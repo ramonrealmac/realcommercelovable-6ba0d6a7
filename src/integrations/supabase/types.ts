@@ -1216,6 +1216,7 @@ export type Database = {
           dt_cadastro: string | null
           empresa_id: number
           excluido: boolean | null
+          meio_pagamento_id: number | null
           numero_autoriza: string | null
           operadora_id: number
           plano_conta_id: number | null
@@ -1233,6 +1234,7 @@ export type Database = {
           dt_cadastro?: string | null
           empresa_id: number
           excluido?: boolean | null
+          meio_pagamento_id?: number | null
           numero_autoriza?: string | null
           operadora_id: number
           plano_conta_id?: number | null
@@ -1250,6 +1252,7 @@ export type Database = {
           dt_cadastro?: string | null
           empresa_id?: number
           excluido?: boolean | null
+          meio_pagamento_id?: number | null
           numero_autoriza?: string | null
           operadora_id?: number
           plano_conta_id?: number | null
@@ -2794,34 +2797,19 @@ export type Database = {
           codigo: string | null
           descricao: string | null
           meio_pagamento_id: number
+          soma_vl_caixa: string | null
         }
         Insert: {
           codigo?: string | null
           descricao?: string | null
-          meio_pagamento_id: number
+          meio_pagamento_id?: number
+          soma_vl_caixa?: string | null
         }
         Update: {
           codigo?: string | null
           descricao?: string | null
           meio_pagamento_id?: number
-        }
-        Relationships: []
-      }
-      meios_pagamento: {
-        Row: {
-          codigo: string | null
-          descricao: string | null
-          meios_pagamento_id: number
-        }
-        Insert: {
-          codigo?: string | null
-          descricao?: string | null
-          meios_pagamento_id?: number
-        }
-        Update: {
-          codigo?: string | null
-          descricao?: string | null
-          meios_pagamento_id?: number
+          soma_vl_caixa?: string | null
         }
         Relationships: []
       }
