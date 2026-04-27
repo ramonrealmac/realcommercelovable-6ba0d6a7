@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      aaaproduto_fornecedor: {
+        Row: {
+          cadastro_id: number
+          cd_prod_fornec: string | null
+          empresa_id: number
+          fator_conv: number | null
+          produto_fornecedor_id: number
+          produto_id: number
+          unidade_id: string | null
+        }
+        Insert: {
+          cadastro_id?: number
+          cd_prod_fornec?: string | null
+          empresa_id?: number
+          fator_conv?: number | null
+          produto_fornecedor_id?: number
+          produto_id?: number
+          unidade_id?: string | null
+        }
+        Update: {
+          cadastro_id?: number
+          cd_prod_fornec?: string | null
+          empresa_id?: number
+          fator_conv?: number | null
+          produto_fornecedor_id?: number
+          produto_id?: number
+          unidade_id?: string | null
+        }
+        Relationships: []
+      }
       abate: {
         Row: {
           abate_id: number
@@ -602,40 +632,32 @@ export type Database = {
       banco: {
         Row: {
           banco_id: number
+          cd_banco: string
           dt_alteracao: string | null
           dt_cadastro: string | null
           empresa_id: number
           excluido: boolean | null
           nome: string
-          razao_social: string
         }
         Insert: {
-          banco_id?: number
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          nome: string
-          razao_social?: string
-        }
-        Update: {
-          banco_id?: number
+          banco_id: number
+          cd_banco?: string
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
           excluido?: boolean | null
           nome?: string
-          razao_social?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "banco_empresa_id_fkey"
-            columns: ["empresa_id"]
-            isOneToOne: false
-            referencedRelation: "empresa"
-            referencedColumns: ["empresa_id"]
-          },
-        ]
+        Update: {
+          banco_id?: number
+          cd_banco?: string
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id?: number
+          excluido?: boolean | null
+          nome?: string
+        }
+        Relationships: []
       }
       bandeira: {
         Row: {
@@ -1196,6 +1218,7 @@ export type Database = {
           excluido: boolean | null
           numero_autoriza: string | null
           operadora_id: number
+          plano_conta_id: number | null
           prazo_pagamento_id: number
           qt_parcela: number
           vl_parcela: number | null
@@ -1212,6 +1235,7 @@ export type Database = {
           excluido?: boolean | null
           numero_autoriza?: string | null
           operadora_id: number
+          plano_conta_id?: number | null
           prazo_pagamento_id: number
           qt_parcela: number
           vl_parcela?: number | null
@@ -1228,6 +1252,7 @@ export type Database = {
           excluido?: boolean | null
           numero_autoriza?: string | null
           operadora_id?: number
+          plano_conta_id?: number | null
           prazo_pagamento_id?: number
           qt_parcela?: number
           vl_parcela?: number | null
@@ -1437,135 +1462,6 @@ export type Database = {
           },
         ]
       }
-      condicao: {
-        Row: {
-          ativo_entrada: string | null
-          ativo_parcelado: string | null
-          concede_desconto: string | null
-          condicao_id: number
-          conta_id: string | null
-          descricao: string | null
-          dt_alteracao: string | null
-          dt_cadastro: string | null
-          empresa_id: number
-          excluido: boolean | null
-          exibicao: string | null
-          pc_acrescimo: number | null
-          pc_juros: number | null
-          pc_multa: number | null
-          prazo_01: number | null
-          prazo_02: number | null
-          prazo_03: number | null
-          prazo_04: number | null
-          prazo_05: number | null
-          prazo_06: number | null
-          prazo_07: number | null
-          prazo_08: number | null
-          prazo_09: number | null
-          prazo_10: number | null
-          prazo_11: number | null
-          prazo_12: number | null
-          prazo_13: number | null
-          prazo_14: number | null
-          prazo_15: number | null
-          prazo_16: number | null
-          prazo_17: number | null
-          prazo_18: number | null
-          prazo_19: number | null
-          prazo_20: number | null
-          prazo_21: number | null
-          prazo_22: number | null
-          prazo_23: number | null
-          prazo_24: number | null
-          qt_parcelas: number | null
-          tp_documento: number
-        }
-        Insert: {
-          ativo_entrada?: string | null
-          ativo_parcelado?: string | null
-          concede_desconto?: string | null
-          condicao_id?: number
-          conta_id?: string | null
-          descricao?: string | null
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id: number
-          excluido?: boolean | null
-          exibicao?: string | null
-          pc_acrescimo?: number | null
-          pc_juros?: number | null
-          pc_multa?: number | null
-          prazo_01?: number | null
-          prazo_02?: number | null
-          prazo_03?: number | null
-          prazo_04?: number | null
-          prazo_05?: number | null
-          prazo_06?: number | null
-          prazo_07?: number | null
-          prazo_08?: number | null
-          prazo_09?: number | null
-          prazo_10?: number | null
-          prazo_11?: number | null
-          prazo_12?: number | null
-          prazo_13?: number | null
-          prazo_14?: number | null
-          prazo_15?: number | null
-          prazo_16?: number | null
-          prazo_17?: number | null
-          prazo_18?: number | null
-          prazo_19?: number | null
-          prazo_20?: number | null
-          prazo_21?: number | null
-          prazo_22?: number | null
-          prazo_23?: number | null
-          prazo_24?: number | null
-          qt_parcelas?: number | null
-          tp_documento: number
-        }
-        Update: {
-          ativo_entrada?: string | null
-          ativo_parcelado?: string | null
-          concede_desconto?: string | null
-          condicao_id?: number
-          conta_id?: string | null
-          descricao?: string | null
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          exibicao?: string | null
-          pc_acrescimo?: number | null
-          pc_juros?: number | null
-          pc_multa?: number | null
-          prazo_01?: number | null
-          prazo_02?: number | null
-          prazo_03?: number | null
-          prazo_04?: number | null
-          prazo_05?: number | null
-          prazo_06?: number | null
-          prazo_07?: number | null
-          prazo_08?: number | null
-          prazo_09?: number | null
-          prazo_10?: number | null
-          prazo_11?: number | null
-          prazo_12?: number | null
-          prazo_13?: number | null
-          prazo_14?: number | null
-          prazo_15?: number | null
-          prazo_16?: number | null
-          prazo_17?: number | null
-          prazo_18?: number | null
-          prazo_19?: number | null
-          prazo_20?: number | null
-          prazo_21?: number | null
-          prazo_22?: number | null
-          prazo_23?: number | null
-          prazo_24?: number | null
-          qt_parcelas?: number | null
-          tp_documento?: number
-        }
-        Relationships: []
-      }
       condicao_pagamento: {
         Row: {
           condicao_id: number
@@ -1575,6 +1471,7 @@ export type Database = {
           empresa_id: number
           excluido: boolean | null
           intervalo: number | null
+          plano_conta_id: number | null
           prazo_1: number | null
           prazo_10: number
           prazo_11: number
@@ -1598,6 +1495,7 @@ export type Database = {
           empresa_id?: number
           excluido?: boolean | null
           intervalo?: number | null
+          plano_conta_id?: number | null
           prazo_1?: number | null
           prazo_10?: number
           prazo_11?: number
@@ -1621,6 +1519,7 @@ export type Database = {
           empresa_id?: number
           excluido?: boolean | null
           intervalo?: number | null
+          plano_conta_id?: number | null
           prazo_1?: number | null
           prazo_10?: number
           prazo_11?: number
@@ -3523,6 +3422,297 @@ export type Database = {
           },
         ]
       }
+      nfe_cabecalho: {
+        Row: {
+          cadastro_id: number | null
+          chave_nfe: string
+          created_at: string
+          deposito_id: number | null
+          dt_alteracao: string | null
+          dt_emissao: string | null
+          dt_entrada: string | null
+          dt_saida: string | null
+          empresa_id: number
+          excluido: boolean
+          nfe_cabecalho_id: number
+          nr_nota: string
+          nr_protocolo: string
+          obs_nf: string
+          serie: string
+          st_nf: string
+          tp_entrada: string
+          updated_at: string
+          vl_desconto: number
+          vl_despesa: number
+          vl_frete: number
+          vl_icms_st: number
+          vl_ipi: number
+          vl_produtos: number
+          vl_seguro: number
+          vl_total_nf: number
+          xml_nf: string | null
+        }
+        Insert: {
+          cadastro_id?: number | null
+          chave_nfe?: string
+          created_at?: string
+          deposito_id?: number | null
+          dt_alteracao?: string | null
+          dt_emissao?: string | null
+          dt_entrada?: string | null
+          dt_saida?: string | null
+          empresa_id: number
+          excluido?: boolean
+          nfe_cabecalho_id?: never
+          nr_nota?: string
+          nr_protocolo?: string
+          obs_nf?: string
+          serie?: string
+          st_nf?: string
+          tp_entrada?: string
+          updated_at?: string
+          vl_desconto?: number
+          vl_despesa?: number
+          vl_frete?: number
+          vl_icms_st?: number
+          vl_ipi?: number
+          vl_produtos?: number
+          vl_seguro?: number
+          vl_total_nf?: number
+          xml_nf?: string | null
+        }
+        Update: {
+          cadastro_id?: number | null
+          chave_nfe?: string
+          created_at?: string
+          deposito_id?: number | null
+          dt_alteracao?: string | null
+          dt_emissao?: string | null
+          dt_entrada?: string | null
+          dt_saida?: string | null
+          empresa_id?: number
+          excluido?: boolean
+          nfe_cabecalho_id?: never
+          nr_nota?: string
+          nr_protocolo?: string
+          obs_nf?: string
+          serie?: string
+          st_nf?: string
+          tp_entrada?: string
+          updated_at?: string
+          vl_desconto?: number
+          vl_despesa?: number
+          vl_frete?: number
+          vl_icms_st?: number
+          vl_ipi?: number
+          vl_produtos?: number
+          vl_seguro?: number
+          vl_total_nf?: number
+          xml_nf?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nfe_cabecalho_cadastro_id_fkey"
+            columns: ["cadastro_id"]
+            isOneToOne: false
+            referencedRelation: "cadastro"
+            referencedColumns: ["cadastro_id"]
+          },
+          {
+            foreignKeyName: "nfe_cabecalho_deposito_id_fkey"
+            columns: ["deposito_id"]
+            isOneToOne: false
+            referencedRelation: "deposito"
+            referencedColumns: ["deposito_id"]
+          },
+        ]
+      }
+      nfe_item: {
+        Row: {
+          cd_prod_fornec: string
+          cfop: string
+          created_at: string
+          cst_cofins: string
+          cst_icms: string
+          cst_ipi: string
+          cst_pis: string
+          empresa_id: number
+          excluido: boolean
+          gtin: string
+          ncm: string
+          nfe_cabecalho_id: number
+          nfe_item_id: number
+          nm_produto: string
+          nr_item: number
+          pc_cofins: number
+          pc_fcp_st: number
+          pc_icms: number
+          pc_icms_st: number
+          pc_ipi: number
+          pc_mva: number
+          pc_pis: number
+          produto_id: number | null
+          qt_entrada: number
+          unidade: string
+          updated_at: string
+          vl_bc_st: number
+          vl_cofins: number
+          vl_desconto: number
+          vl_fcp_st: number
+          vl_icms_st: number
+          vl_ipi: number
+          vl_pis: number
+          vl_total: number
+          vl_unit: number
+        }
+        Insert: {
+          cd_prod_fornec?: string
+          cfop?: string
+          created_at?: string
+          cst_cofins?: string
+          cst_icms?: string
+          cst_ipi?: string
+          cst_pis?: string
+          empresa_id: number
+          excluido?: boolean
+          gtin?: string
+          ncm?: string
+          nfe_cabecalho_id: number
+          nfe_item_id?: never
+          nm_produto?: string
+          nr_item?: number
+          pc_cofins?: number
+          pc_fcp_st?: number
+          pc_icms?: number
+          pc_icms_st?: number
+          pc_ipi?: number
+          pc_mva?: number
+          pc_pis?: number
+          produto_id?: number | null
+          qt_entrada?: number
+          unidade?: string
+          updated_at?: string
+          vl_bc_st?: number
+          vl_cofins?: number
+          vl_desconto?: number
+          vl_fcp_st?: number
+          vl_icms_st?: number
+          vl_ipi?: number
+          vl_pis?: number
+          vl_total?: number
+          vl_unit?: number
+        }
+        Update: {
+          cd_prod_fornec?: string
+          cfop?: string
+          created_at?: string
+          cst_cofins?: string
+          cst_icms?: string
+          cst_ipi?: string
+          cst_pis?: string
+          empresa_id?: number
+          excluido?: boolean
+          gtin?: string
+          ncm?: string
+          nfe_cabecalho_id?: number
+          nfe_item_id?: never
+          nm_produto?: string
+          nr_item?: number
+          pc_cofins?: number
+          pc_fcp_st?: number
+          pc_icms?: number
+          pc_icms_st?: number
+          pc_ipi?: number
+          pc_mva?: number
+          pc_pis?: number
+          produto_id?: number | null
+          qt_entrada?: number
+          unidade?: string
+          updated_at?: string
+          vl_bc_st?: number
+          vl_cofins?: number
+          vl_desconto?: number
+          vl_fcp_st?: number
+          vl_icms_st?: number
+          vl_ipi?: number
+          vl_pis?: number
+          vl_total?: number
+          vl_unit?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nfe_item_nfe_cabecalho_id_fkey"
+            columns: ["nfe_cabecalho_id"]
+            isOneToOne: false
+            referencedRelation: "nfe_cabecalho"
+            referencedColumns: ["nfe_cabecalho_id"]
+          },
+          {
+            foreignKeyName: "nfe_item_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "produto"
+            referencedColumns: ["produto_id"]
+          },
+        ]
+      }
+      nfe_recebida: {
+        Row: {
+          chave_nfe: string
+          cnpj_emitente: string
+          created_at: string
+          dt_emissao: string | null
+          empresa_id: number
+          nfe_recebida_id: number
+          nm_emitente: string
+          nr_nota: string | null
+          nsu: string | null
+          serie: string | null
+          st_download: boolean
+          st_manifesto: string
+          updated_at: string
+          vl_total: number | null
+          xml_completo: string | null
+          xml_resumo: string | null
+        }
+        Insert: {
+          chave_nfe: string
+          cnpj_emitente: string
+          created_at?: string
+          dt_emissao?: string | null
+          empresa_id: number
+          nfe_recebida_id?: never
+          nm_emitente: string
+          nr_nota?: string | null
+          nsu?: string | null
+          serie?: string | null
+          st_download?: boolean
+          st_manifesto?: string
+          updated_at?: string
+          vl_total?: number | null
+          xml_completo?: string | null
+          xml_resumo?: string | null
+        }
+        Update: {
+          chave_nfe?: string
+          cnpj_emitente?: string
+          created_at?: string
+          dt_emissao?: string | null
+          empresa_id?: number
+          nfe_recebida_id?: never
+          nm_emitente?: string
+          nr_nota?: string | null
+          nsu?: string | null
+          serie?: string | null
+          st_download?: boolean
+          st_manifesto?: string
+          updated_at?: string
+          vl_total?: number | null
+          xml_completo?: string | null
+          xml_resumo?: string | null
+        }
+        Relationships: []
+      }
       operadora: {
         Row: {
           cnpj: string | null
@@ -3955,6 +4145,36 @@ export type Database = {
           },
         ]
       }
+      plano: {
+        Row: {
+          conta: string | null
+          empresa_id: number
+          natureza: string | null
+          nome: string | null
+          plano_id: number
+          plano_id_pai: number | null
+          tp_conta: string | null
+        }
+        Insert: {
+          conta?: string | null
+          empresa_id: number
+          natureza?: string | null
+          nome?: string | null
+          plano_id: number
+          plano_id_pai?: number | null
+          tp_conta?: string | null
+        }
+        Update: {
+          conta?: string | null
+          empresa_id?: number
+          natureza?: string | null
+          nome?: string | null
+          plano_id?: number
+          plano_id_pai?: number | null
+          tp_conta?: string | null
+        }
+        Relationships: []
+      }
       plano_conta: {
         Row: {
           conta: string
@@ -3963,7 +4183,7 @@ export type Database = {
           empresa_id: number
           excluido: boolean | null
           nome: string
-          plano_id: number
+          plano_conta_id: number
           tp_conta: string | null
           tp_natureza: string | null
         }
@@ -3974,7 +4194,7 @@ export type Database = {
           empresa_id?: number
           excluido?: boolean | null
           nome: string
-          plano_id?: number
+          plano_conta_id?: number
           tp_conta?: string | null
           tp_natureza?: string | null
         }
@@ -3985,7 +4205,7 @@ export type Database = {
           empresa_id?: number
           excluido?: boolean | null
           nome?: string
-          plano_id?: number
+          plano_conta_id?: number
           tp_conta?: string | null
           tp_natureza?: string | null
         }
@@ -4339,6 +4559,60 @@ export type Database = {
           unidade_id?: string
         }
         Relationships: []
+      }
+      produto_fornecedor: {
+        Row: {
+          cadastro_id: number
+          cd_prod_fornec: string
+          created_at: string
+          empresa_id: number
+          excluido: boolean
+          fator_conversao: number
+          nm_prod_fornec: string
+          produto_fornecedor_id: number
+          produto_id: number
+          updated_at: string
+        }
+        Insert: {
+          cadastro_id: number
+          cd_prod_fornec?: string
+          created_at?: string
+          empresa_id: number
+          excluido?: boolean
+          fator_conversao?: number
+          nm_prod_fornec?: string
+          produto_fornecedor_id?: never
+          produto_id: number
+          updated_at?: string
+        }
+        Update: {
+          cadastro_id?: number
+          cd_prod_fornec?: string
+          created_at?: string
+          empresa_id?: number
+          excluido?: boolean
+          fator_conversao?: number
+          nm_prod_fornec?: string
+          produto_fornecedor_id?: never
+          produto_id?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "produto_fornecedor_cadastro_id_fkey"
+            columns: ["cadastro_id"]
+            isOneToOne: false
+            referencedRelation: "cadastro"
+            referencedColumns: ["cadastro_id"]
+          },
+          {
+            foreignKeyName: "produto_fornecedor_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "produto"
+            referencedColumns: ["produto_id"]
+          },
+        ]
       }
       produto_grupo: {
         Row: {
