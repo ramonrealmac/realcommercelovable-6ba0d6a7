@@ -10,10 +10,10 @@ const http = require('http');
 
 // Configurações do Provedor (TCP/IP)
 const PROVEDOR_IP = '127.0.0.1';
-const PROVEDOR_PORT = 3434;
+const PROVEDOR_PORT = 3435;
 
 // Servidor da Ponte (HTTP) - Porta que o sistema vai chamar
-const BRIDGE_PORT = 3001;
+const BRIDGE_PORT = 3434;
 
 const server = http.createServer((req, res) => {
   // Habilita CORS

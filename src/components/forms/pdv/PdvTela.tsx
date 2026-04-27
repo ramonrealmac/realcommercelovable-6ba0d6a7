@@ -321,7 +321,6 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         dt_movimento: dtMovimento,
         tp_movimento: "E",
         tp_operacao: String(XParams!.tp_operacao_caixa),
-        conta_gerencial_id: XParams!.conta_gerencial_caixa,
         centro_custo_id: XParams!.centro_custo_caixa,
         historico: `Recebimento Pedido ${nrMov}`,
         documento: String(nrMov),
@@ -347,6 +346,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         qt_parcela: l.qt_parcela,
         vl_parcela: l.vl_parcela,
         vl_recebido: l.vl_recebido,
+        plano_conta_id: (l as any).plano_conta_id || null,
         excluido: false,
       }));
       const { error: e2 } = await db.from("caixa_movimento_item").insert(itensCx);

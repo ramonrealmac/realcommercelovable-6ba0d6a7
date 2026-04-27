@@ -56,6 +56,7 @@ export interface IPdvPagamentoLinha {
   qt_parcela: number;
   vl_parcela: number;
   vl_recebido: number;
+  plano_conta_id?: number | null;
 }
 
 export interface IMovimentoPagamento {

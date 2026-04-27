@@ -5,8 +5,8 @@ const http = require('http');
 
 // Configurações da Ponte (Integrada do provedor-bridge.cjs)
 const PROVEDOR_IP = '127.0.0.1';
-const PROVEDOR_PORT = 3434;
-const BRIDGE_PORT = 3001;
+const PROVEDOR_PORT = 3435;
+const BRIDGE_PORT = 3434;
 
 function startBridge() {
   const server = http.createServer((req, res) => {

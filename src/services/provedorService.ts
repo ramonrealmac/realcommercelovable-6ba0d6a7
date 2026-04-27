@@ -6,7 +6,7 @@ import { toast } from "sonner";
 export const provedorService = {
   // Configurações padrão
   config: {
-    baseUrl: "http://localhost:3001",
+    baseUrl: "http://localhost:3434",
   },
 
   /**

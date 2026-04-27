@@ -10,7 +10,7 @@ import { Terminal, Send, Activity, Settings2 } from "lucide-react";
 const ProvedorTestForm: React.FC = () => {
   const [config, setConfig] = useState({
     ip: "localhost",
-    port: "3001", // Porta da ponte
+    port: "3434", // Porta da ponte
     mode: "bridge" as "direct" | "bridge"
   });
   const [command, setCommand] = useState("NFE.StatusServico()");
@@ -70,7 +70,7 @@ const ProvedorTestForm: React.FC = () => {
                 <Button 
                   variant={config.mode === "bridge" ? "default" : "outline"} 
                   size="sm" 
-                  onClick={() => setConfig(p => ({ ...p, mode: "bridge", port: "3001" }))}
+                  onClick={() => setConfig(p => ({ ...p, mode: "bridge", port: "3434" }))}
                   className="text-[10px]"
                 >
                   Ponte (TCP)
@@ -100,7 +100,7 @@ const ProvedorTestForm: React.FC = () => {
                 id="port" 
                 value={config.port} 
                 onChange={e => setConfig(prev => ({ ...prev, port: e.target.value }))} 
-                placeholder={config.mode === 'bridge' ? "3001" : "8080"}
+                placeholder={config.mode === 'bridge' ? "3434" : "8080"}
               />
             </div>
             <div className="pt-2">
