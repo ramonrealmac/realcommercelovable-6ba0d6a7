@@ -67,44 +67,32 @@ const NfeRecebidasForm: React.FC = () => {
       const rowVal = String(row[key] || "").toLowerCase();
       if (!rowVal.includes(val.toLowerCase())) return false;
     }
-    
-    // Filtros principais (Status e Data)
+    // Filtro de Status (cliente)
     if (XStatusFilter && row.st_manifesto !== XStatusFilter) return false;
-    
-    if (XDtIni && row.dt_emissao < XDtIni) {
-      console.log(`[DEBUG] Nota ${row.nr_nota} filtrada por Data Inicial: ${row.dt_emissao} < ${XDtIni}`);
-      return false;
-    }
-    if (XDtFim && row.dt_emissao > XDtFim) {
-      console.log(`[DEBUG] Nota ${row.nr_nota} filtrada por Data Final: ${row.dt_emissao} > ${XDtFim}`);
-      return false;
-    }
-    
     return true;
   });
+
   const loadData = async () => {
     if (!XEmpresaId) {
       console.warn("loadData cancelado: XEmpresaId não definido.");
       return;
     }
     setXLoading(true);
-    console.log(`[DEBUG] Buscando notas no banco para EMPRESA_ID: ${XEmpresaId}`);
     try {
-      const { data, error } = await db.from("nfe_recebida")
+      let query = db.from("nfe_recebida")
         .select("*")
-        .eq("empresa_id", XEmpresaId)
-        .order("dt_emissao", { ascending: false });
-      
+        .eq("empresa_id", XEmpresaId);
+
+      if (XDtIni) query = query.gte("dt_emissao", XDtIni);
+      if (XDtFim) query = query.lte("dt_emissao", XDtFim);
+
+      const { data, error } = await query.order("dt_emissao", { ascending: false });
+
       if (error) throw error;
-      
-      console.log(`[DEBUG] Resultado da busca: ${data?.length || 0} registros encontrados para empresa ${XEmpresaId}.`);
-      if (data && data.length > 0) {
-        console.log("[DEBUG] Exemplo do primeiro registro:", data[0]);
-      }
-      
+      console.log(`[NFe] ${data?.length || 0} registros (empresa ${XEmpresaId}, ${XDtIni} → ${XDtFim})`);
       setXData(data || []);
     } catch (e: any) {
-      console.error("[DEBUG] Erro ao carregar dados:", e);
+      console.error("Erro ao carregar NF-e:", e);
       toast.error("Erro ao carregar dados: " + e.message);
     } finally {
       setXLoading(false);
