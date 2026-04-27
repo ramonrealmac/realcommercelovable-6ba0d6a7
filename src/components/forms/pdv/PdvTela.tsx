@@ -347,10 +347,44 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         vl_parcela: l.vl_parcela,
         vl_recebido: l.vl_recebido,
         plano_conta_id: (l as any).plano_conta_id || null,
+        meio_pagamento_id: (l as any).meio_pagamento_id ?? null,
         excluido: false,
       }));
       const { error: e2 } = await db.from("caixa_movimento_item").insert(itensCx);
       if (e2) throw new Error("Falha ao gravar formas de pagamento: " + e2.message);
+
+      // ===== Atualiza vl_fechamento da caixa_abertura com os meios que somam ao caixa =====
+      try {
+        const meioIds = Array.from(new Set(
+          itensCx.map(i => i.meio_pagamento_id).filter((v): v is number => v != null)
+        ));
+        if (meioIds.length > 0) {
+          const { data: meios } = await db.from("meio_pagamento")
+            .select("meio_pagamento_id, soma_vl_caixa")
+            .in("meio_pagamento_id", meioIds);
+          const somamSet = new Set(
+            ((meios || []) as any[])
+              .filter(m => String(m.soma_vl_caixa || "").toUpperCase() === "S")
+              .map(m => m.meio_pagamento_id)
+          );
+          const vlSomar = itensCx.reduce(
+            (acc, i) => acc + (i.meio_pagamento_id != null && somamSet.has(i.meio_pagamento_id) ? Number(i.vl_recebido || 0) : 0),
+            0
+          );
+          if (vlSomar > 0) {
+            const novoVlFechamento = Number(abertura.vl_fechamento || 0) + vlSomar;
+            const { error: eAb } = await db.from("caixa_abertura")
+              .update({ vl_fechamento: novoVlFechamento })
+              .eq("empresa_id", abertura.empresa_id)
+              .eq("funcionario_id", abertura.funcionario_id)
+              .eq("dt_abertura", abertura.dt_abertura);
+            if (eAb) throw new Error(eAb.message);
+            abertura.vl_fechamento = novoVlFechamento;
+          }
+        }
+      } catch (errCx: any) {
+        toast.error("Aviso: falha ao atualizar valor de fechamento do caixa: " + (errCx.message || errCx));
+      }
 
       const { error: e3 } = await db.from("movimento")
         .update({ st_pedido: "R", dt_pagamento: new Date().toISOString() })

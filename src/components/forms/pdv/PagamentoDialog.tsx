@@ -12,7 +12,7 @@ const db = supabase as any;
 const fmt = (v: number) => (v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const NO_SPIN = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
-interface ICondicao { condicao_id: number; descricao: string; qtd_parcelas: number | null; tp_documento?: number | null; plano_conta_id?: number | null; }
+interface ICondicao { condicao_id: number; descricao: string; qtd_parcelas: number | null; tp_documento?: number | null; plano_conta_id?: number | null; meio_pagamento_id?: number | null; }
 interface IBandeira { bandeira_id: number; descricao: string; }
 interface IOperadora { operadora_id: number; razao: string; }
 
@@ -65,7 +65,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
     if (!open) return;
     (async () => {
       const [cond, band, oper] = await Promise.all([
-        db.from("condicao").select("condicao_id, descricao, qtd_parcelas:qt_parcelas, tp_documento, plano_conta_id")
+        db.from("condicao").select("condicao_id, descricao, qtd_parcelas:qt_parcelas, tp_documento, plano_conta_id, meio_pagamento_id")
           .eq("excluido", false).order("descricao"),
         db.from("bandeira").select("bandeira_id, descricao").eq("excluido", false).order("descricao"),
         db.from("operadora").select("operadora_id, razao").eq("empresa_id", XEmpresaId).order("razao"),
@@ -74,7 +74,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
       let condList: ICondicao[] = (cond.data || []) as ICondicao[];
       if (cond.error || condList.length === 0) {
         const cp = await db.from("condicao_pagamento")
-          .select("condicao_id, descricao, qtd_parcelas, plano_conta_id").eq("excluido", false).order("descricao");
+          .select("condicao_id, descricao, qtd_parcelas, plano_conta_id, meio_pagamento_id").eq("excluido", false).order("descricao");
         condList = ((cp.data || []) as any[]).map(r => ({ ...r, tp_documento: null }));
       }
       setXCondicoes(condList);
@@ -164,6 +164,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
       vl_parcela: vlParcela,
       vl_recebido: XVlPagar,
       plano_conta_id: cond?.plano_conta_id || null,
+      meio_pagamento_id: cond?.meio_pagamento_id ?? null,
     };
 
     setXLinhas(prev => XEditUid ? prev.map(l => l.uid === XEditUid ? linha : l) : [...prev, linha]);
