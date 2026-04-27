@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import { provedorService } from "@/services/provedorService";
-import { RefreshCw, Download, CheckCircle, AlertTriangle, ShieldCheck, ShieldAlert, FileSearch } from "lucide-react";
+import { RefreshCw, Download, CheckCircle, AlertTriangle, ShieldCheck, ShieldAlert, FileSearch, Eye } from "lucide-react";
 import { formatCPFCNPJ } from "@/lib/validators";
 
 const db = supabase as any;
