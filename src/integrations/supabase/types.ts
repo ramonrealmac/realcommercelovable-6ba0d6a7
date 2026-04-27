@@ -1474,6 +1474,7 @@ export type Database = {
           empresa_id: number
           excluido: boolean | null
           intervalo: number | null
+          meio_pagamento_id: number | null
           plano_conta_id: number | null
           prazo_1: number | null
           prazo_10: number
@@ -1498,6 +1499,7 @@ export type Database = {
           empresa_id?: number
           excluido?: boolean | null
           intervalo?: number | null
+          meio_pagamento_id?: number | null
           plano_conta_id?: number | null
           prazo_1?: number | null
           prazo_10?: number
@@ -1522,6 +1524,7 @@ export type Database = {
           empresa_id?: number
           excluido?: boolean | null
           intervalo?: number | null
+          meio_pagamento_id?: number | null
           plano_conta_id?: number | null
           prazo_1?: number | null
           prazo_10?: number
