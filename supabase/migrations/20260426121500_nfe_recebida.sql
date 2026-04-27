@@ -1,0 +1,41 @@
+
+-- ================================================
+-- NF-e: DOCUMENTOS RECEBIDOS (DFe)
+-- ================================================
+
+CREATE TABLE public.NFE_RECEBIDA (
+  NFE_RECEBIDA_ID   BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  EMPRESA_ID        BIGINT NOT NULL,
+  CHAVE_NFE         TEXT NOT NULL,
+  CNPJ_EMITENTE     TEXT NOT NULL,
+  NM_EMITENTE       TEXT NOT NULL,
+  DT_EMISSAO        DATE,
+  VL_TOTAL          NUMERIC(15,2),
+  NR_NOTA           TEXT,
+  SERIE             TEXT,
+  NSU               TEXT, -- Número Sequencial Único da SEFAZ
+  ST_MANIFESTO      TEXT NOT NULL DEFAULT '0' CHECK (ST_MANIFESTO IN ('0', '210200', '210210', '210220', '210240')),
+  ST_DOWNLOAD       BOOLEAN NOT NULL DEFAULT FALSE,
+  XML_RESUMO        TEXT, -- XML de resumo retornado pelo DFe
+  XML_COMPLETO      TEXT, -- XML completo baixado após manifesto
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IU_NFE_RECEBIDA_CHAVE ON public.NFE_RECEBIDA (CHAVE_NFE) WHERE CHAVE_NFE <> '';
+CREATE INDEX IX_NFE_RECEBIDA_EMPRESA ON public.NFE_RECEBIDA (EMPRESA_ID);
+
+ALTER TABLE public.NFE_RECEBIDA ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated users can read NFE_RECEBIDA"
+  ON public.NFE_RECEBIDA FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Authenticated users can insert NFE_RECEBIDA"
+  ON public.NFE_RECEBIDA FOR INSERT TO authenticated WITH CHECK (true);
+
+CREATE POLICY "Authenticated users can update NFE_RECEBIDA"
+  ON public.NFE_RECEBIDA FOR UPDATE TO authenticated USING (true);
+
+CREATE TRIGGER TR_NFE_RECEBIDA_UPDATED_AT
+  BEFORE UPDATE ON public.NFE_RECEBIDA
+  FOR EACH ROW EXECUTE FUNCTION public.FU_UPDATE_UPDATED_AT();

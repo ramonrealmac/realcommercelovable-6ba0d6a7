@@ -1,0 +1,1 @@
+ALTER TABLE public.deposito ADD COLUMN st_privado boolean NOT NULL DEFAULT true;

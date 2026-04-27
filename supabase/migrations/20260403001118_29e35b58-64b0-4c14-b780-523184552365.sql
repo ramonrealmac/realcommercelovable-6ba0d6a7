@@ -1,0 +1,1 @@
+ALTER TABLE public.cidade RENAME COLUMN cd_cidade TO cidade_id;

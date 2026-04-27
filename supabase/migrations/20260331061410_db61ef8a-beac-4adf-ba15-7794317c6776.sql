@@ -1,0 +1,2 @@
+INSERT INTO parametro (xcor_primaria, xcor_secundaria, xcor_destaque, xcor_fundo, xcor_fundo_card, xcor_texto_principal, xcor_texto_secundario, xcor_botao, xcor_botao_negativo, xcor_header, xcor_menu, xcor_link, xcss_customizado, xurl_logo, xurl_favicon, xurl_banner_vendas, xurl_link_vendas, xemail_remetente, xabacatepay_api_key, xabacatepay_webhook_url, xabacatepay_webhook_secret)
+VALUES ('#8B5CF6','#6D28D9','#F59E0B','#FFFFFF','#F8FAFC','#1E293B','#64748B','#8B5CF6','#EF4444','#7C3AED','#4C1D95','#8B5CF6','','','','','','','','','');
