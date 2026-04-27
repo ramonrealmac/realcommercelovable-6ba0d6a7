@@ -2,16 +2,76 @@ import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { useAppContext } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import FormToolbar from "@/components/shared/FormToolbar";
+import FormDateField from "@/components/shared/FormDateField";
+import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import { validateCPF, validateCNPJ, validateCPFOrCNPJ, formatCPFCNPJ, formatPhone, formatDateBR, parseDateBR } from "@/lib/validators";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Loader2, MapPin, User, Home, FileText, Globe, Truck } from "lucide-react";
+import { Search, Loader2, MapPin } from "lucide-react";
 import VeiculoGrid from "@/components/forms/VeiculoGrid";
 import { baseService } from "@/utils/baseService";
-import StandardCrudForm from "@/components/shared/StandardCrudForm";
-import { useCrudController } from "@/hooks/useCrudController";
-import { IGridColumn } from "@/components/grid/DataGrid";
+import { useGridFilter } from "@/hooks/useGridFilter";
 
 const db = supabase as any;
+
+type TFormMode = "view" | "edit" | "insert";
+
+interface ICadastro {
+  cadastro_id: number;
+  empresa_id: number;
+  cnpj: string;
+  inscricao_estadual: string;
+  razao_social: string;
+  nome_fantasia: string;
+  nome_curto: string;
+  endereco_logradouro: string;
+  endereco_numero: string;
+  endereco_bairro: string;
+  endereco_cep: string;
+  endereco_compl: string;
+  endereco_ptoref: string;
+  endereco_cidade_id: number | null;
+  fone_geral: string;
+  fone_comercial: string;
+  fone_financeiro: string;
+  fone_faturamento: string;
+  condicao_id: number | null;
+  funcionario_id: number | null;
+  tp_pessoa: string;
+  tp_contribuinte: string;
+  grupo_cadastro_id: number | null;
+  tp_cadastro_id: number | null;
+  estado_civil: string;
+  conj_nome: string;
+  conj_cpf: string;
+  conj_dt_nasc: string | null;
+  conj_telefone: string;
+  rg: string;
+  nacionalidade: string;
+  portador_id: number | null;
+  rota_id: number | null;
+  rota_seq: number;
+  st_cadastro: string;
+  st_cliente: string;
+  st_fornecedor: string;
+  st_transportador: string;
+  dep_nome1: string;
+  dep_cpf1: string;
+  dep_dt_nasc1: string | null;
+  dep_grau_parent1: string;
+  dep_nome2: string;
+  dep_cpf2: string;
+  dep_dt_nasc2: string | null;
+  dep_grau_parent2: string;
+  dt_nasc: string | null;
+  email: string;
+  tabela_preco_id: number | null;
+  inscricao_municipal: string;
+  excluido: boolean;
+  latitude: number | null;
+  longitude: number | null;
+}
+
 
 export interface ICadastroFormConfig {
   formTitle: string;
@@ -21,7 +81,9 @@ export interface ICadastroFormConfig {
   lockedFields?: string[];
   extraValidation?: (form: Record<string, string>) => string | null;
   showVeiculoTab?: boolean;
+  /** Se true, abre automaticamente em modo inserção ao montar o componente */
   autoInsert?: boolean;
+  /** Se true, não carrega registros do banco ao inicializar (abre lista vazia) */
   skipInitialLoad?: boolean;
 }
 
@@ -32,6 +94,7 @@ const XLocalizarColumns: IGridColumn[] = [
   { key: "cnpj", label: "CPF/CNPJ", width: "140px", render: (r) => r.cnpj ? formatCPFCNPJ(r.cnpj) : "" },
   { key: "fone_geral", label: "Telefone", width: "130px", render: (r) => r.fone_geral ? formatPhone(r.fone_geral) : "" },
 ];
+
 
 const emptyForm = (): Record<string, string> => ({
   cnpj: "", inscricao_estadual: "", razao_social: "", nome_fantasia: "", nome_curto: "",
@@ -60,18 +123,20 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
   autoInsert = false,
   skipInitialLoad = false,
 }) => {
-  const { XEmpresaId, XEmpresaMatrizId, XEmpresas } = useAppContext();
-  
-  const ctrl = useCrudController<any>({
-    tableName: "cadastro",
-    empresaFieldName: "empresa_id",
-  });
+  const { XEmpresaId, XEmpresaMatrizId, XEmpresas, closeTab, XTabs, XActiveTabId } = useAppContext();
 
+  const [XFormMode, setXFormMode] = useState<TFormMode>("view");
+  const [XInnerTab, setXInnerTab] = useState<"cadastro" | "localizar">("cadastro");
+  const [XCadastroInnerTab, setXCadastroInnerTab] = useState<string>("geral");
+  const [XData, setXData] = useState<ICadastro[]>([]);
+  const [XCurrentIdx, setXCurrentIdx] = useState(0);
   const [XF, setXF] = useState(emptyForm());
-  const [XSubTab, setXSubTab] = useState<string>("geral");
+  const [XSearchFilters, setXSearchFilters] = useState<Record<string, string>>({});
+  const [XLoading, setXLoading] = useState(false);
   const [XBuscandoCnpj, setXBuscandoCnpj] = useState(false);
   const [XBuscandoCep, setXBuscandoCep] = useState(false);
   const [XBuscandoGeo, setXBuscandoGeo] = useState(false);
+
 
   // Lookups
   const [XCidades, setXCidades] = useState<any[]>([]);
@@ -83,10 +148,171 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
   const [XTabelas, setXTabelas] = useState<any[]>([]);
   const [XVendedores, setXVendedores] = useState<any[]>([]);
 
+  const XCurrentRecord = XData[XCurrentIdx] || null;
+  const XIsEditing = XFormMode === "edit" || XFormMode === "insert";
+
   const set = useCallback((key: string, val: string) => {
     if (lockedFields.includes(key)) return;
     setXF(prev => ({ ...prev, [key]: val }));
   }, [lockedFields]);
+
+  // Allow free typing of CPF/CNPJ digits without formatting
+  const handleCnpjChange = useCallback((XRawValue: string) => {
+    const XDigits = XRawValue.replace(/\D/g, "").slice(0, 14);
+    setXF(prev => ({ ...prev, cnpj: XDigits }));
+  }, []);
+
+  // Format and detect tp_pessoa on blur
+  const handleCnpjFormat = useCallback(() => {
+    const XDigits = XF.cnpj.replace(/\D/g, "");
+    if (!XDigits) return;
+    let XTpPessoa = "O";
+    if (XDigits.length <= 11) XTpPessoa = "F";
+    else XTpPessoa = "J";
+    setXF(prev => ({ ...prev, tp_pessoa: XTpPessoa }));
+  }, [XF.cnpj]);
+
+  // Check duplicate CPF/CNPJ on blur
+  const handleCnpjBlur = useCallback(async () => {
+    handleCnpjFormat();
+    if (XFormMode !== "insert" && XFormMode !== "edit") return;
+    const XDigits = XF.cnpj.replace(/\D/g, "");
+    if (XDigits.length < 11) return;
+
+    let XQuery = db
+      .from("cadastro")
+      .select("cadastro_id, razao_social")
+      .eq("empresa_id", XEmpresaMatrizId)
+      .eq("cnpj", XDigits)
+      .eq("excluido", false);
+
+    // Exclude current record when editing
+    if (XFormMode === "edit" && XCurrentRecord) {
+      XQuery = XQuery.neq("cadastro_id", XCurrentRecord.cadastro_id);
+    }
+
+    const { data: XExisting } = await XQuery.limit(1);
+
+    if (XExisting && XExisting.length > 0) {
+      const XWantView = confirm(
+        `Já existe um cadastro com este documento:\n"${XExisting[0].razao_social}" (Cód. ${XExisting[0].cadastro_id})\n\nDeseja visualizar o cadastro existente?`
+      );
+      if (XWantView) {
+        const XIdx = XData.findIndex(r => r.cadastro_id === XExisting[0].cadastro_id);
+        if (XIdx >= 0) {
+          setXCurrentIdx(XIdx);
+          setXFormMode("view");
+          setXInnerTab("cadastro");
+        }
+      }
+    }
+  }, [XF.cnpj, XFormMode, XEmpresaId, XData, XCurrentRecord, handleCnpjFormat]);
+
+  // CNPJ lookup via edge function
+  const handleBuscarCnpj = useCallback(async () => {
+    const XDigits = XF.cnpj.replace(/\D/g, "");
+    if (XF.tp_pessoa === "F" || XDigits.length <= 11) {
+      toast.warning("Consulta disponível apenas para pessoa jurídica (CNPJ).");
+      return;
+    }
+    if (XDigits.length !== 14 || !validateCNPJ(XDigits)) {
+      toast.error("CNPJ inválido para consulta.");
+      return;
+    }
+    setXBuscandoCnpj(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("consulta-cnpj", {
+        body: { cnpj: XDigits },
+      });
+      if (error) throw new Error(error.message || "Erro na consulta");
+      if (data?.error) throw new Error(data.error);
+
+      setXF(prev => ({
+        ...prev,
+        razao_social: (data.company?.name || prev.razao_social).toUpperCase(),
+        nome_fantasia: (data.alias || data.company?.name || prev.nome_fantasia).toUpperCase(),
+        endereco_logradouro: (data.address?.street || prev.endereco_logradouro).toUpperCase(),
+        endereco_numero: (data.address?.number || prev.endereco_numero).toUpperCase(),
+        endereco_bairro: (data.address?.district || prev.endereco_bairro).toUpperCase(),
+        endereco_cep: (data.address?.zip || prev.endereco_cep).replace(/\D/g, ""),
+        endereco_compl: (data.address?.details || prev.endereco_compl).toUpperCase(),
+        fone_geral: data.phones?.[0] ? `${data.phones[0].area}${data.phones[0].number}` : prev.fone_geral,
+        email: data.emails?.[0]?.address || prev.email,
+        inscricao_estadual: data.registrations?.[0]?.number || prev.inscricao_estadual,
+      }));
+      toast.success("Dados do CNPJ carregados com sucesso!");
+    } catch (err: any) {
+      toast.error("Erro ao consultar CNPJ: " + (err.message || "Falha na consulta"));
+    } finally {
+      setXBuscandoCnpj(false);
+    }
+  }, [XF.cnpj, XF.tp_pessoa]);
+
+  // CEP lookup via ViaCEP edge function
+  const handleBuscarCep = useCallback(async () => {
+    const XDigits = XF.endereco_cep.replace(/\D/g, "");
+    if (XDigits.length !== 8) {
+      toast.error("CEP deve ter 8 dígitos.");
+      return;
+    }
+    setXBuscandoCep(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("consulta-cep", {
+        body: { cep: XDigits },
+      });
+      if (error) throw new Error(error.message || "Erro na consulta");
+      if (data?.error) throw new Error(data.error);
+
+      setXF(prev => ({
+        ...prev,
+        endereco_logradouro: (data.logradouro || prev.endereco_logradouro).toUpperCase(),
+        endereco_bairro: (data.bairro || prev.endereco_bairro).toUpperCase(),
+        endereco_compl: (data.complemento || prev.endereco_compl).toUpperCase(),
+      }));
+
+      // Try to match cidade
+      if (data.localidade) {
+        const XCidadeMatch = XCidades.find((c: any) =>
+          c.descricao.toUpperCase() === data.localidade.toUpperCase() &&
+          (!data.uf || c.uf?.toUpperCase() === data.uf.toUpperCase())
+        );
+        if (XCidadeMatch) {
+          setXF(prev => ({ ...prev, endereco_cidade_id: String(XCidadeMatch.cidade_id) }));
+        }
+      }
+
+      toast.success("Endereço carregado com sucesso!");
+    } catch (err: any) {
+      toast.error("Erro ao consultar CEP: " + (err.message || "Falha na consulta"));
+    } finally {
+      setXBuscandoCep(false);
+    }
+  }, [XF.endereco_cep, XCidades]);
+
+  // GPS Geolocation
+  const handleObterGeo = useCallback(() => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocalização não suportada neste navegador.");
+      return;
+    }
+    setXBuscandoGeo(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setXF(prev => ({
+          ...prev,
+          latitude: String(position.coords.latitude),
+          longitude: String(position.coords.longitude),
+        }));
+        toast.success("Coordenadas obtidas com sucesso!");
+        setXBuscandoGeo(false);
+      },
+      (err) => {
+        toast.error("Erro ao obter localização: " + err.message);
+        setXBuscandoGeo(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
+  }, []);
 
   const loadLookups = useCallback(async () => {
     const [r1, r2, r3, r4, r5, r6, r7, r8] = await Promise.all([
@@ -99,13 +325,25 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
       db.from("tabela_preco").select("tabela_id,descricao").eq("excluido", false).order("descricao"),
       db.from("cadastro").select("cadastro_id,razao_social").eq("st_vendedor", "S").eq("excluido", false).order("razao_social"),
     ]);
-    setXCidades(r1.data || []); setXGrupos(r2.data || []); setXTiposCad(r3.data || []);
-    setXCondicoes(r4.data || []); setXPortadores(r5.data || []); setXRotas(r6.data || []);
-    setXTabelas(r7.data || []); setXVendedores(r8.data || []);
+    setXCidades(r1.data || []);
+    setXGrupos(r2.data || []);
+    setXTiposCad(r3.data || []);
+    setXCondicoes(r4.data || []);
+    setXPortadores(r5.data || []);
+    setXRotas(r6.data || []);
+    setXTabelas(r7.data || []);
+    setXVendedores(r8.data || []);
   }, []);
 
   const loadData = useCallback(async () => {
-    let XQuery = db.from("cadastro").select("*").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false);
+    setXLoading(true);
+    let XQuery = db
+      .from("cadastro")
+      .select("*")
+      .eq("empresa_id", XEmpresaMatrizId)
+      .eq("excluido", false);
+
+    // Apply data filters
     if (dataFilter) {
       if (filterMode === "or") {
         const XParts: string[] = [];
@@ -119,203 +357,653 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
         if (dataFilter.st_transportador) XQuery = XQuery.eq("st_transportador", dataFilter.st_transportador);
       }
     }
-    const { data: XRows } = await XQuery.order("cadastro_id");
-    ctrl.setXData(XRows || []);
-  }, [XEmpresaMatrizId, dataFilter, filterMode, ctrl.setXData]);
 
-  useEffect(() => { if (!skipInitialLoad) loadData(); loadLookups(); }, [XEmpresaMatrizId]);
+    const { data: XRows } = await XQuery.order("cadastro_id");
+    setXData(XRows || []);
+    setXLoading(false);
+  }, [XEmpresaMatrizId, dataFilter, filterMode]);
 
   useEffect(() => {
-    if (ctrl.XCurrentRecord && ctrl.XFormMode === "view") {
-      const nf: any = {};
-      Object.keys(emptyForm()).forEach(k => {
-        const val = ctrl.XCurrentRecord[k];
-        if (k.startsWith("dt_") || k === "conj_dt_nasc") nf[k] = formatDateBR(val);
-        else nf[k] = val != null ? String(val) : "";
-      });
-      setXF(nf);
-    } else if (ctrl.XFormMode === "insert") {
-      setXF({ ...emptyForm(), ...(defaultValues || {}) });
-    }
-  }, [ctrl.XCurrentRecord, ctrl.XFormMode]);
+    if (!skipInitialLoad) loadData();
+    loadLookups();
+    setXCurrentIdx(0);
+    setXFormMode("view");
+  }, [XEmpresaMatrizId]);
 
-  const handleBuscarCnpj = async () => {
-    const XDigits = XF.cnpj.replace(/\D/g, "");
-    if (XDigits.length !== 14) { toast.error("CNPJ inválido para consulta."); return; }
-    setXBuscandoCnpj(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("consulta-cnpj", { body: { cnpj: XDigits } });
-      if (error || data?.error) throw new Error(error?.message || data?.error);
-      setXF(prev => ({
-        ...prev,
-        razao_social: (data.company?.name || prev.razao_social).toUpperCase(),
-        nome_fantasia: (data.alias || data.company?.name || prev.nome_fantasia).toUpperCase(),
-        endereco_logradouro: (data.address?.street || prev.endereco_logradouro).toUpperCase(),
-        endereco_numero: (data.address?.number || prev.endereco_numero).toUpperCase(),
-        endereco_bairro: (data.address?.district || prev.endereco_bairro).toUpperCase(),
-        endereco_cep: (data.address?.zip || prev.endereco_cep).replace(/\D/g, ""),
-        fone_geral: data.phones?.[0] ? `${data.phones[0].area}${data.phones[0].number}` : prev.fone_geral,
-        email: data.emails?.[0]?.address || prev.email,
-      }));
-      toast.success("Dados do CNPJ carregados!");
-    } catch (err: any) { toast.error("Erro ao consultar: " + err.message); } finally { setXBuscandoCnpj(false); }
+  // Auto-insert: dispara DEPOIS do effect acima via setTimeout(0)
+  useEffect(() => {
+    if (autoInsert) {
+      const XDefaults = { ...emptyForm(), ...(defaultValues || {}) };
+      // setTimeout garante execução após todos os effects síncronos do mount
+      setTimeout(() => {
+        setXFormMode("insert");
+        setXF(XDefaults);
+        setXInnerTab("cadastro");
+        setXCadastroInnerTab("geral");
+      }, 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // executa apenas na montagem
+
+  // Populate form when editing
+  useEffect(() => {
+    if (XCurrentRecord && XFormMode === "edit") {
+      const XNf: Record<string, string> = {};
+      for (const key of Object.keys(emptyForm())) {
+        const XVal = (XCurrentRecord as any)[key];
+        if (key.startsWith("dt_") || key.startsWith("dep_dt_") || key === "conj_dt_nasc") {
+          XNf[key] = formatDateBR(XVal);
+        } else {
+          XNf[key] = XVal != null ? String(XVal) : "";
+        }
+      }
+      setXF(XNf);
+    }
+  }, [XCurrentRecord, XFormMode]);
+
+  const handleIncluir = () => {
+    const XDefaults = { ...emptyForm(), ...(defaultValues || {}) };
+    setXFormMode("insert");
+    setXF(XDefaults);
+    setXInnerTab("cadastro");
+    setXCadastroInnerTab("geral");
+
+  };
+
+  const handleEditar = () => {
+    if (!XCurrentRecord) return;
+    setXFormMode("edit");
+    setXInnerTab("cadastro");
+    setXCadastroInnerTab("geral");
+
   };
 
   const handleSalvar = async () => {
-    if (!XF.razao_social.trim()) { toast.error("A Razão Social é obrigatória."); return; }
-    const XCpfCnpj = XF.cnpj.replace(/\D/g, "");
-    const toDate = (v: string) => { if (!v) return null; return parseDateBR(v) || v || null; };
-    const XPayload: any = { 
-      ...XF, 
-      empresa_id: XEmpresaMatrizId, 
-      cnpj: XCpfCnpj,
-      dt_nasc: toDate(XF.dt_nasc),
-      conj_dt_nasc: toDate(XF.conj_dt_nasc),
-      dt_alteracao: new Date().toISOString()
-    };
-    
-    if (ctrl.XFormMode === "edit" && ctrl.XCurrentRecord) {
-      const { error } = await db.from("cadastro").update(XPayload).eq("cadastro_id", ctrl.XCurrentRecord.cadastro_id);
-      if (error) { toast.error("Erro ao salvar: " + error.message); return; }
-    } else {
-      const { error } = await db.from("cadastro").insert(XPayload);
-      if (error) { toast.error("Erro ao salvar: " + error.message); return; }
+    if (!XF.razao_social.trim()) {
+      toast.error("A Razão Social é obrigatória.");
+      return;
     }
-    toast.success("Cadastro salvo!");
-    ctrl.setXFormMode("view");
-    loadData();
+    const XCpfCnpj = XF.cnpj.replace(/\D/g, "");
+    if (XCpfCnpj && !validateCPFOrCNPJ(XCpfCnpj)) {
+      toast.error("CPF/CNPJ inválido.");
+      return;
+    }
+
+    // Check duplicate CPF/CNPJ before saving
+    if (XCpfCnpj) {
+      let XDupQuery = db
+        .from("cadastro")
+        .select("cadastro_id, razao_social")
+        .eq("empresa_id", XEmpresaMatrizId)
+        .eq("cnpj", XCpfCnpj)
+        .eq("excluido", false);
+      if (XFormMode === "edit" && XCurrentRecord) {
+        XDupQuery = XDupQuery.neq("cadastro_id", XCurrentRecord.cadastro_id);
+      }
+      const { data: XDup } = await XDupQuery.limit(1);
+      if (XDup && XDup.length > 0) {
+        toast.error(`CPF/CNPJ já cadastrado para "${XDup[0].razao_social}" (Cód. ${XDup[0].cadastro_id}). Não é permitido duplicidade.`);
+        return;
+      }
+    }
+
+    // Extra validation from config
+    if (extraValidation) {
+      const XMsg = extraValidation(XF);
+      if (XMsg) {
+        toast.error(XMsg);
+        return;
+      }
+    }
+
+    const toNull = (v: string) => v.trim() || null;
+    const toInt = (v: string) => { const n = parseInt(v); return isNaN(n) ? null : n; };
+    const toFloat = (v: string) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+    const toDate = (v: string) => {
+      if (!v) return null;
+      const XParsed = parseDateBR(v);
+      return XParsed || v || null;
+    };
+
+    const XPayload: any = {
+      empresa_id: XEmpresaMatrizId,
+      cnpj: XCpfCnpj || "",
+      inscricao_estadual: toNull(XF.inscricao_estadual) || "",
+      razao_social: XF.razao_social.trim(),
+      nome_fantasia: toNull(XF.nome_fantasia) || "",
+      nome_curto: toNull(XF.nome_curto) || "",
+      endereco_logradouro: toNull(XF.endereco_logradouro) || "",
+      endereco_numero: toNull(XF.endereco_numero) || "",
+      endereco_bairro: toNull(XF.endereco_bairro) || "",
+      endereco_cep: toNull(XF.endereco_cep) || "",
+      endereco_compl: toNull(XF.endereco_compl) || "",
+      endereco_ptoref: toNull(XF.endereco_ptoref) || "",
+      endereco_cidade_id: toInt(XF.endereco_cidade_id),
+      fone_geral: XF.fone_geral.replace(/\D/g, "") || "",
+      fone_comercial: XF.fone_comercial.replace(/\D/g, "") || "",
+      fone_financeiro: XF.fone_financeiro.replace(/\D/g, "") || "",
+      fone_faturamento: XF.fone_faturamento.replace(/\D/g, "") || "",
+      condicao_id: toInt(XF.condicao_id),
+      funcionario_id: toInt(XF.funcionario_id),
+      tp_pessoa: XF.tp_pessoa || "F",
+      tp_contribuinte: XF.tp_contribuinte || "N",
+      grupo_cadastro_id: toInt(XF.grupo_cadastro_id),
+      tp_cadastro_id: toInt(XF.tp_cadastro_id),
+      estado_civil: toNull(XF.estado_civil) || "",
+      conj_nome: toNull(XF.conj_nome) || "",
+      conj_cpf: XF.conj_cpf.replace(/\D/g, "") || "",
+      conj_dt_nasc: toDate(XF.conj_dt_nasc),
+      conj_telefone: XF.conj_telefone.replace(/\D/g, "") || "",
+      rg: toNull(XF.rg) || "",
+      nacionalidade: toNull(XF.nacionalidade) || "BRASILEIRA",
+      portador_id: toInt(XF.portador_id),
+      rota_id: toInt(XF.rota_id),
+      rota_seq: parseInt(XF.rota_seq) || 0,
+      st_cadastro: XF.st_cadastro || "A",
+      st_cliente: XF.st_cliente || "S",
+      st_fornecedor: XF.st_fornecedor || "N",
+      st_transportador: XF.st_transportador || "N",
+      dep_nome1: toNull(XF.dep_nome1) || "",
+      dep_cpf1: XF.dep_cpf1.replace(/\D/g, "") || "",
+      dep_dt_nasc1: toDate(XF.dep_dt_nasc1),
+      dep_grau_parent1: toNull(XF.dep_grau_parent1) || "",
+      dep_nome2: toNull(XF.dep_nome2) || "",
+      dep_cpf2: XF.dep_cpf2.replace(/\D/g, "") || "",
+      dep_dt_nasc2: toDate(XF.dep_dt_nasc2),
+      dep_grau_parent2: toNull(XF.dep_grau_parent2) || "",
+      dt_nasc: toDate(XF.dt_nasc),
+      email: toNull(XF.email) || "",
+      tabela_preco_id: toInt(XF.tabela_preco_id),
+      inscricao_municipal: toNull(XF.inscricao_municipal) || "",
+      latitude: toFloat(XF.latitude),
+      longitude: toFloat(XF.longitude),
+    };
+
+    let XSavedCadastroId: number | null = null;
+
+    if (XFormMode === "edit" && XCurrentRecord) {
+      const { error } = await db.from("cadastro").update({ ...XPayload, dt_alteracao: new Date().toISOString() }).eq("cadastro_id", XCurrentRecord.cadastro_id);
+      if (error) { toast.error("Erro ao salvar: " + error.message); return; }
+      XSavedCadastroId = XCurrentRecord.cadastro_id;
+    } else {
+      const { data: XInserted, error } = await db.from("cadastro").insert(XPayload).select("cadastro_id").single();
+      if (error) { toast.error("Erro ao salvar: " + error.message); return; }
+      XSavedCadastroId = XInserted?.cadastro_id || null;
+    }
+
+    toast.success(XFormMode === "edit" ? "Cadastro alterado com sucesso." : "Cadastro incluído com sucesso.");
+    setXFormMode("view");
+    await loadData();
   };
 
-  const renderCadastro = () => (
-    <div className="space-y-6">
-      {/* Sub-tabs Minimalistas no Padrão RealCommerce */}
-      <div className="flex gap-1 p-1 bg-slate-100/50 dark:bg-slate-800/50 rounded-lg w-fit border border-border/40">
-        {[
-          {id: "geral", icon: <User size={14}/>, label: "Geral"},
-          {id: "endereco", icon: <Home size={14}/>, label: "Endereço"},
-          {id: "complemento", icon: <FileText size={14}/>, label: "Complemento"},
-          {id: "geo", icon: <Globe size={14}/>, label: "Mapa"},
-          ...(showVeiculoTab ? [{id: "veiculos", icon: <Truck size={14}/>, label: "Veículos"}] : [])
-        ].map(t => (
+
+  const handleCancelar = () => setXFormMode("view");
+
+  const handleExcluir = async () => {
+    if (!XCurrentRecord) return;
+    if (!confirm(`Deseja realmente excluir "${XCurrentRecord.razao_social}"?`)) return;
+    await baseService.excluirLogico("cadastro", "cadastro_id", XCurrentRecord.cadastro_id);
+    toast.success("Cadastro excluído com sucesso.");
+    await loadData();
+    if (XCurrentIdx > 0) setXCurrentIdx(XCurrentIdx - 1);
+  };
+
+  const handleFirst = () => setXCurrentIdx(0);
+  const handlePrev = () => setXCurrentIdx(Math.max(0, XCurrentIdx - 1));
+  const handleNext = () => setXCurrentIdx(Math.min(XData.length - 1, XCurrentIdx + 1));
+  const handleLast = () => setXCurrentIdx(XData.length - 1);
+
+  const handleRefresh = async () => {
+    await loadData();
+    toast.info("Dados recarregados.");
+  };
+
+  const handleSair = () => {
+    const XTab = XTabs.find(t => t.id === XActiveTabId);
+    if (XTab) closeTab(XTab.id);
+  };
+
+  // Localizar filter
+  const XFilteredData = useGridFilter(XData, XSearchFilters);
+
+  const handleSelectFromSearch = (XRow: any) => {
+    const XIdx = XData.findIndex(r => r.cadastro_id === XRow.cadastro_id);
+    if (XIdx >= 0) {
+      setXCurrentIdx(XIdx);
+      setXInnerTab("cadastro");
+      setXFormMode("view");
+    }
+  };
+
+  // Field rendering helpers
+  const XFieldBgEdit = "bg-card";
+  const XFieldBgRead = "bg-secondary";
+
+  const renderReadField = (label: string, value: string | number | null | undefined, className?: string) => (
+    <div className={className}>
+      <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
+      <input type="text" value={value ?? ""} readOnly className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XFieldBgRead}`} />
+    </div>
+  );
+
+  const renderEditField = (label: string, key: string, options?: { required?: boolean; placeholder?: string; className?: string; noUppercase?: boolean }) => {
+    const XIsLocked = lockedFields.includes(key);
+    return (
+      <div className={options?.className}>
+        <label className="block text-xs font-medium text-muted-foreground mb-1">
+          {label} {options?.required && <span className="text-destructive">*</span>}
+        </label>
+        <input
+          type="text"
+          value={XF[key] || ""}
+          onChange={(e) => set(key, options?.noUppercase ? e.target.value : e.target.value.toUpperCase())}
+          readOnly={XIsLocked}
+          placeholder={options?.placeholder}
+          className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XIsLocked ? XFieldBgRead : XFieldBgEdit} focus:ring-2 focus:ring-ring outline-none`}
+        />
+      </div>
+    );
+  };
+
+  const renderField = (label: string, key: string, options?: { required?: boolean; placeholder?: string; className?: string; noUppercase?: boolean }) => {
+    if (XIsEditing) return renderEditField(label, key, options);
+    return renderReadField(label, XCurrentRecord ? (XCurrentRecord as any)[key] : "", options?.className);
+  };
+
+  const renderSelect = (label: string, key: string, items: { v: string; l: string }[]) => {
+    if (!XIsEditing) {
+      const XDisplay = items.find(i => i.v === (XCurrentRecord as any)?.[key])?.l || (XCurrentRecord as any)?.[key] || "";
+      return renderReadField(label, XDisplay);
+    }
+    const XIsLocked = lockedFields.includes(key);
+    return (
+      <div>
+        <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
+        <Select value={XF[key] || ""} onValueChange={(v) => set(key, v)} disabled={XIsLocked}>
+          <SelectTrigger className={`h-[34px] text-sm ${XIsLocked ? XFieldBgRead : XFieldBgEdit}`}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {items.map(i => <SelectItem key={i.v} value={i.v}>{i.l}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  };
+
+  const renderLookup = (label: string, key: string, items: any[], valueKey: string, labelKey: string) => {
+    if (!XIsEditing) {
+      const XId = XCurrentRecord ? (XCurrentRecord as any)[key] : null;
+      const XItem = items.find((i: any) => i[valueKey] === XId);
+      return renderReadField(label, XItem ? XItem[labelKey] : "");
+    }
+    return (
+      <div>
+        <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
+        <Select value={XF[key] || "__none__"} onValueChange={(v) => set(key, v === "__none__" ? "" : v)}>
+          <SelectTrigger className={`h-[34px] text-sm ${XFieldBgEdit}`}><SelectValue placeholder="Selecione..." /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">— Nenhum —</SelectItem>
+            {items.map((i: any) => <SelectItem key={i[valueKey]} value={String(i[valueKey])}>{i[labelKey]}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  };
+
+  const renderDateField = (label: string, key: string) => {
+    if (!XIsEditing) {
+      return renderReadField(label, formatDateBR(XCurrentRecord ? (XCurrentRecord as any)[key] : null));
+    }
+    return <FormDateField label={label} value={XF[key] || ""} onChange={(v) => set(key, v)} />;
+  };
+
+  const XCadTabs = useMemo(() => {
+    const XBase = ["geral", "endereco", "complemento", "geo"];
+    if (showVeiculoTab) XBase.push("veiculos");
+    return XBase;
+  }, [showVeiculoTab]);
+
+  const XCadTabLabels: Record<string, string> = {
+    geral: "Dados Gerais",
+    endereco: "Endereço / Contato",
+    complemento: "Complemento",
+    geo: "Geolocalização",
+    veiculos: "Veículos",
+  };
+
+  // Map URL for geolocation
+  const XMapLat = XIsEditing ? XF.latitude : (XCurrentRecord?.latitude != null ? String(XCurrentRecord.latitude) : "");
+  const XMapLng = XIsEditing ? XF.longitude : (XCurrentRecord?.longitude != null ? String(XCurrentRecord.longitude) : "");
+  const XMapUrl = XMapLat && XMapLng
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${Number(XMapLng) - 0.005}%2C${Number(XMapLat) - 0.005}%2C${Number(XMapLng) + 0.005}%2C${Number(XMapLat) + 0.005}&layer=mapnik&marker=${XMapLat}%2C${XMapLng}`
+    : "";
+
+
+  return (
+    <div className="flex flex-col h-full bg-card" data-form-container>
+      <FormToolbar
+        XIsEditing={XIsEditing}
+        XHasRecord={!!XCurrentRecord}
+        XIsFirst={XCurrentIdx === 0}
+        XIsLast={XCurrentIdx >= XData.length - 1}
+        onIncluir={handleIncluir}
+        onEditar={handleEditar}
+        onSalvar={handleSalvar}
+        onCancelar={handleCancelar}
+        onExcluir={handleExcluir}
+        onFirst={handleFirst}
+        onPrev={handlePrev}
+        onNext={handleNext}
+        onLast={handleLast}
+        onRefresh={handleRefresh}
+        onLocalizar={() => setXInnerTab("localizar")}
+        onSair={handleSair}
+      />
+
+      {/* Inner tabs: Cadastro / Localizar */}
+      <div className="flex border-b border-border bg-card">
+        {(["cadastro", "localizar"] as const).map(t => (
           <button
-            key={t.id}
-            onClick={() => setXSubTab(t.id)}
-            className={`flex items-center gap-2 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider rounded-md transition-all ${XSubTab === t.id ? "bg-white dark:bg-slate-700 shadow-sm text-primary" : "text-muted-foreground hover:text-foreground"}`}
+            key={t}
+            className={`px-4 py-1.5 text-sm font-medium border-b-2 ${XInnerTab === t ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            onClick={() => setXInnerTab(t)}
           >
-            {t.icon} {t.label}
+            {t === "cadastro" ? formTitle : "Localizar"}
           </button>
         ))}
       </div>
 
-      <div className="bg-white/40 dark:bg-slate-900/40 p-5 rounded-xl border border-border/40 shadow-sm animate-in fade-in duration-300">
-        {XSubTab === "geral" && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-            <div className="md:col-span-3">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Razão Social / Nome Completo</label>
-              <input type="text" value={XF.razao_social} onChange={e => set("razao_social", e.target.value.toUpperCase())} disabled={!ctrl.XIsEditing} className="w-full border-b border-border bg-transparent px-1 py-2 text-sm focus:border-primary outline-none transition-all" />
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fantasia</label>
-              <input type="text" value={XF.nome_fantasia} onChange={e => set("nome_fantasia", e.target.value.toUpperCase())} disabled={!ctrl.XIsEditing} className="w-full border-b border-border bg-transparent px-1 py-2 text-sm focus:border-primary outline-none transition-all" />
-            </div>
-            <div className="md:col-span-1">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">CPF / CNPJ</label>
-              <div className="flex items-center gap-1 border-b border-border focus-within:border-primary transition-all">
-                <input type="text" value={formatCPFCNPJ(XF.cnpj)} onChange={e => set("cnpj", e.target.value.replace(/\D/g,""))} disabled={!ctrl.XIsEditing} className="w-full bg-transparent py-2 text-sm outline-none" />
-                {ctrl.XIsEditing && (
-                  <button onClick={handleBuscarCnpj} disabled={XBuscandoCnpj} className="p-1 hover:text-primary disabled:opacity-30">
-                    {XBuscandoCnpj ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-                  </button>
-                )}
+      {/* Content */}
+      <div className="flex-1 overflow-auto p-4">
+        {XInnerTab === "cadastro" ? (
+          <div className="space-y-3">
+            {/* Código + CPF/CNPJ + Busca + Razão Social */}
+            <div className="grid grid-cols-1 md:flex md:gap-4 gap-3">
+              <div className="w-full md:w-28">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Código</label>
+                <input
+                  type="text"
+                  value={XFormMode === "insert" ? "(Novo)" : XCurrentRecord?.cadastro_id ?? ""}
+                  readOnly
+                  className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XFieldBgRead} text-right`}
+                />
+              </div>
+              <div className="w-full md:w-[13.5rem]">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Emp. Matriz</label>
+                <input
+                  type="text"
+                  value={(() => { const em = XEmpresas.find(e => e.empresa_id === XEmpresaMatrizId); return em ? `${em.empresa_id} - ${em.identificacao}` : String(XEmpresaMatrizId); })()}
+                  readOnly
+                  className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XFieldBgRead}`}
+                />
+              </div>
+              <div className="w-full md:w-52">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  {(XIsEditing ? XF.tp_pessoa : XCurrentRecord?.tp_pessoa) === "J" ? "CNPJ" : (XIsEditing ? XF.tp_pessoa : XCurrentRecord?.tp_pessoa) === "F" ? "CPF" : "CPF/CNPJ"}
+                </label>
+                <div className="flex gap-1">
+                  {XIsEditing ? (
+                    <input
+                      type="text"
+                      value={XF.cnpj ? formatCPFCNPJ(XF.cnpj) : ""}
+                      onChange={(e) => handleCnpjChange(e.target.value)}
+                      onBlur={handleCnpjBlur}
+                      placeholder="CPF ou CNPJ"
+                      maxLength={18}
+                      className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XFieldBgEdit} focus:ring-2 focus:ring-ring outline-none`}
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={XCurrentRecord?.cnpj ? formatCPFCNPJ(XCurrentRecord.cnpj) : ""}
+                      readOnly
+                      className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XFieldBgRead}`}
+                    />
+                  )}
+                  {XIsEditing && (
+                    <button
+                      type="button"
+                      onClick={handleBuscarCnpj}
+                      disabled={XBuscandoCnpj}
+                      className={`flex items-center justify-center w-9 h-[34px] border border-border rounded ${XFieldBgEdit} hover:bg-accent disabled:opacity-50`}
+                      title="Consultar CNPJ"
+                    >
+                      {XBuscandoCnpj ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1">
+                {renderField("Razão Social", "razao_social", { required: true })}
               </div>
             </div>
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">E-mail</label>
-              <input type="email" value={XF.email} onChange={e => set("email", e.target.value.toLowerCase())} disabled={!ctrl.XIsEditing} className="w-full border-b border-border bg-transparent px-1 py-2 text-sm focus:border-primary outline-none transition-all" />
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Telefone Principal</label>
-              <input type="text" value={formatPhone(XF.fone_geral)} onChange={e => set("fone_geral", e.target.value.replace(/\D/g,""))} disabled={!ctrl.XIsEditing} className="w-full border-b border-border bg-transparent px-1 py-2 text-sm focus:border-primary outline-none transition-all" />
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tipo de Cadastro</label>
-              <select value={XF.tp_cadastro_id} onChange={e => set("tp_cadastro_id", e.target.value)} disabled={!ctrl.XIsEditing} className="w-full border-b border-border bg-transparent py-2 text-sm outline-none focus:border-primary">
-                <option value="">Selecione...</option>
-                {XTiposCad.map(t => <option key={t.tp_cadastro_id} value={t.tp_cadastro_id}>{t.nome}</option>)}
-              </select>
-            </div>
-          </div>
-        )}
 
-        {XSubTab === "endereco" && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-             <div className="md:col-span-1">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">CEP</label>
-              <div className="flex items-center gap-1 border-b border-border focus-within:border-primary transition-all">
-                <input type="text" value={XF.endereco_cep} onChange={e => set("endereco_cep", e.target.value.replace(/\D/g,""))} disabled={!ctrl.XIsEditing} className="w-full bg-transparent py-2 text-sm outline-none" />
-                {ctrl.XIsEditing && <button onClick={() => toast.info("Busca CEP")} className="p-1 hover:text-primary"><Search size={14} /></button>}
-              </div>
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Logradouro</label>
-              <input type="text" value={XF.endereco_logradouro} onChange={e => set("endereco_logradouro", e.target.value.toUpperCase())} disabled={!ctrl.XIsEditing} className="w-full border-b border-border bg-transparent px-1 py-2 text-sm focus:border-primary outline-none transition-all" />
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Número</label>
-              <input type="text" value={XF.endereco_numero} onChange={e => set("endereco_numero", e.target.value)} disabled={!ctrl.XIsEditing} className="w-full border-b border-border bg-transparent px-1 py-2 text-sm focus:border-primary outline-none transition-all" />
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Bairro</label>
-              <input type="text" value={XF.endereco_bairro} onChange={e => set("endereco_bairro", e.target.value.toUpperCase())} disabled={!ctrl.XIsEditing} className="w-full border-b border-border bg-transparent px-1 py-2 text-sm focus:border-primary outline-none transition-all" />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Cidade</label>
-              <select value={XF.endereco_cidade_id} onChange={e => set("endereco_cidade_id", e.target.value)} disabled={!ctrl.XIsEditing} className="w-full border-b border-border bg-transparent py-2 text-sm outline-none focus:border-primary">
-                <option value="">Selecione...</option>
-                {XCidades.map(c => <option key={c.cidade_id} value={c.cidade_id}>{c.descricao} - {c.uf}</option>)}
-              </select>
-            </div>
-          </div>
-        )}
-
-        {XSubTab === "geo" && (
-          <div className="space-y-4">
-             <div className="flex items-center gap-4">
-                <button onClick={handleObterGeo} disabled={!ctrl.XIsEditing || XBuscandoGeo} className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-primary text-primary-foreground rounded-lg hover:opacity-90 disabled:opacity-30">
-                  <MapPin size={14}/> {XBuscandoGeo ? "Obtendo..." : "Obter Localização Atual (GPS)"}
+            {/* Sub-tabs for form sections */}
+            <div className="flex border-b border-border flex-wrap">
+              {XCadTabs.map(t => (
+                <button
+                  key={t}
+                  className={`px-4 py-1.5 text-xs font-medium border-b-2 ${XCadastroInnerTab === t ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+                    }`}
+                  onClick={() => setXCadastroInnerTab(t)}
+                >
+                  {XCadTabLabels[t]}
                 </button>
-                <div className="text-xs text-muted-foreground italic">Lat: {XF.latitude || "---"} | Lng: {XF.longitude || "---"}</div>
-             </div>
-             <div className="w-full h-80 rounded-xl border border-border overflow-hidden bg-slate-50 dark:bg-slate-800 flex items-center justify-center">
-                {XF.latitude && XF.longitude ? (
-                  <iframe width="100%" height="100%" frameBorder="0" scrolling="no" marginHeight={0} marginWidth={0} src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(XF.longitude)-0.005},${Number(XF.latitude)-0.005},${Number(XF.longitude)+0.005},${Number(XF.latitude)+0.005}&layer=mapnik&marker=${XF.latitude},${XF.longitude}`} />
+              ))}
+            </div>
+
+            {/* === ABA DADOS GERAIS === */}
+            {XCadastroInnerTab === "geral" && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  {renderSelect("Tipo Pessoa", "tp_pessoa", [{ v: "O", l: "Outros" }, { v: "F", l: "Física" }, { v: "J", l: "Jurídica" }])}
+                  {renderField("RG", "rg")}
+                  {renderField("Insc. Estadual", "inscricao_estadual")}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {renderField("Nome Fantasia", "nome_fantasia")}
+                  {renderField("Nome Curto", "nome_curto")}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {renderField("Insc. Municipal", "inscricao_municipal")}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  {renderSelect("Status", "st_cadastro", [{ v: "A", l: "Ativo" }, { v: "I", l: "Inativo" }])}
+                  {renderSelect("Cliente?", "st_cliente", [{ v: "S", l: "Sim" }, { v: "N", l: "Não" }])}
+                  {renderSelect("Fornecedor?", "st_fornecedor", [{ v: "S", l: "Sim" }, { v: "N", l: "Não" }])}
+                  {renderSelect("Transportador?", "st_transportador", [{ v: "S", l: "Sim" }, { v: "N", l: "Não" }])}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {renderSelect("Contribuinte", "tp_contribuinte", [{ v: "N", l: "Não Contribuinte" }, { v: "C", l: "Contribuinte" }, { v: "I", l: "Isento" }])}
+                  {renderLookup("Grupo Cadastro", "grupo_cadastro_id", XGrupos, "cadastro_grupo_id", "nome")}
+                  {renderLookup("Tipo Cadastro", "tp_cadastro_id", XTiposCad, "tp_cadastro_id", "nome")}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {renderField("E-mail", "email", { placeholder: "email@exemplo.com" })}
+                  {renderDateField("Dt. Nascimento", "dt_nasc")}
+                  {renderField("Nacionalidade", "nacionalidade")}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  {renderSelect("Estado Civil", "estado_civil", [
+                    { v: "S", l: "Solteiro(a)" }, { v: "C", l: "Casado(a)" },
+                    { v: "D", l: "Divorciado(a)" }, { v: "V", l: "Viúvo(a)" },
+                  ])}
+                  {renderLookup("Tabela de Preço", "tabela_preco_id", XTabelas, "tabela_id", "descricao")}
+                  {renderLookup("Cond. Pagamento", "condicao_id", XCondicoes, "condicao_id", "descricao")}
+                </div>
+              </div>
+            )}
+
+            {/* === ABA ENDEREÇO / CONTATO === */}
+            {XCadastroInnerTab === "endereco" && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* CEP with search button */}
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">CEP</label>
+                    <div className="flex gap-1">
+                      {XIsEditing ? (
+                        <input
+                          type="text"
+                          value={XF.endereco_cep || ""}
+                          onChange={(e) => set("endereco_cep", e.target.value.replace(/\D/g, ""))}
+                          placeholder="00000-000"
+                          maxLength={9}
+                          className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XFieldBgEdit} focus:ring-2 focus:ring-ring outline-none`}
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          value={XCurrentRecord?.endereco_cep || ""}
+                          readOnly
+                          className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XFieldBgRead}`}
+                        />
+                      )}
+                      {XIsEditing && (
+                        <button
+                          type="button"
+                          onClick={handleBuscarCep}
+                          disabled={XBuscandoCep}
+                          className={`flex items-center justify-center w-9 h-[34px] border border-border rounded ${XFieldBgEdit} hover:bg-accent disabled:opacity-50`}
+                          title="Consultar CEP"
+                        >
+                          {XBuscandoCep ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {renderLookup("Cidade", "endereco_cidade_id", XCidades, "cidade_id", "descricao")}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  {renderField("Logradouro", "endereco_logradouro", { className: "md:col-span-2" })}
+                  {renderField("Número", "endereco_numero")}
+                  {renderField("Bairro", "endereco_bairro")}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {renderField("Complemento", "endereco_compl")}
+                  {renderField("Ponto de Referência", "endereco_ptoref")}
+                </div>
+
+                <h3 className="text-sm font-semibold text-muted-foreground pt-2">Telefones</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  {renderField("Fone Geral", "fone_geral", { placeholder: "(00) 00000-0000" })}
+                  {renderField("Fone Comercial", "fone_comercial")}
+                  {renderField("Fone Financeiro", "fone_financeiro")}
+                  {renderField("Fone Faturamento", "fone_faturamento")}
+                </div>
+
+                <h3 className="text-sm font-semibold text-muted-foreground pt-2">Vínculos</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {renderLookup("Vendedor (Funcionário)", "funcionario_id", XVendedores, "cadastro_id", "razao_social")}
+                  {renderLookup("Portador", "portador_id", XPortadores, "portador_id", "nome")}
+                  {renderLookup("Rota", "rota_id", XRotas, "rota_id", "descricao")}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  {renderField("Seq. Rota", "rota_seq")}
+                </div>
+              </div>
+            )}
+
+            {/* === ABA COMPLEMENTO === */}
+            {XCadastroInnerTab === "complemento" && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-muted-foreground">Cônjuge</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  {renderField("Nome Cônjuge", "conj_nome", { className: "md:col-span-2" })}
+                  {renderField("CPF Cônjuge", "conj_cpf")}
+                  {renderDateField("Dt. Nasc. Cônjuge", "conj_dt_nasc")}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  {renderField("Telefone Cônjuge", "conj_telefone")}
+                </div>
+
+                <h3 className="text-sm font-semibold text-muted-foreground pt-4">Dependente 1</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  {renderField("Nome", "dep_nome1", { className: "md:col-span-2" })}
+                  {renderField("CPF", "dep_cpf1")}
+                  {renderDateField("Dt. Nascimento", "dep_dt_nasc1")}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  {renderField("Grau Parentesco", "dep_grau_parent1")}
+                </div>
+
+                <h3 className="text-sm font-semibold text-muted-foreground pt-4">Dependente 2</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  {renderField("Nome", "dep_nome2", { className: "md:col-span-2" })}
+                  {renderField("CPF", "dep_cpf2")}
+                  {renderDateField("Dt. Nascimento", "dep_dt_nasc2")}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  {renderField("Grau Parentesco", "dep_grau_parent2")}
+                </div>
+              </div>
+            )}
+
+            {/* === ABA GEOLOCALIZAÇÃO === */}
+            {XCadastroInnerTab === "geo" && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                  {renderField("Latitude", "latitude", { noUppercase: true })}
+                  {renderField("Longitude", "longitude", { noUppercase: true })}
+                  {XIsEditing && (
+                    <div>
+                      <button
+                        type="button"
+                        onClick={handleObterGeo}
+                        disabled={XBuscandoGeo}
+                        className="flex items-center gap-2 px-4 py-1.5 text-sm font-medium border border-border rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                      >
+                        {XBuscandoGeo ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
+                        Obter Coordenadas GPS
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Map display */}
+                {XMapUrl ? (
+                  <div className="border border-border rounded overflow-hidden">
+                    <iframe
+                      title="Mapa de Localização"
+                      src={XMapUrl}
+                      width="100%"
+                      height="400"
+                      className="border-0"
+                      loading="lazy"
+                    />
+                    <div className="p-2 text-xs text-muted-foreground bg-secondary">
+                      📍 Lat: {XMapLat} | Lng: {XMapLng}
+                    </div>
+                  </div>
                 ) : (
-                  <div className="flex flex-col items-center gap-2 text-muted-foreground opacity-40">
-                    <MapPin size={48} />
-                    <span className="text-sm font-bold">Mapa não disponível sem coordenadas</span>
+                  <div className="flex flex-col items-center justify-center h-64 border border-dashed border-border rounded text-muted-foreground">
+                    <MapPin className="h-12 w-12 mb-2 opacity-30" />
+                    <p className="text-sm">Nenhuma coordenada disponível.</p>
+                    {XIsEditing && <p className="text-xs mt-1">Clique em "Obter Coordenadas GPS" para capturar a localização.</p>}
                   </div>
                 )}
-             </div>
-          </div>
-        )}
+              </div>
+            )}
 
-        {XSubTab === "veiculos" && showVeiculoTab && (
-          <VeiculoGrid cadastroId={ctrl.XCurrentRecord?.cadastro_id || 0} podeEditar={ctrl.XIsEditing} />
+            {/* === ABA VEÍCULOS === */}
+            {XCadastroInnerTab === "veiculos" && showVeiculoTab && XCurrentRecord && (
+              <VeiculoGrid XEmpresaId={XEmpresaId} XCadastroId={XCurrentRecord.cadastro_id} />
+            )}
+          </div>
+        ) : (
+          <DataGrid
+            columns={XLocalizarColumns}
+            data={XFilteredData}
+            showFilters
+            filterValues={XSearchFilters}
+            onFilterChange={(key, value) => setXSearchFilters(prev => ({ ...prev, [key]: value }))}
+            onRowDoubleClick={(row) => handleSelectFromSearch(row)}
+            maxHeight="400px"
+            exportTitle={formTitle}
+          />
         )}
       </div>
     </div>
-  );
-
-  return (
-    <StandardCrudForm
-      ctrl={ctrl}
-      title={formTitle}
-      onSalvar={handleSalvar}
-      onExcluir={handleExcluir}
-      onRefresh={loadData}
-      renderCadastro={renderCadastro}
-      localizarColumns={XLocalizarColumns}
-    />
   );
 };
 
