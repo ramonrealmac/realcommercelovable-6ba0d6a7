@@ -1,128 +1,39 @@
-## PDV - Refinamentos visuais e novas funções
+## Diagnóstico
 
-### 1. Migração de schema
+Existem **2 NF-e** na tabela `nfe_recebida` para `empresa_id=1` (notas 1020 e 1021, emitidas em 04/01/2026 e 14/01/2026), mas nenhuma aparece no formulário.
 
-Adicionar à tabela `funcionario`:
-- `caixa_edit_venda` (char, default 'N') — permite editar venda
+### Causa raiz
 
-(`caixa_inf_vend` e `caixa_cnc_venda` já existem.)
+No arquivo `src/components/forms/NfeRecebidasForm.tsx`, a busca no banco está **correta** (filtra apenas por `empresa_id` e ordena por `dt_emissao`). O problema está no **filtro client-side de datas** (linhas 74–81):
 
-Adicionar à tabela `movimento`:
-- `dt_cancelamento` (timestamptz, null)
-- `mot_cancelamento` (text, default '')
-
-### 2. Fluxo de finalização (corrigido)
-
-Ordem atualizada:
-
-```text
-[Finalizar Venda] → PagamentoDialog (Meios de Pagamento e Prazo)
-                       ↓ (botão "Finalizar Recebimento")
-                    Salva venda (status R, baixa estoque, caixa_movimento)
-                       ↓
-                    Fecha PagamentoDialog
-                       ↓
-                    Abre OpcoesPagamentoDialog (Bobina / A4 / NFe / NFCe)
-                       ↓
-                    [Concluir] → limpa carrinho/pedido selecionado
+```ts
+XDtIni = "2026-01-27" - 90 dias = "2025-10-29"  // OK
+XDtFim = "2026-01-27" (hoje)
 ```
 
-`OpcoesPagamentoDialog`: remove o botão "Continuar para Pagamento" e troca por "Concluir".
+A comparação `row.dt_emissao < XDtIni` falha porque:
 
-### 3. Lista de Pedidos a Receber — formato 2 linhas
+1. `row.dt_emissao` vem do Postgres como `"2026-01-04"` (campo `date`), mas dependendo do driver pode chegar como string ISO completa `"2026-01-04T00:00:00..."` ou objeto Date — a comparação de string com `"2026-01-27"` produz resultados imprevisíveis.
+2. Mais crítico: o cálculo do `XDtIni` inicial usa `toISOString()` que pode aplicar timezone UTC, e a comparação direta de strings só funciona se ambos estiverem no formato `YYYY-MM-DD` exato.
+3. As datas no banco (04/01 e 14/01) **estão dentro** do intervalo dos últimos 90 dias, então deveriam aparecer — confirmando que o bug é de formato/comparação.
 
-Cada item em 2 linhas (compacto, zebra alternada):
+Além disso, o filtro `XStatusFilter` inicia vazio (TODAS), então não é o problema.
 
-```text
-┌──────────────────────────────────────────┐
-│ #1234   João da Silva                    │  ← linha 1: nº (negrito) + cliente (azul)
-│ Vend. Maria Souza            R$ 250,00   │  ← linha 2: vendedor (verde itálico) + total
-└──────────────────────────────────────────┘
-```
+## Correção
 
-- Cliente: cor `text-blue-600`, semibold.
-- Vendedor: cor `text-emerald-600`, itálico, prefixo "Vend.".
-- Zebra: `odd:bg-muted/30`.
-- Hover: `hover:bg-accent`.
+Editar `src/components/forms/NfeRecebidasForm.tsx`:
 
-### 4. Cores de fundo dos painéis
+1. **Normalizar `row.dt_emissao` para `YYYY-MM-DD`** antes de comparar com `XDtIni`/`XDtFim`:
+   ```ts
+   const rowDt = String(row.dt_emissao || "").substring(0, 10);
+   if (XDtIni && rowDt && rowDt < XDtIni) return false;
+   if (XDtFim && rowDt && rowDt > XDtFim) return false;
+   ```
+2. Não filtrar por data quando `row.dt_emissao` for vazio/nulo (hoje uma nota sem data é eliminada).
+3. Remover os `console.log` de debug do filtro após validar.
+4. **Mover o filtro de data para o servidor (loadData)**: incluir `.gte("dt_emissao", XDtIni).lte("dt_emissao", XDtFim)` no select, e disparar `loadData()` ao clicar em FILTRAR (já está conectado). Isso evita trazer dados desnecessários e elimina ambiguidade de comparação.
+5. Manter filtro de Status (`XStatusFilter`) e filtros de coluna (`XSearchFilters`) no client.
 
-- Painéis "Venda Direta" e "Pedidos a Receber": fundo na cor do tema do menu principal (usar `bg-sidebar` / `bg-primary/5` conforme variável CSS atual da TopBar/SidebarMenu).
-- Listas de produtos (carrinho) e pedidos: linhas zebradas (`odd:bg-muted/40`).
-- Acentos coloridos em botões/textos (verde para confirmar, azul para info, âmbar para desconto).
+## Resultado esperado
 
-### 5. Vendedor na Venda Direta
-
-Abaixo do campo "Cliente":
-- Novo campo "Vendedor" com botão de busca (reusa `ClienteSearchDialog` filtrando `st_vendedor='S'` ou cria pequeno `VendedorSearchDialog`).
-- Habilitado apenas se `funcionario.caixa_inf_vend === 'S'` do caixa logado; caso contrário fica oculto/desabilitado.
-- Vendedor selecionado é gravado em `movimento.funcionario_id` ao finalizar.
-
-### 6. Permissões caixa_inf_vend / caixa_cnc_venda / caixa_edit_venda
-
-Carregar do `funcionario` do caixa logado e expor como flags:
-- `XPodeInfVend` → mostra/oculta campo Vendedor.
-- `XPodeCancVenda` → habilita opção "Cancelamento" no menu Funções.
-- `XPodeEditVenda` → habilita edição de pedidos a receber (carregar para venda direta para alterar).
-
-### 7. Botão Desconto + Totais em Badges
-
-Rodapé da Venda Direta:
-
-```text
-[Subtotal R$ 100,00] [Desc. 5% R$ 5,00] [Total R$ 95,00]   [%/$ Desconto]  [Finalizar Venda]
-   azul                  âmbar              verde            outline           primary (menor)
-```
-
-- 3 badges lado a lado com título acima e valor em destaque.
-- Label desconto: `Desc.` + `XPercDesc + '%'` quando houver percentual; vazio quando 0.
-- Botão **Finalizar Venda** menor (size sm).
-- Botão **Desconto** abre `DescontoDialog`:
-  - Tabs/radio: `%` ou `R$`
-  - Input numérico
-  - Aplica em `XDesconto` (valor) e `XPercDesc`.
-  - Total = Subtotal − Desconto.
-
-### 8. Botão Funções (antes de Configurar)
-
-Ordem header: `[Funções] [Configurar] [Sair]`
-
-`FuncoesDialog` com 6 cards (grid 3x2):
-
-| Função | Implementar agora | Comportamento |
-|---|---|---|
-| Suprimento | Não | toast "Em desenvolvimento" |
-| Sangria | Não | toast "Em desenvolvimento" |
-| Última Venda | Não | toast "Em desenvolvimento" |
-| Reimpressão | Não | toast "Em desenvolvimento" |
-| **Cancelamento** | **Sim** | Abre `CancelamentoDialog` |
-| Fechamento | Não | toast "Em desenvolvimento" |
-
-### 9. Cancelamento de Venda
-
-`CancelamentoDialog`:
-- Campo: número do pedido (ou seleciona da lista).
-- Campo: motivo (textarea obrigatória).
-- Valida `caixa_cnc_venda='S'`.
-- Ao confirmar:
-  - `UPDATE movimento SET st_movimento='C', dt_cancelamento=now(), mot_cancelamento=:motivo WHERE movimento_id=:id`
-  - Imprime comprovante (template HTML simples via `window.print()`):
-    - Cabeçalho "COMPROVANTE DE CANCELAMENTO"
-    - Operador (nome do caixa), data/hora, nº pedido, motivo.
-- Recarrega lista de pedidos.
-
-### 10. Arquivos
-
-**Criados:**
-- `src/components/forms/pdv/DescontoDialog.tsx`
-- `src/components/forms/pdv/FuncoesDialog.tsx`
-- `src/components/forms/pdv/CancelamentoDialog.tsx`
-- `src/components/forms/pdv/VendedorSearchDialog.tsx`
-- Migration: colunas em `funcionario` e `movimento`.
-
-**Editados:**
-- `src/components/forms/pdv/PdvTela.tsx` — header com Funções, lista 2 linhas zebrada, vendedor, desconto, totais em badges, cores de fundo.
-- `src/components/forms/pdv/PagamentoDialog.tsx` — ao Finalizar Recebimento: salva, fecha, dispara `onAbrirDocumento()`.
-- `src/components/forms/pdv/OpcoesPagamentoDialog.tsx` — botão "Concluir" no lugar de "Continuar para Pagamento".
-- `src/components/forms/pdv/types.ts` — `caixa_edit_venda`, `vendedor_id`, campos de cancelamento.
-- `src/integrations/supabase/types.ts` — refletir colunas novas.
+Após a correção, ao abrir o formulário (ou clicar em FILTRAR) as 2 NF-e existentes (1020 e 1021) serão exibidas na grade.
