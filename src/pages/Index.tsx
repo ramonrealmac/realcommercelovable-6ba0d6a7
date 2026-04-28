@@ -73,6 +73,8 @@ const AppContent = () => {
         return <TrocaSenhaForm />;
       case "empresas":
         return <EmpresaForm />;
+      case "estados":
+        return <EstadoForm />;
       case "cidades":
         return <CidadeForm />;
       case "rotas":
