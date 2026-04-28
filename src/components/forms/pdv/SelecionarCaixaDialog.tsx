@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
 import type { IPdvCaixa, IPdvCaixaAbertura } from "./types";
+import AberturaCaixaForm from "./AberturaCaixaForm";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const db = supabase as any;
 
@@ -26,6 +28,8 @@ const SelecionarCaixaDialog: React.FC<IProps> = ({ onEntrar, onCancelar }) => {
   const [XDtMov, setXDtMov] = useState<string>(new Date().toISOString().slice(0, 10));
   const [XLoading, setXLoading] = useState(false);
   const [XLoadingCaixas, setXLoadingCaixas] = useState(true);
+  const [XOpenAbert, setXOpenAbert] = useState(false);
+  const [XCaixaPendente, setXCaixaPendente] = useState<IPdvCaixa | null>(null);
 
   const carregarCaixas = useCallback(async () => {
     setXLoadingCaixas(true);
@@ -64,24 +68,9 @@ const SelecionarCaixaDialog: React.FC<IProps> = ({ onEntrar, onCancelar }) => {
       const abertura = (aberts && aberts[0]) as IPdvCaixaAbertura | undefined;
 
       if (!abertura) {
-        if (!confirm(`Não existe caixa aberto para "${caixa.nome}". Deseja abrir o caixa em ${fmtDateBR(XDtMov)}?`)) return;
-        // Próximo id
-        const { data: maxRow } = await db.from("caixa_abertura")
-          .select("caixa_abertura_id").order("caixa_abertura_id", { ascending: false }).limit(1);
-        const novoId = ((maxRow && maxRow[0]?.caixa_abertura_id) || 0) + 1;
-        const novo: IPdvCaixaAbertura = {
-          caixa_abertura_id: novoId,
-          empresa_id: XEmpresaId,
-          funcionario_id: caixa.funcionario_id,
-          dt_abertura: XDtMov,
-          vl_abertura: 0,
-          vl_fechamento: null,
-          status: "A",
-        };
-        const { error: e2 } = await db.from("caixa_abertura").insert(novo);
-        if (e2) { toast.error("Falha ao abrir caixa: " + e2.message); return; }
-        toast.success("Caixa aberto.");
-        onEntrar({ caixa, abertura: novo, dtMovimento: XDtMov });
+        // Abrir formulário de Abertura de Caixa
+        setXCaixaPendente(caixa);
+        setXOpenAbert(true);
         return;
       }
 
