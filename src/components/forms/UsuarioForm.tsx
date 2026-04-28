@@ -46,8 +46,11 @@ const UsuarioForm: React.FC = () => {
 
   /* ── CRUD Controller ── */
   const ctrl = useCrudController<IUserRow>({
-    tableName: "profiles",
-    empresaFieldName: "id",
+    XTableName: "profiles",
+    XPrimaryKey: "user_id",
+    XTitle: "Gestão de Usuários",
+    XDefaultRecord: { user_id: "", email: "", nm_usuario: "", ds_login: "", ds_foto: "" },
+    XSoftDelete: false,
   });
 
   /* ── State ── */
@@ -301,14 +304,16 @@ const UsuarioForm: React.FC = () => {
   );
 
   return (
-    <StandardCrudForm
-      ctrl={ctrl}
-      title="Gestão de Usuários"
-      onSalvar={handleSalvar}
-      onExcluir={handleExcluir}
-      onRefresh={loadData}
-      renderCadastro={renderCadastro}
-      localizarColumns={XLocalizarColumns}
+    <StandardCrudForm<IUserRow>
+      config={{
+        XTableName: "profiles",
+        XPrimaryKey: "user_id",
+        XTitle: "Gestão de Usuários",
+        XDefaultRecord: { user_id: "", email: "", nm_usuario: "", ds_login: "", ds_foto: "" },
+        XSoftDelete: false,
+      }}
+      XGridCols={XLocalizarColumns}
+      renderCadastro={() => renderCadastro()}
     />
   );
 };

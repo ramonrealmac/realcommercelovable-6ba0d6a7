@@ -409,7 +409,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
             nm_produto: c.nm_produto,
             qt_movimento: c.qt_item,
             unidade_id: c.unidade_id,
-            vl_unitario: c.vl_unitario,
+            vl_und_produto: c.vl_unitario,
             vl_movimento: c.qt_item * c.vl_unitario,
           }));
       setXImpressaoDados({

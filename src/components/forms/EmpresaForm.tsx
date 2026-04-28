@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppContext } from "@/contexts/AppContext";
-import FormToolbar, { TFormMode } from "@/components/shared/FormToolbar";
+import FormToolbar from "@/components/shared/FormToolbar";
+import type { TFormMode } from "@/hooks/useCrudController";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
