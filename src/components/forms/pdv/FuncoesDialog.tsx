@@ -1,6 +1,6 @@
 import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowDownToLine, ArrowUpFromLine, Receipt, Printer, Ban, Lock, X } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, Receipt, Printer, Ban, Lock, Unlock, X } from "lucide-react";
 import { toast } from "sonner";
 
 interface IProps {
@@ -10,9 +10,10 @@ interface IProps {
   onClose: () => void;
   onCancelamento: () => void;
   onFechamento: () => void;
+  onAbertura: () => void;
 }
 
-const FuncoesDialog: React.FC<IProps> = ({ open, podeCancelar, onClose, onCancelamento, onFechamento }) => {
+const FuncoesDialog: React.FC<IProps> = ({ open, podeCancelar, onClose, onCancelamento, onFechamento, onAbertura }) => {
   const cards = [
     { key: "supr", label: "Suprimento", desc: "Entrada de dinheiro no caixa",
       icon: <ArrowDownToLine size={28} />, color: "text-emerald-600",
@@ -29,6 +30,9 @@ const FuncoesDialog: React.FC<IProps> = ({ open, podeCancelar, onClose, onCancel
     { key: "canc", label: "Cancelamento", desc: "Cancela uma venda",
       icon: <Ban size={28} />, color: "text-red-600",
       action: () => { onClose(); onCancelamento(); }, enabled: podeCancelar },
+    { key: "abert", label: "Abertura", desc: "Abertura do caixa",
+      icon: <Unlock size={28} />, color: "text-emerald-600",
+      action: () => { onClose(); onAbertura(); }, enabled: true },
     { key: "fech", label: "Fechamento", desc: "Fechamento do caixa",
       icon: <Lock size={28} />, color: "text-amber-600",
       action: () => { onClose(); onFechamento(); }, enabled: true },
