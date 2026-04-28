@@ -103,7 +103,7 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
   const handleSalvar = async () => {
     if (!nfeCabecalhoId) return;
     if (!XF.nm_produto?.trim()) { toast.error("Informe a descrição do produto."); return; }
-    const payload: any = { ...XF, nfe_cabecalho_id: nfeCabecalhoId, empresa_id, nm_produto: XF.nm_produto!.toUpperCase(), qt_entrada: parseNum(XF.qt_entrada), vl_unit: parseNum(XF.vl_unit), vl_desconto: parseNum(XF.vl_desconto), vl_total: recalcTotal(XF) };
+    const payload: any = { ...XF, nfe_cabecalho_id: nfeCabecalhoId, empresa_id: empresaId, nm_produto: XF.nm_produto!.toUpperCase(), qt_entrada: parseNum(XF.qt_entrada), vl_unit: parseNum(XF.vl_unit), vl_desconto: parseNum(XF.vl_desconto), vl_total: recalcTotal(XF) };
     if (XMode === "edit" && XCurrentIdx !== null) {
       await db.from("nfe_item").update({ ...payload, updated_at: new Date().toISOString() }).eq("nfe_item_id", XItens[XCurrentIdx].nfe_item_id);
     } else {
