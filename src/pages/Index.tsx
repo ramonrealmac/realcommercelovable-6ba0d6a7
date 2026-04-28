@@ -22,6 +22,7 @@ import EstoqueForm from "@/components/forms/EstoqueForm";
 import ProdutoForm from "@/components/forms/ProdutoForm";
 import PedidoForm from "@/components/forms/PedidoForm";
 import PdvCaixaForm from "@/components/forms/pdv/PdvCaixaForm";
+import FechamentoCaixaForm from "@/components/forms/pdv/FechamentoCaixaForm";
 import NotaFiscalEntradaForm from "@/components/forms/NotaFiscalEntradaForm";
 import NfeRecebidasForm from "@/components/forms/NfeRecebidasForm";
 import AuthGate from "@/components/auth/AuthGate";
@@ -91,6 +92,8 @@ const AppContent = () => {
         return <NfeRecebidasForm />;
       case "pdv-caixa":
         return <PdvCaixaForm />;
+      case "fechamento-caixa":
+        return <FechamentoCaixaForm />;
       case "rb-conexoes":
         return <RbConexaoForm />;
       case "rb-templates":

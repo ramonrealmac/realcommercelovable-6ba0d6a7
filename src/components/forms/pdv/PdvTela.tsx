@@ -12,6 +12,8 @@ import OpcoesPagamentoDialog, { IImpressaoDados } from "./OpcoesPagamentoDialog"
 import DescontoDialog from "./DescontoDialog";
 import FuncoesDialog from "./FuncoesDialog";
 import CancelamentoDialog from "./CancelamentoDialog";
+import FechamentoCaixaForm from "./FechamentoCaixaForm";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type {
   IPdvCaixa, IPdvCaixaAbertura, IPdvParamsEmpresa, IPdvPedidoFechado,
   IPdvPagamentoLinha, IMovimentoPagamento,
@@ -52,6 +54,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   const [XOpenConfig, setXOpenConfig] = useState(false);
   const [XOpenFuncoes, setXOpenFuncoes] = useState(false);
   const [XOpenCanc, setXOpenCanc] = useState(false);
+  const [XOpenFech, setXOpenFech] = useState(false);
 
   // Pedidos fechados disponíveis
   const [XPedidos, setXPedidos] = useState<IPdvPedidoFechado[]>([]);
@@ -715,7 +718,17 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         podeCancelar={XPodeCancVenda}
         onClose={() => setXOpenFuncoes(false)}
         onCancelamento={() => setXOpenCanc(true)}
+        onFechamento={() => setXOpenFech(true)}
       />
+
+      <Dialog open={XOpenFech} onOpenChange={(o) => !o && setXOpenFech(false)}>
+        <DialogContent className="max-w-6xl">
+          <DialogHeader>
+            <DialogTitle>Fechamento de Caixa</DialogTitle>
+          </DialogHeader>
+          <FechamentoCaixaForm />
+        </DialogContent>
+      </Dialog>
 
       <CancelamentoDialog
         open={XOpenCanc}
