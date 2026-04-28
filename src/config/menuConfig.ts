@@ -158,6 +158,8 @@ export const MENU_CONFIG: MenuItem[] = [
           { id: "pdv-caixa", title: "PDV - Caixa", icon: BadgeDollarSign },
           { id: "abertura-caixa", title: "Abertura de Caixa", icon: BadgeDollarSign },
           { id: "fechamento-caixa", title: "Fechamento de Caixa", icon: BadgeDollarSign },
+          { id: "suprimento-caixa", title: "Suprimento de Caixa", icon: ArrowDownToLine },
+          { id: "sangria-caixa", title: "Sangria de Caixa", icon: ArrowUpFromLine },
           { id: "finalizar-venda", title: "Finalizar Venda", icon: BadgeDollarSign },
           { id: "pedidos", title: "Meus Pedidos", icon: ClipboardList },
           {

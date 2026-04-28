@@ -11,16 +11,18 @@ interface IProps {
   onCancelamento: () => void;
   onFechamento: () => void;
   onAbertura: () => void;
+  onSuprimento: () => void;
+  onSangria: () => void;
 }
 
-const FuncoesDialog: React.FC<IProps> = ({ open, podeCancelar, onClose, onCancelamento, onFechamento, onAbertura }) => {
+const FuncoesDialog: React.FC<IProps> = ({ open, podeCancelar, onClose, onCancelamento, onFechamento, onAbertura, onSuprimento, onSangria }) => {
   const cards = [
     { key: "supr", label: "Suprimento", desc: "Entrada de dinheiro no caixa",
       icon: <ArrowDownToLine size={28} />, color: "text-emerald-600",
-      action: () => toast.info("Suprimento será implementado em seguida."), enabled: false },
+      action: () => { onClose(); onSuprimento(); }, enabled: true },
     { key: "sang", label: "Sangria", desc: "Retirada de dinheiro do caixa",
       icon: <ArrowUpFromLine size={28} />, color: "text-rose-600",
-      action: () => toast.info("Sangria será implementada em seguida."), enabled: false },
+      action: () => { onClose(); onSangria(); }, enabled: true },
     { key: "ult", label: "Última Venda", desc: "Reimprime a última venda",
       icon: <Receipt size={28} />, color: "text-blue-600",
       action: () => toast.info("Última Venda será implementada em seguida."), enabled: false },
