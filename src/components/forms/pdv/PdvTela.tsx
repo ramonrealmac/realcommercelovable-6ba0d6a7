@@ -13,6 +13,7 @@ import DescontoDialog from "./DescontoDialog";
 import FuncoesDialog from "./FuncoesDialog";
 import CancelamentoDialog from "./CancelamentoDialog";
 import FechamentoCaixaForm from "./FechamentoCaixaForm";
+import AberturaCaixaForm from "./AberturaCaixaForm";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type {
   IPdvCaixa, IPdvCaixaAbertura, IPdvParamsEmpresa, IPdvPedidoFechado,
@@ -55,6 +56,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   const [XOpenFuncoes, setXOpenFuncoes] = useState(false);
   const [XOpenCanc, setXOpenCanc] = useState(false);
   const [XOpenFech, setXOpenFech] = useState(false);
+  const [XOpenAbert, setXOpenAbert] = useState(false);
 
   // Pedidos fechados disponíveis
   const [XPedidos, setXPedidos] = useState<IPdvPedidoFechado[]>([]);
@@ -719,6 +721,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         onClose={() => setXOpenFuncoes(false)}
         onCancelamento={() => setXOpenCanc(true)}
         onFechamento={() => setXOpenFech(true)}
+        onAbertura={() => setXOpenAbert(true)}
       />
 
       <Dialog open={XOpenFech} onOpenChange={(o) => !o && setXOpenFech(false)}>
@@ -727,6 +730,21 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
             <DialogTitle>Fechamento de Caixa</DialogTitle>
           </DialogHeader>
           <FechamentoCaixaForm />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={XOpenAbert} onOpenChange={(o) => !o && setXOpenAbert(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Abertura de Caixa</DialogTitle>
+          </DialogHeader>
+          <AberturaCaixaForm
+            funcionarioId={caixa.funcionario_id}
+            dtAbertura={dtMovimento}
+            embutido
+            onAberto={() => { setXOpenAbert(false); toast.success("Caixa aberto. Reentre no PDV para utilizá-lo."); }}
+            onCancelar={() => setXOpenAbert(false)}
+          />
         </DialogContent>
       </Dialog>
 
