@@ -48,7 +48,7 @@ const EstadoForm: React.FC = () => (
           <input
             type="text"
             maxLength={2}
-            readOnly={!isEditing || mode === "update"}
+            readOnly={!isEditing || mode === "edit"}
             autoFocus={isEditing && mode === "insert"}
             value={record.estado_id ?? ""}
             onChange={(e) => setField("estado_id", e.target.value.toUpperCase())}
