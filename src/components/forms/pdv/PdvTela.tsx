@@ -14,6 +14,7 @@ import FuncoesDialog from "./FuncoesDialog";
 import CancelamentoDialog from "./CancelamentoDialog";
 import FechamentoCaixaForm from "./FechamentoCaixaForm";
 import AberturaCaixaForm from "./AberturaCaixaForm";
+import SuprimentoSangriaForm from "./SuprimentoSangriaForm";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type {
   IPdvCaixa, IPdvCaixaAbertura, IPdvParamsEmpresa, IPdvPedidoFechado,
