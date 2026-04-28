@@ -52,6 +52,11 @@ import {
   FileBarChart,
   ClipboardCheck,
   Activity,
+  Monitor,
+  Receipt,
+  Lock,
+  Unlock,
+  Calculator,
 } from "lucide-react";
 
 export interface MenuItem {
@@ -155,11 +160,6 @@ export const MENU_CONFIG: MenuItem[] = [
         icon: ArrowUpFromLine,
         children: [
           { id: "pdv", title: "Novo Pedido", icon: FilePen },
-          { id: "pdv-caixa", title: "PDV - Caixa", icon: BadgeDollarSign },
-          { id: "abertura-caixa", title: "Abertura de Caixa", icon: BadgeDollarSign },
-          { id: "fechamento-caixa", title: "Fechamento de Caixa", icon: BadgeDollarSign },
-          { id: "suprimento-caixa", title: "Suprimento de Caixa", icon: ArrowDownToLine },
-          { id: "sangria-caixa", title: "Sangria de Caixa", icon: ArrowUpFromLine },
           { id: "finalizar-venda", title: "Finalizar Venda", icon: BadgeDollarSign },
           { id: "pedidos", title: "Meus Pedidos", icon: ClipboardList },
           {
@@ -197,8 +197,30 @@ export const MENU_CONFIG: MenuItem[] = [
     ],
   },
   {
+    id: "caixa-pdv",
+    title: "4. Caixa/PDV",
+    icon: Monitor,
+    children: [
+      { id: "abertura-caixa", title: "4.1. Abertura de Caixa", icon: Unlock },
+      { id: "pdv-caixa", title: "4.2. PDV/Caixa", icon: Calculator },
+      { id: "suprimento-caixa", title: "4.3. Suprimento", icon: ArrowDownToLine },
+      { id: "sangria-caixa", title: "4.4. Sangria", icon: ArrowUpFromLine },
+      { id: "fechamento-caixa", title: "4.5. Fechamento", icon: Lock },
+    ],
+  },
+  {
+    id: "fiscal",
+    title: "5. Fiscal",
+    icon: Receipt,
+    children: [
+      { id: "nfe-nfce", title: "Nfe/Nfce", icon: FileText },
+      { id: "mdfe", title: "Mdfe", icon: FileText },
+      { id: "cte", title: "Cte", icon: FileText },
+    ],
+  },
+  {
     id: "relatorios-menu",
-    title: "4. Relatórios",
+    title: "6. Relatórios",
     icon: FileBarChart,
     children: [
       { id: "rel-contas-receber", title: "Relatórios - Contas a Receber", icon: FileUp },
@@ -210,7 +232,7 @@ export const MENU_CONFIG: MenuItem[] = [
   },
   {
     id: "configuracoes",
-    title: "5. Configurações",
+    title: "7. Configurações",
     icon: Settings2,
     adminOnly: true,
     children: [

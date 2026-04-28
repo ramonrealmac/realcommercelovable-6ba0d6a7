@@ -27,6 +27,7 @@ import AberturaCaixaForm from "@/components/forms/pdv/AberturaCaixaForm";
 import SuprimentoSangriaForm from "@/components/forms/pdv/SuprimentoSangriaForm";
 import NotaFiscalEntradaForm from "@/components/forms/NotaFiscalEntradaForm";
 import NfeRecebidasForm from "@/components/forms/NfeRecebidasForm";
+import MdfeForm from "@/components/forms/mdfe/MdfeForm";
 import AuthGate from "@/components/auth/AuthGate";
 import { useThemeColors } from "@/hooks/useThemeColors";
 import RbConexaoForm from "@/rbuilder/components/rb_ConexaoForm";
@@ -108,6 +109,8 @@ const AppContent = () => {
         return <RbTemplatePesquisaForm />;
       case "rb-relatorios":
         return <RbRelatorioForm />;
+      case "mdfe":
+        return <MdfeForm />;
       case "provedor-test":
         return <ProvedorTestForm />;
       default:

@@ -7,14 +7,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 interface ICidade {
   cidade_id: number;
   descricao: string;
-  uf: string | null;
+  estado_id: string | null;
   cd_ibge: string | null;
 }
 
 const XGridCols: IGridColumn[] = [
   { key: "cidade_id", label: "Código", width: "80px", align: "right" },
   { key: "descricao", label: "Descrição", width: "1fr" },
-  { key: "uf", label: "UF", width: "80px" },
+  { key: "estado_id", label: "UF", width: "80px" },
   { key: "cd_ibge", label: "Cód. IBGE", width: "120px" },
 ];
 
@@ -25,11 +25,11 @@ const XConfig: ICrudConfig<ICidade> = {
   XPrimaryKey: "cidade_id",
   XTitle: "Cidades",
   XOrderBy: "cidade_id",
-  XDefaultRecord: { descricao: "", uf: "PR", cd_ibge: "" },
+  XDefaultRecord: { descricao: "", estado_id: "PR", cd_ibge: "" },
   XOnBeforeSave: (rec) => ({
     ...rec,
     descricao: (rec.descricao || "").trim().toUpperCase(),
-    uf: rec.uf || "PR",
+    estado_id: rec.estado_id || "PR",
     cd_ibge: (rec.cd_ibge || "").trim() || null,
   }),
 };
@@ -58,14 +58,14 @@ const CidadeForm: React.FC = () => (
         <div className="w-full md:w-32">
           <label className="block text-xs font-medium text-muted-foreground mb-1">UF</label>
           {isEditing ? (
-            <Select value={record.uf || "PR"} onValueChange={v => setField("uf", v)}>
+            <Select value={record.estado_id || "PR"} onValueChange={v => setField("estado_id", v)}>
               <SelectTrigger className="h-[34px] text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {UF_OPTIONS.map(uf => <SelectItem key={uf} value={uf}>{uf}</SelectItem>)}
               </SelectContent>
             </Select>
           ) : (
-            <input type="text" readOnly value={record.uf ?? ""}
+            <input type="text" readOnly value={record.estado_id ?? ""}
               className="w-full border border-border rounded px-3 py-1.5 text-sm bg-secondary" />
           )}
         </div>
