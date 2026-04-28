@@ -14,6 +14,7 @@ import UsuarioForm from "@/components/forms/UsuarioForm";
 import TrocaSenhaForm from "@/components/forms/TrocaSenhaForm";
 import EmpresaForm from "@/components/forms/EmpresaForm";
 import CidadeForm from "@/components/forms/CidadeForm";
+import EstadoForm from "@/components/forms/EstadoForm";
 import RotaForm from "@/components/forms/RotaForm";
 import LinhaProdutoForm from "@/components/forms/LinhaProdutoForm";
 import UnidadeForm from "@/components/forms/UnidadeForm";
@@ -72,6 +73,8 @@ const AppContent = () => {
         return <TrocaSenhaForm />;
       case "empresas":
         return <EmpresaForm />;
+      case "estados":
+        return <EstadoForm />;
       case "cidades":
         return <CidadeForm />;
       case "rotas":
