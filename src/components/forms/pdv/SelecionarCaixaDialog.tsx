@@ -134,6 +134,37 @@ const SelecionarCaixaDialog: React.FC<IProps> = ({ onEntrar, onCancelar }) => {
           >{XLoading ? "..." : "Prosseguir"}</button>
         </div>
       </div>
+
+      <Dialog open={XOpenAbert} onOpenChange={(o) => !o && setXOpenAbert(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Abertura de Caixa</DialogTitle>
+          </DialogHeader>
+          {XCaixaPendente && (
+            <AberturaCaixaForm
+              funcionarioId={XCaixaPendente.funcionario_id}
+              dtAbertura={XDtMov}
+              embutido
+              onCancelar={() => { setXOpenAbert(false); setXCaixaPendente(null); }}
+              onAberto={(res) => {
+                setXOpenAbert(false);
+                const novaAb: IPdvCaixaAbertura = {
+                  caixa_abertura_id: res.caixa_abertura_id,
+                  empresa_id: XEmpresaId,
+                  funcionario_id: res.funcionario_id,
+                  dt_abertura: res.dt_abertura,
+                  vl_abertura: res.vl_abertura,
+                  vl_fechamento: null,
+                  status: "A",
+                };
+                const caixa = XCaixaPendente;
+                setXCaixaPendente(null);
+                if (caixa) onEntrar({ caixa, abertura: novaAb, dtMovimento: res.dt_abertura });
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
