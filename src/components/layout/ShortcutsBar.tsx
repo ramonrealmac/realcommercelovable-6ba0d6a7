@@ -4,36 +4,54 @@ import { MENU_CONFIG, MenuItem, getLeafItems } from "@/config/menuConfig";
 import { useAppContext } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 
-const STORAGE_PREFIX = "x_shortcuts_v1::";
-
 const ShortcutsBar = () => {
   const { openTab } = useAppContext();
-  const [XUserId, setXUserId] = useState<string>("anon");
+  const [XUserId, setXUserId] = useState<string | null>(null);
   const [XShortcuts, setXShortcuts] = useState<string[]>([]); // list of leaf menu ids
   const [XPickerOpen, setXPickerOpen] = useState(false);
   const [XSearch, setXSearch] = useState("");
   const XRef = useRef<HTMLDivElement>(null);
 
-  // Load user
+  // Load user + react to auth changes
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.id) setXUserId(session.user.id);
+      setXUserId(session?.user?.id ?? null);
     });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setXUserId(session?.user?.id ?? null);
+    });
+    return () => sub.subscription.unsubscribe();
   }, []);
 
-  // Load shortcuts from localStorage
+  // Load shortcuts from Supabase
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_PREFIX + XUserId);
-      if (raw) setXShortcuts(JSON.parse(raw));
-    } catch {}
+    if (!XUserId) {
+      setXShortcuts([]);
+      return;
+    }
+    (async () => {
+      const { data, error } = await supabase
+        .from("usuario_atalho")
+        .select("nm_menu, nr_ordem")
+        .eq("user_id", XUserId)
+        .order("nr_ordem", { ascending: true });
+      if (!error && data) setXShortcuts(data.map((r: any) => r.nm_menu));
+    })();
   }, [XUserId]);
 
-  const persist = (list: string[]) => {
+  const persist = async (list: string[]) => {
     setXShortcuts(list);
-    try {
-      localStorage.setItem(STORAGE_PREFIX + XUserId, JSON.stringify(list));
-    } catch {}
+    if (!XUserId) return;
+    // Replace strategy: delete all then insert current list
+    await supabase.from("usuario_atalho").delete().eq("user_id", XUserId);
+    if (list.length > 0) {
+      const rows = list.map((nm_menu, idx) => ({
+        user_id: XUserId,
+        nm_menu,
+        nr_ordem: idx,
+      }));
+      await supabase.from("usuario_atalho").insert(rows);
+    }
   };
 
   // Flat leaf menu items (have a component / open tab)
