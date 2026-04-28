@@ -1151,6 +1151,7 @@ export type Database = {
       }
       caixa_movimento: {
         Row: {
+          caixa_abertura_id: number | null
           caixa_movimento_id: number
           centro_custo_id: number | null
           colaborador_id: number
@@ -1169,6 +1170,7 @@ export type Database = {
           vlr_movimento: number | null
         }
         Insert: {
+          caixa_abertura_id?: number | null
           caixa_movimento_id?: number
           centro_custo_id?: number | null
           colaborador_id: number
@@ -1187,6 +1189,7 @@ export type Database = {
           vlr_movimento?: number | null
         }
         Update: {
+          caixa_abertura_id?: number | null
           caixa_movimento_id?: number
           centro_custo_id?: number | null
           colaborador_id?: number
@@ -1314,8 +1317,8 @@ export type Database = {
           descricao: string
           dt_alteracao: string | null
           dt_cadastro: string | null
+          estado_id: string | null
           excluido: boolean | null
-          uf: string | null
         }
         Insert: {
           cd_ibge?: string | null
@@ -1323,8 +1326,8 @@ export type Database = {
           descricao: string
           dt_alteracao?: string | null
           dt_cadastro?: string | null
+          estado_id?: string | null
           excluido?: boolean | null
-          uf?: string | null
         }
         Update: {
           cd_ibge?: string | null
@@ -1332,12 +1335,12 @@ export type Database = {
           descricao?: string
           dt_alteracao?: string | null
           dt_cadastro?: string | null
+          estado_id?: string | null
           excluido?: boolean | null
-          uf?: string | null
         }
         Relationships: []
       }
-      cidades: {
+      cidadesx: {
         Row: {
           cidade_id: string
           column_10: string | null
@@ -2154,7 +2157,7 @@ export type Database = {
         }
         Relationships: []
       }
-      estados: {
+      estado: {
         Row: {
           dt_alteracao: string | null
           dt_cadastro: string | null
@@ -2162,6 +2165,7 @@ export type Database = {
           excluido: boolean | null
           icms_externo: number | null
           icms_interno: number | null
+          nm_estado: string | null
           pc_fcp: number | null
         }
         Insert: {
@@ -2171,6 +2175,7 @@ export type Database = {
           excluido?: boolean | null
           icms_externo?: number | null
           icms_interno?: number | null
+          nm_estado?: string | null
           pc_fcp?: number | null
         }
         Update: {
@@ -2180,6 +2185,7 @@ export type Database = {
           excluido?: boolean | null
           icms_externo?: number | null
           icms_interno?: number | null
+          nm_estado?: string | null
           pc_fcp?: number | null
         }
         Relationships: []
@@ -2792,6 +2798,291 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "empresa"
             referencedColumns: ["empresa_id"]
+          },
+        ]
+      }
+      mdf_cabecalho: {
+        Row: {
+          cap_kg_veiculo: number
+          cap_m3_veiculo: number
+          chave_mdf: string
+          cidades_percurso: string
+          ciot: string | null
+          cnpj_ciot: string | null
+          cnpj_emit: string
+          condutor_cpf: string
+          condutor_nome: string
+          created_at: string
+          dt_autorizacao: string | null
+          dt_emissao: string
+          dt_fim_viagem: string | null
+          dt_ini_viagem: string
+          empresa_id: number
+          excluido: boolean
+          ie_emit: string
+          kg_carga: number
+          mdf_cabecalho_id: number
+          nr_apolice: string | null
+          nr_averbacao: string | null
+          nr_mdf: string
+          nr_protocolo: string
+          obs_mdf: string
+          placa_veiculo: string
+          qt_nf: number
+          rntrc_veiculo: string
+          seguradora_cnpj: string | null
+          seguradora_nome: string | null
+          serie: string
+          st_mdf: string
+          tara_veiculo: number
+          tp_carroceria: string
+          tp_rodado: string
+          uf_fim: string
+          uf_ini: string
+          uf_veiculo: string
+          unid_medida_carga: string
+          updated_at: string
+          vl_carga: number
+          xml_autorizado: string | null
+          xml_encerramento: string | null
+        }
+        Insert: {
+          cap_kg_veiculo?: number
+          cap_m3_veiculo?: number
+          chave_mdf?: string
+          cidades_percurso?: string
+          ciot?: string | null
+          cnpj_ciot?: string | null
+          cnpj_emit?: string
+          condutor_cpf?: string
+          condutor_nome?: string
+          created_at?: string
+          dt_autorizacao?: string | null
+          dt_emissao: string
+          dt_fim_viagem?: string | null
+          dt_ini_viagem: string
+          empresa_id: number
+          excluido?: boolean
+          ie_emit?: string
+          kg_carga?: number
+          mdf_cabecalho_id?: never
+          nr_apolice?: string | null
+          nr_averbacao?: string | null
+          nr_mdf?: string
+          nr_protocolo?: string
+          obs_mdf?: string
+          placa_veiculo?: string
+          qt_nf?: number
+          rntrc_veiculo?: string
+          seguradora_cnpj?: string | null
+          seguradora_nome?: string | null
+          serie?: string
+          st_mdf?: string
+          tara_veiculo?: number
+          tp_carroceria?: string
+          tp_rodado?: string
+          uf_fim?: string
+          uf_ini?: string
+          uf_veiculo?: string
+          unid_medida_carga?: string
+          updated_at?: string
+          vl_carga?: number
+          xml_autorizado?: string | null
+          xml_encerramento?: string | null
+        }
+        Update: {
+          cap_kg_veiculo?: number
+          cap_m3_veiculo?: number
+          chave_mdf?: string
+          cidades_percurso?: string
+          ciot?: string | null
+          cnpj_ciot?: string | null
+          cnpj_emit?: string
+          condutor_cpf?: string
+          condutor_nome?: string
+          created_at?: string
+          dt_autorizacao?: string | null
+          dt_emissao?: string
+          dt_fim_viagem?: string | null
+          dt_ini_viagem?: string
+          empresa_id?: number
+          excluido?: boolean
+          ie_emit?: string
+          kg_carga?: number
+          mdf_cabecalho_id?: never
+          nr_apolice?: string | null
+          nr_averbacao?: string | null
+          nr_mdf?: string
+          nr_protocolo?: string
+          obs_mdf?: string
+          placa_veiculo?: string
+          qt_nf?: number
+          rntrc_veiculo?: string
+          seguradora_cnpj?: string | null
+          seguradora_nome?: string | null
+          serie?: string
+          st_mdf?: string
+          tara_veiculo?: number
+          tp_carroceria?: string
+          tp_rodado?: string
+          uf_fim?: string
+          uf_ini?: string
+          uf_veiculo?: string
+          unid_medida_carga?: string
+          updated_at?: string
+          vl_carga?: number
+          xml_autorizado?: string | null
+          xml_encerramento?: string | null
+        }
+        Relationships: []
+      }
+      mdf_log: {
+        Row: {
+          dt_log: string
+          empresa_id: number
+          mdf_cabecalho_id: number
+          mdf_log_id: number
+          obs: string | null
+          retorno_acbr: string | null
+          sucesso: boolean
+          tp_acao: string
+        }
+        Insert: {
+          dt_log?: string
+          empresa_id: number
+          mdf_cabecalho_id: number
+          mdf_log_id?: never
+          obs?: string | null
+          retorno_acbr?: string | null
+          sucesso?: boolean
+          tp_acao?: string
+        }
+        Update: {
+          dt_log?: string
+          empresa_id?: number
+          mdf_cabecalho_id?: number
+          mdf_log_id?: never
+          obs?: string | null
+          retorno_acbr?: string | null
+          sucesso?: boolean
+          tp_acao?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mdf_log_mdf_cabecalho_id_fkey"
+            columns: ["mdf_cabecalho_id"]
+            isOneToOne: false
+            referencedRelation: "mdf_cabecalho"
+            referencedColumns: ["mdf_cabecalho_id"]
+          },
+        ]
+      }
+      mdf_nf: {
+        Row: {
+          chave_doc: string
+          cidade_descarreg: string
+          cnpj_emit_doc: string
+          created_at: string
+          empresa_id: number
+          estado_descarreg: string
+          excluido: boolean
+          kg_doc: number
+          mdf_cabecalho_id: number
+          mdf_nf_id: number
+          nr_nota: string
+          serie: string
+          tp_doc: string
+          vl_doc: number
+        }
+        Insert: {
+          chave_doc?: string
+          cidade_descarreg?: string
+          cnpj_emit_doc?: string
+          created_at?: string
+          empresa_id: number
+          estado_descarreg?: string
+          excluido?: boolean
+          kg_doc?: number
+          mdf_cabecalho_id: number
+          mdf_nf_id?: never
+          nr_nota?: string
+          serie?: string
+          tp_doc?: string
+          vl_doc?: number
+        }
+        Update: {
+          chave_doc?: string
+          cidade_descarreg?: string
+          cnpj_emit_doc?: string
+          created_at?: string
+          empresa_id?: number
+          estado_descarreg?: string
+          excluido?: boolean
+          kg_doc?: number
+          mdf_cabecalho_id?: number
+          mdf_nf_id?: never
+          nr_nota?: string
+          serie?: string
+          tp_doc?: string
+          vl_doc?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mdf_nf_mdf_cabecalho_id_fkey"
+            columns: ["mdf_cabecalho_id"]
+            isOneToOne: false
+            referencedRelation: "mdf_cabecalho"
+            referencedColumns: ["mdf_cabecalho_id"]
+          },
+        ]
+      }
+      mdf_veiculo_reboque: {
+        Row: {
+          cap_kg: number
+          cap_m3: number
+          created_at: string
+          empresa_id: number
+          excluido: boolean
+          mdf_cabecalho_id: number
+          mdf_reboque_id: number
+          placa: string
+          tara: number
+          tp_carroceria: string
+          uf: string
+        }
+        Insert: {
+          cap_kg?: number
+          cap_m3?: number
+          created_at?: string
+          empresa_id: number
+          excluido?: boolean
+          mdf_cabecalho_id: number
+          mdf_reboque_id?: never
+          placa?: string
+          tara?: number
+          tp_carroceria?: string
+          uf?: string
+        }
+        Update: {
+          cap_kg?: number
+          cap_m3?: number
+          created_at?: string
+          empresa_id?: number
+          excluido?: boolean
+          mdf_cabecalho_id?: number
+          mdf_reboque_id?: never
+          placa?: string
+          tara?: number
+          tp_carroceria?: string
+          uf?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mdf_veiculo_reboque_mdf_cabecalho_id_fkey"
+            columns: ["mdf_cabecalho_id"]
+            isOneToOne: false
+            referencedRelation: "mdf_cabecalho"
+            referencedColumns: ["mdf_cabecalho_id"]
           },
         ]
       }
