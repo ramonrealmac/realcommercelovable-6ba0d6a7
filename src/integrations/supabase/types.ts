@@ -5235,6 +5235,33 @@ export type Database = {
         }
         Relationships: []
       }
+      usuario_atalho: {
+        Row: {
+          created_at: string
+          nm_menu: string
+          nr_ordem: number
+          updated_at: string
+          user_id: string
+          usuario_atalho_id: number
+        }
+        Insert: {
+          created_at?: string
+          nm_menu: string
+          nr_ordem?: number
+          updated_at?: string
+          user_id: string
+          usuario_atalho_id?: number
+        }
+        Update: {
+          created_at?: string
+          nm_menu?: string
+          nr_ordem?: number
+          updated_at?: string
+          user_id?: string
+          usuario_atalho_id?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
