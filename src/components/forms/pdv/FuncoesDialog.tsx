@@ -9,9 +9,10 @@ interface IProps {
   podeCancelar: boolean;
   onClose: () => void;
   onCancelamento: () => void;
+  onFechamento: () => void;
 }
 
-const FuncoesDialog: React.FC<IProps> = ({ open, podeCancelar, onClose, onCancelamento }) => {
+const FuncoesDialog: React.FC<IProps> = ({ open, podeCancelar, onClose, onCancelamento, onFechamento }) => {
   const cards = [
     { key: "supr", label: "Suprimento", desc: "Entrada de dinheiro no caixa",
       icon: <ArrowDownToLine size={28} />, color: "text-emerald-600",
@@ -30,7 +31,7 @@ const FuncoesDialog: React.FC<IProps> = ({ open, podeCancelar, onClose, onCancel
       action: () => { onClose(); onCancelamento(); }, enabled: podeCancelar },
     { key: "fech", label: "Fechamento", desc: "Fechamento do caixa",
       icon: <Lock size={28} />, color: "text-amber-600",
-      action: () => toast.info("Fechamento será implementado em seguida."), enabled: false },
+      action: () => { onClose(); onFechamento(); }, enabled: true },
   ];
 
   return (
