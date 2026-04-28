@@ -58,6 +58,8 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   const [XOpenCanc, setXOpenCanc] = useState(false);
   const [XOpenFech, setXOpenFech] = useState(false);
   const [XOpenAbert, setXOpenAbert] = useState(false);
+  const [XOpenSupr, setXOpenSupr] = useState(false);
+  const [XOpenSang, setXOpenSang] = useState(false);
 
   // Pedidos fechados disponíveis
   const [XPedidos, setXPedidos] = useState<IPdvPedidoFechado[]>([]);
@@ -723,6 +725,8 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         onCancelamento={() => setXOpenCanc(true)}
         onFechamento={() => setXOpenFech(true)}
         onAbertura={() => setXOpenAbert(true)}
+        onSuprimento={() => setXOpenSupr(true)}
+        onSangria={() => setXOpenSang(true)}
       />
 
       <Dialog open={XOpenFech} onOpenChange={(o) => !o && setXOpenFech(false)}>
@@ -745,6 +749,38 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
             embutido
             onAberto={() => { setXOpenAbert(false); toast.success("Caixa aberto. Reentre no PDV para utilizá-lo."); }}
             onCancelar={() => setXOpenAbert(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={XOpenSupr} onOpenChange={(o) => !o && setXOpenSupr(false)}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Suprimento de Caixa</DialogTitle>
+          </DialogHeader>
+          <SuprimentoSangriaForm
+            tipo="SUP"
+            embutido
+            funcionarioId={caixa.funcionario_id}
+            dtMovimento={dtMovimento}
+            onConcluido={() => setXOpenSupr(false)}
+            onCancelar={() => setXOpenSupr(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={XOpenSang} onOpenChange={(o) => !o && setXOpenSang(false)}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Sangria de Caixa</DialogTitle>
+          </DialogHeader>
+          <SuprimentoSangriaForm
+            tipo="SAN"
+            embutido
+            funcionarioId={caixa.funcionario_id}
+            dtMovimento={dtMovimento}
+            onConcluido={() => setXOpenSang(false)}
+            onCancelar={() => setXOpenSang(false)}
           />
         </DialogContent>
       </Dialog>

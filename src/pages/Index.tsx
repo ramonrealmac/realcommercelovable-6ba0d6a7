@@ -24,6 +24,7 @@ import PedidoForm from "@/components/forms/PedidoForm";
 import PdvCaixaForm from "@/components/forms/pdv/PdvCaixaForm";
 import FechamentoCaixaForm from "@/components/forms/pdv/FechamentoCaixaForm";
 import AberturaCaixaForm from "@/components/forms/pdv/AberturaCaixaForm";
+import SuprimentoSangriaForm from "@/components/forms/pdv/SuprimentoSangriaForm";
 import NotaFiscalEntradaForm from "@/components/forms/NotaFiscalEntradaForm";
 import NfeRecebidasForm from "@/components/forms/NfeRecebidasForm";
 import AuthGate from "@/components/auth/AuthGate";
@@ -97,6 +98,10 @@ const AppContent = () => {
         return <FechamentoCaixaForm />;
       case "abertura-caixa":
         return <AberturaCaixaForm />;
+      case "suprimento-caixa":
+        return <SuprimentoSangriaForm tipo="SUP" />;
+      case "sangria-caixa":
+        return <SuprimentoSangriaForm tipo="SAN" />;
       case "rb-conexoes":
         return <RbConexaoForm />;
       case "rb-templates":
