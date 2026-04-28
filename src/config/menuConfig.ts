@@ -111,6 +111,7 @@ export const MENU_CONFIG: MenuItem[] = [
         title: "Endereços e Rotas",
         icon: MapPin,
         children: [
+          { id: "estados", title: "Estados", icon: MapPin },
           { id: "cidades", title: "Cidades", icon: Navigation },
           { id: "rotas", title: "Rotas", icon: Route },
         ],
