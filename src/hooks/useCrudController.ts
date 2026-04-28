@@ -174,6 +174,8 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
     XCurrentRecord,
     XEditRecord,
     XLoading,
+    setXData,
+    setXFormMode,
     setXEditRecord,
     setXCurrentIdx,
     setField,
