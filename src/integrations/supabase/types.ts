@@ -640,7 +640,7 @@ export type Database = {
           nome: string
         }
         Insert: {
-          banco_id: number
+          banco_id?: number
           cd_banco?: string
           dt_alteracao?: string | null
           dt_cadastro?: string | null
