@@ -342,16 +342,20 @@ export function generateReportHtml(
       margin: ${top}mm ${right}mm ${bottom}mm ${left}mm;
     }
     @media print {
-      body { margin: 0; padding: 0; }
+      body { margin: 0; padding: 0; background: #fff !important; }
       .rpb-page-header { position: running(pageHeader); }
       .rpb-page-footer { position: running(pageFooter); }
       tr { page-break-inside: avoid; }
     }
     * { box-sizing: border-box; }
+    html {
+      background: #ffffff;
+    }
     body {
       font-family: Arial, sans-serif;
       font-size: 9pt;
       color: #1a1a1a;
+      background: #ffffff;
       margin: 0;
       padding: ${top}mm ${right}mm ${bottom}mm ${left}mm;
     }

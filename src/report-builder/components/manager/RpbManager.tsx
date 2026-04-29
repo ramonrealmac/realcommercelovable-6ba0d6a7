@@ -17,7 +17,8 @@ import {
   rpbListConexoes, rpbExecuteQuery,
 } from '../../services/rpbService';
 import RpbExecutor from '../executor/RpbExecutor';
-import { Plus, Trash2, Pencil, Play, PenTool } from 'lucide-react'; // Pencil/Trash2 usados no form de filtros
+import { Plus, Trash2, Pencil, Play, PenTool, HelpCircle } from 'lucide-react'; 
+import { MENU_CONFIG, getLeafItems } from '@/config/menuConfig';
 
 const RpbDesigner = lazy(() => import('../designer/RpbDesigner'));
 
@@ -25,7 +26,13 @@ const RpbDesigner = lazy(() => import('../designer/RpbDesigner'));
 const GRID_COLS: IGridColumn[] = [
   { key: 'rpb_relatorio_id', label: 'Cód.',      width: '60px',  align: 'right' },
   { key: 'categoria',        label: 'Categoria', width: '130px' },
-  { key: 'nome',             label: 'Nome',      width: '2fr' },
+  { key: 'nome',             label: 'Nome',      width: '1.5fr' },
+  { 
+    key: 'nm_form',          
+    label: 'Vínculo Form', 
+    width: '130px',
+    render: (row) => getLeafItems(MENU_CONFIG).find(x => x.id === row.nm_form)?.title || row.nm_form || '-'
+  },
   { key: 'descricao',        label: 'Descrição', width: '2fr' },
 ];
 
@@ -41,7 +48,7 @@ const FILTRO_TIPOS = [
 ];
 
 const emptyForm = (): Partial<IRpbRelatorio> => ({
-  nome: '', descricao: '', categoria: '', query_sql: '', rpb_conexao_id: null,
+  nome: '', descricao: '', categoria: '', nm_form: '', query_sql: '', rpb_conexao_id: null,
 });
 
 const emptyFiltro = (): Partial<IRpbFiltro> => ({
@@ -68,6 +75,7 @@ const RpbManager: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [saving, setSaving]           = useState(false);
   const [mode, setMode]               = useState<'view'|'edit'|'insert'>('view');
+  const [showHelp, setShowHelp]       = useState(false);
 
   const isEditing = mode === 'edit' || mode === 'insert';
 
@@ -105,8 +113,8 @@ const RpbManager: React.FC = () => {
     setSelected(rel);
     setForm({
       nome: rel.nome, descricao: rel.descricao,
-      categoria: rel.categoria, query_sql: rel.query_sql,
-      rpb_conexao_id: rel.rpb_conexao_id,
+      categoria: rel.categoria, nm_form: rel.nm_form || '',
+      query_sql: rel.query_sql, rpb_conexao_id: rel.rpb_conexao_id,
     });
     setMode('edit');
     setView('form');
@@ -245,6 +253,10 @@ const RpbManager: React.FC = () => {
             </button>
           </>
         )}
+        <button onClick={() => setShowHelp(true)}
+          className="text-xs px-2 py-1 rounded border border-border hover:bg-secondary flex items-center gap-1 text-slate-500">
+          <HelpCircle size={14} /> Ajuda
+        </button>
         <button onClick={() => { const t = XTabs.find(t => t.id === XActiveTabId); if (t) closeTab(t.id); }}
           className="text-xs px-2 py-1 rounded border border-border hover:bg-secondary">
           Sair
@@ -358,6 +370,28 @@ const RpbManager: React.FC = () => {
                 <input value={isEditing ? (form.descricao || '') : selected?.descricao || ''} readOnly={!isEditing}
                   onChange={e => setF('descricao', e.target.value)}
                   className={inp + (!isEditing ? ' bg-secondary' : '')} />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground font-semibold">Vínculo com Formulário (Tela)</label>
+                {isEditing ? (
+                  <select 
+                    value={form.nm_form || ''} 
+                    onChange={e => setF('nm_form', e.target.value)}
+                    className={inp}
+                  >
+                    <option value="">Nenhum (Relatório avulso)</option>
+                    {getLeafItems(MENU_CONFIG).sort((a,b) => a.title.localeCompare(b.title)).map(item => (
+                      <option key={item.id} value={item.id}>{item.title}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input 
+                    value={getLeafItems(MENU_CONFIG).find(x => x.id === selected?.nm_form)?.title || selected?.nm_form || ''} 
+                    readOnly 
+                    className={inp + ' bg-secondary'} 
+                  />
+                )}
+                <p className="text-[10px] text-muted-foreground mt-0.5">Define em qual tela este relatório aparecerá como opção de impressão.</p>
               </div>
               <div>
                 <label className="text-xs text-muted-foreground font-semibold">Conexão</label>
@@ -513,6 +547,56 @@ const RpbManager: React.FC = () => {
       {view === 'execute' && selected && (
         <div className="flex-1 overflow-hidden">
           <RpbExecutor relatorio={selected} conexoes={conexoes} />
+        </div>
+      )}
+
+      {/* ── Modal de Ajuda ────────────────────────────────── */}
+      {showHelp && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-card border border-border rounded-lg shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between p-4 border-b border-border bg-secondary/20">
+              <div className="flex items-center gap-2">
+                <HelpCircle className="text-primary w-5 h-5" />
+                <h3 className="font-bold text-sm">Como utilizar o Report Builder Pro</h3>
+              </div>
+              <button onClick={() => setShowHelp(false)} className="p-1 hover:bg-foreground/10 rounded">
+                <Plus size={20} className="rotate-45" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-6 text-sm space-y-4">
+              <section>
+                <h4 className="font-bold text-primary mb-1 uppercase text-xs">1. Organização em Menus</h4>
+                <p className="text-muted-foreground">Os relatórios criados aqui aparecem automaticamente no menu <strong>6. Relatórios</strong>, dentro da pasta <strong>RBuilder</strong>. Eles são agrupados de acordo com a <strong>Categoria</strong> que você preencher no cadastro.</p>
+              </section>
+
+              <section>
+                <h4 className="font-bold text-primary mb-1 uppercase text-xs">2. Vínculo com Telas (Botão Imprimir)</h4>
+                <p className="text-muted-foreground">Para que um relatório apareça como opção de impressão dentro de uma tela (ex: Pedidos), preencha o campo <strong>Vínculo com Formulário (nm_form)</strong> com o nome técnico da tela (ex: <code>PedidoForm</code>).</p>
+                <p className="text-xs text-slate-500 mt-1 italic">* Os relatórios aparecerão no botão "Imprimir" localizado na barra de ferramentas do formulário.</p>
+              </section>
+
+              <section>
+                <h4 className="font-bold text-primary mb-1 uppercase text-xs">3. Parâmetros Automáticos</h4>
+                <p className="text-muted-foreground">Se o relatório estiver vinculado a uma tela, você pode capturar os dados do registro atual usando a sintaxe <code>&#123;&#123;nome_do_campo&#125;&#125;</code> na sua Query SQL.</p>
+                <div className="bg-secondary/40 p-2 rounded font-mono text-[11px] border border-border mt-1">
+                  SELECT * FROM movimento WHERE movimento_id = &#123;&#123;movimento_id&#125;&#125;
+                </div>
+              </section>
+
+              <section>
+                <h4 className="font-bold text-primary mb-1 uppercase text-xs">4. Filtros Customizados</h4>
+                <p className="text-muted-foreground">Na aba <strong>Filtros</strong>, você pode criar campos para que o usuário preencha antes de gerar o relatório. O nome interno do filtro deve ser o mesmo usado na query: <code>&#123;&#123;meu_filtro&#125;&#125;</code>.</p>
+              </section>
+
+              <section>
+                <h4 className="font-bold text-primary mb-1 uppercase text-xs">5. Designer e Layout</h4>
+                <p className="text-muted-foreground">Use o <strong>Designer</strong> para criar o visual do relatório. Você pode arrastar campos da query para as bandas (Cabeçalho, Detalhe, Rodapé). O sistema suporta até 2 níveis de agrupamento com totalizadores automáticos.</p>
+              </section>
+            </div>
+            <div className="p-4 border-t border-border bg-secondary/10 flex justify-end">
+              <button onClick={() => setShowHelp(false)} className="px-4 py-1.5 bg-primary text-primary-foreground rounded text-xs font-bold">Entendi</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

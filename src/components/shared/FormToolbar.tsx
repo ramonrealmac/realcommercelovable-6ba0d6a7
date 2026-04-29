@@ -69,13 +69,14 @@ interface FormToolbarProps {
   onSair: () => void;
   onLog?: () => void;
   onHelp?: () => void;
+  extras?: React.ReactNode;
 }
 
 const FormToolbar: React.FC<FormToolbarProps> = ({
   XIsEditing, XHasRecord, XIsFirst, XIsLast,
   onIncluir, onEditar, onSalvar, onCancelar, onExcluir,
   onFirst, onPrev, onNext, onLast, onRefresh, onLocalizar, onSair,
-  onLog, onHelp
+  onLog, onHelp, extras
 }) => {
   return (
     <div className="flex items-center gap-0.5 p-1 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 overflow-x-auto no-scrollbar">
@@ -94,6 +95,7 @@ const FormToolbar: React.FC<FormToolbarProps> = ({
           <ToolbarBtn icon={<Search size={18} />} label="Localizar (F3)" onClick={onLocalizar} color="info" />
           {onLog && <ToolbarBtn icon={<FileText size={18} />} label="Log de Operações" onClick={onLog} color="log" />}
           <ToolbarSeparator />
+          {extras}
           <ToolbarBtn icon={<HelpCircle size={18} />} label="Ajuda (F1)" onClick={onHelp || (() => {})} color="help" />
           <ToolbarBtn icon={<LogOut size={18} />} label="Sair (Esc)" onClick={onSair} color="destructive" />
         </>

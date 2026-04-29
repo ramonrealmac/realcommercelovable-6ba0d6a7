@@ -5,6 +5,8 @@ import { MENU_CONFIG, MenuItem } from "@/config/menuConfig";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { rbFetchRelatorios } from "@/rbuilder/services/rb_reportService";
 import type { IRbRelatorio } from "@/rbuilder/models/rb_types";
+import { rpbListRelatorios } from "@/report-builder/services/rpbService";
+import type { IRpbRelatorio } from "@/report-builder/types";
 
 const MenuItemNode = ({
   item,
@@ -66,19 +68,26 @@ const MenuItemNode = ({
 };
 
 const SidebarMenu = () => {
-  const { XSidebarOpen, closeSidebar, openTab, XEmpresaMatrizId } = useAppContext();
+  const { XSidebarOpen, closeSidebar, openTab, XEmpresaMatrizId, XEmpresaId } = useAppContext();
   const [XRbRelatorios, setXRbRelatorios] = useState<IRbRelatorio[]>([]);
+  const [XRpbRelatorios, setXRpbRelatorios] = useState<IRpbRelatorio[]>([]);
 
   useEffect(() => {
     if (XSidebarOpen && XEmpresaMatrizId > 0) {
       rbFetchRelatorios(XEmpresaMatrizId).then(setXRbRelatorios);
     }
-  }, [XSidebarOpen, XEmpresaMatrizId]);
+    if (XSidebarOpen && XEmpresaId > 0) {
+      rpbListRelatorios(XEmpresaId).then(setXRpbRelatorios);
+    }
+  }, [XSidebarOpen, XEmpresaMatrizId, XEmpresaId]);
 
   // Build dynamic menu for rbuilder reports grouped by menu/submenu
   const XRbMenuItems = (() => {
+    if (!Array.isArray(XRbRelatorios) || XRbRelatorios.length === 0) return [];
+    
     const XGrouped: Record<string, Record<string, IRbRelatorio[]>> = {};
     for (const r of XRbRelatorios) {
+      if (!r) continue;
       const XMenu = r.menu || "Geral";
       const XSubmenu = r.submenu || "";
       if (!XGrouped[XMenu]) XGrouped[XMenu] = {};
@@ -90,19 +99,21 @@ const SidebarMenu = () => {
     for (const [XMenu, XSubmenus] of Object.entries(XGrouped)) {
       const XChildren: MenuItem[] = [];
       for (const [XSubmenu, XRels] of Object.entries(XSubmenus)) {
+        const XSortedRels = [...XRels].sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+        
         if (XSubmenu) {
           XChildren.push({
             id: `rb-sub-${XMenu}-${XSubmenu}`,
             title: XSubmenu,
             icon: FileBarChart,
-            children: XRels.sort((a, b) => a.ordem - b.ordem).map(r => ({
+            children: XSortedRels.map(r => ({
               id: `rb-exec-${r.rb_relatorio_id}`,
               title: r.nome,
               icon: FileBarChart,
             })),
           });
         } else {
-          for (const r of XRels.sort((a, b) => a.ordem - b.ordem)) {
+          for (const r of XSortedRels) {
             XChildren.push({
               id: `rb-exec-${r.rb_relatorio_id}`,
               title: r.nome,
@@ -122,10 +133,33 @@ const SidebarMenu = () => {
   })();
 
   // Inject dynamic reports into the menu config
-  const XMenuConfig = MENU_CONFIG.map(item => {
-    if (item.id === "relatorios-menu" && XRbMenuItems.length > 0) {
-      // Find the "rbuilder" static entry and replace with dynamic children
-      const XStaticChildren = (item.children || []).filter(c => c.id !== "rbuilder");
+  const XMenuConfig = (MENU_CONFIG || []).map(item => {
+    if (item.id === "relatorios-menu") {
+      // Group RPB reports by category
+      const XRpbCategories: Record<string, IRpbRelatorio[]> = {};
+      if (Array.isArray(XRpbRelatorios)) {
+        XRpbRelatorios.forEach(r => {
+          if (!r) return;
+          const cat = r.categoria || "Geral";
+          if (!XRpbCategories[cat]) XRpbCategories[cat] = [];
+          XRpbCategories[cat].push(r);
+        });
+      }
+
+      const XRpbCategoryItems: MenuItem[] = Object.entries(XRpbCategories).map(([cat, rels]) => ({
+        id: `rpb-cat-${cat}`,
+        title: cat,
+        icon: FileBarChart,
+        children: rels.map(r => ({
+          id: `rpb-exec-${r.rpb_relatorio_id}`,
+          title: r.nome,
+          icon: FileBarChart,
+        })),
+      }));
+
+      const XStaticChildren = (item.children || []).filter(c => c && c.id !== "rbuilder");
+      const XRBuilderChildren = [...XRbMenuItems, ...XRpbCategoryItems];
+
       return {
         ...item,
         children: [
@@ -134,7 +168,7 @@ const SidebarMenu = () => {
             id: "rbuilder",
             title: "RBuilder",
             icon: FileBarChart,
-            children: XRbMenuItems,
+            children: XRBuilderChildren,
           },
         ],
       };

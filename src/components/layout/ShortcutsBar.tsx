@@ -63,7 +63,10 @@ const ShortcutsBar = () => {
   }, [XAllLeaves]);
 
   const XPinned = useMemo(
-    () => XShortcuts.map(id => XLeafById.get(id)).filter(Boolean) as MenuItem[],
+    () => {
+      if (!Array.isArray(XShortcuts)) return [];
+      return XShortcuts.map(id => XLeafById.get(id)).filter(Boolean) as MenuItem[];
+    },
     [XShortcuts, XLeafById]
   );
 

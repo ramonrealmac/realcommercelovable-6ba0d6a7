@@ -228,8 +228,6 @@ export const MENU_CONFIG: MenuItem[] = [
       { id: "rel-contas-pagar", title: "Relatórios - Contas a Pagar", icon: FileDown },
       { id: "relatorios", title: "Relatórios - Vendas", icon: ShoppingCart },
       { id: "rel-produtos", title: "Relatórios - Produtos", icon: Package2 },
-      { id: "rpb-relatorios", title: "Report Builder Pro", icon: FileBarChart },
-      { id: "rbuilder", title: "RBuilder (legado)", icon: FileBarChart },
     ],
   },
   {
@@ -241,23 +239,24 @@ export const MENU_CONFIG: MenuItem[] = [
       { id: "empresas", title: "Empresas", icon: Building2 },
       { id: "grupo-relatorios", title: "Grupo de Relatórios", icon: Folder },
       { id: "config-relatorios", title: "Relatórios", icon: FolderOpen },
-      { id: "filtros-relatorio", title: "Filtros do Relatório", icon: Filter },
+      { id: "rpb-relatorios", title: "Report Builder Pro", icon: FileBarChart },
       { id: "parametros", title: "Parâmetros", icon: Settings2 },
       { id: "licencas", title: "Ativar Licenças", icon: Key },
-      { id: "rb-conexoes", title: "RB - Conexões", icon: Warehouse },
-      { id: "rb-templates", title: "RB - Variáveis", icon: Filter },
-      { id: "rb-relatorios", title: "RB - Relatórios", icon: FileBarChart },
       { id: "provedor-test", title: "Teste Provedor", icon: Activity },
     ],
   },
 ];
 
 /** Flat list of all leaf menu IDs (items that open a tab) */
-export function getLeafItems(items: MenuItem[]): MenuItem[] {
+export function getLeafItems(items: MenuItem[], visited = new Set<string>()): MenuItem[] {
   const result: MenuItem[] = [];
+  if (!Array.isArray(items)) return result;
+  
   for (const item of items) {
-    if (item.children) {
-      result.push(...getLeafItems(item.children));
+    if (!item || visited.has(item.id)) continue;
+    visited.add(item.id);
+    if (item.children && Array.isArray(item.children) && item.children.length > 0) {
+      result.push(...getLeafItems(item.children, visited));
     } else {
       result.push(item);
     }

@@ -1,202 +1,246 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useRef, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
 import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import type { IGridColumn } from "@/components/grid/DataGrid";
-import { Send, Lock, XCircle, Search, FileText, Activity } from "lucide-react";
-import type { IMdfCabecalho, TMdfSt } from "./types";
-import {
-  MDF_ST_LABELS, MDF_ST_COLORS,
-  TP_RODADO_OPTIONS, TP_CARROCERIA_OPTIONS, UF_OPTIONS,
-} from "./types";
-import MdfNfsTab from "./MdfNfsTab";
-import MdfReboquesTab from "./MdfReboquesTab";
-import MdfLogTab from "./MdfLogTab";
-import { emitirMdfe, encerrarMdfe, cancelarMdfe, consultarMdfe } from "./mdfeService";
+import { Send, Lock, XCircle, Activity } from "lucide-react";
+import { emitirMdfe } from "./mdfeService";
+import MdfCarregaTab from "./tabs/MdfCarregaTab";
+import MdfDescarregaTab from "./tabs/MdfDescarregaTab";
+import MdfDocumentosTab from "./tabs/MdfDocumentosTab";
+import MdfVeiculosTab from "./tabs/MdfVeiculosTab";
+import MdfMotoristasTab from "./tabs/MdfMotoristasTab";
+import MdfPercursoTab from "./tabs/MdfPercursoTab";
+import MdfPagamentoTab from "./tabs/MdfPagamentoTab";
+import MdfComponenteTab from "./tabs/MdfComponenteTab";
+import MdfParcelasTab from "./tabs/MdfParcelasTab";
+import MdfHistoricoTab from "./tabs/MdfHistoricoTab";
 
-const db = supabase as any;
+type TMdfSt = "D" | "A" | "E" | "C" | "R" | "G";
 
-// ── Grid colunas ─────────────────────────────────────────────
-const XGridCols: IGridColumn[] = [
-  { key: "mdf_cabecalho_id", label: "Nº",       width: "70px",  align: "right" },
-  { key: "nr_mdf",           label: "MDF-e",    width: "100px" },
-  { key: "serie",            label: "Série",    width: "60px",  align: "center" },
-  { key: "dt_emissao",       label: "Emissão",  width: "110px",
-    render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
-  { key: "placa_veiculo",    label: "Placa",    width: "100px" },
-  { key: "uf_ini",           label: "UF Ini",   width: "70px",  align: "center" },
-  { key: "uf_fim",           label: "UF Fim",   width: "70px",  align: "center" },
-  { key: "st_mdf",           label: "Status",   width: "110px",
-    render: r => <span className={MDF_ST_COLORS[r.st_mdf as TMdfSt] || ""}>{MDF_ST_LABELS[r.st_mdf as TMdfSt] || r.st_mdf}</span> },
-  { key: "vl_carga",         label: "Vl. Carga", width: "120px", align: "right",
-    render: r => Number(r.vl_carga || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) },
-];
-
-const XDefault: Partial<IMdfCabecalho> = {
-  nr_mdf: "", serie: "1",
-  dt_emissao:    new Date().toISOString().substring(0, 10),
-  dt_ini_viagem: new Date().toISOString().substring(0, 10),
-  dt_fim_viagem: null,
-  uf_ini: "PR", uf_fim: "SP",
-  cidades_percurso: "",
-  placa_veiculo: "", rntrc_veiculo: "", uf_veiculo: "PR",
-  tara_veiculo: 0, cap_kg_veiculo: 0, cap_m3_veiculo: 0,
-  tp_rodado: "01", tp_carroceria: "02",
-  condutor_nome: "", condutor_cpf: "",
-  qt_nf: 0, vl_carga: 0, kg_carga: 0, unid_medida_carga: "KG",
-  st_mdf: "A",
-  chave_mdf: "", nr_protocolo: "",
-  obs_mdf: "",
+const ST_LABELS: Record<TMdfSt, string> = {
+  D: "Digitação",
+  G: "XML Gerado",
+  A: "Autorizado",
+  E: "Encerrado",
+  C: "Cancelado",
+  R: "Rejeitado",
 };
 
-// ── Componente principal ─────────────────────────────────────
+const ST_COLORS: Record<TMdfSt, string> = {
+  D: "text-yellow-600",
+  G: "text-blue-600",
+  A: "text-green-600",
+  E: "text-purple-600",
+  C: "text-red-600",
+  R: "text-orange-600",
+};
+
+const UF_LIST = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
+
+const XGridCols: IGridColumn[] = [
+  { key: "mdf_manifesto_id", label: "Cód.", width: "70px", align: "right" },
+  { key: "numero",           label: "Número",  width: "90px" },
+  { key: "serie",            label: "Série",   width: "60px", align: "center" },
+  { key: "dt_emissao",       label: "Emissão", width: "110px",
+    render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
+  { key: "ufini",  label: "UF Ini", width: "70px", align: "center" },
+  { key: "uffim",  label: "UF Fim", width: "70px", align: "center" },
+  { key: "qtd_nfe", label: "NF-e", width: "70px", align: "right" },
+  { key: "peso_total", label: "Peso (KG)", width: "100px", align: "right",
+    render: r => Number(r.peso_total || 0).toLocaleString("pt-BR", { minimumFractionDigits: 3 }) },
+  { key: "valor_total", label: "Valor (R$)", width: "120px", align: "right",
+    render: r => Number(r.valor_total || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) },
+  { key: "status", label: "Status", width: "100px",
+    render: r => <span className={ST_COLORS[r.status as TMdfSt] || ""}>{ST_LABELS[r.status as TMdfSt] || r.status}</span> },
+];
+
+const XDefault = {
+  numero: "", serie: "1", modelo: "58",
+  dt_emissao: new Date().toISOString().substring(0, 10),
+  dt_viagem:  new Date().toISOString().substring(0, 10),
+  hr_viagem: "00:00:00",
+  modalidade: "1", tp_emitente: "1", tp_transportador: "1",
+  ufini: "", uffim: "", unidade: "KG",
+  peso_total: 0, valor_total: 0, qtd_nfe: 0, status: "D",
+};
+
 const MdfeForm: React.FC = () => {
   const { XEmpresaId } = useAppContext();
-  const XRefreshRef = useRef<(() => Promise<void>) | null>(null);
+  const XRefreshRef = useRef<any>(null);
 
-  // Empresa dados (CNPJ/IE para preencher emissão)
-  const [xEmpresaDados, setXEmpresaDados] = useState<{ cnpj: string; ie: string } | null>(null);
-
-  useEffect(() => {
-    if (!XEmpresaId) return;
-    db.from("empresa")
-      .select("cnpj,ie")
-      .eq("empresa_id", XEmpresaId)
-      .maybeSingle()
-      .then(({ data }: any) => {
-        if (data) setXEmpresaDados({ cnpj: data.cnpj || "", ie: data.ie || "" });
-      });
-  }, [XEmpresaId]);
-
-  // ── Ações de transmissão ────────────────────────────────────
-  const handleEmitir = useCallback(async (cabId: number) => {
+  const handleTransmitir = useCallback(async (manifestoId: number) => {
     if (!confirm("Confirma a emissão do MDF-e? O documento será enviado ao SEFAZ via ACBr.")) return;
-    toast.loading("Emitindo MDF-e...", { id: "mdf-emit" });
-    const res = await emitirMdfe(cabId, XEmpresaId);
-    toast.dismiss("mdf-emit");
-    if (res.sucesso) {
-      toast.success("MDF-e autorizado com sucesso!");
-    } else {
-      toast.error("Erro na emissão: " + res.mensagem);
+    toast.loading("Transmitindo MDF-e...", { id: "mdf-tx" });
+    try {
+      const res = await emitirMdfe(manifestoId, XEmpresaId);
+      toast.success(res.mensagem || "MDF-e transmitido com sucesso!");
+      XRefreshRef.current?.();
+    } catch (e: any) {
+      toast.error(e.message || "Erro na transmissão");
+    } finally {
+      toast.dismiss("mdf-tx");
     }
-    if (XRefreshRef.current) await XRefreshRef.current();
   }, [XEmpresaId]);
 
-  const handleEncerrar = useCallback(async (cabId: number) => {
+  const handleEncerrar = useCallback(async (manifestoId: number) => {
     if (!confirm("Confirma o encerramento do MDF-e?")) return;
-    toast.loading("Encerrando MDF-e...", { id: "mdf-enc" });
-    const res = await encerrarMdfe(cabId, XEmpresaId);
-    toast.dismiss("mdf-enc");
-    res.sucesso ? toast.success("MDF-e encerrado!") : toast.error("Erro: " + res.mensagem);
-    if (XRefreshRef.current) await XRefreshRef.current();
-  }, [XEmpresaId]);
+    const { error } = await supabase.from("mdf_manifesto").update({ status: "E" }).eq("mdf_manifesto_id", manifestoId);
+    if (error) { toast.error("Erro ao encerrar: " + error.message); return; }
+    toast.success("MDF-e encerrado!");
+    XRefreshRef.current?.();
+  }, []);
 
-  const handleCancelar = useCallback(async (cabId: number) => {
+  const handleCancelar = useCallback(async (manifestoId: number) => {
     const just = prompt("Informe a justificativa do cancelamento (mín. 15 caracteres):");
-    if (!just || just.length < 15) { toast.warning("Justificativa inválida (mín. 15 chars)."); return; }
-    toast.loading("Cancelando MDF-e...", { id: "mdf-canc" });
-    const res = await cancelarMdfe(cabId, XEmpresaId, just);
-    toast.dismiss("mdf-canc");
-    res.sucesso ? toast.success("MDF-e cancelado!") : toast.error("Erro: " + res.mensagem);
-    if (XRefreshRef.current) await XRefreshRef.current();
-  }, [XEmpresaId]);
-
-  const handleConsultar = useCallback(async (cabId: number) => {
-    toast.loading("Consultando...", { id: "mdf-cons" });
-    const res = await consultarMdfe(cabId, XEmpresaId);
-    toast.dismiss("mdf-cons");
-    if (res.sucesso) {
-      alert("Retorno ACBr:\n\n" + res.mensagem);
-    } else {
-      toast.error("Erro na consulta: " + res.mensagem);
-    }
-  }, [XEmpresaId]);
-
-  // ── Helper ──────────────────────────────────────────────────
-  const fmt2 = (v: number) =>
-    Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+    if (!just || just.length < 15) { toast.warning("Justificativa inválida (mín. 15 caracteres)."); return; }
+    const { error } = await supabase.from("mdf_manifesto").update({ status: "C" }).eq("mdf_manifesto_id", manifestoId);
+    if (error) { toast.error("Erro ao cancelar: " + error.message); return; }
+    toast.success("MDF-e cancelado!");
+    XRefreshRef.current?.();
+  }, []);
 
   return (
-    <StandardCrudForm<IMdfCabecalho>
+    <StandardCrudForm
       config={{
-        XTableName: "mdf_cabecalho",
-        XPrimaryKey: "mdf_cabecalho_id",
-        XTitle: "MDF-e",
-        XOrderBy: "mdf_cabecalho_id",
-        XDefaultRecord: {
-          ...XDefault,
-          empresa_id: XEmpresaId,
-          cnpj_emit: xEmpresaDados?.cnpj || "",
-          ie_emit:   xEmpresaDados?.ie   || "",
-        } as any,
+        XTableName: "mdf_manifesto",
+        XPrimaryKey: "mdf_manifesto_id",
+        XTitle: "MDF-e — Manifesto Eletrônico",
         XEmpresaId,
         XSoftDelete: true,
+        XOrderBy: "mdf_manifesto_id",
+        XDefaultRecord: { ...XDefault, empresa_id: XEmpresaId } as any,
         XOnBeforeSave: (rec) => {
-          if (!rec.nr_mdf?.trim()) throw new Error("Informe o número do MDF-e.");
-          if (!rec.dt_emissao)     throw new Error("Informe a data de emissão.");
-          if (!rec.placa_veiculo?.trim()) throw new Error("Informe a placa do veículo.");
-          if (!rec.condutor_nome?.trim()) throw new Error("Informe o nome do condutor.");
+          if (!rec.ufini?.trim()) throw new Error("UF Inicial é obrigatória.");
+          if (!rec.uffim?.trim()) throw new Error("UF Final é obrigatória.");
+          if (!rec.dt_emissao)   throw new Error("Data de Emissão é obrigatória.");
+          if (!rec.dt_viagem)    throw new Error("Data da Viagem é obrigatória.");
+          if (!rec.hr_viagem)    throw new Error("Hora da Viagem é obrigatória.");
+          
           return {
             ...rec,
-            empresa_id:  rec.empresa_id || XEmpresaId,
-            cnpj_emit:   xEmpresaDados?.cnpj || rec.cnpj_emit || "",
-            ie_emit:     xEmpresaDados?.ie   || rec.ie_emit   || "",
+            empresa_id: XEmpresaId,
+            excluido: rec.excluido ?? false,
+            dt_cadastro: rec.mdf_manifesto_id ? undefined : new Date().toISOString(),
+            dt_alteracao: new Date().toISOString(),
           };
         },
       }}
       XGridCols={XGridCols}
       XExportTitle="MDF-e"
       XRefreshRef={XRefreshRef}
-      XAfterInsertTab="nfs"
+      XAfterInsertTab="carrega"
       XExtraTabs={[
+
         {
-          key: "nfs",
-          label: "Documentos (NF-e)",
-          render: ({ record, currentRecord, isEditing }) => {
-            const id = (currentRecord || record)?.mdf_cabecalho_id || null;
-            const st = (currentRecord || record)?.st_mdf || "A";
-            return (
-              <MdfNfsTab
-                mdfCabecalhoId={id}
-                empresaId={XEmpresaId}
-                podeEditar={st === "A"}
-              />
-            );
-          },
+          key: "carrega", label: "Carregamento",
+          render: ({ currentRecord }) => (
+            <MdfCarregaTab
+              mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
+              empresaId={XEmpresaId}
+              podeEditar={currentRecord?.status === "D"}
+            />
+          ),
         },
         {
-          key: "reboques",
-          label: "Reboques",
-          render: ({ record, currentRecord }) => {
-            const id = (currentRecord || record)?.mdf_cabecalho_id || null;
-            const st = (currentRecord || record)?.st_mdf || "A";
-            return (
-              <MdfReboquesTab
-                mdfCabecalhoId={id}
-                empresaId={XEmpresaId}
-                podeEditar={st === "A"}
-              />
-            );
-          },
+          key: "descarrega", label: "Descarregamento",
+          render: ({ currentRecord }) => (
+            <MdfDescarregaTab
+              mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
+              empresaId={XEmpresaId}
+              podeEditar={currentRecord?.status === "D"}
+            />
+          ),
         },
         {
-          key: "log",
-          label: "Log Transmissão",
-          render: ({ record, currentRecord }) => {
-            const id = (currentRecord || record)?.mdf_cabecalho_id || null;
-            return <MdfLogTab mdfCabecalhoId={id} />;
-          },
+          key: "docs", label: "Documentos (NF-e)",
+          render: ({ currentRecord }) => (
+            <MdfDocumentosTab
+              mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
+              empresaId={XEmpresaId}
+              podeEditar={currentRecord?.status === "D"}
+            />
+          ),
+        },
+        {
+          key: "veiculos", label: "Veículos",
+          render: ({ currentRecord }) => (
+            <MdfVeiculosTab
+              mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
+              empresaId={XEmpresaId}
+              podeEditar={currentRecord?.status === "D"}
+            />
+          ),
+        },
+        {
+          key: "motoristas", label: "Motoristas",
+          render: ({ currentRecord }) => (
+            <MdfMotoristasTab
+              mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
+              empresaId={XEmpresaId}
+              podeEditar={currentRecord?.status === "D"}
+            />
+          ),
+        },
+        {
+          key: "percurso", label: "Percurso (UF)",
+          render: ({ currentRecord }) => (
+            <MdfPercursoTab
+              mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
+              empresaId={XEmpresaId}
+              podeEditar={currentRecord?.status === "D"}
+            />
+          ),
+        },
+        {
+          key: "pagamento", label: "Pagamento",
+          render: ({ currentRecord }) => (
+            <MdfPagamentoTab
+              mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
+              empresaId={XEmpresaId}
+              podeEditar={currentRecord?.status === "D"}
+            />
+          ),
+        },
+        {
+          key: "componentes", label: "Componentes",
+          render: ({ currentRecord }) => (
+            <MdfComponenteTab
+              mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
+              empresaId={XEmpresaId}
+              podeEditar={currentRecord?.status === "D"}
+            />
+          ),
+        },
+        {
+          key: "parcelas", label: "Parcelas",
+          render: ({ currentRecord }) => (
+            <MdfParcelasTab
+              mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
+              empresaId={XEmpresaId}
+              podeEditar={currentRecord?.status === "D"}
+            />
+          ),
+        },
+        {
+          key: "historico", label: "Histórico / XML",
+          render: ({ currentRecord }) => (
+            <MdfHistoricoTab
+              mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
+              empresaId={XEmpresaId}
+              podeEditar={false}
+            />
+          ),
         },
       ]}
       renderCadastro={({ record, setField, mode, isEditing, currentRecord }) => {
         const ro = !isEditing;
-        const stAtual = (record.st_mdf || "A") as TMdfSt;
-        const cabId = currentRecord?.mdf_cabecalho_id || null;
-        const podeEmitir    = cabId && stAtual === "A" && !isEditing;
-        const podeEncerrar  = cabId && stAtual === "X" && !isEditing;
-        const podeCancelar  = cabId && stAtual === "X" && !isEditing;
-        const podeConsultar = cabId && (stAtual === "X" || stAtual === "E") && !isEditing;
+        const st = (record.status || "D") as TMdfSt;
+        const mdfId = currentRecord?.mdf_manifesto_id ?? null;
+        const podeTransmitir = mdfId && st === "D" && !isEditing;
+        const podeEncerrar   = mdfId && st === "A" && !isEditing;
+        const podeCancelar   = mdfId && (st === "A" || st === "E") && !isEditing;
 
         return (
           <div className="space-y-4">
@@ -205,13 +249,20 @@ const MdfeForm: React.FC = () => {
             <div className="grid grid-cols-12 gap-3 items-end">
               <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Cód.</label>
-                <input readOnly value={record.mdf_cabecalho_id ?? (mode === "insert" ? "(Novo)" : "")}
+                <input readOnly
+                  value={mdfId ?? (mode === "insert" ? "(Novo)" : "")}
                   className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right" />
               </div>
+              <div className="col-span-1">
+                <label className="text-xs text-muted-foreground">Modelo</label>
+                <input readOnly={ro} value={record.modelo ?? "58"}
+                  onChange={e => setField("modelo", e.target.value)}
+                  className="w-full border border-border rounded px-2 py-1 text-sm text-center" />
+              </div>
               <div className="col-span-2">
-                <label className="text-xs text-muted-foreground">Nº MDF-e <span className="text-destructive">*</span></label>
-                <input readOnly={ro} value={record.nr_mdf ?? ""}
-                  onChange={e => setField("nr_mdf", e.target.value)}
+                <label className="text-xs text-muted-foreground">Número <span className="text-destructive">*</span></label>
+                <input readOnly={ro} value={record.numero ?? ""}
+                  onChange={e => setField("numero", e.target.value)}
                   className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
               <div className="col-span-1">
@@ -223,224 +274,143 @@ const MdfeForm: React.FC = () => {
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Dt. Emissão <span className="text-destructive">*</span></label>
                 <input type="date" readOnly={ro}
-                  value={(record.dt_emissao || "").toString().substring(0, 10)}
+                  value={String(record.dt_emissao || "").substring(0, 10)}
                   onChange={e => setField("dt_emissao", e.target.value)}
-                  className="w-full border border-border rounded px-2 py-1 text-sm" />
-              </div>
-              <div className="col-span-2">
-                <label className="text-xs text-muted-foreground">Início Viagem <span className="text-destructive">*</span></label>
-                <input type="date" readOnly={ro}
-                  value={(record.dt_ini_viagem || "").toString().substring(0, 10)}
-                  onChange={e => setField("dt_ini_viagem", e.target.value)}
                   className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Status</label>
                 <input readOnly
-                  value={MDF_ST_LABELS[stAtual] || stAtual}
-                  className={`w-full border border-border rounded px-2 py-1 text-sm font-semibold bg-secondary ${MDF_ST_COLORS[stAtual]}`} />
+                  value={ST_LABELS[st] || st}
+                  className={`w-full border border-border rounded px-2 py-1 text-sm font-semibold bg-secondary ${ST_COLORS[st] || ""}`} />
               </div>
-              {/* Botões de ação */}
-              <div className="col-span-2 flex gap-1 flex-wrap items-end">
-                {podeEmitir && (
-                  <button onClick={() => handleEmitir(cabId!)}
-                    className="flex items-center gap-1 px-2 py-1.5 text-xs rounded bg-green-600 text-white hover:bg-green-700">
-                    <Send className="w-3.5 h-3.5" /> Emitir
+              <div className="col-span-3 flex gap-2 items-end flex-wrap">
+                {podeTransmitir && (
+                  <button onClick={() => handleTransmitir(mdfId!)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded bg-green-600 text-white text-xs hover:bg-green-700">
+                    <Send className="w-3.5 h-3.5" /> Transmitir
                   </button>
                 )}
                 {podeEncerrar && (
-                  <button onClick={() => handleEncerrar(cabId!)}
-                    className="flex items-center gap-1 px-2 py-1.5 text-xs rounded bg-blue-600 text-white hover:bg-blue-700">
+                  <button onClick={() => handleEncerrar(mdfId!)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded bg-blue-600 text-white text-xs hover:bg-blue-700">
                     <Lock className="w-3.5 h-3.5" /> Encerrar
                   </button>
                 )}
                 {podeCancelar && (
-                  <button onClick={() => handleCancelar(cabId!)}
-                    className="flex items-center gap-1 px-2 py-1.5 text-xs rounded bg-red-600 text-white hover:bg-red-700">
+                  <button onClick={() => handleCancelar(mdfId!)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded bg-red-600 text-white text-xs hover:bg-red-700">
                     <XCircle className="w-3.5 h-3.5" /> Cancelar
                   </button>
                 )}
-                {podeConsultar && (
-                  <button onClick={() => handleConsultar(cabId!)}
-                    className="flex items-center gap-1 px-2 py-1.5 text-xs rounded bg-secondary text-secondary-foreground hover:bg-secondary/80">
-                    <Activity className="w-3.5 h-3.5" /> Consultar
-                  </button>
-                )}
               </div>
             </div>
 
-            {/* ── Linha 2: Percurso ── */}
-            <div className="grid grid-cols-12 gap-3">
+            {/* ── Linha 2: Viagem + UFs + Modalidade ── */}
+            <div className="grid grid-cols-12 gap-3 items-end">
               <div className="col-span-2">
-                <label className="text-xs text-muted-foreground">UF Ini (Carregamento) <span className="text-destructive">*</span></label>
-                <select disabled={ro} value={record.uf_ini || "PR"}
-                  onChange={e => setField("uf_ini", e.target.value)}
+                <label className="text-xs text-muted-foreground">Dt. Viagem <span className="text-destructive">*</span></label>
+                <input type="date" readOnly={ro}
+                  value={String(record.dt_viagem || "").substring(0, 10)}
+                  onChange={e => setField("dt_viagem", e.target.value)}
+                  className="w-full border border-border rounded px-2 py-1 text-sm" />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground">Hora Viagem <span className="text-destructive">*</span></label>
+                <input type="time" readOnly={ro}
+                  value={record.hr_viagem ?? "00:00:00"}
+                  onChange={e => setField("hr_viagem", e.target.value)}
+                  className="w-full border border-border rounded px-2 py-1 text-sm" />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground">UF Inicial <span className="text-destructive">*</span></label>
+                <select disabled={ro} value={record.ufini ?? ""}
+                  onChange={e => setField("ufini", e.target.value)}
                   className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
-                  {UF_OPTIONS.map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                  <option value="">— UF —</option>
+                  {UF_LIST.map(uf => <option key={uf} value={uf}>{uf}</option>)}
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="text-xs text-muted-foreground">UF Fim (Descarregamento) <span className="text-destructive">*</span></label>
-                <select disabled={ro} value={record.uf_fim || "SP"}
-                  onChange={e => setField("uf_fim", e.target.value)}
+                <label className="text-xs text-muted-foreground">UF Final <span className="text-destructive">*</span></label>
+                <select disabled={ro} value={record.uffim ?? ""}
+                  onChange={e => setField("uffim", e.target.value)}
                   className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
-                  {UF_OPTIONS.map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                  <option value="">— UF —</option>
+                  {UF_LIST.map(uf => <option key={uf} value={uf}>{uf}</option>)}
                 </select>
               </div>
-              <div className="col-span-8">
-                <label className="text-xs text-muted-foreground">Cidades Percurso (separadas por ";")</label>
-                <input readOnly={ro} value={record.cidades_percurso ?? ""}
-                  onChange={e => setField("cidades_percurso", e.target.value)}
-                  placeholder="Ex: PONTA GROSSA;LONDRINA;MARINGA"
-                  className="w-full border border-border rounded px-2 py-1 text-sm" />
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground">Modalidade</label>
+                <select disabled={ro} value={record.modalidade ?? "1"}
+                  onChange={e => setField("modalidade", e.target.value)}
+                  className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
+                  <option value="1">1 - Rodoviário</option>
+                  <option value="2">2 - Aéreo</option>
+                  <option value="3">3 - Aquaviário</option>
+                  <option value="4">4 - Ferroviário</option>
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground">Unidade Medida</label>
+                <select disabled={ro} value={record.unidade ?? "KG"}
+                  onChange={e => setField("unidade", e.target.value)}
+                  className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
+                  <option value="KG">KG</option>
+                  <option value="TON">TON</option>
+                </select>
               </div>
             </div>
 
-            {/* ── Linha 3: Veículo tração ── */}
-            <div className="border border-border rounded-lg p-3 bg-card">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Veículo de Tração</p>
-              <div className="grid grid-cols-12 gap-3">
-                <div className="col-span-2">
-                  <label className="text-xs text-muted-foreground">Placa <span className="text-destructive">*</span></label>
-                  <input readOnly={ro} value={record.placa_veiculo ?? ""}
-                    onChange={e => setField("placa_veiculo", e.target.value.toUpperCase())}
-                    className="w-full border border-border rounded px-2 py-1 text-sm font-mono uppercase" />
-                </div>
-                <div className="col-span-2">
-                  <label className="text-xs text-muted-foreground">RNTRC</label>
-                  <input readOnly={ro} value={record.rntrc_veiculo ?? ""}
-                    onChange={e => setField("rntrc_veiculo", e.target.value)}
-                    className="w-full border border-border rounded px-2 py-1 text-sm" />
-                </div>
-                <div className="col-span-1">
-                  <label className="text-xs text-muted-foreground">UF</label>
-                  <select disabled={ro} value={record.uf_veiculo || "PR"}
-                    onChange={e => setField("uf_veiculo", e.target.value)}
-                    className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
-                    {UF_OPTIONS.map(uf => <option key={uf} value={uf}>{uf}</option>)}
-                  </select>
-                </div>
-                <div className="col-span-2">
-                  <label className="text-xs text-muted-foreground">Tp. Rodado</label>
-                  <select disabled={ro} value={record.tp_rodado || "01"}
-                    onChange={e => setField("tp_rodado", e.target.value)}
-                    className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
-                    {TP_RODADO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </div>
-                <div className="col-span-2">
-                  <label className="text-xs text-muted-foreground">Tp. Carroceria</label>
-                  <select disabled={ro} value={record.tp_carroceria || "00"}
-                    onChange={e => setField("tp_carroceria", e.target.value)}
-                    className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
-                    {TP_CARROCERIA_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </div>
-                <div className="col-span-1">
-                  <label className="text-xs text-muted-foreground">Tara (kg)</label>
-                  <input readOnly={ro} type="number" value={record.tara_veiculo ?? 0}
-                    onChange={e => setField("tara_veiculo", Number(e.target.value))}
-                    className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
-                </div>
-                <div className="col-span-1">
-                  <label className="text-xs text-muted-foreground">Cap. KG</label>
-                  <input readOnly={ro} type="number" value={record.cap_kg_veiculo ?? 0}
-                    onChange={e => setField("cap_kg_veiculo", Number(e.target.value))}
-                    className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
-                </div>
-                <div className="col-span-1">
-                  <label className="text-xs text-muted-foreground">Cap. M³</label>
-                  <input readOnly={ro} type="number" value={record.cap_m3_veiculo ?? 0}
-                    onChange={e => setField("cap_m3_veiculo", Number(e.target.value))}
-                    className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
-                </div>
+            {/* ── Linha 3: Tipo Emitente / Transportador ── */}
+            <div className="grid grid-cols-12 gap-3 items-end">
+              <div className="col-span-4">
+                <label className="text-xs text-muted-foreground">Tipo Emitente <span className="text-destructive">*</span></label>
+                <select disabled={ro} value={record.tp_emitente ?? "1"}
+                  onChange={e => setField("tp_emitente", e.target.value)}
+                  className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
+                  <option value="1">1 - Prestador de serviço de transporte</option>
+                  <option value="2">2 - Transportador de carga própria</option>
+                  <option value="3">3 - Prestador de serviço de transporte (Carga própria)</option>
+                </select>
+              </div>
+              <div className="col-span-4">
+                <label className="text-xs text-muted-foreground">Tipo Transportador <span className="text-destructive">*</span></label>
+                <select disabled={ro} value={record.tp_transportador ?? "1"}
+                  onChange={e => setField("tp_transportador", e.target.value)}
+                  className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
+                  <option value="1">1 - ETC</option>
+                  <option value="2">2 - TAC</option>
+                  <option value="3">3 - CTC</option>
+                </select>
               </div>
             </div>
 
-            {/* ── Linha 4: Condutor ── */}
-            <div className="grid grid-cols-12 gap-3">
-              <div className="col-span-6">
-                <label className="text-xs text-muted-foreground">Condutor — Nome <span className="text-destructive">*</span></label>
-                <input readOnly={ro} value={record.condutor_nome ?? ""}
-                  onChange={e => setField("condutor_nome", e.target.value.toUpperCase())}
-                  className="w-full border border-border rounded px-2 py-1 text-sm" />
-              </div>
-              <div className="col-span-3">
-                <label className="text-xs text-muted-foreground">Condutor — CPF</label>
-                <input readOnly={ro} value={record.condutor_cpf ?? ""}
-                  onChange={e => setField("condutor_cpf", e.target.value.replace(/\D/g, "").substring(0, 11))}
-                  placeholder="00000000000"
-                  className="w-full border border-border rounded px-2 py-1 text-sm font-mono" />
-              </div>
-            </div>
-
-            {/* ── Linha 5: Totais de carga ── */}
-            <div className="border border-border rounded-lg p-3 bg-card">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Totais da Carga</p>
+            {/* ── Totais ── */}
+            <div className="border border-border rounded p-3 bg-card">
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Totais do Manifesto</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <label className="text-xs text-muted-foreground">Qtd. NF-e</label>
-                  <input readOnly={ro} type="number" value={record.qt_nf ?? 0}
-                    onChange={e => setField("qt_nf", Number(e.target.value))}
+                  <label className="text-xs text-muted-foreground">Qtd. NF-e <span className="text-destructive">*</span></label>
+                  <input type="number" readOnly={ro} value={record.qtd_nfe ?? 0}
+                    onChange={e => setField("qtd_nfe", Number(e.target.value))}
                     className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">Vl. Carga (R$)</label>
-                  <input readOnly={ro} type="number" value={record.vl_carga ?? 0}
-                    onChange={e => setField("vl_carga", Number(e.target.value))}
+                  <label className="text-xs text-muted-foreground">Peso Total (KG) <span className="text-destructive">*</span></label>
+                  <input type="number" readOnly={ro} value={record.peso_total ?? 0}
+                    onChange={e => setField("peso_total", e.target.value)}
+                    step="0.001"
                     className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">Peso (KG)</label>
-                  <input readOnly={ro} type="number" value={record.kg_carga ?? 0}
-                    onChange={e => setField("kg_carga", Number(e.target.value))}
+                  <label className="text-xs text-muted-foreground">Valor Total (R$) <span className="text-destructive">*</span></label>
+                  <input type="number" readOnly={ro} value={record.valor_total ?? 0}
+                    onChange={e => setField("valor_total", e.target.value)}
+                    step="0.01"
                     className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Unid. Medida</label>
-                  <select disabled={ro} value={record.unid_medida_carga || "KG"}
-                    onChange={e => setField("unid_medida_carga", e.target.value)}
-                    className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
-                    <option value="KG">KG</option>
-                    <option value="TON">TON</option>
-                  </select>
                 </div>
               </div>
-            </div>
-
-            {/* ── Linha 6: Chave / Protocolo (autorização) ── */}
-            {stAtual !== "A" && (
-              <div className="border border-border rounded-lg p-3 bg-card">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Dados da Autorização</p>
-                <div className="grid grid-cols-12 gap-3">
-                  <div className="col-span-7">
-                    <label className="text-xs text-muted-foreground">Chave MDF-e (44 dígitos)</label>
-                    <input readOnly value={record.chave_mdf ?? ""}
-                      className="w-full border border-border rounded px-2 py-1 text-sm font-mono bg-secondary" />
-                  </div>
-                  <div className="col-span-3">
-                    <label className="text-xs text-muted-foreground">Nº Protocolo</label>
-                    <input readOnly value={record.nr_protocolo ?? ""}
-                      className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary" />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-xs text-muted-foreground">Dt. Autorização</label>
-                    <input readOnly
-                      value={record.dt_autorizacao
-                        ? new Date(record.dt_autorizacao).toLocaleString("pt-BR")
-                        : ""}
-                      className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary" />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ── Observações ── */}
-            <div>
-              <label className="text-xs text-muted-foreground">Observações / Inf. Adicionais</label>
-              <textarea readOnly={ro} value={record.obs_mdf ?? ""}
-                onChange={e => setField("obs_mdf", e.target.value)}
-                className="w-full border border-border rounded px-2 py-2 text-sm min-h-[60px]" />
             </div>
 
           </div>

@@ -4,6 +4,7 @@ export interface AppTab {
   id: string;
   title: string;
   component: string;
+  params?: any;
 }
 
 export interface IEmpresaOption {

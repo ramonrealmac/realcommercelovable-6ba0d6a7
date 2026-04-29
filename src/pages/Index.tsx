@@ -36,6 +36,7 @@ import RbTemplatePesquisaForm from "@/rbuilder/components/rb_TemplatePesquisaFor
 import RbRelatorioForm from "@/rbuilder/components/rb_RelatorioForm";
 import RbReportExecutor from "@/rbuilder/components/rb_ReportExecutor";
 import { RpbManager } from "@/report-builder";
+import RpbStandaloneExecutor from "@/report-builder/components/executor/RpbStandaloneExecutor";
 import ProvedorTestForm from "@/components/forms/ProvedorTestForm";
 
 const AppContent = () => {
@@ -51,7 +52,7 @@ const AppContent = () => {
     }
   }, [XThemeLogomarca, setXLogomarca]);
 
-  const renderTabContent = (component: string) => {
+  const renderTabContent = (component: string, params?: any) => {
     switch (component) {
       case "GrupoProdutosForm":
       case "grupo-produtos":
@@ -120,6 +121,10 @@ const AppContent = () => {
       case "provedor-test":
         return <ProvedorTestForm />;
       default:
+        if (component.startsWith("rpb-exec-")) {
+          const XRelId = parseInt(component.replace("rpb-exec-", ""));
+          if (!isNaN(XRelId)) return <RpbStandaloneExecutor rpbRelatorioId={XRelId} initialParams={params} />;
+        }
         if (component.startsWith("rb-exec-")) {
           const XReportId = parseInt(component.replace("rb-exec-", ""));
           if (!isNaN(XReportId)) return <RbReportExecutor XReportId={XReportId} />;
@@ -159,7 +164,7 @@ const AppContent = () => {
               key={tab.id}
               className={`h-full ${tab.id === XActiveTabId ? "block" : "hidden"}`}
             >
-              {renderTabContent(tab.component)}
+              {renderTabContent(tab.component, tab.params)}
             </div>
           ))}
           {XTabs.length === 0 && (

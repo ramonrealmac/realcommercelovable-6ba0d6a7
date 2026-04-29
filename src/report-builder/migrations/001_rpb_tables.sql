@@ -25,6 +25,7 @@ CREATE TABLE public.rpb_relatorio (
   nome             TEXT NOT NULL,
   descricao        TEXT NOT NULL DEFAULT '',
   categoria        TEXT NOT NULL DEFAULT '',
+  nm_form          TEXT NOT NULL DEFAULT '',    -- Nome do formulário vinculado (ex: PedidoForm)
   query_sql        TEXT NOT NULL DEFAULT '',
   rpb_conexao_id   BIGINT REFERENCES public.rpb_conexao(rpb_conexao_id),
   layout_json      JSONB,       -- IRpbLayout serializado

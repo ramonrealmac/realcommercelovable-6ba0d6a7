@@ -4,6 +4,7 @@ import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import { useCrudController, ICrudConfig, TFormMode } from "@/hooks/useCrudController";
 import { useGridFilter } from "@/hooks/useGridFilter";
 import { useAppContext } from "@/contexts/AppContext";
+import RpbFormReportsButton from "@/report-builder/components/executor/RpbFormReportsButton";
 
 export interface IExtraTab {
   key: string;
@@ -95,6 +96,19 @@ function StandardCrudForm<T extends Record<string, any>>({
         onRefresh={ctrl.handleRefresh}
         onLocalizar={() => setXInnerTab("localizar")}
         onSair={handleSair}
+        extras={(() => {
+          const activeTab = XTabs.find(t => t.id === XActiveTabId);
+          const actualNmForm = config.XNmForm || activeTab?.component;
+          if (!actualNmForm || !ctrl.XCurrentRecord) return null;
+          
+          return (
+            <RpbFormReportsButton 
+              nmForm={actualNmForm} 
+              currentRecord={ctrl.XCurrentRecord} 
+              variant="ghost"
+            />
+          );
+        })()}
       />
 
       <div className="flex border-b border-border">

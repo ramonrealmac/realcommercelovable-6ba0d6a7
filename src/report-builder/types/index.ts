@@ -190,6 +190,7 @@ export interface IRpbRelatorio {
   nome:             string;
   descricao:        string;
   categoria:        string;
+  nm_form:          string;
   query_sql:        string;
   rpb_conexao_id:   number | null;
   layout_json:      RpbLayout | null;
