@@ -1167,7 +1167,8 @@ export type Database = {
           movimento_id: number | null
           tp_movimento: string | null
           tp_operacao: string | null
-          vlr_movimento: number | null
+          vl_movimento: number | null
+          vl_troco: number | null
         }
         Insert: {
           caixa_abertura_id?: number | null
@@ -1186,7 +1187,8 @@ export type Database = {
           movimento_id?: number | null
           tp_movimento?: string | null
           tp_operacao?: string | null
-          vlr_movimento?: number | null
+          vl_movimento?: number | null
+          vl_troco?: number | null
         }
         Update: {
           caixa_abertura_id?: number | null
@@ -1205,9 +1207,18 @@ export type Database = {
           movimento_id?: number | null
           tp_movimento?: string | null
           tp_operacao?: string | null
-          vlr_movimento?: number | null
+          vl_movimento?: number | null
+          vl_troco?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_caixa_movimento_abertura"
+            columns: ["caixa_abertura_id"]
+            isOneToOne: false
+            referencedRelation: "caixa_abertura"
+            referencedColumns: ["caixa_abertura_id"]
+          },
+        ]
       }
       caixa_movimento_item: {
         Row: {
@@ -1264,7 +1275,15 @@ export type Database = {
           vl_parcela?: number | null
           vl_recebido?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_caixa_movimento_item_movimento"
+            columns: ["caixa_movimento_id"]
+            isOneToOne: false
+            referencedRelation: "caixa_movimento"
+            referencedColumns: ["caixa_movimento_id"]
+          },
+        ]
       }
       cfop: {
         Row: {
@@ -5450,6 +5469,7 @@ export type Database = {
           empresa_id: number
           excluido: boolean
           layout_json: Json | null
+          nm_form: string
           nome: string
           query_sql: string
           rpb_conexao_id: number | null
@@ -5463,6 +5483,7 @@ export type Database = {
           empresa_id: number
           excluido?: boolean
           layout_json?: Json | null
+          nm_form?: string
           nome: string
           query_sql?: string
           rpb_conexao_id?: number | null
@@ -5476,6 +5497,7 @@ export type Database = {
           empresa_id?: number
           excluido?: boolean
           layout_json?: Json | null
+          nm_form?: string
           nome?: string
           query_sql?: string
           rpb_conexao_id?: number | null
