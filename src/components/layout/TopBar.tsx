@@ -3,6 +3,7 @@ import { Menu, Grid3X3, LogOut, KeyRound, Shield, Users, UserCog } from "lucide-
 import { useAppContext } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import ShortcutsBar from "./ShortcutsBar";
+import ChatInternoTopBarButton from "@/components/chat-interno/ChatInternoTopBarButton";
 
 const TopBar = () => {
   const { XEmpresaId, setXEmpresaId, setXEmpresaMatrizId, XEmpresas, toggleSidebar, openTab } = useAppContext();
@@ -81,6 +82,8 @@ const TopBar = () => {
       <div className="hidden md:block flex-1" />
 
       <ShortcutsBar />
+
+      <ChatInternoTopBarButton />
 
       <button className="p-1.5 hover:bg-foreground/10 rounded" title="Aplicativos">
         <Grid3X3 size={18} />
