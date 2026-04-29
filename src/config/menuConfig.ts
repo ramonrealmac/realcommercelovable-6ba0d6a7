@@ -131,7 +131,7 @@ export const MENU_CONFIG: MenuItem[] = [
           { id: "contas", title: "Contas", icon: ArrowRightLeft },
           { id: "portadores", title: "Portadores", icon: Wallet },
           { id: "cond-pagamento", title: "Condições de Pagamento", icon: CreditCard },
-          { id: "plano-contas", title: "Planos de Contas", icon: AlignLeft },
+          { id: "plano-contas", title: "Plano de Contas", icon: AlignLeft },
           { id: "tipo-operacoes", title: "Tipos de Operações", icon: AlignLeft },
           { id: "tipo-pag-rec", title: "Tipo Pag./Recebimento", icon: ArrowRightLeft },
           { id: "comissoes", title: "Comissões", icon: Percent },

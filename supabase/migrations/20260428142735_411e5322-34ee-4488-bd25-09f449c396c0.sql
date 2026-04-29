@@ -1,3 +1,4 @@
+
 CREATE TABLE public.usuario_atalho (
   usuario_atalho_id BIGSERIAL PRIMARY KEY,
   user_id UUID NOT NULL,
