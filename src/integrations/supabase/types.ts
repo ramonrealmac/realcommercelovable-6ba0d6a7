@@ -1406,6 +1406,109 @@ export type Database = {
           },
         ]
       }
+      chat_sala: {
+        Row: {
+          chat_sala_id: number
+          criado_por: string
+          ds_nome: string | null
+          dt_atualizacao: string
+          dt_criacao: string
+          empresa_id: number | null
+          tp_sala: string
+        }
+        Insert: {
+          chat_sala_id?: number
+          criado_por: string
+          ds_nome?: string | null
+          dt_atualizacao?: string
+          dt_criacao?: string
+          empresa_id?: number | null
+          tp_sala: string
+        }
+        Update: {
+          chat_sala_id?: number
+          criado_por?: string
+          ds_nome?: string | null
+          dt_atualizacao?: string
+          dt_criacao?: string
+          empresa_id?: number | null
+          tp_sala?: string
+        }
+        Relationships: []
+      }
+      chat_sala_membro: {
+        Row: {
+          chat_sala_id: number
+          chat_sala_membro_id: number
+          dt_entrada: string
+          dt_ultima_leitura: string
+          user_id: string
+        }
+        Insert: {
+          chat_sala_id: number
+          chat_sala_membro_id?: number
+          dt_entrada?: string
+          dt_ultima_leitura?: string
+          user_id: string
+        }
+        Update: {
+          chat_sala_id?: number
+          chat_sala_membro_id?: number
+          dt_entrada?: string
+          dt_ultima_leitura?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_sala_membro_chat_sala_id_fkey"
+            columns: ["chat_sala_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sala"
+            referencedColumns: ["chat_sala_id"]
+          },
+        ]
+      }
+      chat_sala_mensagem: {
+        Row: {
+          chat_sala_id: number
+          chat_sala_mensagem_id: number
+          ds_anexo_tipo: string | null
+          ds_anexo_url: string | null
+          ds_audio_url: string | null
+          ds_conteudo: string | null
+          dt_criacao: string
+          user_id: string
+        }
+        Insert: {
+          chat_sala_id: number
+          chat_sala_mensagem_id?: number
+          ds_anexo_tipo?: string | null
+          ds_anexo_url?: string | null
+          ds_audio_url?: string | null
+          ds_conteudo?: string | null
+          dt_criacao?: string
+          user_id: string
+        }
+        Update: {
+          chat_sala_id?: number
+          chat_sala_mensagem_id?: number
+          ds_anexo_tipo?: string | null
+          ds_anexo_url?: string | null
+          ds_audio_url?: string | null
+          ds_conteudo?: string | null
+          dt_criacao?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_sala_mensagem_chat_sala_id_fkey"
+            columns: ["chat_sala_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sala"
+            referencedColumns: ["chat_sala_id"]
+          },
+        ]
+      }
       cidade: {
         Row: {
           cd_ibge: string | null
@@ -5715,6 +5818,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      fu_chat_is_membro: {
+        Args: { _sala_id: number; _user_id: string }
+        Returns: boolean
+      }
       fu_form_permissao: {
         Args: { _empresa_id: number; _nm_formulario: string; _user_id: string }
         Returns: {
