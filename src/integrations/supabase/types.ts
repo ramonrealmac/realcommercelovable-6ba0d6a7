@@ -1329,6 +1329,83 @@ export type Database = {
           },
         ]
       }
+      chat_conversa: {
+        Row: {
+          chat_conversa_id: number
+          ds_titulo: string
+          dt_atualizacao: string
+          dt_criacao: string
+          empresa_id: number | null
+          user_id: string
+        }
+        Insert: {
+          chat_conversa_id?: number
+          ds_titulo?: string
+          dt_atualizacao?: string
+          dt_criacao?: string
+          empresa_id?: number | null
+          user_id: string
+        }
+        Update: {
+          chat_conversa_id?: number
+          ds_titulo?: string
+          dt_atualizacao?: string
+          dt_criacao?: string
+          empresa_id?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      chat_mensagem: {
+        Row: {
+          chat_conversa_id: number
+          chat_mensagem_id: number
+          dados_acao: Json | null
+          ds_anexo_tipo: string | null
+          ds_anexo_url: string | null
+          ds_audio_url: string | null
+          ds_conteudo: string | null
+          dt_criacao: string
+          tp_acao: string | null
+          tp_remetente: string
+          user_id: string
+        }
+        Insert: {
+          chat_conversa_id: number
+          chat_mensagem_id?: number
+          dados_acao?: Json | null
+          ds_anexo_tipo?: string | null
+          ds_anexo_url?: string | null
+          ds_audio_url?: string | null
+          ds_conteudo?: string | null
+          dt_criacao?: string
+          tp_acao?: string | null
+          tp_remetente: string
+          user_id: string
+        }
+        Update: {
+          chat_conversa_id?: number
+          chat_mensagem_id?: number
+          dados_acao?: Json | null
+          ds_anexo_tipo?: string | null
+          ds_anexo_url?: string | null
+          ds_audio_url?: string | null
+          ds_conteudo?: string | null
+          dt_criacao?: string
+          tp_acao?: string | null
+          tp_remetente?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_mensagem_chat_conversa_id_fkey"
+            columns: ["chat_conversa_id"]
+            isOneToOne: false
+            referencedRelation: "chat_conversa"
+            referencedColumns: ["chat_conversa_id"]
+          },
+        ]
+      }
       cidade: {
         Row: {
           cd_ibge: string | null
