@@ -182,6 +182,7 @@ const AppContent = () => {
           )}
         </div>
       </div>
+      <ChatLauncher />
     </div>
   );
 };
