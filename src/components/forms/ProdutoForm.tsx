@@ -15,27 +15,28 @@ import { consumePendingProduct } from "@/utils/nfePendingStore";
 const db = supabase as any;
 type TFormMode = "view" | "edit" | "insert";
 
-/* ─── Helpers pt-BR formatting ─── */
-const parseBR = (s: string): number => {
-  if (typeof s !== "string") return Number(s) || 0;
-
-  const XRaw = s.trim().replace(/\s/g, "");
-  if (!XRaw) return 0;
-
-  let XNormalized = XRaw;
-  if (XRaw.includes(",") && XRaw.includes(".")) {
-    XNormalized = XRaw.replace(/\./g, "").replace(",", ".");
-  } else if (XRaw.includes(",")) {
-    XNormalized = XRaw.replace(",", ".");
-  }
-
-  const n = Number(XNormalized);
-  return Number.isFinite(n) ? n : 0;
+/* ─── Helpers pt-BR formatting (alinhado com NFe) ─── */
+const parseNum = (v: any) => {
+  if (v === undefined || v === null || v === "") return 0;
+  if (typeof v === "number") return v;
+  const s = String(v).replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
 };
 
-const fmtBR = (v: number | string, decimals: number): string => {
-  const n = typeof v === "string" ? parseBR(v) : v;
-  return n.toLocaleString("pt-BR", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+const fmt2 = (v: number) => Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt4 = (v: number) => Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+
+const fmtInput = (v: any) => {
+  if (v === 0 || v === "0") return "0,00";
+  const n = typeof v === "number" ? v : parseNum(v);
+  return n.toFixed(2).replace(".", ",");
+};
+
+const fmtInput4 = (v: any) => {
+  if (v === 0 || v === "0") return "0,0000";
+  const n = typeof v === "number" ? v : parseNum(v);
+  return n.toFixed(4).replace(".", ",");
 };
 
 
@@ -300,23 +301,23 @@ const ProdutoForm: React.FC = () => {
 
   /* ─── Calculate cost values ─── */
   const recalcFromPercentages = useCallback((form: Record<string, string>, changedPcKey?: string) => {
-    const vl = parseBR(form.vl_compra);
+    const vl = parseNum(form.vl_compra);
     const XUpdates: Record<string, string> = {};
     for (const [pcKey, vlKey] of XCostPairs) {
       if (changedPcKey && pcKey !== changedPcKey) continue;
-      const pc = parseBR(form[pcKey]);
-      XUpdates[vlKey] = ((pc / 100) * vl).toFixed(2);
+      const pc = parseNum(form[pcKey]);
+      XUpdates[vlKey] = ((pc / 100) * vl).toFixed(2).replace(".", ",");
     }
     return XUpdates;
   }, []);
 
   const recalcFromValue = useCallback((form: Record<string, string>, changedVlKey: string) => {
-    const vl = parseBR(form.vl_compra);
+    const vl = parseNum(form.vl_compra);
     const XUpdates: Record<string, string> = {};
     for (const [pcKey, vlKey] of XCostPairs) {
       if (vlKey !== changedVlKey) continue;
-      const vlItem = parseBR(form[vlKey]);
-      XUpdates[pcKey] = vl > 0 ? ((vlItem / vl) * 100).toFixed(4) : "0";
+      const vlItem = parseNum(form[vlKey]);
+      XUpdates[pcKey] = vl > 0 ? ((vlItem / vl) * 100).toFixed(4).replace(".", ",") : "0,0000";
     }
     return XUpdates;
   }, []);
@@ -324,10 +325,10 @@ const ProdutoForm: React.FC = () => {
   const XCreditKeys = new Set(["vl_icms_cred"]);
 
   const recalcTotals = useCallback((form: Record<string, string>) => {
-    const vl = parseBR(form.vl_compra);
+    const vl = parseNum(form.vl_compra);
     let XSumVl = 0;
     for (const [, vlKey] of XCostPairs) {
-      const v = parseBR(form[vlKey]);
+      const v = parseNum(form[vlKey]);
       if (XCreditKeys.has(vlKey)) {
         XSumVl -= v;
       } else {
@@ -335,17 +336,16 @@ const ProdutoForm: React.FC = () => {
       }
     }
     const XCusto = parseFloat((vl + XSumVl).toFixed(2));
-    const XMark = parseBR(form.pc_multiplicador);
+    const XMark = parseNum(form.pc_multiplicador);
     const XVlMark = parseFloat(((XMark / 100) * XCusto).toFixed(2));
     return {
-      vl_custo: XCusto.toFixed(2),
-      vl_multiplicador: XVlMark.toFixed(2),
-      preco_sugerido: (XCusto + XVlMark).toFixed(2),
+      vl_custo: XCusto.toFixed(2).replace(".", ","),
+      vl_multiplicador: XVlMark.toFixed(2).replace(".", ","),
+      preco_sugerido: (XCusto + XVlMark).toFixed(2).replace(".", ","),
     };
   }, []);
 
   const handleCostFieldChange = useCallback((key: string, rawVal: string) => {
-    // Allow raw numeric input directly
     const val = rawVal;
     setXF(prev => {
       const XNext = { ...prev, [key]: val };
@@ -363,6 +363,13 @@ const ProdutoForm: React.FC = () => {
       return XNext;
     });
   }, [recalcFromPercentages, recalcFromValue, recalcTotals]);
+
+  const handleNumBlur = useCallback((key: string, decimals: number = 2) => {
+    const current = XF[key];
+    if (current === undefined || current === null || current === "") return;
+    const val = parseNum(current);
+    set(key, val.toFixed(decimals).replace(".", ","));
+  }, [XF, set]);
 
   /* ─── CRUD handlers ─── */
   const handleIncluir = () => {
@@ -382,7 +389,7 @@ const ProdutoForm: React.FC = () => {
   const handleSalvar = async () => {
     if (!XF.nome.trim()) { toast.error("A Descrição é obrigatória."); return; }
 
-    const toNum = (v: string) => parseBR(v);
+    const toNum = (v: string) => parseNum(v);
     const toInt = (v: string) => { const n = parseInt(v); return isNaN(n) ? null : n; };
 
     const XPayload: any = {
@@ -657,8 +664,9 @@ const ProdutoForm: React.FC = () => {
           <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
           <input
             type="text"
-            value={XF[key] || "0"}
+            value={XF[key] || "0,00"}
             onChange={(e) => handleCostFieldChange(key, e.target.value)}
+            onBlur={() => handleNumBlur(key, dec)}
             onFocus={(e) => e.target.select()}
             readOnly={opts?.readOnly}
             className={`w-full border border-border rounded px-3 py-1.5 text-sm text-right ${opts?.readOnly ? XBgRead : XBgEdit} focus:ring-2 focus:ring-ring outline-none`}
@@ -667,7 +675,7 @@ const ProdutoForm: React.FC = () => {
       );
     }
     const val = XCurrentRecord ? Number((XCurrentRecord as any)[key] || 0) : 0;
-    return renderReadField(label, fmtBR(val, dec), opts?.className);
+    return renderReadField(label, dec === 4 ? fmt4(val) : fmt2(val), opts?.className);
   };
 
   const renderSelect = (label: string, key: string, items: { v: string; l: string }[]) => {
@@ -715,8 +723,9 @@ const ProdutoForm: React.FC = () => {
         <label className="block text-xs font-medium text-muted-foreground mb-1">{labelPc}</label>
         <input
           type="text"
-          value={XIsEditing ? (XF[pcKey] || "0") : fmtBR(XCurrentRecord ? Number((XCurrentRecord as any)[pcKey] || 0) : 0, 4)}
+          value={XIsEditing ? (XF[pcKey] || "0,0000") : fmt4(XCurrentRecord ? Number((XCurrentRecord as any)[pcKey] || 0) : 0)}
           onChange={(e) => handleCostFieldChange(pcKey, e.target.value)}
+          onBlur={() => handleNumBlur(pcKey, 4)}
           onFocus={(e) => e.target.select()}
           readOnly={!XIsEditing}
           className={`w-full border border-border rounded px-3 py-1.5 text-sm text-right ${XIsEditing ? XBgEdit : XBgRead} focus:ring-2 focus:ring-ring outline-none`}
@@ -726,8 +735,9 @@ const ProdutoForm: React.FC = () => {
         <label className="block text-xs font-medium text-muted-foreground mb-1">R$</label>
         <input
           type="text"
-          value={XIsEditing ? (XF[vlKey] || "0") : fmtBR(XCurrentRecord ? Number((XCurrentRecord as any)[vlKey] || 0) : 0, 2)}
+          value={XIsEditing ? (XF[vlKey] || "0,00") : fmt2(XCurrentRecord ? Number((XCurrentRecord as any)[vlKey] || 0) : 0)}
           onChange={(e) => handleCostFieldChange(vlKey, e.target.value)}
+          onBlur={() => handleNumBlur(vlKey, 2)}
           onFocus={(e) => e.target.select()}
           readOnly={!XIsEditing}
           className={`w-full border border-border rounded px-3 py-1.5 text-sm text-right ${XIsEditing ? XBgEdit : XBgRead} focus:ring-2 focus:ring-ring outline-none`}

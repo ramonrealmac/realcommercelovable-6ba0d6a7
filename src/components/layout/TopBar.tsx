@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Menu, Grid3X3, LogOut, KeyRound, Shield, Users, UserCog } from "lucide-react";
 import { useAppContext } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
+import ShortcutsBar from "./ShortcutsBar";
 
 const TopBar = () => {
   const { XEmpresaId, setXEmpresaId, setXEmpresaMatrizId, XEmpresas, toggleSidebar, openTab } = useAppContext();
@@ -78,6 +79,8 @@ const TopBar = () => {
       </div>
 
       <div className="hidden md:block flex-1" />
+
+      <ShortcutsBar />
 
       <button className="p-1.5 hover:bg-foreground/10 rounded" title="Aplicativos">
         <Grid3X3 size={18} />

@@ -228,7 +228,8 @@ export const MENU_CONFIG: MenuItem[] = [
       { id: "rel-contas-pagar", title: "Relatórios - Contas a Pagar", icon: FileDown },
       { id: "relatorios", title: "Relatórios - Vendas", icon: ShoppingCart },
       { id: "rel-produtos", title: "Relatórios - Produtos", icon: Package2 },
-      { id: "rbuilder", title: "RBuilder", icon: FileBarChart },
+      { id: "rpb-relatorios", title: "Report Builder Pro", icon: FileBarChart },
+      { id: "rbuilder", title: "RBuilder (legado)", icon: FileBarChart },
     ],
   },
   {

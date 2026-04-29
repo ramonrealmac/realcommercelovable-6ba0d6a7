@@ -35,6 +35,7 @@ import RbConexaoForm from "@/rbuilder/components/rb_ConexaoForm";
 import RbTemplatePesquisaForm from "@/rbuilder/components/rb_TemplatePesquisaForm";
 import RbRelatorioForm from "@/rbuilder/components/rb_RelatorioForm";
 import RbReportExecutor from "@/rbuilder/components/rb_ReportExecutor";
+import { RpbManager } from "@/report-builder";
 import ProvedorTestForm from "@/components/forms/ProvedorTestForm";
 
 const AppContent = () => {
@@ -114,6 +115,8 @@ const AppContent = () => {
         return <RbRelatorioForm />;
       case "mdfe":
         return <MdfeForm />;
+      case "rpb-relatorios":
+        return <RpbManager />;
       case "provedor-test":
         return <ProvedorTestForm />;
       default:
