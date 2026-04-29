@@ -40,6 +40,7 @@ import RpbStandaloneExecutor from "@/report-builder/components/executor/RpbStand
 import ProvedorTestForm from "@/components/forms/ProvedorTestForm";
 import PlanoContaForm from "@/components/forms/PlanoContaForm";
 import BancoForm from "@/components/forms/BancoForm";
+import ChatLauncher from "@/components/chat/ChatLauncher";
 
 const AppContent = () => {
   const { XTabs, XActiveTabId, openTab, XEmpresaId, setXLogomarca, XLogomarca } = useAppContext();
