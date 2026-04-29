@@ -252,7 +252,7 @@ const PedidoForm: React.FC = () => {
                 <div className="grid grid-cols-12 gap-3">
                   <div className="col-span-3">
                     <label className="text-xs text-muted-foreground">Rota</label>
-                    <select disabled={ro} value={record.rota_id ?? ""} onChange={e => setField("rota_id" as any, e.target.value ? Number(e.target.value) : null as any)} className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
+                    <select disabled={ro} value={record.rota_id ?? ""} onChange={e => setField("rota_id" as any, e.target.value ? Number(e.target.value) : null as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
                       <option value="">--</option>
                       {XRotas.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                     </select>
@@ -263,7 +263,7 @@ const PedidoForm: React.FC = () => {
                   </div>
                   <div className="col-span-7">
                     <label className="text-xs text-muted-foreground">Cidade</label>
-                    <select disabled={ro} value={record.cidade_id ?? ""} onChange={e => setField("cidade_id" as any, e.target.value ? Number(e.target.value) : null as any)} className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
+                    <select disabled={ro} value={record.cidade_id ?? ""} onChange={e => setField("cidade_id" as any, e.target.value ? Number(e.target.value) : null as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
                       <option value="">--</option>
                       {XCidades.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                     </select>
@@ -392,7 +392,7 @@ const PedidoForm: React.FC = () => {
             <div className="grid grid-cols-12 gap-3">
               <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Pedido</label>
-                <input readOnly value={record.nr_movimento ?? (mode === "insert" ? "(Novo)" : "")} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right" />
+                <input readOnly value={record.nr_movimento ?? (mode === "insert" ? "(Novo)" : "")} className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
               </div>
               <div className="col-span-5">
                 <label className="text-xs text-muted-foreground">Cliente <span className="text-destructive">*</span></label>
@@ -401,7 +401,7 @@ const PedidoForm: React.FC = () => {
                     readOnly
                     value={record.cadastro_id ? (XClientesCache[record.cadastro_id]?.razao || `#${record.cadastro_id}`) : ""}
                     placeholder="Clique na lupa para pesquisar..."
-                    className="flex-1 border border-border rounded px-2 py-1 text-sm bg-secondary"
+                    className="flex-1 border border-border rounded px-2 py-1 text-sm"
                   />
                   <button
                     type="button"
@@ -427,18 +427,18 @@ const PedidoForm: React.FC = () => {
               </div>
               <div className="col-span-3">
                 <label className="text-xs text-muted-foreground">Vendedor <span className="text-destructive">*</span></label>
-                <select disabled={ro} value={record.funcionario_id ?? ""} onChange={e => setField("funcionario_id", e.target.value ? Number(e.target.value) : null as any)} className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
+                <select disabled={ro} value={record.funcionario_id ?? ""} onChange={e => setField("funcionario_id", e.target.value ? Number(e.target.value) : null as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
                   <option value="">--</option>
                   {XVendedores.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
                 </select>
               </div>
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Status</label>
-                <input readOnly value={ST_PEDIDO_LABELS[stAtual] || stAtual} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary" />
+                <input readOnly value={ST_PEDIDO_LABELS[stAtual] || stAtual} className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
               <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Faturado</label>
-                <input readOnly value={record.faturado ?? "N"} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-center" />
+                <input readOnly value={record.faturado ?? "N"} className="w-full border border-border rounded px-2 py-1 text-sm text-center" />
               </div>
             </div>
 
@@ -453,14 +453,14 @@ const PedidoForm: React.FC = () => {
               </div>
               <div className="col-span-3">
                 <label className="text-xs text-muted-foreground">Tipo de Operação</label>
-                <select disabled={ro} value={record.tp_operacao_id ?? ""} onChange={e => setField("tp_operacao_id", e.target.value ? Number(e.target.value) : null as any)} className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
+                <select disabled={ro} value={record.tp_operacao_id ?? ""} onChange={e => setField("tp_operacao_id", e.target.value ? Number(e.target.value) : null as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
                   <option value="">--</option>
                   {XTpOperacoes.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
                 </select>
               </div>
               <div className="col-span-3">
                 <label className="text-xs text-muted-foreground">Tipo de Movimento <span className="text-destructive">*</span></label>
-                <select disabled={ro} value={record.tp_movimento || "PD"} onChange={e => setField("tp_movimento", e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
+                <select disabled={ro} value={record.tp_movimento || "PD"} onChange={e => setField("tp_movimento", e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
                   <option value="PD">Pedido</option>
                   <option value="SV">Saída por Venda</option>
                   <option value="OR">Orçamento</option>
@@ -468,7 +468,7 @@ const PedidoForm: React.FC = () => {
               </div>
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">NF</label>
-                <input readOnly value={record.numero_nfe ?? ""} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right" />
+                <input readOnly value={record.numero_nfe ?? ""} className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
               </div>
             </div>
 
@@ -476,7 +476,7 @@ const PedidoForm: React.FC = () => {
             <div className="grid grid-cols-12 gap-3 items-end">
               <div className="col-span-3">
                 <label className="text-xs text-muted-foreground">Tipo de Desconto <span className="text-destructive">*</span></label>
-                <select disabled={ro} value={record.tp_desconto || "N"} onChange={e => setField("tp_desconto", e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
+                <select disabled={ro} value={record.tp_desconto || "N"} onChange={e => setField("tp_desconto", e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
                   {Object.entries(TP_DESCONTO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
               </div>

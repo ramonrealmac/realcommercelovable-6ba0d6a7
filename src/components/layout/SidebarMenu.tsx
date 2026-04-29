@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAppContext } from "@/contexts/AppContext";
-import { X, ChevronRight, ChevronDown, FileBarChart } from "lucide-react";
+import { X, ChevronRight, ChevronDown, FileBarChart, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { MENU_CONFIG, MenuItem } from "@/config/menuConfig";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { rbFetchRelatorios } from "@/rbuilder/services/rb_reportService";
@@ -13,13 +14,19 @@ const MenuItemNode = ({
   depth = 0,
   openTab,
   closeSidebar,
+  forceExpand = false,
 }: {
   item: MenuItem;
   depth?: number;
   openTab: (tab: { title: string; component: string }) => void;
   closeSidebar: () => void;
+  forceExpand?: boolean;
 }) => {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(forceExpand);
+
+  useEffect(() => {
+    if (forceExpand) setExpanded(true);
+  }, [forceExpand]);
   const hasChildren = !!item.children?.length;
   const Icon = item.icon;
 
@@ -44,6 +51,7 @@ const MenuItemNode = ({
                 depth={depth + 1}
                 openTab={openTab}
                 closeSidebar={closeSidebar}
+                forceExpand={forceExpand}
               />
             ))}
           </div>
@@ -71,6 +79,7 @@ const SidebarMenu = () => {
   const { XSidebarOpen, closeSidebar, openTab, XEmpresaMatrizId, XEmpresaId } = useAppContext();
   const [XRbRelatorios, setXRbRelatorios] = useState<IRbRelatorio[]>([]);
   const [XRpbRelatorios, setXRpbRelatorios] = useState<IRpbRelatorio[]>([]);
+  const [XSearch, setXSearch] = useState("");
 
   useEffect(() => {
     if (XSidebarOpen && XEmpresaMatrizId > 0) {
@@ -176,6 +185,26 @@ const SidebarMenu = () => {
     return item;
   });
 
+  const XFilteredMenu = useMemo(() => {
+    if (!XSearch.trim()) return XMenuConfig;
+    const q = XSearch.toLowerCase();
+
+    const filterItems = (items: MenuItem[]): MenuItem[] => {
+      return items.map(item => {
+        const matchesSelf = item.title.toLowerCase().includes(q);
+        const filteredChildren = item.children ? filterItems(item.children) : undefined;
+        const hasVisibleChildren = filteredChildren && filteredChildren.length > 0;
+
+        if (matchesSelf || hasVisibleChildren) {
+          return { ...item, children: filteredChildren };
+        }
+        return null;
+      }).filter(Boolean) as MenuItem[];
+    };
+
+    return filterItems(XMenuConfig);
+  }, [XMenuConfig, XSearch]);
+
   if (!XSidebarOpen) return null;
 
   return (
@@ -188,16 +217,41 @@ const SidebarMenu = () => {
             <X size={18} />
           </button>
         </div>
+        <div className="p-3 border-b border-border bg-muted/30">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input 
+              placeholder="Buscar no menu..." 
+              className="pl-9 h-9 text-xs bg-background"
+              value={XSearch}
+              onChange={(e) => setXSearch(e.target.value)}
+            />
+            {XSearch && (
+              <button 
+                onClick={() => setXSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2"
+              >
+                <X className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+              </button>
+            )}
+          </div>
+        </div>
         <ScrollArea className="flex-1">
           <div className="p-2">
-            {XMenuConfig.map((item) => (
+            {XFilteredMenu.map((item) => (
               <MenuItemNode
                 key={item.id}
                 item={item}
                 openTab={openTab}
                 closeSidebar={closeSidebar}
+                forceExpand={!!XSearch}
               />
             ))}
+            {XFilteredMenu.length === 0 && (
+              <div className="p-4 text-center text-xs text-muted-foreground">
+                Nenhum item encontrado.
+              </div>
+            )}
           </div>
         </ScrollArea>
       </div>

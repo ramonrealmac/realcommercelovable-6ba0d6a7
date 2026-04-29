@@ -365,12 +365,12 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
               <label className="text-xs text-muted-foreground">Produto</label>
               <input readOnly tabIndex={-1} value={XEdit.nm_produto || ""}
                 placeholder="Selecione um produto..."
-                className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary" />
+                className="w-full border border-border rounded px-2 py-1 text-sm" />
             </div>
             <div className="col-span-1">
               <label className="text-xs text-muted-foreground">Und.</label>
               <input readOnly tabIndex={-1} value={XEdit.unidade_id ?? ""}
-                className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary" />
+                className="w-full border border-border rounded px-2 py-1 text-sm" />
             </div>
             <div className="col-span-1">
               <label className="text-xs text-muted-foreground">Preço Unit.</label>
@@ -400,7 +400,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
             <div className="col-span-1 flex flex-col justify-end">
               <label className="text-xs text-muted-foreground">Subtotal</label>
               <input readOnly tabIndex={-1} value={fmt(XEdit.vl_produto || 0)}
-                className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right font-semibold" />
+                className="w-full border border-border rounded px-2 py-1 text-sm font-semibold text-right" />
             </div>
           </div>
 
@@ -441,13 +441,13 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Estoq. Disp.</label>
               <input readOnly tabIndex={-1} value={XEditEstoque ? fmt(XEditEstoque.disp, 4) : ""}
-                className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right" />
+                className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
             </div>
             <div className="col-span-4">
               <label className="text-xs text-muted-foreground">Depósito</label>
               <select disabled={ro} value={XEdit.deposito_id ?? ""}
                 onChange={e => setF("deposito_id", Number(e.target.value))}
-                className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
+                className="w-full border border-border rounded px-2 py-1 text-sm">
                 <option value="">--</option>
                 {XDepositos
                   .filter(d => !XEdit.produto_id || XDepEstoque[d.deposito_id] !== undefined)
@@ -514,7 +514,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Total</label>
               <input readOnly tabIndex={-1} value={fmt(XEdit.vl_movimento || 0)}
-                className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right font-semibold" />
+                className="w-full border border-border rounded px-2 py-1 text-sm font-semibold text-right" />
             </div>
             <div className="col-span-2 flex items-end gap-1">
               <button onClick={salvarItem} disabled={ro}

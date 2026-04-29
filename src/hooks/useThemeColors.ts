@@ -50,7 +50,7 @@ const COLOR_MAP: Record<string, string> = {
 
 export function useThemeColors(empresaId: number) {
   const [XLoaded, setXLoaded] = useState(false);
-  const [XLogomarca, setXLogomarca] = useState<string>("");
+  const [XLogomarca, setXLogomarca] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (!empresaId) return;

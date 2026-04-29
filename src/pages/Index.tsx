@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { Palette } from "lucide-react";
 import TopBar from "@/components/layout/TopBar";
 import TabBar from "@/components/layout/TabBar";
 import SidebarMenu from "@/components/layout/SidebarMenu";
@@ -143,31 +144,13 @@ const AppContent = () => {
     }
   };
 
-  useEffect(() => {
-    if (!XInitRef.current) {
-      XInitRef.current = true;
-      openTab({ title: "Grupos de Produtos", component: "GrupoProdutosForm" });
-    }
-  }, [openTab]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
       <TopBar />
       <TabBar />
       <SidebarMenu />
-      <div
-        className="flex-1 overflow-hidden relative"
-        style={XLogomarca ? {
-          backgroundImage: `url(${XLogomarca})`,
-          backgroundSize: "contain",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-        } : undefined}
-      >
-        {/* Semi-transparent overlay when logomarca is present */}
-        {XLogomarca && (
-          <div className="absolute inset-0 bg-background/85 pointer-events-none z-0" />
-        )}
+      <div className="flex-1 overflow-hidden relative">
         <div className="relative z-10 h-full">
           {XTabs.map(tab => (
             <div
@@ -178,15 +161,22 @@ const AppContent = () => {
             </div>
           ))}
           {XTabs.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm">
-              {XLogomarca ? (
-                <img 
-                  src={XLogomarca} 
-                  alt="Logo" 
-                  className="max-w-[400px] max-h-[200px] object-contain opacity-10 grayscale select-none pointer-events-none" 
-                />
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm p-8 text-center">
+              {XThemeLogomarca || XLogomarca ? (
+                <div className="animate-in fade-in zoom-in duration-1000">
+                  <img 
+                    src={XThemeLogomarca || XLogomarca} 
+                    alt="Logo" 
+                    className="max-w-[600px] max-h-[400px] object-contain opacity-50 select-none pointer-events-none" 
+                  />
+                </div>
               ) : (
-                <span>Use o menu para abrir um formulário.</span>
+                <div className="flex flex-col items-center gap-4">
+                  <div className="w-16 h-16 rounded-full border-2 border-dashed border-muted flex items-center justify-center opacity-20">
+                    <Palette className="w-8 h-8" />
+                  </div>
+                  <span>Use o menu para abrir um formulário.</span>
+                </div>
               )}
             </div>
           )}
