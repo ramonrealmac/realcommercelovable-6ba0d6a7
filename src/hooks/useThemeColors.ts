@@ -41,6 +41,11 @@ const COLOR_MAP: Record<string, string> = {
   cor_destaque: "--warning",
   cor_menu: "--sidebar-primary",
   cor_link: "--accent",
+  // Textbox
+  cor_input_fundo: "--input-bg",
+  cor_input_readonly: "--input-readonly-bg",
+  cor_input_borda: "--input-border-color",
+  cor_input_label: "--label-color",
 };
 
 export function useThemeColors(empresaId: number) {

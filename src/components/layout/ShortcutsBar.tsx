@@ -101,6 +101,17 @@ const ShortcutsBar = () => {
 
   return (
     <div className="flex items-center gap-1 relative" ref={XRef}>
+      {/* Pin manager button */}
+      <button
+        onClick={() => setXPickerOpen(p => !p)}
+        className={`p-1.5 rounded transition-colors ${
+          XPickerOpen ? "bg-foreground/20" : "hover:bg-foreground/10"
+        }`}
+        title="Gerenciar atalhos"
+      >
+        <Pin size={18} />
+      </button>
+
       {/* Pinned shortcuts (icon-only) */}
       <div className="hidden sm:flex items-center gap-0.5 max-w-[40vw] overflow-x-auto">
         {XPinned.map(item => {
@@ -117,17 +128,6 @@ const ShortcutsBar = () => {
           );
         })}
       </div>
-
-      {/* Pin manager button */}
-      <button
-        onClick={() => setXPickerOpen(p => !p)}
-        className={`p-1.5 rounded transition-colors ${
-          XPickerOpen ? "bg-foreground/20" : "hover:bg-foreground/10"
-        }`}
-        title="Gerenciar atalhos"
-      >
-        <Pin size={18} />
-      </button>
 
       {XPickerOpen && (
         <div className="absolute right-0 top-full mt-1 w-80 max-h-[70vh] bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden flex flex-col text-foreground">

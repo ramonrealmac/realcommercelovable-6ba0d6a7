@@ -317,6 +317,27 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         total = novo.total;
       }
 
+      const totalRecebidoSomado = linhas.reduce((acc, l) => acc + Number(l.vl_recebido || 0), 0);
+      const valorTroco = Math.max(0, totalRecebidoSomado - total);
+      
+      let linhasAjustadas = [...linhas];
+      if (valorTroco > 0) {
+        const idxDinheiro = linhasAjustadas.findIndex(l => l.meio_pagamento_id === 1);
+        if (idxDinheiro === -1) {
+          throw new Error("Para haver troco, é necessário um pagamento em Dinheiro.");
+        }
+        const vlrAtu = Number(linhasAjustadas[idxDinheiro].vl_recebido || 0);
+        const novoVlr = Number((vlrAtu - valorTroco).toFixed(2));
+        if (novoVlr < 0) {
+          throw new Error("Valor em dinheiro insuficiente para o troco.");
+        }
+        linhasAjustadas[idxDinheiro] = {
+          ...linhasAjustadas[idxDinheiro],
+          vl_recebido: novoVlr,
+          vl_parcela: Number((novoVlr / (linhasAjustadas[idxDinheiro].qt_parcela || 1)).toFixed(2))
+        };
+      }
+
       const { data: maxCx } = await db.from("caixa_movimento")
         .select("caixa_movimento_id").order("caixa_movimento_id", { ascending: false }).limit(1);
       const cxId = ((maxCx && maxCx[0]?.caixa_movimento_id) || 0) + 1;
@@ -333,7 +354,8 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         centro_custo_id: XParams!.centro_custo_caixa,
         historico: `Recebimento Pedido ${nrMov}`,
         documento: String(nrMov),
-        vlr_movimento: total,
+        vl_movimento: total,
+        vl_troco: valorTroco,
         movimento_id: movimentoId,
         excluido: false,
       };
@@ -343,7 +365,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       const { data: maxCxIt } = await db.from("caixa_movimento_item")
         .select("caixa_movimento_item_id").order("caixa_movimento_item_id", { ascending: false }).limit(1);
       let nextCxIt = ((maxCxIt && maxCxIt[0]?.caixa_movimento_item_id) || 0) + 1;
-      const itensCx = linhas.map(l => ({
+      const itensCx = linhasAjustadas.map(l => ({
         caixa_movimento_item_id: nextCxIt++,
         caixa_movimento_id: cxId,
         empresa_id: XEmpresaId,

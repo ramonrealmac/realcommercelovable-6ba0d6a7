@@ -122,6 +122,8 @@ const AppContent = () => {
         return <MdfeForm />;
       case "rpb-relatorios":
         return <RpbManager />;
+      case "rpb-designer":
+        return <RpbManager initialView="designer" initialSelectedId={params?.relatorioId} />;
       case "provedor-test":
         return <ProvedorTestForm />;
       case "plano-contas":
@@ -176,8 +178,16 @@ const AppContent = () => {
             </div>
           ))}
           {XTabs.length === 0 && (
-            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-              Use o menu para abrir um formulário.
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm">
+              {XLogomarca ? (
+                <img 
+                  src={XLogomarca} 
+                  alt="Logo" 
+                  className="max-w-[400px] max-h-[200px] object-contain opacity-10 grayscale select-none pointer-events-none" 
+                />
+              ) : (
+                <span>Use o menu para abrir um formulário.</span>
+              )}
             </div>
           )}
         </div>

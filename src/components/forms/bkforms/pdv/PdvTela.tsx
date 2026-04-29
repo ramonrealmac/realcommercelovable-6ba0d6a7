@@ -325,7 +325,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         centro_custo_id: XParams!.centro_custo_caixa,
         historico: `Recebimento Pedido ${nrMov}`,
         documento: String(nrMov),
-        vlr_movimento: total,
+        vl_movimento: total,
         movimento_id: movimentoId,
         excluido: false,
       };

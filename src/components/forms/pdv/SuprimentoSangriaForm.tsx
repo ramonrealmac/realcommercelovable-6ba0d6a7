@@ -205,7 +205,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
           tp_movimento: tipo,
           tp_operacao: isSup ? "E" : "S",
           historico: XDescricao,
-          vlr_movimento: isSup ? vl : -vl,
+          vl_movimento: isSup ? vl : -vl,
           excluido: false,
         });
         if (errCm) throw new Error(errCm.message);

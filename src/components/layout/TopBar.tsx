@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Menu, Grid3X3, LogOut, KeyRound, Shield, Users, UserCog } from "lucide-react";
+import { Menu, LogOut, KeyRound, Shield, Users, UserCog } from "lucide-react";
 import { useAppContext } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import ShortcutsBar from "./ShortcutsBar";
@@ -71,7 +71,7 @@ const TopBar = () => {
             const emp = XEmpresas.find(x => x.empresa_id === id);
             setXEmpresaMatrizId(emp?.empresa_matriz_id ?? id);
           }}
-          className="bg-card text-foreground border border-border rounded px-2 py-0.5 text-sm min-w-0 w-full md:min-w-[192px] md:w-auto truncate"
+          className="bg-card text-foreground border border-border rounded px-2 py-0.5 text-sm min-w-0 w-full md:min-w-[230px] md:w-auto truncate"
         >
           {XEmpresas.map(e => (
             <option key={e.empresa_id} value={e.empresa_id}>{e.empresa_id} - {e.identificacao || e.razao_social}</option>
@@ -79,15 +79,13 @@ const TopBar = () => {
         </select>
       </div>
 
+      <div className="ml-4">
+        <ShortcutsBar />
+      </div>
+
       <div className="hidden md:block flex-1" />
 
-      <ShortcutsBar />
-
       <ChatInternoTopBarButton />
-
-      <button className="p-1.5 hover:bg-foreground/10 rounded" title="Aplicativos">
-        <Grid3X3 size={18} />
-      </button>
 
       {/* User avatar + dropdown */}
       <div className="relative" ref={XMenuRef}>

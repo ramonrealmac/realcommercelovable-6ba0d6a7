@@ -11,8 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
-  RotateCcw, Copy, Eye, Palette, Clock, Link2, Upload, Plus,
+  RotateCcw, Copy, Eye, Palette, Clock, Link2, Upload, Plus, Download,
 } from "lucide-react";
+import { useRef } from "react";
 
 const db = supabase as any;
 
@@ -38,6 +39,11 @@ const COLOR_FIELDS = [
   { key: "cor_header", label: "Header" },
   { key: "cor_menu", label: "Menu" },
   { key: "cor_link", label: "Links" },
+  // Textbox
+  { key: "cor_input_fundo", label: "Campo Editável (fundo)" },
+  { key: "cor_input_readonly", label: "Campo Somente Leitura (fundo)" },
+  { key: "cor_input_borda", label: "Campo Moldura/Borda" },
+  { key: "cor_input_label", label: "Label dos Campos" },
 ];
 
 const DEFAULT_COLORS: Record<string, string> = {
@@ -45,6 +51,11 @@ const DEFAULT_COLORS: Record<string, string> = {
   cor_fundo: "#FFFFFF", cor_fundo_card: "#F8FAFC", cor_texto_principal: "#1E293B",
   cor_texto_secundario: "#64748B", cor_botao: "#8B5CF6", cor_botao_negativo: "#EF4444",
   cor_header: "#7C3AED", cor_menu: "#4C1D95", cor_link: "#8B5CF6",
+  // Textbox
+  cor_input_fundo: "#FFFFFF",
+  cor_input_readonly: "#F1F5F9",
+  cor_input_borda: "#CBD5E1",
+  cor_input_label: "#64748B",
 };
 
 const XLocalizarColumns: IGridColumn[] = [
@@ -114,6 +125,11 @@ const emptyEmpresa = () => ({
   email_remetente: "",
   css_customizado: "",
   logomarca: "",
+  // Textbox
+  cor_input_fundo: "#FFFFFF",
+  cor_input_readonly: "#F1F5F9",
+  cor_input_borda: "#CBD5E1",
+  cor_input_label: "#64748B",
 });
 
 type TEmpresa = ReturnType<typeof emptyEmpresa>;
@@ -258,7 +274,21 @@ const EmpresaForm: React.FC = () => {
 
       // Re-apply theme colors after save
       const root = document.documentElement;
-      const map: Record<string, string> = { cor_primaria: "--primary", cor_header: "--topbar", cor_fundo: "--background", cor_fundo_card: "--card", cor_texto_principal: "--foreground", cor_texto_secundario: "--muted-foreground", cor_botao_negativo: "--destructive", cor_destaque: "--warning", cor_menu: "--sidebar-primary" };
+      const map: Record<string, string> = {
+        cor_primaria: "--primary",
+        cor_header: "--topbar",
+        cor_fundo: "--background",
+        cor_fundo_card: "--card",
+        cor_texto_principal: "--foreground",
+        cor_texto_secundario: "--muted-foreground",
+        cor_botao_negativo: "--destructive",
+        cor_destaque: "--warning",
+        cor_menu: "--sidebar-primary",
+        cor_input_fundo: "--input-bg",
+        cor_input_readonly: "--input-readonly-bg",
+        cor_input_borda: "--input-border-color",
+        cor_input_label: "--label-color",
+      };
       for (const [k, v] of Object.entries(map)) { const hex = (XEdit as any)[k]; if (hex) { const hsl = hexToHsl(hex); if (hsl) root.style.setProperty(v, hsl); } }
       if (XEdit.cor_primaria) { const hsl = hexToHsl(XEdit.cor_primaria); if (hsl) { root.style.setProperty("--grid-header", hsl); root.style.setProperty("--grid-selected", hsl); } }
 
@@ -303,6 +333,52 @@ const EmpresaForm: React.FC = () => {
   const resetColors = () => {
     Object.entries(DEFAULT_COLORS).forEach(([k, v]) => updateEdit(k, v));
     updateEdit("css_customizado", "");
+  };
+
+  const themeInputRef = useRef<HTMLInputElement>(null);
+
+  // All color keys in COLOR_FIELDS
+  const THEME_KEYS = COLOR_FIELDS.map(cf => cf.key);
+
+  const handleExportTheme = () => {
+    const source = XIsEditing ? XEdit : XCurrent;
+    if (!source) { toast.error("Nenhuma empresa selecionada."); return; }
+    const payload: Record<string, string> = { __version: "1.0", __empresa: (source as any).razao_social || "" };
+    THEME_KEYS.forEach(k => { payload[k] = (source as any)[k] || DEFAULT_COLORS[k] || ""; });
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url;
+    a.download = `tema_${((source as any).razao_social || "empresa").replace(/\s+/g, "_").toLowerCase()}.rctheme`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Tema exportado com sucesso!");
+  };
+
+  const handleImportTheme = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string);
+        if (!data.__version) throw new Error("Arquivo de tema inválido.");
+        let applied = 0;
+        THEME_KEYS.forEach(k => {
+          if (data[k] && /^#[0-9A-Fa-f]{6}$/.test(data[k])) {
+            updateEdit(k, data[k]);
+            applied++;
+          }
+        });
+        if (data.css_customizado !== undefined) updateEdit("css_customizado", data.css_customizado);
+        toast.success(`Tema importado! ${applied} cores aplicadas. Salve para confirmar.`);
+      } catch (err: any) {
+        toast.error("Erro ao importar tema: " + err.message);
+      } finally {
+        if (themeInputRef.current) themeInputRef.current.value = "";
+      }
+    };
+    reader.readAsText(file);
   };
 
   const copyLink = () => {
@@ -608,16 +684,29 @@ const EmpresaForm: React.FC = () => {
         {/* ── Tema ── */}
         {XInnerTab === "tema" && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between mb-2">
+            {/* Hidden file input for import */}
+            <input ref={themeInputRef} type="file" accept=".rctheme,.json" className="hidden" onChange={handleImportTheme} />
+
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <Palette className="w-5 h-5 text-primary" />
                 <h3 className="text-sm font-semibold">Aparência / Tema</h3>
               </div>
-              {XIsEditing && (
-                <Button variant="outline" size="sm" className="gap-1" onClick={resetColors}>
-                  <RotateCcw className="w-3.5 h-3.5" /> Restaurar Padrão
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button variant="outline" size="sm" className="gap-1" onClick={handleExportTheme}>
+                  <Download className="w-3.5 h-3.5" /> Exportar Tema
                 </Button>
-              )}
+                {XIsEditing && (
+                  <>
+                    <Button variant="outline" size="sm" className="gap-1" onClick={() => themeInputRef.current?.click()}>
+                      <Upload className="w-3.5 h-3.5" /> Importar Tema
+                    </Button>
+                    <Button variant="outline" size="sm" className="gap-1" onClick={resetColors}>
+                      <RotateCcw className="w-3.5 h-3.5" /> Restaurar Padrão
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
             <p className="text-xs text-muted-foreground">Personalize as cores do sistema para esta empresa.</p>
 
@@ -652,9 +741,38 @@ const EmpresaForm: React.FC = () => {
                 <div className="p-3" style={{ backgroundColor: (XDisplayVal("cor_header") as string) || "#7C3AED" }}>
                   <span className="text-sm font-bold" style={{ color: "#fff" }}>{XDisplayVal("nm_escola") || "Loja"}</span>
                 </div>
-                <div className="p-4 space-y-2">
+                <div className="p-4 space-y-3">
                   <p className="text-sm font-semibold" style={{ color: (XDisplayVal("cor_texto_principal") as string) || "#1E293B" }}>Produto Exemplo</p>
                   <p className="text-xs" style={{ color: (XDisplayVal("cor_texto_secundario") as string) || "#64748B" }}>Descrição do produto</p>
+                  {/* Textbox preview */}
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: (XDisplayVal("cor_input_label") as string) || DEFAULT_COLORS.cor_input_label }}>Campo Editável</label>
+                      <input
+                        readOnly
+                        defaultValue="Exemplo de texto editável"
+                        className="w-full rounded px-3 py-1.5 text-sm"
+                        style={{
+                          backgroundColor: (XDisplayVal("cor_input_fundo") as string) || DEFAULT_COLORS.cor_input_fundo,
+                          border: `1px solid ${(XDisplayVal("cor_input_borda") as string) || DEFAULT_COLORS.cor_input_borda}`,
+                          color: (XDisplayVal("cor_texto_principal") as string) || "#1E293B",
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: (XDisplayVal("cor_input_label") as string) || DEFAULT_COLORS.cor_input_label }}>Campo Somente Leitura</label>
+                      <input
+                        readOnly
+                        defaultValue="Não editável"
+                        className="w-full rounded px-3 py-1.5 text-sm"
+                        style={{
+                          backgroundColor: (XDisplayVal("cor_input_readonly") as string) || DEFAULT_COLORS.cor_input_readonly,
+                          border: `1px solid ${(XDisplayVal("cor_input_borda") as string) || DEFAULT_COLORS.cor_input_borda}`,
+                          color: (XDisplayVal("cor_texto_secundario") as string) || "#64748B",
+                        }}
+                      />
+                    </div>
+                  </div>
                   <div className="flex gap-2">
                     <button className="px-3 py-1 text-xs text-white rounded" style={{ backgroundColor: (XDisplayVal("cor_botao") as string) || "#8B5CF6" }}>Comprar</button>
                     <button className="px-3 py-1 text-xs text-white rounded" style={{ backgroundColor: (XDisplayVal("cor_botao_negativo") as string) || "#EF4444" }}>Cancelar</button>

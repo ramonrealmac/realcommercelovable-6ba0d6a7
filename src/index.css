@@ -60,6 +60,12 @@
     --sidebar-accent-foreground: 220 15% 20%;
     --sidebar-border: 220 13% 87%;
     --sidebar-ring: 220 70% 45%;
+
+    /* Textbox customizable colors */
+    --input-bg: 0 0% 100%;            /* fundo campo editável */
+    --input-readonly-bg: 220 10% 94%; /* fundo campo somente leitura */
+    --input-border-color: 220 13% 87%; /* moldura/borda */
+    --label-color: 220 10% 46%;        /* cor do label */
   }
 }
 
@@ -72,6 +78,45 @@
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     font-size: 13px;
   }
+
+  /* Apply textbox theme vars system-wide */
+  label.text-muted-foreground,
+  label.text-xs {
+    color: hsl(var(--label-color));
+  }
+
+  /* ── Textbox theme: applies to ALL form inputs/selects/textareas ── */
+
+  /* Base: every input/select/textarea gets the themed border */
+  input:not([type="color"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    background-color: hsl(var(--input-bg));
+    border-color: hsl(var(--input-border-color)) !important;
+  }
+
+  /* Disabled or readonly → readonly background */
+  input:disabled:not([type="color"]):not([type="checkbox"]):not([type="radio"]),
+  input[readonly]:not([type="color"]):not([type="checkbox"]):not([type="radio"]),
+  select:disabled,
+  textarea:disabled,
+  textarea[readonly] {
+    background-color: hsl(var(--input-readonly-bg)) !important;
+    color: hsl(var(--foreground)) !important;
+    opacity: 1 !important; /* prevent browser gray-out on disabled */
+  }
+
+  /* Force selects to use custom rendering (prevents OS/browser override on disabled) */
+  select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 24px !important;
+  }
+
 }
 
 /* Scrollbar styling */
