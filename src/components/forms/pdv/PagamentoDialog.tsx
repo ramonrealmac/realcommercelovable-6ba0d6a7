@@ -6,6 +6,7 @@ import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import GridActionToolbar, { gridActions } from "@/components/grid/GridActionToolbar";
 import { useAppContext } from "@/contexts/AppContext";
 import type { IPdvPagamentoLinha, IMovimentoPagamento } from "./types";
+import { CreditCard, ShoppingCart, Wallet, ArrowRightLeft } from "lucide-react";
 
 const db = supabase as any;
 
@@ -239,10 +240,13 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !XSalvando && onClose()}>
-      <DialogContent className="max-w-5xl">
-        <DialogHeader>
-          <DialogTitle>Meios de Pagamento e Prazos</DialogTitle>
-        </DialogHeader>
+      <DialogContent className="max-w-5xl p-0 overflow-hidden">
+        <div className="flex items-center h-10 bg-topbar text-topbar-foreground px-4 gap-2 shrink-0">
+          <CreditCard size={18} />
+          <h2 className="text-sm font-semibold">Meios de Pagamento e Prazos</h2>
+        </div>
+
+        <div className="p-6 space-y-4">
 
         <div className="grid grid-cols-12 gap-4">
           {/* Esquerda: formulário */}
@@ -293,8 +297,8 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
               </div>
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Vezes</label>
-                <input type="number" value={XQtParcela} onChange={e => setXQtParcela(Number(e.target.value) || 1)}
-                  className={`w-full border border-border rounded px-2 py-1.5 text-sm text-right bg-card ${NO_SPIN}`} />
+                <input type="number" value={XQtParcela} readOnly tabIndex={-1}
+                  className={`w-full border border-border rounded px-2 py-1.5 text-sm text-right bg-secondary ${NO_SPIN}`} />
               </div>
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Vlr Parcela</label>
@@ -319,21 +323,33 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
           {/* Direita: cards de totais */}
           <div className="col-span-5 space-y-2">
             <div className="border border-border rounded px-3 py-2 bg-muted/40 flex justify-between items-center">
-              <span className="text-xs text-muted-foreground">Total Pedido</span>
+              <div className="flex items-center gap-1.5">
+                <ShoppingCart size={14} className="text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">Total Pedido</span>
+              </div>
               <span className="font-semibold text-base">{fmt(totalPedido)}</span>
             </div>
             <div className="border border-blue-300 rounded px-3 py-2 bg-blue-50 dark:bg-blue-950/30 flex justify-between items-center">
-              <span className="text-xs text-blue-900 dark:text-blue-200">Valor Pago</span>
+              <div className="flex items-center gap-1.5">
+                <Wallet size={14} className="text-blue-600 dark:text-blue-400" />
+                <span className="text-xs text-blue-900 dark:text-blue-200">Valor Pago</span>
+              </div>
               <span className="font-semibold text-base text-blue-900 dark:text-blue-200">{fmt(totalPago)}</span>
             </div>
             <div className={`border rounded px-3 py-2 flex justify-between items-center ${
               valorAPagar > 0 ? "border-red-300 bg-red-50 dark:bg-red-950/30" : "border-border bg-muted/40"
             }`}>
-              <span className={`text-xs ${valorAPagar > 0 ? "text-red-900 dark:text-red-200" : "text-muted-foreground"}`}>Valor a Pagar</span>
+              <div className="flex items-center gap-1.5">
+                <CreditCard size={14} className={valorAPagar > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"} />
+                <span className={`text-xs ${valorAPagar > 0 ? "text-red-900 dark:text-red-200" : "text-muted-foreground"}`}>Valor a Pagar</span>
+              </div>
               <span className={`font-bold text-lg ${valorAPagar > 0 ? "text-red-700 dark:text-red-300" : ""}`}>{fmt(valorAPagar)}</span>
             </div>
             <div className="border border-border rounded px-3 py-2 bg-muted/40 flex justify-between items-center">
-              <span className="text-xs text-muted-foreground">Troco</span>
+              <div className="flex items-center gap-1.5">
+                <ArrowRightLeft size={14} className="text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">Troco</span>
+              </div>
               <span className="font-semibold text-base">{fmt(troco)}</span>
             </div>
           </div>
@@ -361,6 +377,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
             className="text-sm px-4 py-1.5 rounded bg-primary text-primary-foreground disabled:opacity-50">
             {XSalvando ? "Gravando..." : "Finalizar Recebimento →"}
           </button>
+        </div>
         </div>
       </DialogContent>
     </Dialog>

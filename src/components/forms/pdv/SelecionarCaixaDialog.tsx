@@ -5,6 +5,7 @@ import { useAppContext } from "@/contexts/AppContext";
 import type { IPdvCaixa, IPdvCaixaAbertura } from "./types";
 import AberturaCaixaForm from "./AberturaCaixaForm";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Monitor } from "lucide-react";
 
 const db = supabase as any;
 
@@ -88,11 +89,14 @@ const SelecionarCaixaDialog: React.FC<IProps> = ({ onEntrar, onCancelar }) => {
 
   return (
     <div className="h-full flex items-center justify-center bg-muted/20 p-6">
-      <div className="w-full max-w-md bg-card border border-border rounded-lg shadow-sm p-6 space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">PDV - Seleção de Caixa</h2>
-          <p className="text-xs text-muted-foreground">Selecione o caixa e a data do movimento para iniciar o PDV.</p>
+      <div className="w-full max-w-md bg-card border border-border rounded-lg shadow-sm overflow-hidden">
+        <div className="flex items-center h-10 bg-topbar text-topbar-foreground px-4 gap-2 shrink-0">
+          <Monitor size={18} />
+          <h2 className="text-sm font-semibold">PDV - Seleção de Caixa</h2>
         </div>
+
+        <div className="p-6 space-y-4">
+          <p className="text-xs text-muted-foreground -mt-2">Selecione o caixa e a data do movimento para iniciar o PDV.</p>
 
         <div className="space-y-1">
           <label className="text-xs text-muted-foreground">Caixa</label>
@@ -134,6 +138,7 @@ const SelecionarCaixaDialog: React.FC<IProps> = ({ onEntrar, onCancelar }) => {
           >{XLoading ? "..." : "Prosseguir"}</button>
         </div>
       </div>
+    </div>
 
       <Dialog open={XOpenAbert} onOpenChange={(o) => !o && setXOpenAbert(false)}>
         <DialogContent className="max-w-md">

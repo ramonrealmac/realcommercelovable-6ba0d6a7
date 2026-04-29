@@ -324,6 +324,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       const cm = {
         caixa_movimento_id: cxId,
         empresa_id: XEmpresaId,
+        caixa_abertura_id: abertura.caixa_abertura_id,
         funcionario_id: caixa.funcionario_id,
         colaborador_id: caixa.funcionario_id,
         dt_movimento: dtMovimento,
