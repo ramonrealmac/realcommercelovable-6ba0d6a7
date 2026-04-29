@@ -36,6 +36,8 @@ import RbTemplatePesquisaForm from "@/rbuilder/components/rb_TemplatePesquisaFor
 import RbRelatorioForm from "@/rbuilder/components/rb_RelatorioForm";
 import RbReportExecutor from "@/rbuilder/components/rb_ReportExecutor";
 import ProvedorTestForm from "@/components/forms/ProvedorTestForm";
+import PlanoContaForm from "@/components/forms/PlanoContaForm";
+import BancoForm from "@/components/forms/BancoForm";
 
 const AppContent = () => {
   const { XTabs, XActiveTabId, openTab, XEmpresaId, setXLogomarca, XLogomarca } = useAppContext();
@@ -51,6 +53,7 @@ const AppContent = () => {
   }, [XThemeLogomarca, setXLogomarca]);
 
   const renderTabContent = (component: string) => {
+    console.log("Renderizando aba:", component);
     switch (component) {
       case "GrupoProdutosForm":
       case "grupo-produtos":
@@ -116,6 +119,10 @@ const AppContent = () => {
         return <MdfeForm />;
       case "provedor-test":
         return <ProvedorTestForm />;
+      case "plano-contas":
+        return <PlanoContaForm />;
+      case "bancos":
+        return <BancoForm />;
       default:
         if (component.startsWith("rb-exec-")) {
           const XReportId = parseInt(component.replace("rb-exec-", ""));

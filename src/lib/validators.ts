@@ -79,3 +79,27 @@ export function formatDateBR(XValue: string | null | undefined): string {
   const XYear = XDate.getFullYear();
   return `${XDay}/${XMonth}/${XYear}`;
 }
+
+/** Formats a string given a specific mask (e.g., 9.99.999.999) */
+export function formatMask(XValue: string, XMask: string): string {
+  if (!XValue || !XMask) return XValue || "";
+  const XCleanValue = XValue.replace(/[\.\-\/]/g, ""); // Strip existing mask chars
+  let XFormatted = "";
+  let XValIndex = 0;
+
+  for (let i = 0; i < XMask.length && XValIndex < XCleanValue.length; i++) {
+    const XMaskChar = XMask[i];
+    if (XMaskChar === "9" || XMaskChar === "A" || XMaskChar === "#") {
+      XFormatted += XCleanValue[XValIndex];
+      XValIndex++;
+    } else {
+      XFormatted += XMaskChar;
+      // If the user already typed the separator, don't increment ValIndex
+      if (XCleanValue[XValIndex] === XMaskChar) {
+        XValIndex++;
+      }
+    }
+  }
+  return XFormatted;
+}
+
