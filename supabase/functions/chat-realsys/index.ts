@@ -230,30 +230,116 @@ async function executeTool(
       }
 
       case "criar_pedido": {
-        // Cria movimento + itens
-        const { data: mov, error: e1 } = await supabase.from("movimento").insert({
+        // Resolve funcionario (vendedor) — tenta achar um vendedor da empresa.
+        let funcionarioId: number | null = null;
+        const { data: funcs } = await supabase
+          .from("funcionario")
+          .select("funcionario_id, nome, vendedor")
+          .eq("empresa_id", empresaId)
+          .eq("vendedor", "S")
+          .limit(2);
+        if (funcs && funcs.length === 1) funcionarioId = funcs[0].funcionario_id;
+
+        // Próximos IDs/Nº (mesmo padrão usado no PdvTela / PedidoForm)
+        const { data: maxMov } = await supabase
+          .from("movimento").select("movimento_id")
+          .order("movimento_id", { ascending: false }).limit(1);
+        const movId = ((maxMov && maxMov[0]?.movimento_id) || 0) + 1;
+
+        const { data: maxNr } = await supabase
+          .from("movimento").select("nr_movimento")
+          .eq("empresa_id", empresaId)
+          .order("nr_movimento", { ascending: false }).limit(1);
+        const nr = ((maxNr && maxNr[0]?.nr_movimento) || 0) + 1;
+
+        const itensSrc = Array.isArray(args.itens) ? args.itens : [];
+        const vlProduto = itensSrc.reduce(
+          (s: number, it: any) => s + (Number(it.qt) || 0) * (Number(it.vl_unitario) || 0),
+          0,
+        );
+
+        const movPayload: any = {
+          movimento_id: movId,
           empresa_id: empresaId,
           cadastro_id: args.cadastro_id,
-          tp_movimento: "S",
-          st_pedido: "A",
+          funcionario_id: funcionarioId,
+          condicao_id: args.condpagto_id || null,
+          nr_movimento: nr,
+          tp_movimento: "PD",
+          tp_origem: "ASSISTENTE",
+          st_pedido: "O",
+          faturado: "N",
           dt_emissao: new Date().toISOString(),
-        }).select("movimento_id").single();
-        if (e1) throw e1;
+          dt_entrega: args.dt_entrega || new Date().toISOString().substring(0, 10),
+          obs_pedido: String(args.obs || ""),
+          vl_produto: vlProduto,
+          vl_movimento: vlProduto,
+          vl_desconto: 0,
+          pc_desconto: 0,
+          tp_desconto: "N",
+          excluido: false,
+        };
 
-        const itens = (args.itens || []).map((it: any) => ({
-          movimento_id: mov.movimento_id,
-          produto_id: it.produto_id,
-          qt_movimento: it.qt,
-          vl_und_produto: it.vl_unitario,
-          empresa_id: empresaId,
-        }));
+        const { error: e1 } = await supabase.from("movimento").insert(movPayload);
+        if (e1) {
+          console.error("criar_pedido movimento error", e1, movPayload);
+          throw e1;
+        }
+
+        // Próximo movimento_item_id
+        const { data: maxIt } = await supabase
+          .from("movimento_item").select("movimento_item_id")
+          .order("movimento_item_id", { ascending: false }).limit(1);
+        let nextItId = ((maxIt && maxIt[0]?.movimento_item_id) || 0) + 1;
+
+        // Busca nm_produto / unidade dos produtos referenciados
+        const prodIds = itensSrc.map((it: any) => Number(it.produto_id)).filter(Boolean);
+        const { data: prods } = await supabase
+          .from("produto").select("produto_id, nm_produto, unidade_id")
+          .in("produto_id", prodIds.length ? prodIds : [-1]);
+        const prodMap = new Map<number, any>((prods || []).map((p: any) => [p.produto_id, p]));
+
+        const itens = itensSrc.map((it: any) => {
+          const p = prodMap.get(Number(it.produto_id));
+          const qt = Number(it.qt) || 0;
+          const vlu = Number(it.vl_unitario) || 0;
+          return {
+            movimento_item_id: nextItId++,
+            empresa_id: empresaId,
+            movimento_id: movId,
+            produto_id: it.produto_id,
+            nm_produto: p?.nm_produto || "",
+            unidade_id: p?.unidade_id || null,
+            tp_movimento: "PD",
+            qt_movimento: qt,
+            vl_und_produto: vlu,
+            vl_produto: qt * vlu,
+            vl_movimento: qt * vlu,
+            vl_desconto: 0,
+            pc_desconto: 0,
+            tp_desconto: "N",
+            excluido: false,
+          };
+        });
+
         if (itens.length) {
           const { error: e2 } = await supabase.from("movimento_item").insert(itens);
-          if (e2) throw e2;
+          if (e2) {
+            console.error("criar_pedido movimento_item error", e2, itens);
+            throw e2;
+          }
         }
-        await supabase.rpc("fu_recalcular_pedido", { _movimento_id: mov.movimento_id });
 
-        return { ok: true, movimento_id: mov.movimento_id, ui_action: { type: "open_tab", component: "pedidos", titulo: "Meus Pedidos" } };
+        // Recalcula totais
+        try { await supabase.rpc("fu_recalcular_pedido", { _movimento_id: movId }); } catch (_) {}
+
+        return {
+          ok: true,
+          movimento_id: movId,
+          nr_movimento: nr,
+          vendedor_resolvido: funcionarioId,
+          ui_action: { type: "open_tab", component: "pedidos", titulo: "Pedidos" },
+        };
       }
 
       default:
