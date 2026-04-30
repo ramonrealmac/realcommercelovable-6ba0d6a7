@@ -2113,6 +2113,10 @@ export type Database = {
           cor_fundo: string | null
           cor_fundo_card: string | null
           cor_header: string | null
+          cor_input_borda: string | null
+          cor_input_fundo: string | null
+          cor_input_label: string | null
+          cor_input_readonly: string | null
           cor_link: string | null
           cor_menu: string | null
           cor_primaria: string | null
@@ -2172,6 +2176,10 @@ export type Database = {
           cor_fundo?: string | null
           cor_fundo_card?: string | null
           cor_header?: string | null
+          cor_input_borda?: string | null
+          cor_input_fundo?: string | null
+          cor_input_label?: string | null
+          cor_input_readonly?: string | null
           cor_link?: string | null
           cor_menu?: string | null
           cor_primaria?: string | null
@@ -2231,6 +2239,10 @@ export type Database = {
           cor_fundo?: string | null
           cor_fundo_card?: string | null
           cor_header?: string | null
+          cor_input_borda?: string | null
+          cor_input_fundo?: string | null
+          cor_input_label?: string | null
+          cor_input_readonly?: string | null
           cor_link?: string | null
           cor_menu?: string | null
           cor_primaria?: string | null
