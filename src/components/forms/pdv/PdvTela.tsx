@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
-import { LogOut, Search, Trash2, Plus, Receipt, RefreshCw, Settings, Wrench, Percent } from "lucide-react";
+import { LogOut, Search, Trash2, Plus, Receipt, RefreshCw, Settings, Wrench, Percent, ShoppingCart, Tag, CircleDollarSign } from "lucide-react";
 import ProdutoSearchDialog, { buscarProdutoPorCodigo, IProdutoRow } from "../pedido/ProdutoSearchDialog";
 import ClienteSearchDialog, { IClienteRow } from "../pedido/ClienteSearchDialog";
 import VendedorSearchDialog, { IVendedorRow } from "./VendedorSearchDialog";
@@ -40,6 +40,57 @@ interface ICartItem {
   qt_item: number;
   deposito_id: number | null;
 }
+
+// --- Sub-componente para linha do carrinho (gerencia estado local da quantidade para permitir decimais fluídos) ---
+interface ICartItemRowProps {
+  item: ICartItem;
+  idx: number;
+  XFonteProd: number;
+  alterarQt: (idx: number, delta: number) => void;
+  setQt: (idx: number, val: string) => void;
+  removerItem: (idx: number) => void;
+}
+
+const CartItemRow: React.FC<ICartItemRowProps> = ({ item, idx, XFonteProd, alterarQt, setQt, removerItem }) => {
+  const [localVal, setLocalVal] = useState(item.qt_item.toString().replace(".", ","));
+
+  // Sincroniza localVal quando a prop item.qt_item muda externamente (ex: pelos botões + ou -)
+  useEffect(() => {
+    setLocalVal(item.qt_item.toString().replace(".", ","));
+  }, [item.qt_item]);
+
+  const handleChange = (v: string) => {
+    setLocalVal(v);
+    const n = parseFloat(v.replace(",", "."));
+    if (!isNaN(n)) {
+      setQt(idx, v);
+    }
+  };
+
+  return (
+    <div className={`px-3 py-2 flex items-center gap-2 border-b border-border ${idx % 2 ? "bg-muted/40" : ""}`}>
+      <div className="flex-1">
+        <div className="font-medium truncate text-blue-700 dark:text-blue-400">{item.nm_produto}</div>
+        <div className="text-muted-foreground" style={{ fontSize: `${XFonteProd - 1}px` }}>
+          {item.qt_item.toLocaleString("pt-BR")} {item.unidade_id || ""} × R$ {item.vl_unitario.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} = <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">R$ {(item.qt_item * item.vl_unitario).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-1">
+        <button onClick={() => alterarQt(idx, -1)} className="px-2 py-0.5 border border-border rounded hover:bg-accent">−</button>
+        <input 
+          type="text" 
+          value={localVal}
+          onChange={(e) => handleChange(e.target.value)}
+          className="w-16 text-center border border-border rounded py-0.5 text-xs bg-white text-black font-bold focus:border-blue-400 outline-none"
+        />
+        <button onClick={() => alterarQt(idx, +1)} className="px-2 py-0.5 border border-border rounded hover:bg-accent">+</button>
+        <button onClick={() => removerItem(idx)} className="p-1 text-destructive hover:bg-destructive/10 rounded">
+          <Trash2 size={14} />
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => {
   const { XEmpresaId, XEmpresaMatrizId, XEmpresas } = useAppContext();
@@ -88,17 +139,8 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   const [XImpressaoDados, setXImpressaoDados] = useState<IImpressaoDados | null>(null);
 
   const searchRef = useRef<HTMLInputElement>(null);
-
-  // Carrega parametros da empresa
-  useEffect(() => {
-    (async () => {
-      const { data, error } = await db.from("empresa")
-        .select("tp_operacao_caixa, conta_gerencial_caixa, centro_custo_caixa, deposito_estoque_caixa, imagem_caixa")
-        .eq("empresa_id", XEmpresaId).maybeSingle();
-      if (error) { toast.error(error.message); return; }
-      setXParams(data as IPdvParamsEmpresa);
-    })();
-  }, [XEmpresaId]);
+  const pedidoSearchRef = useRef<HTMLInputElement>(null);
+  const [XShowAtalhos, setXShowAtalhos] = useState(false);
 
   // Carrega pedidos fechados
   const carregarPedidos = useCallback(async () => {
@@ -138,6 +180,83 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     })));
   }, [XEmpresaId]);
 
+  // Subtotal e lógica de recebimento necessária para finalizarVenda
+  const subtotal = XCart.reduce((a, c) => a + c.qt_item * c.vl_unitario, 0);
+  const baseSubtotal = XPedidoSel ? XPedidoSel.vl_movimento : subtotal;
+  const vlDescAplicado = XPedidoSel ? 0 : XVlDesc;
+  const totalReceber = Math.max(0, baseSubtotal - vlDescAplicado);
+  const podeReceber = (XPedidoSel != null) || (XCart.length > 0);
+
+  // ===== Finalizar venda =====
+  const finalizarVenda = useCallback(async () => {
+    if (!podeReceber) { toast.error("Selecione um pedido ou adicione itens à venda direta."); return; }
+    if (!XParams) { toast.error("Parâmetros da empresa não carregados."); return; }
+
+    let pagtos: IMovimentoPagamento[] = [];
+    if (XPedidoSel) {
+      const { data } = await db.from("movimento_pagamento")
+        .select("movimento_pagamento_id, condicao_id, vl_pagamento, numero_autorizacao, bandeira_id, operadora_id, n_parcelas")
+        .eq("movimento_id", XPedidoSel.movimento_id)
+        .eq("excluido", false);
+      pagtos = (data || []) as IMovimentoPagamento[];
+    }
+    setXPagtosPedido(pagtos);
+    setXOpenPagto(true);
+  }, [podeReceber, XParams, XPedidoSel]);
+
+  // ===== Atalhos de teclado =====
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      const isInput = tag === 'input' || tag === 'textarea' || tag === 'select';
+
+      switch (e.key) {
+        case 'F2':
+          e.preventDefault();
+          searchRef.current?.focus();
+          searchRef.current?.select();
+          break;
+        case 'F3':
+          e.preventDefault();
+          if (!XPedidoSel) setXOpenCliente(true);
+          break;
+        case 'F4':
+          e.preventDefault();
+          if (!XPedidoSel && XPodeInfVend) setXOpenVend(true);
+          break;
+        case 'F5':
+          e.preventDefault();
+          carregarPedidos();
+          toast.info('Lista de pedidos atualizada.');
+          break;
+        case 'F6':
+          e.preventDefault();
+          if (!XPedidoSel && XCart.length > 0) setXOpenDesc(true);
+          break;
+        case 'F9':
+          e.preventDefault();
+          finalizarVenda();
+          break;
+        case 'F1':
+          e.preventDefault();
+          setXShowAtalhos(prev => !prev);
+          break;
+        case 'Escape':
+          e.preventDefault();
+          if (XPedidoSel) setXPedidoSel(null);
+          break;
+        case 'Delete':
+          if (!isInput && XCart.length > 0) {
+            e.preventDefault();
+            setXCart(prev => prev.slice(0, -1));
+          }
+          break;
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [XPedidoSel, XPodeInfVend, XCart, XOpenDesc, finalizarVenda, carregarPedidos]);
+
   useEffect(() => { carregarPedidos(); }, [carregarPedidos]);
 
   // Refresh automático
@@ -146,6 +265,18 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     const id = setInterval(() => { carregarPedidos(); }, seg * 1000);
     return () => clearInterval(id);
   }, [XRefreshSeg, carregarPedidos]);
+
+  // Auto-foco inteligente
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!XPedidoSel) {
+        searchRef.current?.focus();
+      } else {
+        pedidoSearchRef.current?.focus();
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [XPedidoSel, XOpenProduto, XOpenCliente, XOpenVend, XOpenPagto, XOpenConfig]);
 
   // Carrega itens do pedido selecionado
   useEffect(() => {
@@ -210,32 +341,26 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     setXCart(prev => prev.map((c, i) => i === idx ? { ...c, qt_item: Math.max(0.001, c.qt_item + delta) } : c));
   };
 
+  const setQt = (idx: number, val: string) => {
+    const s = val.replace(",", ".");
+    const n = parseFloat(s);
+    if (isNaN(n)) return;
+    setXCart(prev => prev.map((c, i) => i === idx ? { ...c, qt_item: n } : c));
+  };
+
   const removerItem = (idx: number) => setXCart(prev => prev.filter((_, i) => i !== idx));
 
-  const subtotal = XCart.reduce((a, c) => a + c.qt_item * c.vl_unitario, 0);
-
-  // Quando pedido selecionado, usa total do pedido (sem desconto local)
-  const baseSubtotal = XPedidoSel ? XPedidoSel.vl_movimento : subtotal;
-  const vlDescAplicado = XPedidoSel ? 0 : XVlDesc;
-  const totalReceber = Math.max(0, baseSubtotal - vlDescAplicado);
-  const podeReceber = (XPedidoSel != null) || (XCart.length > 0);
-
-  // ===== Finalizar venda → vai DIRETO para PagamentoDialog =====
-  const finalizarVenda = async () => {
-    if (!podeReceber) { toast.error("Selecione um pedido ou adicione itens à venda direta."); return; }
-    if (!XParams) { toast.error("Parâmetros da empresa não carregados."); return; }
-
-    let pagtos: IMovimentoPagamento[] = [];
-    if (XPedidoSel) {
-      const { data } = await db.from("movimento_pagamento")
-        .select("movimento_pagamento_id, condicao_id, vl_pagamento, numero_autorizacao, bandeira_id, operadora_id, n_parcelas")
-        .eq("movimento_id", XPedidoSel.movimento_id)
-        .eq("excluido", false);
-      pagtos = (data || []) as IMovimentoPagamento[];
-    }
-    setXPagtosPedido(pagtos);
-    setXOpenPagto(true);
-  };
+  // Carrega parametros da empresa
+  useEffect(() => {
+    if (!XEmpresaId) return;
+    (async () => {
+      const { data, error } = await db.from("empresa")
+        .select("tp_operacao_caixa, conta_gerencial_caixa, centro_custo_caixa, deposito_estoque_caixa, imagem_caixa")
+        .eq("empresa_id", XEmpresaId).maybeSingle();
+      if (error) { toast.error(error.message); return; }
+      setXParams(data as IPdvParamsEmpresa);
+    })();
+  }, [XEmpresaId]);
 
   /** Cria movimento (st_pedido='F') quando for venda direta. */
   const criarMovimentoVendaDireta = async (): Promise<{ movimento_id: number; nr: number; total: number; }> => {
@@ -537,7 +662,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
                     <div className="flex-1">
                       <div className="font-medium truncate text-blue-700 dark:text-blue-400">{it.nm_produto}</div>
                       <div className="text-muted-foreground" style={{ fontSize: `${XFonteProd - 1}px` }}>
-                        {fmt(Number(it.qt_movimento))} {it.unidade_id || ""} × {fmt(Number(it.vl_und_produto))} = <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">{fmt(Number(it.vl_movimento || it.qt_movimento * it.vl_und_produto))}</span>
+                        {fmt(Number(it.qt_movimento))} {it.unidade_id || ""} × R$ {fmt(Number(it.vl_und_produto))} = <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">R$ {fmt(Number(it.vl_movimento || it.qt_movimento * it.vl_und_produto))}</span>
                       </div>
                     </div>
                   </div>
@@ -557,24 +682,17 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
                   {XCart.length === 0 && !XParams?.imagem_caixa && (
                     <div className="p-4 text-xs text-muted-foreground text-center">Bipagem ou pesquisa para incluir itens.</div>
                   )}
-                  {XCart.map((c, idx) => (
-                    <div key={idx}
-                      className={`px-3 py-2 flex items-center gap-2 border-b border-border ${idx % 2 ? "bg-muted/40" : ""}`}>
-                      <div className="flex-1">
-                        <div className="font-medium truncate text-blue-700 dark:text-blue-400">{c.nm_produto}</div>
-                        <div className="text-muted-foreground" style={{ fontSize: `${XFonteProd - 1}px` }}>
-                          {fmt(c.qt_item)} {c.unidade_id || ""} × {fmt(c.vl_unitario)} = <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">{fmt(c.qt_item * c.vl_unitario)}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => alterarQt(idx, -1)} className="px-2 py-0.5 border border-border rounded hover:bg-accent">−</button>
-                        <button onClick={() => alterarQt(idx, +1)} className="px-2 py-0.5 border border-border rounded hover:bg-accent">+</button>
-                        <button onClick={() => removerItem(idx)} className="p-1 text-destructive hover:bg-destructive/10 rounded">
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                {XCart.map((c, idx) => (
+                  <CartItemRow 
+                    key={`${idx}-${c.produto_id}`}
+                    item={c} 
+                    idx={idx} 
+                    XFonteProd={XFonteProd} 
+                    alterarQt={alterarQt} 
+                    setQt={setQt} 
+                    removerItem={removerItem} 
+                  />
+                ))}
                 </div>
               </>
             )}
@@ -595,6 +713,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
               <div className="relative">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                 <input
+                  ref={pedidoSearchRef}
                   value={XBuscaPedido}
                   onChange={(e) => setXBuscaPedido(e.target.value)}
                   placeholder="Cliente, vendedor ou nº..."
@@ -680,19 +799,23 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
 
               {/* Badges de totais */}
               <div className="grid grid-cols-3 gap-1.5 mt-2">
-                <div className="border border-blue-300 bg-blue-50 dark:bg-blue-950/30 rounded px-1.5 py-1 text-center">
-                  <div className="text-xs text-blue-900 dark:text-blue-200 font-medium uppercase">Subtotal</div>
-                  <div className="font-bold text-lg text-blue-900 dark:text-blue-200">{fmt(baseSubtotal)}</div>
-                </div>
-                <div className="border border-amber-300 bg-amber-50 dark:bg-amber-950/30 rounded px-1.5 py-1 text-center">
-                  <div className="text-xs text-amber-900 dark:text-amber-200 font-medium uppercase">
-                    Desc.{XPcDesc > 0 ? ` ${XPcDesc.toFixed(1)}%` : ""}
+                <div className="border border-blue-300 bg-blue-50 dark:bg-blue-950/30 rounded px-2 py-1 flex flex-col">
+                  <div className="flex items-center gap-1 text-[10px] text-blue-900 dark:text-blue-200 font-bold uppercase w-full justify-start">
+                    <ShoppingCart size={10} /> Subtotal
                   </div>
-                  <div className="font-bold text-lg text-amber-900 dark:text-amber-200">{fmt(vlDescAplicado)}</div>
+                  <div className="font-bold text-lg text-blue-900 dark:text-blue-200 leading-none w-full text-right mt-0.5">{fmt(baseSubtotal)}</div>
                 </div>
-                <div className="border border-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 rounded px-1.5 py-1 text-center">
-                  <div className="text-xs text-emerald-900 dark:text-emerald-200 font-medium uppercase">Total</div>
-                  <div className="font-bold text-2xl text-emerald-900 dark:text-emerald-200">{fmt(totalReceber)}</div>
+                <div className="border border-amber-300 bg-amber-50 dark:bg-amber-950/30 rounded px-2 py-1 flex flex-col">
+                  <div className="flex items-center gap-1 text-[10px] text-amber-900 dark:text-amber-200 font-bold uppercase w-full justify-start">
+                    <Tag size={10} /> Desc.{XPcDesc > 0 ? ` ${XPcDesc.toFixed(1)}%` : ""}
+                  </div>
+                  <div className="font-bold text-lg text-amber-900 dark:text-amber-200 leading-none w-full text-right mt-0.5">{fmt(vlDescAplicado)}</div>
+                </div>
+                <div className="border border-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 rounded px-2 py-1 flex flex-col">
+                  <div className="flex items-center gap-1 text-[10px] text-emerald-900 dark:text-emerald-200 font-bold uppercase w-full justify-start">
+                    <CircleDollarSign size={10} /> Total
+                  </div>
+                  <div className="font-bold text-2xl text-emerald-900 dark:text-emerald-200 leading-none w-full text-right mt-0.5">{fmt(totalReceber)}</div>
                 </div>
               </div>
             </div>
@@ -709,6 +832,57 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
           </div>
         </div>
       </div>
+
+      {/* Barra de atalhos */}
+      <div className="flex-shrink-0 border-t border-border bg-card/80 px-3 py-1 flex items-center gap-4 text-[10px] text-muted-foreground flex-wrap">
+        {[
+          { key: 'F1', label: 'Ajuda', color: 'bg-primary/10 border-primary/20 text-primary' },
+          { key: 'F2', label: 'Buscar Produto', color: 'bg-primary/10 border-primary/20 text-primary' },
+          { key: 'F3', label: 'Cliente', color: 'bg-primary/10 border-primary/20 text-primary' },
+          ...(XPodeInfVend ? [{ key: 'F4', label: 'Vendedor', color: 'bg-primary/10 border-primary/20 text-primary' }] : []),
+          { key: 'F5', label: 'Atualizar', color: 'bg-primary/10 border-primary/20 text-primary' },
+          { key: 'F6', label: 'Desconto', color: 'bg-primary/10 border-primary/20 text-primary' },
+          { key: 'F9', label: 'Finalizar', color: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400' },
+          { key: 'Esc', label: 'Limpar seleção', color: 'bg-rose-500/10 border-rose-500/20 text-rose-600' },
+        ].map(a => (
+          <span key={a.key} className="flex items-center gap-1">
+            <kbd className={`px-1.5 py-0.5 rounded border font-mono font-bold shadow-sm ${a.color}`}>{a.key}</kbd>
+            <span>{a.label}</span>
+          </span>
+        ))}
+      </div>
+
+      {/* Modal de ajuda de atalhos */}
+      {XShowAtalhos && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }}
+          onClick={() => setXShowAtalhos(false)}>
+          <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold text-sm mb-3 flex items-center gap-2">⌨️ Atalhos de Teclado — PDV</h3>
+            <div className="space-y-1.5 text-sm">
+              {[
+                { key: 'F1', label: 'Exibir / ocultar esta ajuda' },
+                { key: 'F2', label: 'Focar campo de busca de produto' },
+                { key: 'F3', label: 'Pesquisar cliente' },
+                { key: 'F4', label: 'Pesquisar vendedor' },
+                { key: 'F5', label: 'Atualizar lista de pedidos' },
+                { key: 'F6', label: 'Abrir desconto' },
+                { key: 'F9', label: 'Finalizar / receber venda' },
+                { key: 'Esc', label: 'Deselecionar pedido' },
+                { key: 'Del', label: 'Remover último item do carrinho' },
+              ].map(a => (
+                <div key={a.key} className="flex items-center gap-3">
+                  <kbd className="min-w-[48px] text-center px-2 py-1 rounded border border-border bg-muted font-mono font-bold text-foreground shadow-sm text-xs">{a.key}</kbd>
+                  <span className="text-muted-foreground">{a.label}</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setXShowAtalhos(false)}
+              className="mt-4 w-full text-xs py-1.5 rounded border border-border hover:bg-accent">
+              Fechar (F1 ou Esc)
+            </button>
+          </div>
+        </div>
+      )}
 
       <ProdutoSearchDialog open={XOpenProduto} onClose={() => setXOpenProduto(false)}
         onSelect={(p, dep) => adicionarProdutoAoCarrinho(p, dep)} />
@@ -831,5 +1005,6 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     </div>
   );
 };
+
 
 export default PdvTela;

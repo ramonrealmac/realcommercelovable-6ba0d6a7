@@ -167,7 +167,7 @@ const AppContent = () => {
                   <img 
                     src={XThemeLogomarca || XLogomarca} 
                     alt="Logo" 
-                    className="max-w-[600px] max-h-[400px] object-contain opacity-50 select-none pointer-events-none" 
+                    className="max-w-[600px] max-h-[400px] object-contain opacity-80 select-none pointer-events-none" 
                   />
                 </div>
               ) : (

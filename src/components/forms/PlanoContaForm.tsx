@@ -4,7 +4,6 @@ import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import type { IGridColumn } from "@/components/grid/DataGrid";
 import { formatMask } from "@/lib/validators";
 import { supabase } from "@/integrations/supabase/client";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface IPlanoConta {
   plano_conta_id: number;
@@ -113,31 +112,27 @@ const PlanoContaForm: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Tipo de Conta</label>
-                {!isEditing ? (
-                  <input type="text" value={record.tp_conta === "S" ? "Sintética" : "Analítica"} readOnly className="w-full border border-border rounded px-3 py-1.5 text-sm bg-secondary" />
-                ) : (
-                  <Select value={record.tp_conta || "A"} onValueChange={(v) => setField("tp_conta", v)}>
-                    <SelectTrigger className="h-[34px] text-sm bg-card"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="A">Analítica</SelectItem>
-                      <SelectItem value="S">Sintética</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
+                <select
+                  value={record.tp_conta || "A"}
+                  onChange={(e) => setField("tp_conta", e.target.value)}
+                  disabled={!isEditing}
+                  className={`w-full border border-border rounded px-3 py-1.5 text-sm h-[34px] ${isEditing ? "bg-card focus:ring-2 focus:ring-ring outline-none" : "bg-secondary"}`}
+                >
+                  <option value="A">Analítica</option>
+                  <option value="S">Sintética</option>
+                </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Natureza</label>
-                {!isEditing ? (
-                  <input type="text" value={record.tp_natureza === "C" ? "Credora" : "Devedora"} readOnly className="w-full border border-border rounded px-3 py-1.5 text-sm bg-secondary" />
-                ) : (
-                  <Select value={record.tp_natureza || "D"} onValueChange={(v) => setField("tp_natureza", v)}>
-                    <SelectTrigger className="h-[34px] text-sm bg-card"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="D">Devedora</SelectItem>
-                      <SelectItem value="C">Credora</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
+                <select
+                  value={record.tp_natureza || "D"}
+                  onChange={(e) => setField("tp_natureza", e.target.value)}
+                  disabled={!isEditing}
+                  className={`w-full border border-border rounded px-3 py-1.5 text-sm h-[34px] ${isEditing ? "bg-card focus:ring-2 focus:ring-ring outline-none" : "bg-secondary"}`}
+                >
+                  <option value="D">Devedora</option>
+                  <option value="C">Credora</option>
+                </select>
               </div>
             </div>
           </div>

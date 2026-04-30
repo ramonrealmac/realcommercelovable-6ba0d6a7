@@ -80,8 +80,11 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues }) =>
     }
   }, [relatorio.rpb_relatorio_id]);
 
-  const setVal = (nome: string, val: any) =>
+  const setVal = (nome: string, val: any) => {
     setValores(prev => ({ ...prev, [nome]: val }));
+    if (executed) setExecuted(false);
+    if (showPreviewInline) setShowPreviewInline(false);
+  };
 
   const validate = (): boolean => {
     for (const f of filtros) {
@@ -236,17 +239,21 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues }) =>
             {relatorio.descricao && <p className="text-xs text-muted-foreground">{relatorio.descricao}</p>}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {executed && (
+            {loading ? (
+              <button disabled className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded bg-primary/70 text-primary-foreground cursor-wait">
+                <Loader2 className="w-4 h-4 animate-spin" /> Processando...
+              </button>
+            ) : !executed ? (
+              <button onClick={handleExecute}
+                className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm transition-all active:scale-95">
+                <Play className="w-4 h-4" /> Gerar Relatório
+              </button>
+            ) : (
               <button onClick={() => setShowDestino(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded bg-secondary border border-border hover:bg-secondary/80">
-                <Printer className="w-4 h-4" /> Destino...
+                className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 animate-in fade-in zoom-in-95 duration-300 active:scale-95">
+                <Printer className="w-4 h-4" /> Imprimir / Exportar
               </button>
             )}
-            <button onClick={handleExecute} disabled={loading}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-              {loading ? 'Gerando...' : 'Gerar Relatorio'}
-            </button>
           </div>
         </div>
 
@@ -339,11 +346,7 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues }) =>
               <FileText size={32} className="text-emerald-600" />
             </div>
             <p className="text-sm font-semibold">{data.length} registro(s) carregado(s)</p>
-            <p className="text-xs text-muted-foreground">Clique em "Destino..." para imprimir ou exportar</p>
-            <button onClick={() => setShowDestino(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded bg-primary text-primary-foreground hover:bg-primary/90 text-sm">
-              <Printer size={16} /> Escolher Destino
-            </button>
+            <p className="text-xs text-muted-foreground">Utilize os botões no topo para imprimir ou exportar os resultados.</p>
           </div>
         )}
       </div>

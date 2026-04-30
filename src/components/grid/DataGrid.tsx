@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { ArrowUp, ArrowDown, Download, FileText, FileSpreadsheet, File } from "lucide-react";
 
-// --- Types ---
 export interface IGridColumn {
   key: string;
   label: string;
@@ -30,6 +29,8 @@ interface DataGridProps {
   toolbarLeft?: React.ReactNode;
   toolbarRight?: React.ReactNode;
   showRecordCount?: boolean;
+  showExport?: boolean;
+  headerClassName?: string;
 }
 
 // --- Sorting logic ---
@@ -120,6 +121,8 @@ const DataGrid: React.FC<DataGridProps> = ({
   toolbarLeft,
   toolbarRight,
   showRecordCount = true,
+  showExport = true,
+  headerClassName,
 }) => {
   const [XSorts, setXSorts] = useState<ISortItem[]>([]);
   const [XHiddenCols, setXHiddenCols] = useState<Set<string>>(new Set());
@@ -182,45 +185,49 @@ const DataGrid: React.FC<DataGridProps> = ({
   return (
     <div className="space-y-1">
       {/* Top bar: Todas as ações alinhadas à esquerda para um visual mais limpo */}
-      <div className="flex items-center justify-start gap-2 pb-1.5 flex-wrap">
-        <div className="flex items-center gap-1 flex-wrap">{toolbarLeft}</div>
-        
-        <div className="flex items-center gap-1">
-          {toolbarRight}
+      {(toolbarLeft || toolbarRight || showExport) && (
+        <div className="flex items-center justify-start gap-2 pb-1.5 flex-wrap">
+          <div className="flex items-center gap-1 flex-wrap">{toolbarLeft}</div>
           
-          <div className="relative" ref={exportRef}>
-            <button
-              onClick={() => setXShowExport(!XShowExport)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-transparent text-slate-600 dark:text-slate-400 hover:bg-accent hover:text-foreground transition-all"
-              title="Exportar"
-            >
-              <Download size={14} className="text-sky-600 dark:text-sky-500" /> Exportar
-            </button>
-            {XShowExport && (
-              <div className="absolute left-0 top-9 z-50 bg-popover border border-border rounded-lg shadow-xl py-1 min-w-[160px] animate-in fade-in zoom-in duration-150">
+          <div className="flex items-center gap-1">
+            {toolbarRight}
+            
+            {showExport && (
+              <div className="relative" ref={exportRef}>
                 <button
-                  className="flex items-center gap-3 w-full px-3 py-2 text-xs hover:bg-accent text-left transition-colors"
-                  onClick={() => { exportAsPdf(XVisibleCols, XSortedData, exportTitle); setXShowExport(false); }}
+                  onClick={() => setXShowExport(!XShowExport)}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-transparent text-slate-600 dark:text-slate-400 hover:bg-accent hover:text-foreground transition-all"
+                  title="Exportar"
                 >
-                  <File size={14} className="text-rose-500" /> PDF (Impressão)
+                  <Download size={14} className="text-sky-600 dark:text-sky-500" /> Exportar
                 </button>
-                <button
-                  className="flex items-center gap-3 w-full px-3 py-2 text-xs hover:bg-accent text-left transition-colors"
-                  onClick={() => { exportAsText(XVisibleCols, XSortedData, exportTitle); setXShowExport(false); }}
-                >
-                  <FileText size={14} className="text-slate-500" /> Arquivo de Texto
-                </button>
-                <button
-                  className="flex items-center gap-3 w-full px-3 py-2 text-xs hover:bg-accent text-left transition-colors"
-                  onClick={() => { exportAsCsv(XVisibleCols, XSortedData, exportTitle); setXShowExport(false); }}
-                >
-                  <FileSpreadsheet size={14} className="text-emerald-600" /> Planilha Excel
-                </button>
+                {XShowExport && (
+                  <div className="absolute left-0 top-9 z-50 bg-popover border border-border rounded-lg shadow-xl py-1 min-w-[160px] animate-in fade-in zoom-in duration-150">
+                    <button
+                      className="flex items-center gap-3 w-full px-3 py-2 text-xs hover:bg-accent text-left transition-colors"
+                      onClick={() => { exportAsPdf(XVisibleCols, XSortedData, exportTitle); setXShowExport(false); }}
+                    >
+                      <File size={14} className="text-rose-500" /> PDF (Impressão)
+                    </button>
+                    <button
+                      className="flex items-center gap-3 w-full px-3 py-2 text-xs hover:bg-accent text-left transition-colors"
+                      onClick={() => { exportAsText(XVisibleCols, XSortedData, exportTitle); setXShowExport(false); }}
+                    >
+                      <FileText size={14} className="text-slate-500" /> Arquivo de Texto
+                    </button>
+                    <button
+                      className="flex items-center gap-3 w-full px-3 py-2 text-xs hover:bg-accent text-left transition-colors"
+                      onClick={() => { exportAsCsv(XVisibleCols, XSortedData, exportTitle); setXShowExport(false); }}
+                    >
+                      <FileSpreadsheet size={14} className="text-emerald-600" /> Planilha Excel
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
-      </div>
+      )}
 
       {/* Grid */}
       <div className="border border-border rounded overflow-hidden overflow-x-auto" onContextMenu={handleContextMenu}>
@@ -243,13 +250,13 @@ const DataGrid: React.FC<DataGridProps> = ({
 
         {/* Header */}
         <div
-          className="bg-grid-header text-grid-header-foreground text-xs font-semibold"
+          className={headerClassName || "bg-grid-header text-grid-header-foreground text-xs font-semibold"}
           style={{ display: "grid", gridTemplateColumns: gridTemplate }}
         >
           {XVisibleCols.map(c => (
             <div
               key={c.key}
-              className="px-2 py-1.5 border-r border-primary-foreground/20 last:border-r-0 cursor-pointer select-none flex items-center"
+              className={`px-2 py-1.5 border-r last:border-r-0 cursor-pointer select-none flex items-center ${headerClassName ? 'border-current/10' : 'border-primary-foreground/20'}`}
               style={{ justifyContent: c.align === "right" ? "flex-end" : c.align === "center" ? "center" : "flex-start" }}
               onClick={() => handleSort(c.key)}
             >
