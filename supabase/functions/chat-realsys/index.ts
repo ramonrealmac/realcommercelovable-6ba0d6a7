@@ -170,6 +170,19 @@ async function executeTool(
         return { resultados: data || [] };
       }
 
+      case "buscar_cond_pagamento": {
+        const termo = String(args.termo || "").trim();
+        let q = supabase.from("condicao_pagamento")
+          .select("condicao_id, descricao, qtd_parcelas, intervalo")
+          .eq("excluido", false)
+          .limit(10);
+        if (empresaId) q = q.eq("empresa_id", empresaId);
+        if (termo) q = q.ilike("descricao", `%${termo}%`);
+        const { data, error } = await q;
+        if (error) throw error;
+        return { resultados: data || [] };
+      }
+
       case "cadastrar_cliente": {
         const cnpj = String(args.cnpj_cpf || "").replace(/\D/g, "");
         const tpPessoa = cnpj.length === 14 ? "J" : "F";
