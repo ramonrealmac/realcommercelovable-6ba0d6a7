@@ -147,22 +147,48 @@ async function executeTool(
       }
 
       case "cadastrar_cliente": {
-        const cnpj = String(args.cnpj_cpf || "").replace(/\D/g, "") || null;
+        const cnpj = String(args.cnpj_cpf || "").replace(/\D/g, "");
+        const tpPessoa = cnpj.length === 14 ? "J" : "F";
+        const razao = String(args.razao_social || "").trim();
+        const fantasia = String(args.nome_fantasia || razao).trim();
         const payload: any = {
-          razao_social: args.razao_social,
-          nome_fantasia: args.nome_fantasia || args.razao_social,
+          empresa_id: empresaId,
+          razao_social: razao,
+          nome_fantasia: fantasia,
+          nome_curto: fantasia.substring(0, 30),
+          identificacao: "",
           cnpj,
-          email_geral: args.email || null,
-          fone_geral: args.telefone || null,
-          endereco: args.endereco || null,
-          cep: (args.cep || "").replace(/\D/g, "") || null,
+          rg: "",
+          inscricao_estadual: "",
+          inscricao_municipal: "",
+          email: String(args.email || "").trim(),
+          tp_pessoa: tpPessoa,
+          tp_contribuinte: "N",
+          estado_civil: "",
+          endereco_logradouro: String(args.endereco || "").trim(),
+          endereco_numero: "",
+          endereco_bairro: "",
+          endereco_compl: "",
+          endereco_cep: String(args.cep || "").replace(/\D/g, ""),
+          endereco_ptoref: "",
+          fone_geral: String(args.telefone || "").trim(),
+          fone_comercial: "",
+          fone_financeiro: "",
+          fone_faturamento: "",
+          conj_nome: "",
+          conj_cpf: "",
+          conj_telefone: "",
+          dep_nome1: "",
           st_cliente: "S",
           st_fornecedor: "N",
           st_transportador: "N",
-          empresa_id: empresaId,
+          st_vendedor: "N",
         };
         const { data, error } = await supabase.from("cadastro").insert(payload).select("cadastro_id, razao_social").single();
-        if (error) throw error;
+        if (error) {
+          console.error("cadastrar_cliente insert error", error, payload);
+          throw error;
+        }
         return { ok: true, cliente: data, ui_action: { type: "open_tab", component: "cadastro-completo", titulo: "Clientes" } };
       }
 
