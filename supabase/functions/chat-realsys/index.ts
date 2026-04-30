@@ -97,12 +97,28 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "buscar_cond_pagamento",
+      description: "Busca condições de pagamento (à vista, 30 dias, 30/60, etc.) pelo nome.",
+      parameters: {
+        type: "object",
+        properties: { termo: { type: "string" } },
+        required: ["termo"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "criar_pedido",
-      description: "Cria um pedido (orçamento) com itens. Os IDs de cliente e produto devem ter sido obtidos previamente via buscar_cliente / buscar_produto.",
+      description: "Cria um PEDIDO em modo Orçamento (st_pedido='O', tp_movimento='PD'). Não fatura nem registra caixa. O vendedor (funcionario_id) é o usuário logado e é resolvido automaticamente. Confirme TODOS os dados com o usuário antes de chamar.",
       parameters: {
         type: "object",
         properties: {
-          cadastro_id: { type: "number", description: "ID do cliente" },
+          cadastro_id: { type: "number", description: "ID do cliente (obtido via buscar_cliente)" },
+          condpagto_id: { type: "number", description: "ID da condição de pagamento (obtido via buscar_cond_pagamento)" },
+          dt_entrega: { type: "string", description: "Data de entrega no formato YYYY-MM-DD" },
+          obs: { type: "string", description: "Observação opcional do pedido" },
           itens: {
             type: "array",
             items: {
@@ -117,7 +133,7 @@ const TOOLS = [
             },
           },
         },
-        required: ["cadastro_id", "itens"],
+        required: ["cadastro_id", "condpagto_id", "dt_entrega", "itens"],
         additionalProperties: false,
       },
     },
