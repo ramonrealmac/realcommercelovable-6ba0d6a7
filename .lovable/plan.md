@@ -1,105 +1,104 @@
-# Chat Interno com Assistente IA "RealSys"
+## Objetivo
 
-Criar um chat persistente acessível por um botão flutuante em toda a aplicação. Mensagens podem ser texto, voz (transcrita) ou anexos (imagens/PDFs com extração de dados). O bot "RealSys" responde via Lovable AI e executa tarefas reais no sistema (abrir formulários, cadastrar clientes, criar orçamentos/pedidos) através de tool calling.
+Fazer o boneco do `ChatLauncher` (botão flutuante do RealSys) ficar parado a maior parte do tempo e, a cada `empresa.tempo_animacao` segundos (default 5), reproduzir uma curta animação de "piscar + acenar" — uma única vez por ciclo — e voltar ao estado parado.
 
-## 1. Banco de Dados (migration)
+A animação será feita via **GIF gerado a partir do PNG existente** (sem precisar de novo asset desenhado), combinada com lógica de timer no React para alternar entre imagem estática (PNG) e GIF (animação).
 
-Tabelas no schema `public`:
+---
 
-- **`chat_conversa`** — uma conversa por usuário/empresa (pode ter várias).
-  - `chat_conversa_id bigserial PK`, `user_id uuid`, `empresa_id bigint`, `ds_titulo text`, `dt_criacao`, `dt_atualizacao`.
-- **`chat_mensagem`** — histórico.
-  - `chat_mensagem_id bigserial PK`, `chat_conversa_id` (FK), `tp_remetente text` (`user`|`assistant`|`system`|`tool`), `ds_conteudo text`, `ds_anexo_url text` (storage), `ds_anexo_tipo text` (mime), `ds_audio_url text`, `tp_acao text` (ação executada), `dados_acao jsonb`, `dt_criacao`.
-- **RLS:** apenas o próprio `user_id` lê/grava (`auth.uid() = user_id`).
-- **Storage bucket** `chat-anexos` (privado) com policies `auth.uid()::text = (storage.foldername(name))[1]` para isolar arquivos por usuário.
+## Etapas
 
-## 2. Edge Function `chat-realsys`
+### 1. Banco — adicionar parâmetro por empresa
+Migration: adicionar coluna `tempo_animacao` em `public.empresa`:
+- tipo `integer`
+- default `5`
+- comentário: "Intervalo em segundos entre execuções da animação do bot RealSys (0 = desativado)"
 
-Recebe `{ conversaId, messages, empresaId }` e chama Lovable AI Gateway (`google/gemini-3-flash-preview` por padrão) com:
+### 2. Gerar o GIF animado a partir do PNG
+Usar Python (Pillow) para criar `src/assets/realsys-bot-animado.gif`:
+- Frames base derivados do `realsys-bot.png` (1024x1024 RGBA)
+- Sequência de ~12-16 frames combinando:
+  - **Piscar**: aplicar uma faixa horizontal escura sobre a região dos olhos por 2 frames (efeito de pálpebra fechando)
+  - **Acenar**: rotacionar levemente (±15°) a região do braço/mão (recorte retangular do lado direito da imagem) em 6-8 frames de ida e volta
+- Duração total ~1.2s, sem loop infinito (`loop=1` → reproduz uma única vez)
+- Otimizado (paleta reduzida, transparência preservada)
+- QA: abrir o GIF e validar visualmente cada frame
 
-- **System prompt** explicando que é o RealSys, assistente do ERP, em pt-BR, e que pode usar ferramentas.
-- **Tools** (function calling) expostas ao modelo:
-  - `abrir_formulario(component)` — abre uma aba (ex.: `cadastro-completo`, `pdv`, `produtos`).
-  - `cadastrar_cliente({razao_social, cnpj, telefone, email, endereco...})` — INSERT em `cadastro` com `st_cliente='S'`.
-  - `criar_pedido({cadastro_id, itens:[{produto_id, qt, vl_unitario}]})` — INSERT em `movimento` + `movimento_item` e chama `fu_recalcular_pedido`.
-  - `buscar_cliente(termo)` / `buscar_produto(termo)` — SELECT com filtro.
-  - `extrair_dados_documento({texto})` — usa o próprio LLM para estruturar dados de um documento já parseado (CNPJ, IE, endereço…).
-- Streaming SSE de tokens para resposta progressiva.
-- Após o modelo emitir `tool_calls`, a function executa a ação no Supabase usando o JWT do usuário (respeitando RLS) e devolve o resultado ao modelo para continuação.
+Observação técnica: como o PNG é uma ilustração já renderizada, a "animação" será obtida por manipulação de pixels (recorte + rotação + máscara dos olhos). Não terá qualidade de animação desenhada à mão, mas dá o efeito de vida pedido. Se o resultado ficar ruim visualmente, fallback é animar via CSS (rotação/escala do PNG inteiro) sem usar GIF.
 
-Tratamento de **429** (rate limit) e **402** (créditos) com mensagens claras.
+### 3. Hook reutilizável `useEmpresaParam`
+Criar `src/hooks/useEmpresaParam.ts` para ler campos da empresa atual (cache simples por `empresa_id`). Usado para `tempo_animacao` agora e reutilizável depois para outros parâmetros visuais.
 
-## 3. Edge Function `chat-transcrever`
+### 4. Componente `RealsysBotAvatar` (isolado e reutilizável)
+Criar `src/components/chat/RealsysBotAvatar.tsx`:
+- Props: `size`, `className`, `intervalSec` (opcional, sobrescreve o da empresa)
+- Estado interno `playing: boolean`
+- `setInterval` baseado em `tempo_animacao` (segundos). Quando dispara:
+  - Troca `<img src>` do PNG estático para o GIF (com cache-buster `?t=${Date.now()}` para forçar replay do GIF)
+  - Após a duração da animação (~1300ms), volta para o PNG
+- Se `tempo_animacao = 0`, não anima
+- Pausa quando `document.hidden` (Page Visibility API) para não consumir CPU em aba inativa
+- Limpa timers no unmount
 
-Recebe áudio (base64) → transcreve via Lovable AI (modelo multimodal Gemini aceita áudio) → retorna texto. Usado tanto para áudios anexados quanto para o botão de microfone.
+### 5. Integrar no `ChatLauncher`
+Substituir o `<img>` direto por `<RealsysBotAvatar />` no `src/components/chat/ChatLauncher.tsx`. Nenhuma outra mudança de comportamento.
 
-## 4. Edge Function `chat-extrair-anexo`
+### 6. Expor o campo no `EmpresaForm` (opcional, mas coerente com o padrão)
+Adicionar input numérico "Tempo de animação do bot (s)" em `src/components/forms/EmpresaForm.tsx`, na seção de parâmetros visuais/personalização, junto com as cores. Default 5, mínimo 0.
 
-Recebe arquivo (imagem/PDF) → envia ao Gemini multimodal pedindo extração estruturada (CNPJ, razão social, endereço, itens de uma nota, etc.) → devolve JSON. O resultado vira contexto para o assistente confirmar com o usuário antes de cadastrar.
+---
 
-## 5. Frontend
+## Detalhes técnicos
 
-### Avatar do RealSys
-Gerar via Lovable AI (`google/gemini-2.5-flash-image`) **uma vez** durante o desenvolvimento — robozinho amigável usando as cores da logomarca (`logo_realsys.jpg`). Salvar em `src/assets/realsys-bot.png`.
-
-### Componentes novos
-- `src/components/chat/ChatLauncher.tsx` — botão flutuante (canto inferior direito) com badge de mensagens não lidas. Renderizado dentro de `AppContent` (só aparece após login + empresa selecionada).
-- `src/components/chat/ChatPanel.tsx` — painel lateral/drawer (usa `Sheet` do shadcn) com lista de mensagens, input, botão de anexo, botão de microfone (reutiliza `useSpeechRecognition`) e botão "gravar áudio" (envia o blob).
-- `src/components/chat/ChatMessage.tsx` — bolha de mensagem com markdown (`react-markdown`), preview de anexo, player de áudio, e cards de "ação executada" (ex.: "✓ Cliente ACME criado — abrir cadastro").
-- `src/components/chat/useChatActions.ts` — hook que conecta as tool calls retornadas pela edge function ao `openTab` do `AppContext` quando a ação é `abrir_formulario` (a UI precisa executar isso, não o backend).
-
-### Fluxo de envio
-1. Usuário digita / fala / anexa.
-2. Anexo → upload em `chat-anexos/{user_id}/...` → URL salva em `chat_mensagem`.
-3. Áudio → `chat-transcrever` → texto vira a mensagem (áudio fica anexado).
-4. Documento → `chat-extrair-anexo` → JSON entra no contexto da próxima requisição ao assistente.
-5. `chat-realsys` é chamado com histórico completo → resposta em streaming → tool calls executadas → mensagem final renderizada.
-
-## 6. Segurança
-- Edge functions validam JWT do usuário e usam o token dele para todas as queries (RLS aplica).
-- Tools que escrevem em tabelas com `empresa_id` recebem o `empresaId` do contexto da requisição (não confiar em valor que o LLM "inventou").
-- Tamanho máx. anexo: 10 MB. Tipos permitidos: imagem, PDF, áudio.
-
-## 7. Detalhes técnicos
-
-```text
-TopBar ─┐
-        ├─ AppContent
-TabBar ─┤      └─ ChatLauncher (fixed bottom-right)
-SideBar ┘            └─ ChatPanel (Sheet)
-                           ├─ ChatMessage[]
-                           └─ Input + anexo + mic + audio-record
+**Migration SQL:**
+```sql
+ALTER TABLE public.empresa
+  ADD COLUMN IF NOT EXISTS tempo_animacao integer NOT NULL DEFAULT 5;
+COMMENT ON COLUMN public.empresa.tempo_animacao IS
+  'Intervalo (s) entre animações do bot RealSys. 0 desativa.';
 ```
 
-Tool-call loop na edge function:
-```text
-client → edge → AI Gateway
-                  ↓ tool_calls
-              executa no Supabase (RLS)
-                  ↓ tool_results
-              AI Gateway → resposta final → SSE → client
+**Estrutura do componente:**
+```tsx
+// pseudo
+const [playing, setPlaying] = useState(false);
+useEffect(() => {
+  if (!intervalSec) return;
+  const id = setInterval(() => {
+    if (document.hidden) return;
+    setPlaying(true);
+    setTimeout(() => setPlaying(false), 1300);
+  }, intervalSec * 1000);
+  return () => clearInterval(id);
+}, [intervalSec]);
+
+return <img src={playing ? `${gif}?t=${Date.now()}` : png} />;
 ```
 
-## Arquivos a criar/editar
+**Geração do GIF (script Python descartável em /tmp):**
+- Carrega PNG, identifica caixa aproximada dos olhos e do braço por proporção (não por detecção — coordenadas fixas baseadas no layout do bot)
+- Para cada frame, compõe imagem nova com `Image.paste` da região modificada
+- Salva com `save_all=True, append_images=[...], duration=80, loop=1, disposal=2, transparency=0`
 
-**Criar:**
-- `supabase/migrations/<ts>_chat_realsys.sql` (tabelas + RLS + bucket)
-- `supabase/functions/chat-realsys/index.ts`
-- `supabase/functions/chat-transcrever/index.ts`
-- `supabase/functions/chat-extrair-anexo/index.ts`
-- `src/assets/realsys-bot.png` (gerado)
+---
+
+## Arquivos afetados
+
+Criados:
+- `supabase/migrations/<timestamp>_empresa_tempo_animacao.sql`
+- `src/assets/realsys-bot-animado.gif`
+- `src/hooks/useEmpresaParam.ts`
+- `src/components/chat/RealsysBotAvatar.tsx`
+
+Editados:
 - `src/components/chat/ChatLauncher.tsx`
-- `src/components/chat/ChatPanel.tsx`
-- `src/components/chat/ChatMessage.tsx`
-- `src/components/chat/useChatActions.ts`
-- `src/components/chat/chatService.ts` (wrapper das chamadas)
+- `src/components/forms/EmpresaForm.tsx` (adicionar campo no form)
+- `src/integrations/supabase/types.ts` (atualizado automaticamente após migration)
 
-**Editar:**
-- `src/pages/Index.tsx` — montar `<ChatLauncher />` dentro de `AppContent`.
-- `package.json` — adicionar `react-markdown`.
+---
 
-## Pontos de confirmação
+## Riscos / pontos de atenção
 
-1. **Escopo das ações automáticas:** comecei com **cadastrar cliente, abrir formulários, criar pedido/orçamento, buscar cliente/produto**. Posso adicionar fornecedor, produto, condição de pagamento etc. depois.
-2. **Persistência do histórico:** mantenho histórico completo no banco (sem expirar). Ok?
-3. **Avatar:** gero um robozinho com as cores da logo. Se tiver preferência (mais sério, mais cartoon), me avise.
+- **Qualidade visual do GIF**: como é gerado por manipulação do PNG, o "aceno" pode ficar artificial. Se ficar ruim, na implementação aplico fallback CSS-only (rotação/scale/keyframes) sem GIF — mesmo comportamento, sem novo asset.
+- **Replay do GIF**: navegadores cacheiam GIFs e não reiniciam ao re-renderizar; o cache-buster na URL resolve.
+- **Performance**: timer único por instância, pausado em aba oculta.

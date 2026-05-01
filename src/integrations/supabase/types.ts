@@ -665,6 +665,7 @@ export type Database = {
           descricao: string | null
           dt_alteracao: string | null
           dt_cadastro: string | null
+          empresa_id: number | null
           excluido: boolean | null
         }
         Insert: {
@@ -672,6 +673,7 @@ export type Database = {
           descricao?: string | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
+          empresa_id?: number | null
           excluido?: boolean | null
         }
         Update: {
@@ -679,6 +681,7 @@ export type Database = {
           descricao?: string | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
+          empresa_id?: number | null
           excluido?: boolean | null
         }
         Relationships: []
@@ -1284,6 +1287,24 @@ export type Database = {
             referencedColumns: ["caixa_movimento_id"]
           },
         ]
+      }
+      centro_custo: {
+        Row: {
+          centro_custo_id: number
+          empresa_id: number | null
+          nome: string | null
+        }
+        Insert: {
+          centro_custo_id?: never
+          empresa_id?: number | null
+          nome?: string | null
+        }
+        Update: {
+          centro_custo_id?: never
+          empresa_id?: number | null
+          nome?: string | null
+        }
+        Relationships: []
       }
       cfop: {
         Row: {
@@ -4858,6 +4879,7 @@ export type Database = {
           dt_cadastro: string | null
           empresa_id: number
           excluido: boolean | null
+          nivel: number | null
           nome: string
           plano_conta_id: number
           tp_conta: string | null
@@ -4869,6 +4891,7 @@ export type Database = {
           dt_cadastro?: string | null
           empresa_id?: number
           excluido?: boolean | null
+          nivel?: number | null
           nome: string
           plano_conta_id?: number
           tp_conta?: string | null
@@ -4880,6 +4903,7 @@ export type Database = {
           dt_cadastro?: string | null
           empresa_id?: number
           excluido?: boolean | null
+          nivel?: number | null
           nome?: string
           plano_conta_id?: number
           tp_conta?: string | null
