@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import realsysBot from "@/assets/realsys-bot.png";
+import RealsysBotAvatar from "./RealsysBotAvatar";
 import ChatPanel from "./ChatPanel";
 
 const ChatLauncher: React.FC = () => {
@@ -13,7 +13,7 @@ const ChatLauncher: React.FC = () => {
         title="Falar com o RealSys"
         className="fixed bottom-4 right-4 z-40 w-14 h-14 rounded-full bg-primary shadow-lg hover:scale-105 transition-transform flex items-center justify-center border-2 border-primary-foreground/20"
       >
-        <img src={realsysBot} alt="RealSys" className="w-12 h-12 object-contain" />
+        <RealsysBotAvatar XSize={48} />
       </button>
       <ChatPanel open={XOpen} onOpenChange={setXOpen} />
     </>
