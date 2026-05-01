@@ -63,6 +63,7 @@ const RealsysBotAvatar: React.FC<IRealsysBotAvatarProps> = ({
 
   return (
     <img
+      key={XPlaying ? `anim-${XGifKey}` : "static"}
       src={XSrc}
       alt={XAlt}
       width={XSize}
