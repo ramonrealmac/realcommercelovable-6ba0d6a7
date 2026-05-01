@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useAppContext } from "@/contexts/AppContext";
-import { X, ChevronRight, ChevronDown, FileBarChart, Search } from "lucide-react";
+import { X, ChevronRight, ChevronDown, FileBarChart, Search, ChevronsDown, ChevronsUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { MENU_CONFIG, MenuItem } from "@/config/menuConfig";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -15,18 +15,31 @@ const MenuItemNode = ({
   openTab,
   closeSidebar,
   forceExpand = false,
+  lastAction = null,
 }: {
   item: MenuItem;
   depth?: number;
   openTab: (tab: { title: string; component: string }) => void;
   closeSidebar: () => void;
   forceExpand?: boolean;
+  lastAction?: { type: 'expand' | 'collapse', ts: number } | null;
 }) => {
   const [expanded, setExpanded] = useState(forceExpand);
+  const [appliedActionTs, setAppliedActionTs] = useState(0);
 
+  // Sync with search-based forceExpand
   useEffect(() => {
     if (forceExpand) setExpanded(true);
   }, [forceExpand]);
+
+  // Sync with global expand/collapse buttons
+  useEffect(() => {
+    if (lastAction && lastAction.ts > appliedActionTs) {
+      setExpanded(lastAction.type === 'expand');
+      setAppliedActionTs(lastAction.ts);
+    }
+  }, [lastAction, appliedActionTs]);
+
   const hasChildren = !!item.children?.length;
   const Icon = item.icon;
 
@@ -52,6 +65,7 @@ const MenuItemNode = ({
                 openTab={openTab}
                 closeSidebar={closeSidebar}
                 forceExpand={forceExpand}
+                lastAction={lastAction}
               />
             ))}
           </div>
@@ -80,6 +94,7 @@ const SidebarMenu = () => {
   const [XRbRelatorios, setXRbRelatorios] = useState<IRbRelatorio[]>([]);
   const [XRpbRelatorios, setXRpbRelatorios] = useState<IRpbRelatorio[]>([]);
   const [XSearch, setXSearch] = useState("");
+  const [XLastAction, setXLastAction] = useState<{ type: 'expand' | 'collapse', ts: number } | null>(null);
 
   useEffect(() => {
     if (XSidebarOpen && XEmpresaMatrizId > 0) {
@@ -91,7 +106,7 @@ const SidebarMenu = () => {
   }, [XSidebarOpen, XEmpresaMatrizId, XEmpresaId]);
 
   // Build dynamic menu for rbuilder reports grouped by menu/submenu
-  const XRbMenuItems = (() => {
+  const XRbMenuItems = useMemo(() => {
     if (!Array.isArray(XRbRelatorios) || XRbRelatorios.length === 0) return [];
     
     const XGrouped: Record<string, Record<string, IRbRelatorio[]>> = {};
@@ -139,51 +154,52 @@ const SidebarMenu = () => {
       });
     }
     return XItems;
-  })();
+  }, [XRbRelatorios]);
 
   // Inject dynamic reports into the menu config
-  const XMenuConfig = (MENU_CONFIG || []).map(item => {
-    if (item.id === "relatorios-menu") {
-      // Group RPB reports by category
-      const XRpbCategories: Record<string, IRpbRelatorio[]> = {};
-      if (Array.isArray(XRpbRelatorios)) {
-        XRpbRelatorios.forEach(r => {
-          if (!r) return;
-          const cat = r.categoria || "Geral";
-          if (!XRpbCategories[cat]) XRpbCategories[cat] = [];
-          XRpbCategories[cat].push(r);
-        });
-      }
+  const XMenuConfig = useMemo(() => {
+    return (MENU_CONFIG || []).map(item => {
+      if (item.id === "relatorios-menu") {
+        const XRpbCategories: Record<string, IRpbRelatorio[]> = {};
+        if (Array.isArray(XRpbRelatorios)) {
+          XRpbRelatorios.forEach(r => {
+            if (!r) return;
+            const cat = r.categoria || "Geral";
+            if (!XRpbCategories[cat]) XRpbCategories[cat] = [];
+            XRpbCategories[cat].push(r);
+          });
+        }
 
-      const XRpbCategoryItems: MenuItem[] = Object.entries(XRpbCategories).map(([cat, rels]) => ({
-        id: `rpb-cat-${cat}`,
-        title: cat,
-        icon: FileBarChart,
-        children: rels.map(r => ({
-          id: `rpb-exec-${r.rpb_relatorio_id}`,
-          title: r.nome,
+        const XRpbCategoryItems: MenuItem[] = Object.entries(XRpbCategories).map(([cat, rels]) => ({
+          id: `rpb-cat-${cat}`,
+          title: cat,
           icon: FileBarChart,
-        })),
-      }));
-
-      const XStaticChildren = (item.children || []).filter(c => c && c.id !== "rbuilder");
-      const XRBuilderChildren = [...XRbMenuItems, ...XRpbCategoryItems];
-
-      return {
-        ...item,
-        children: [
-          ...XStaticChildren,
-          {
-            id: "rbuilder",
-            title: "RBuilder",
+          children: rels.map(r => ({
+            id: `rpb-exec-${r.rpb_relatorio_id}`,
+            title: r.nome,
             icon: FileBarChart,
-            children: XRBuilderChildren,
-          },
-        ],
-      };
-    }
-    return item;
-  });
+          })),
+        }));
+
+        const XStaticChildren = (item.children || []).filter(c => c && c.id !== "rbuilder");
+        const XRBuilderChildren = [...XRbMenuItems, ...XRpbCategoryItems];
+
+        return {
+          ...item,
+          children: [
+            ...XStaticChildren,
+            {
+              id: "rbuilder",
+              title: "RBuilder",
+              icon: FileBarChart,
+              children: XRBuilderChildren,
+            },
+          ],
+        };
+      }
+      return item;
+    });
+  }, [XRbMenuItems, XRpbRelatorios]);
 
   const XFilteredMenu = useMemo(() => {
     if (!XSearch.trim()) return XMenuConfig;
@@ -222,18 +238,34 @@ const SidebarMenu = () => {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input 
               placeholder="Buscar no menu..." 
-              className="pl-9 h-9 text-xs bg-background"
+              className="pl-9 pr-16 h-9 text-xs bg-background"
               value={XSearch}
               onChange={(e) => setXSearch(e.target.value)}
             />
-            {XSearch && (
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              {XSearch && (
+                <button 
+                  onClick={() => setXSearch("")}
+                  className="p-1 hover:bg-foreground/10 rounded mr-1"
+                >
+                  <X className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" />
+                </button>
+              )}
               <button 
-                onClick={() => setXSearch("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2"
+                onClick={() => setXLastAction({ type: 'expand', ts: Date.now() })}
+                title="Expandir tudo"
+                className="p-1 hover:bg-foreground/10 rounded text-muted-foreground hover:text-foreground transition-colors"
               >
-                <X className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+                <ChevronsDown size={14} />
               </button>
-            )}
+              <button 
+                onClick={() => setXLastAction({ type: 'collapse', ts: Date.now() })}
+                title="Recolher tudo"
+                className="p-1 hover:bg-foreground/10 rounded text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ChevronsUp size={14} />
+              </button>
+            </div>
           </div>
         </div>
         <ScrollArea className="flex-1">
@@ -245,6 +277,7 @@ const SidebarMenu = () => {
                 openTab={openTab}
                 closeSidebar={closeSidebar}
                 forceExpand={!!XSearch}
+                lastAction={XLastAction}
               />
             ))}
             {XFilteredMenu.length === 0 && (

@@ -90,46 +90,80 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
   const vlPagarNum = useMemo(() => parseNum(XVlPagar), [XVlPagar]);
   const vlParcela = XQtParcela > 0 ? +(vlPagarNum / XQtParcela).toFixed(2) : vlPagarNum;
 
-  // Determina se a condição selecionada exige dados de cartão (meio_pagamento_id 3=Crédito, 4=Débito)
+  interface IMeioPagamento { meio_pagamento_id: number; descricao: string; }
+
+  const [XMeiosPagamento, setXMeiosPagamento] = useState<IMeioPagamento[]>([]);
+
+  // Determina se a condição selecionada exige dados de cartão
   const camposCartaoEditaveis = useMemo(() => {
     const c = XCondicoes.find(x => x.condicao_id === XCondicaoId);
-    return c?.meio_pagamento_id === 3 || c?.meio_pagamento_id === 4;
-  }, [XCondicoes, XCondicaoId]);
+    if (!c) return false;
+    
+    console.log("PagamentoDialog: Verificando se condicao", XCondicaoId, "é cartão. meio_pagamento_id:", c.meio_pagamento_id);
+
+    // Check by ID (3=Crédito, 4=Débito are defaults, but let's be more flexible)
+    if ([3, 4, 10, 11].includes(c.meio_pagamento_id || 0)) return true;
+    
+    // Check by description in MeioPagamento if available
+    const mp = XMeiosPagamento.find(m => m.meio_pagamento_id === c.meio_pagamento_id);
+    if (mp) {
+      const desc = mp.descricao.toLowerCase();
+      if (desc.includes("cartão") || desc.includes("cartao") || desc.includes("card") || desc.includes("débito") || desc.includes("debito") || desc.includes("crédito") || desc.includes("credito")) return true;
+    }
+    
+    // Check by condition description as last resort
+    const cDesc = c.descricao.toLowerCase();
+    if (cDesc.includes("cartão") || cDesc.includes("cartao") || cDesc.includes("débito") || cDesc.includes("debito")) return true;
+    
+    return false;
+  }, [XCondicoes, XCondicaoId, XMeiosPagamento]);
 
   useEffect(() => {
     if (!open) return;
     (async () => {
       try {
-        // Fetch Condições (with fallback)
-        let condRes = await db.from("condicao")
-          .select("condicao_id, descricao, qtd_parcelas:qt_parcelas, tp_documento, plano_conta_id, meio_pagamento_id")
-          .eq("excluido", false).order("descricao");
+        console.log("PagamentoDialog: Iniciando carga de dados. Empresa:", XEmpresaId);
         
-        let condList: ICondicao[] = (condRes.data || []) as ICondicao[];
-        if (condRes.error || condList.length === 0) {
-          const cp = await db.from("condicao_pagamento")
-            .select("condicao_id, descricao, qtd_parcelas, plano_conta_id, meio_pagamento_id")
-            .eq("excluido", false).order("descricao");
-          condList = ((cp.data || []) as any[]).map(r => ({ ...r, tp_documento: null }));
+        // Fetch Meios de Pagamento (sem filtros para garantir)
+        const mpRes = await db.from("meio_pagamento").select("meio_pagamento_id, descricao");
+        if (mpRes.data) {
+          setXMeiosPagamento(mpRes.data);
+          console.log("PagamentoDialog: Meios de pagamento carregados:", mpRes.data.length);
+        } else if (mpRes.error) {
+          console.warn("PagamentoDialog: Erro ao carregar meio_pagamento:", mpRes.error);
         }
+
+        // Fetch Condições (sem filtros restritivos no início)
+        let condRes = await db.from("condicao_pagamento").select("condicao_id, descricao, qtd_parcelas, plano_conta_id, meio_pagamento_id");
+        if (condRes.error || !condRes.data || condRes.data.length === 0) {
+           condRes = await db.from("condicao").select("condicao_id, descricao, qtd_parcelas:qt_parcelas, tp_documento, plano_conta_id, meio_pagamento_id");
+        }
+        
+        const condList = (condRes.data || []).map((r: any) => ({ ...r, tp_documento: r.tp_documento || null }));
+        console.log("PagamentoDialog: Condições carregadas:", condList.length);
         setXCondicoes(condList);
 
-        // Fetch Bandeiras
-        const bandRes = await db.from("bandeira").select("bandeira_id, descricao").order("descricao");
-        if (bandRes.data) {
-          setXBandeiras(bandRes.data);
+        // Fetch Bandeiras - Sem filtro de exclusão para teste
+        let bandRes = await db.from("bandeira").select("bandeira_id, descricao").eq("empresa_id", XEmpresaId).order("descricao");
+        if (bandRes.error || !bandRes.data || bandRes.data.length === 0) {
+          console.warn("PagamentoDialog: Nenhuma bandeira com empresa_id", XEmpresaId, "tentando geral...");
+          bandRes = await db.from("bandeira").select("bandeira_id, descricao").order("descricao");
         }
+        console.log("PagamentoDialog: Bandeiras carregadas:", bandRes.data?.length || 0);
+        if (bandRes.data) setXBandeiras(bandRes.data);
 
-        // Fetch Operadoras (try with empresa_id first, then without)
+        // Fetch Operadoras - Sem filtro de exclusão para teste
         let operRes = await db.from("operadora").select("operadora_id, razao").eq("empresa_id", XEmpresaId).order("razao");
-        if (operRes.error || (operRes.data?.length === 0)) {
+        if (operRes.error || !operRes.data || operRes.data.length === 0) {
+          console.warn("PagamentoDialog: Nenhuma operadora com empresa_id", XEmpresaId, "tentando geral...");
           operRes = await db.from("operadora").select("operadora_id, razao").order("razao");
         }
-        if (operRes.data) {
-          setXOperadoras(operRes.data);
-        }
-      } catch (err) {
-        console.error("Erro ao carregar dados do pagamento:", err);
+        console.log("PagamentoDialog: Operadoras carregadas:", operRes.data?.length || 0);
+        if (operRes.data) setXOperadoras(operRes.data);
+
+      } catch (err: any) {
+        console.error("PagamentoDialog: Erro ao carregar dados:", err);
+        toast.error("Erro ao carregar listas de pagamento: " + (err.message || "Erro desconhecido"));
       }
     })();
     // Reset
@@ -138,7 +172,19 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
     resetForm(totalPedido);
     setXFila([...(pagtosPreCarregados || [])]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, XEmpresaId]);
+
+  // Pré-preenche o primeiro item da fila quando carrega condições
+  useEffect(() => {
+    if (!open) return;
+    if (XCondicoes.length === 0) return;
+    if (XEditUid) return;
+    if (totalPago + 0.0001 >= totalPedido) return;
+    if (XFila.length === 0) return;
+    const proximo = XFila[0];
+    aplicarPagtoFila(proximo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [XCondicoes, XFila, open]);
 
   // Pré-preenche o primeiro item da fila quando carrega condições
   useEffect(() => {
