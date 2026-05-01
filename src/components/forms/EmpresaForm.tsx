@@ -126,10 +126,18 @@ const emptyEmpresa = () => ({
   css_customizado: "",
   logomarca: "",
   // Textbox
-  cor_input_fundo: "#FFFFFF",
-  cor_input_readonly: "#F1F5F9",
-  cor_input_borda: "#CBD5E1",
   cor_input_label: "#64748B",
+  // New fields
+  abacatepay_api_key: "",
+  abacatepay_webhook_secret: "",
+  abacatepay_webhook_url: "",
+  centro_custo_caixa: 0,
+  conta_gerencial_caixa: null as number | null,
+  deposito_estoque_caixa: 0,
+  empresa_deposito_caixa: null as number | null,
+  tp_operacao_caixa: 0,
+  imagem_caixa: "",
+  valida_estoque: "",
 });
 
 type TEmpresa = ReturnType<typeof emptyEmpresa>;
@@ -150,6 +158,9 @@ const EmpresaForm: React.FC = () => {
   // Cidades lookup
   const [XCidades, setXCidades] = useState<{ cidade_id: number; descricao: string }[]>([]);
 
+  // Depositos lookup
+  const [XDepositos, setXDepositos] = useState<{ deposito_id: number; nome: string }[]>([]);
+
   // Horários
   const [XHorarios, setXHorarios] = useState<Horario[]>([]);
 
@@ -160,12 +171,14 @@ const EmpresaForm: React.FC = () => {
   }, []);
 
   const loadLookups = useCallback(async () => {
-    const [empRes, cidRes] = await Promise.all([
+    const [empRes, cidRes, depRes] = await Promise.all([
       db.from("empresa").select("empresa_id, razao_social").eq("excluido", false).order("razao_social"),
       db.from("cidade").select("cidade_id, descricao").eq("excluido", false).order("descricao"),
+      db.from("deposito").select("deposito_id, nome").eq("excluido", false).order("nome"),
     ]);
     if (empRes.data) setXEmpresasLookup(empRes.data);
     if (cidRes.data) setXCidades(cidRes.data);
+    if (depRes.data) setXDepositos(depRes.data);
   }, []);
 
   const loadHorarios = useCallback(async (empresaId: number) => {
@@ -436,6 +449,8 @@ const EmpresaForm: React.FC = () => {
 
   const TABS = [
     { id: "cadastro", label: "Cadastro" },
+    { id: "financeiro", label: "Financeiro / Caixa" },
+    { id: "integracoes", label: "Integrações" },
     { id: "horario", label: "Horário Loja Virtual" },
     { id: "link", label: "Link de Vendas" },
     { id: "tema", label: "Tema" },
@@ -566,15 +581,6 @@ const EmpresaForm: React.FC = () => {
               {field("fone_faturamento", "Faturamento")}
             </div>
 
-            {/* Casas decimais */}
-            <h3 className="text-sm font-semibold text-foreground pt-2">Casas Decimais</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {field("vl_venda_qt_decimais", "Valor Venda", { type: "number" })}
-              {field("qt_venda_qt_decimais", "Qtde Venda", { type: "number" })}
-              {field("vl_saida_qt_decimais", "Valor Saída", { type: "number" })}
-              {field("qt_saida_qt_decimais", "Qtde Saída", { type: "number" })}
-            </div>
-
             {/* Logomarca */}
             <h3 className="text-sm font-semibold text-foreground pt-2">Logomarca</h3>
             <div className="flex items-center gap-4">
@@ -597,6 +603,104 @@ const EmpresaForm: React.FC = () => {
                   )}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Financeiro / Caixa ── */}
+        {XInnerTab === "financeiro" && (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground mb-4 border-b pb-2">Configurações de Caixa / PDV</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {field("centro_custo_caixa", "ID Centro de Custo", { type: "number" })}
+                {field("conta_gerencial_caixa", "ID Conta Gerencial", { type: "number" })}
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Depósito Padrão (Estoque)</label>
+                  <select
+                    value={XDisplayVal("deposito_estoque_caixa") || ""}
+                    disabled={!XIsEditing}
+                    onChange={e => updateEdit("deposito_estoque_caixa", e.target.value ? Number(e.target.value) : 0)}
+                    className={`w-full border border-border rounded px-3 py-1.5 text-sm ${!XIsEditing ? "bg-secondary" : "bg-card"}`}
+                  >
+                    <option value="0">(Selecione)</option>
+                    {XDepositos.map(d => (
+                      <option key={d.deposito_id} value={d.deposito_id}>{d.nome}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {field("tp_operacao_caixa", "Tipo Operação Caixa", { type: "number" })}
+              {field("valida_estoque", "Lógica Validação Estoque")}
+              {field("imagem_caixa", "URL Imagem Caixa")}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Empresa Depósito Caixa</label>
+                <select
+                  value={XDisplayVal("empresa_deposito_caixa") || ""}
+                  disabled={!XIsEditing}
+                  onChange={e => updateEdit("empresa_deposito_caixa", e.target.value ? Number(e.target.value) : null)}
+                  className={`w-full border border-border rounded px-3 py-1.5 text-sm ${!XIsEditing ? "bg-secondary" : "bg-card"}`}
+                >
+                  <option value="">(Nenhuma)</option>
+                  {XEmpresasLookup.map(e => (
+                    <option key={e.empresa_id} value={e.empresa_id}>{e.empresa_id} - {e.razao_social}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold text-foreground mb-4 border-b pb-2">Casas Decimais</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {field("vl_venda_qt_decimais", "Valor Venda", { type: "number" })}
+                {field("qt_venda_qt_decimais", "Qtde Venda", { type: "number" })}
+                {field("vl_saida_qt_decimais", "Valor Saída", { type: "number" })}
+                {field("qt_saida_qt_decimais", "Qtde Saída", { type: "number" })}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold text-foreground mb-4 border-b pb-2">Validação de Estoque</h3>
+              <div className="flex flex-wrap gap-6">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={!!XDisplayVal("lg_valida_estoque_link")}
+                    onCheckedChange={v => updateEdit("lg_valida_estoque_link", v)}
+                    disabled={!XIsEditing}
+                  />
+                  <Label className="text-xs">Validar Estoque no Link de Vendas</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={!!XDisplayVal("lg_valida_estoque_pdv")}
+                    onCheckedChange={v => updateEdit("lg_valida_estoque_pdv", v)}
+                    disabled={!XIsEditing}
+                  />
+                  <Label className="text-xs">Validar Estoque no PDV</Label>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Integrações ── */}
+        {XInnerTab === "integracoes" && (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground mb-4 border-b pb-2">AbacatePay</h3>
+              <div className="space-y-4">
+                {field("abacatepay_api_key", "API Key", { type: "password" })}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {field("abacatepay_webhook_secret", "Webhook Secret", { type: "password" })}
+                  {field("abacatepay_webhook_url", "Webhook URL")}
+                </div>
+              </div>
             </div>
           </div>
         )}
