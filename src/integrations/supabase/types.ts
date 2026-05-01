@@ -2175,6 +2175,7 @@ export type Database = {
           qt_venda_qt_decimais: number | null
           razao_social: string
           regime_trib: string | null
+          tempo_animacao: number
           tp_operacao_caixa: number
           url_banner_vendas: string | null
           url_favicon: string | null
@@ -2238,6 +2239,7 @@ export type Database = {
           qt_venda_qt_decimais?: number | null
           razao_social?: string
           regime_trib?: string | null
+          tempo_animacao?: number
           tp_operacao_caixa?: number
           url_banner_vendas?: string | null
           url_favicon?: string | null
@@ -2301,6 +2303,7 @@ export type Database = {
           qt_venda_qt_decimais?: number | null
           razao_social?: string
           regime_trib?: string | null
+          tempo_animacao?: number
           tp_operacao_caixa?: number
           url_banner_vendas?: string | null
           url_favicon?: string | null
