@@ -145,3 +145,30 @@ input[type=number] {
   -moz-appearance: textfield;
 }
 
+/* ===== RealSys Bot — animacao "acena + pisca" ===== */
+@keyframes rb-bot-wave {
+  0%   { transform: rotate(0deg)  translateY(0)    scale(1); }
+  15%  { transform: rotate(-8deg) translateY(-4%)  scale(1.04); }
+  30%  { transform: rotate(10deg) translateY(-6%)  scale(1.06); }
+  45%  { transform: rotate(-8deg) translateY(-4%)  scale(1.04); }
+  60%  { transform: rotate(8deg)  translateY(-2%)  scale(1.03); }
+  75%  { transform: rotate(-4deg) translateY(0)    scale(1.02); }
+  100% { transform: rotate(0deg)  translateY(0)    scale(1); }
+}
+.rb-bot-wave {
+  animation: rb-bot-wave 1.4s ease-in-out 1;
+  transform-origin: 50% 100%;
+  will-change: transform;
+}
+
+@keyframes rb-bot-blink {
+  0%, 70%, 100% { transform: scaleY(0); opacity: 0; }
+  78%, 88%      { transform: scaleY(1); opacity: 0.85; }
+}
+.rb-bot-blink {
+  background: hsl(var(--foreground) / 0.85);
+  border-radius: 9999px;
+  transform-origin: 50% 50%;
+  animation: rb-bot-blink 1.4s ease-in-out 1;
+}
+
