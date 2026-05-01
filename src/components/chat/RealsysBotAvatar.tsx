@@ -1,14 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import botStatic from "@/assets/realsys-bot.png";
-import botAnimado from "@/assets/realsys-bot-animado.gif";
 import { useEmpresaParam } from "@/hooks/useEmpresaParam";
 
 interface IRealsysBotAvatarProps {
-  /** Tamanho em px (largura = altura). Default 48. */
   XSize?: number;
-  /** Sobrescreve o intervalo (em segundos) lido de empresa.tempo_animacao. */
   XIntervalSec?: number;
-  /** Duracao da animacao em ms (default 1300, casado com o GIF). */
   XAnimDurationMs?: number;
   XClassName?: string;
   XAlt?: string;
@@ -16,19 +12,19 @@ interface IRealsysBotAvatarProps {
 
 /**
  * Avatar do bot RealSys.
- * - Renderiza o PNG estatico por padrao.
- * - A cada `empresa.tempo_animacao` segundos troca para o GIF (com cache-buster
- *   para forcar replay, ja que o GIF tem loop=1) e volta ao estatico ao fim.
- * - Pausa quando a aba esta oculta para nao consumir CPU.
+ * - Mostra o PNG estatico, sempre centralizado e visivel.
+ * - A cada `empresa.tempo_animacao` segundos aplica uma classe CSS de animacao
+ *   ("acena + pisca") por XAnimDurationMs e remove em seguida.
+ * - Animacao 100% CSS (sem GIF): bounce vertical + balanco lateral leve +
+ *   uma "piscada" via mascara escura sobre a faixa dos olhos.
  * - Se o intervalo for 0, fica sempre parado.
  *
- * Componente isolado e reutilizavel: pode ser usado em qualquer ponto do
- * sistema (header, dialog, splash, etc).
+ * Componente isolado e reutilizavel.
  */
 const RealsysBotAvatar: React.FC<IRealsysBotAvatarProps> = ({
   XSize = 48,
   XIntervalSec,
-  XAnimDurationMs = 1300,
+  XAnimDurationMs = 1400,
   XClassName = "",
   XAlt = "RealSys",
 }) => {
@@ -36,22 +32,18 @@ const RealsysBotAvatar: React.FC<IRealsysBotAvatarProps> = ({
   const XIntervalo = (XIntervalSec ?? XEmpresaTempo) || 0;
 
   const [XPlaying, setXPlaying] = useState(false);
-  const [XGifKey, setXGifKey] = useState<number>(0);
   const XStopRef = useRef<number | null>(null);
+  const XCycleRef = useRef(0);
 
   useEffect(() => {
     if (!XIntervalo || XIntervalo <= 0) return;
-
     const tick = () => {
       if (typeof document !== "undefined" && document.hidden) return;
-      setXGifKey(Date.now()); // forca recarga do GIF para reproduzir novamente
+      XCycleRef.current += 1;
       setXPlaying(true);
       if (XStopRef.current) window.clearTimeout(XStopRef.current);
-      XStopRef.current = window.setTimeout(() => {
-        setXPlaying(false);
-      }, XAnimDurationMs);
+      XStopRef.current = window.setTimeout(() => setXPlaying(false), XAnimDurationMs);
     };
-
     const id = window.setInterval(tick, XIntervalo * 1000);
     return () => {
       window.clearInterval(id);
@@ -59,19 +51,38 @@ const RealsysBotAvatar: React.FC<IRealsysBotAvatarProps> = ({
     };
   }, [XIntervalo, XAnimDurationMs]);
 
-  const XSrc = XPlaying ? `${botAnimado}?t=${XGifKey}` : botStatic;
-
   return (
-    <img
-      key={XPlaying ? `anim-${XGifKey}` : "static"}
-      src={XSrc}
-      alt={XAlt}
-      width={XSize}
-      height={XSize}
-      className={`object-contain ${XClassName}`}
+    <span
+      className={`relative inline-block overflow-visible ${XClassName}`}
       style={{ width: XSize, height: XSize }}
-      draggable={false}
-    />
+    >
+      <img
+        // re-monta a cada ciclo para reiniciar a animacao do zero
+        key={XPlaying ? `p-${XCycleRef.current}` : "s"}
+        src={botStatic}
+        alt={XAlt}
+        width={XSize}
+        height={XSize}
+        draggable={false}
+        className={`block object-contain ${XPlaying ? "rb-bot-wave" : ""}`}
+        style={{
+          width: XSize,
+          height: XSize,
+          transformOrigin: "50% 100%", // pivot nos pés
+        }}
+      />
+      {/* Faixa de "pálpebra" para simular piscada */}
+      {XPlaying && (
+        <span
+          aria-hidden
+          className="rb-bot-blink absolute left-0 right-0 pointer-events-none"
+          style={{
+            top: `${XSize * 0.34}px`,
+            height: `${XSize * 0.12}px`,
+          }}
+        />
+      )}
+    </span>
   );
 };
 
