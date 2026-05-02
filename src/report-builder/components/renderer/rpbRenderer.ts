@@ -6,9 +6,9 @@ import type {
   RpbLayout, RpbBand, RpbComponent, RpbGroupDef,
   RpbTableComp, RpbTextComp, RpbTotalizerComp,
   RpbImageComp, RpbLineComp, RpbBoxComp, RpbTableColumn,
+  RpbFormat, RpbDateFormat
 } from '../../types';
 import { formatValue, DEFAULT_STYLE } from '../../types';
-import type { RpbDateFormat } from '../../types';
 
 // ── Calcula totais de um dataset ──────────────────────────────
 function calcTotals(data: any[], columns: RpbTableColumn[]): Record<string, number> {
@@ -128,7 +128,8 @@ function renderComponent(
   comp: RpbComponent,
   data: any[],
   row: Record<string, any> = {},
-  extraVars: Record<string, any> = {}
+  extraVars: Record<string, any> = {},
+  altBgColor?: string
 ): string {
   const pos = `
     position: absolute;
@@ -213,8 +214,9 @@ function renderComponent(
       const tbody = `
         <tbody>
           ${data.map((row, i) => {
-            const bg = i % 2 === 1 && c.altRowBg !== 'transparent'
-              ? `background-color:${c.altRowBg};` : '';
+            const currentAltBg = c.altRowBg && c.altRowBg !== 'transparent' ? c.altRowBg : altBgColor;
+            const bg = i % 2 === 1 && currentAltBg && currentAltBg !== 'transparent'
+              ? `background-color:${currentAltBg};` : '';
             return `<tr style="${bg}">
               ${cols.map(col => {
                 const colFontSize = (col as any).fontSize || rs.fontSize || tableFontSize;
@@ -276,7 +278,12 @@ function renderBand(
 // ── Renderiza banda de detalhe (tabela + texto por linha) ─────
 // Tabelas são exibidas uma vez para todos os dados.
 // Componentes text/outros são renderizados por linha individualmente.
-function renderDetailBand(band: RpbBand, data: any[], extraVars: Record<string, any> = {}): string {
+function renderDetailBand(
+  band: RpbBand, 
+  data: any[], 
+  extraVars: Record<string, any> = {},
+  altBgColor?: string
+): string {
   if (!band.visible || band.height === 0) return '';
 
   const tableComps = band.components.filter(c => c.type === 'table') as RpbTableComp[];
@@ -286,17 +293,20 @@ function renderDetailBand(band: RpbBand, data: any[], extraVars: Record<string, 
 
   // Renderiza tabelas (abrangem todos os dados de uma vez)
   if (tableComps.length > 0) {
-    html += tableComps.map(comp => renderComponent(comp, data, {}, extraVars)).join('');
+    html += tableComps.map(comp => renderComponent(comp, data, {}, extraVars, altBgColor)).join('');
   }
 
   // Renderiza componentes text/outros uma vez por linha de dados
   if (otherComps.length > 0) {
-    const bg = band.bgColor !== 'transparent' ? `background-color:${band.bgColor};` : '';
-    for (const row of data) {
-      html += `<div style="position:relative;width:100%;height:${band.height}mm;${bg}overflow:hidden;">
-        ${otherComps.map(c => renderComponent(c, data, row, extraVars)).join('')}
+    data.forEach((row, i) => {
+      const isAlt = i % 2 === 1;
+      const rowColor = isAlt ? (altBgColor || 'transparent') : (band.bgColor || 'transparent');
+      const bgStyle = (rowColor && rowColor !== 'transparent') ? `background-color:${rowColor} !important;` : '';
+
+      html += `<div style="position:relative;width:100%;height:${band.height}mm;${bgStyle}overflow:hidden;">
+        ${otherComps.map(c => renderComponent(c, data, row, extraVars, altBgColor)).join('')}
       </div>`;
-    }
+    });
   }
 
   return html;
@@ -339,19 +349,19 @@ function renderGroupSection(
           html += `<div style="${pb2}">`;
           const g2ExtraVars = { ...g1ExtraVars, grupo2_valor: key2, [group2.field]: key2 };
           html += renderBand(layout.bands.group2Header, g2Rows, g2Rows[0] || { [group2.field]: key2 }, g2ExtraVars);
-          html += renderDetailBand(layout.bands.detail, g2Rows, g2ExtraVars);
+          html += renderDetailBand(layout.bands.detail, g2Rows, g2ExtraVars, layout.detailAltBgColor);
           html += renderBand(layout.bands.group2Footer, g2Rows, g2Rows[g2Rows.length - 1] || {}, g2ExtraVars, true);
           html += `</div>`;
         }
       } else {
-        html += renderDetailBand(layout.bands.detail, g1Rows, g1ExtraVars);
+        html += renderDetailBand(layout.bands.detail, g1Rows, g1ExtraVars, layout.detailAltBgColor);
       }
 
       html += renderBand(layout.bands.group1Footer, g1Rows, g1Rows[g1Rows.length - 1] || {}, g1ExtraVars, true);
       html += `</div>`;
     }
   } else {
-    html += renderDetailBand(layout.bands.detail, data, extraVars);
+    html += renderDetailBand(layout.bands.detail, data, extraVars, layout.detailAltBgColor);
   }
 
   return html;
@@ -401,6 +411,8 @@ export function generateReportHtml(
       background: #ffffff;
       margin: 0;
       padding: ${top}mm ${right}mm ${bottom}mm ${left}mm;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
     }
     table { border-collapse: collapse; }
     td, th { word-break: break-word; }

@@ -76,9 +76,16 @@ export async function rpbExecuteQuery(
   // Substitui parâmetros no SQL
   let finalSql = sql;
   for (const [key, value] of Object.entries(params)) {
-    const escaped = typeof value === 'string'
-      ? `'${value.replace(/'/g, "''")}'`
-      : value === null || value === undefined ? 'NULL' : String(value);
+    let escaped: string;
+    if (Array.isArray(value)) {
+      escaped = value.map(v => 
+        typeof v === 'string' ? `'${v.replace(/'/g, "''")}'` : String(v)
+      ).join(', ');
+    } else {
+      escaped = typeof value === 'string'
+        ? `'${value.replace(/'/g, "''")}'`
+        : value === null || value === undefined ? 'NULL' : String(value);
+    }
     finalSql = finalSql.split(`{{${key}}}`).join(escaped);
   }
 

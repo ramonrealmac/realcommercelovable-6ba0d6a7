@@ -1,7 +1,4 @@
-// ============================================================
-// Report Builder Pro — Canvas das Bandas (área central)
-// ============================================================
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useState } from 'react';
 import type {
   RpbLayout, RpbBandName, RpbComponent, RpbBand,
 } from '../../types';
@@ -28,38 +25,19 @@ const CompItem: React.FC<{
   comp: RpbComponent;
   selected: boolean;
   isRef: boolean;       // true = primeiro selecionado (referência de alinhamento)
+  dragOffset: { dx: number; dy: number } | null;
   onSelect: (multi: boolean) => void;
-  onMove: (dx: number, dy: number) => void;
-}> = ({ comp, selected, isRef, onSelect, onMove }) => {
-  const dragging = useRef(false);
-  const startPos = useRef({ x: 0, y: 0 });
-  const moved    = useRef(false);
-
-  const onMouseDown = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    dragging.current = true;
-    moved.current    = false;
-    startPos.current = { x: e.clientX, y: e.clientY };
-
-    const onUp = (ev: MouseEvent) => {
-      if (!dragging.current) return;
-      dragging.current = false;
-      const dx = pxToMm((ev.clientX - startPos.current.x));
-      const dy = pxToMm((ev.clientY - startPos.current.y));
-      if (Math.abs(dx) > 0.3 || Math.abs(dy) > 0.3) {
-        onMove(dx, dy);
-        moved.current = true;
-      }
-      if (!moved.current) onSelect(ev.ctrlKey || ev.metaKey);
-      window.removeEventListener('mouseup', onUp);
-    };
-    window.addEventListener('mouseup', onUp);
-  }, [onSelect, onMove]);
+  onStartDrag: (e: React.MouseEvent) => void;
+}> = ({ comp, selected, isRef, dragOffset, onSelect, onStartDrag }) => {
+  const moved = useRef(false);
 
   // Cor de destaque: ref = dourado, selected = primário, default = tracejado
   const outlineColor = isRef ? '#f59e0b' : selected ? '#6366f1' : 'rgba(99,102,241,0.3)';
   const outlineWidth = isRef || selected ? '2px' : '1px';
   const outlineStyle = isRef ? 'solid' : selected ? 'solid' : 'dashed';
+
+  const dx = (selected && dragOffset) ? dragOffset.dx : 0;
+  const dy = (selected && dragOffset) ? dragOffset.dy : 0;
 
   const style: React.CSSProperties = {
     position: 'absolute',
@@ -73,6 +51,9 @@ const CompItem: React.FC<{
     userSelect: 'none',
     overflow: 'hidden',
     zIndex: selected ? 10 : 1,
+    transform: (dx !== 0 || dy !== 0) ? `translate(${mm(dx)}px, ${mm(dy)}px)` : undefined,
+    opacity: (selected && dragOffset) ? 0.8 : 1,
+    transition: (dx === 0 && dy === 0) ? 'transform 0.1s ease-out' : 'none',
   };
 
   // Badge de referência (1º selecionado)
@@ -151,9 +132,30 @@ const CompItem: React.FC<{
   }
 
   return (
-    <div style={style} onMouseDown={onMouseDown}>
+    <div 
+      style={style} 
+      onMouseDown={(e) => {
+        moved.current = false;
+        onStartDrag(e);
+      }}
+      onClick={(e) => {
+        if (!moved.current) {
+          onSelect(e.ctrlKey || e.metaKey);
+        }
+      }}
+    >
       {refBadge}
       {inner}
+      
+      {/* Ghost do original durante arrasto */}
+      {selected && dragOffset && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          outline: '1px dashed #ccc', opacity: 0.3,
+          pointerEvents: 'none',
+          transform: `translate(${-mm(dx)}px, ${-mm(dy)}px)`
+        }} />
+      )}
     </div>
   );
 };
@@ -165,13 +167,14 @@ const BandRow: React.FC<{
   active: boolean;
   selectedIds: string[];
   refId: string | null;    // id do primeiro selecionado (badge amarelo)
+  dragOffset: { dx: number; dy: number } | null;
   pageW: number;
   onActivate: () => void;
   onSelectComp: (id: string, bandName: RpbBandName, multi: boolean) => void;
   onClearSelection: () => void;
-  onMoveComp: (id: string, dx: number, dy: number) => void;
+  onStartDragComp: (e: React.MouseEvent, id: string, bandName: RpbBandName) => void;
   onResizeBand: (newH: number) => void;
-}> = ({ name, band, active, selectedIds, refId, pageW, onActivate, onSelectComp, onClearSelection, onMoveComp, onResizeBand }) => {
+}> = ({ name, band, active, selectedIds, refId, dragOffset, pageW, onActivate, onSelectComp, onClearSelection, onStartDragComp, onResizeBand }) => {
   const resizing = useRef(false);
   const startY  = useRef(0);
   const startH  = useRef(0);
@@ -238,8 +241,9 @@ const BandRow: React.FC<{
               comp={comp}
               selected={selectedIds.includes(comp.id)}
               isRef={refId === comp.id}
+              dragOffset={dragOffset}
               onSelect={(multi) => onSelectComp(comp.id, name, multi)}
-              onMove={(dx, dy) => onMoveComp(comp.id, dx, dy)}
+              onStartDrag={(e) => onStartDragComp(e, comp.id, name)}
             />
           ))}
         </div>
@@ -262,6 +266,8 @@ const RpbCanvas: React.FC<Props> = ({
   layout, activeBand, selectedIds, onChange, onSelectBand, onSelectComponent, onClearSelection,
 }) => {
   const { pageSize, orientation, margins } = layout;
+  const [dragOffset, setDragOffset] = useState<{ dx: number; dy: number } | null>(null);
+  const dragInfo = useRef<{ bandName: RpbBandName; startX: number; startY: number } | null>(null);
 
   const sizes: Record<string, { w: number; h: number }> = {
     A4: { w: 210, h: 297 }, A3: { w: 297, h: 420 }, Letter: { w: 216, h: 279 },
@@ -277,12 +283,59 @@ const RpbCanvas: React.FC<Props> = ({
     });
   };
 
-  const handleMoveComp = (bandName: RpbBandName, id: string, dx: number, dy: number) => {
-    const band = layout.bands[bandName];
-    const comps = band.components.map(c =>
-      c.id === id ? { ...c, x: Math.max(0, c.x + dx), y: Math.max(0, c.y + dy) } : c
-    );
-    updateBand(bandName, { components: comps });
+  const handleStartDragComp = (e: React.MouseEvent, id: string, bandName: RpbBandName) => {
+    e.stopPropagation();
+    
+    // Se o componente clicado não está selecionado, seleciona ele (sozinho) antes de arrastar
+    if (!selectedIds.includes(id)) {
+      onSelectComponent(id, bandName, false);
+    }
+
+    dragInfo.current = { bandName, startX: e.clientX, startY: e.clientY };
+
+    const onMove = (ev: MouseEvent) => {
+      if (!dragInfo.current) return;
+      const dx = pxToMm(ev.clientX - dragInfo.current.startX);
+      const dy = pxToMm(ev.clientY - dragInfo.current.startY);
+      setDragOffset({ dx, dy });
+    };
+
+    const onUp = (ev: MouseEvent) => {
+      if (!dragInfo.current) return;
+
+      const dx = pxToMm(ev.clientX - dragInfo.current.startX);
+      const dy = pxToMm(ev.clientY - dragInfo.current.startY);
+
+      if (Math.abs(dx) > 0.3 || Math.abs(dy) > 0.3) {
+        // Aplica o movimento a TODOS os componentes selecionados (que estejam na mesma banda)
+        // Nota: O sistema atual suporta seleção multi-banda, mas o arrasto faz mais sentido na mesma banda.
+        // Vamos aplicar a todos os selecionados, independente da banda.
+        
+        onChange({
+          ...layout,
+          bands: Object.keys(layout.bands).reduce((acc, bName) => {
+            const band = layout.bands[bName as RpbBandName];
+            acc[bName as RpbBandName] = {
+              ...band,
+              components: band.components.map(c => 
+                selectedIds.includes(c.id) 
+                  ? { ...c, x: Math.max(0, c.x + dx), y: Math.max(0, c.y + dy) } 
+                  : c
+              )
+            };
+            return acc;
+          }, {} as any)
+        });
+      }
+
+      setDragOffset(null);
+      dragInfo.current = null;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
   };
 
   // id do primeiro selecionado (referência de alinhamento) — para mostrar badge amarelo
@@ -318,11 +371,12 @@ const RpbCanvas: React.FC<Props> = ({
               active={activeBand === name}
               selectedIds={selectedIds}       // passa TODOS os ids (cross-band)
               refId={refId}
+              dragOffset={dragOffset}
               pageW={pageW}
               onActivate={() => onSelectBand(name)}
               onSelectComp={onSelectComponent}
               onClearSelection={onClearSelection}
-              onMoveComp={(id, dx, dy) => handleMoveComp(name, id, dx, dy)}
+              onStartDragComp={handleStartDragComp}
               onResizeBand={newH => updateBand(name, { height: newH })}
             />
           ))}
@@ -333,3 +387,4 @@ const RpbCanvas: React.FC<Props> = ({
 };
 
 export default RpbCanvas;
+

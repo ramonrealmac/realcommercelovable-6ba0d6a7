@@ -7,8 +7,9 @@ import type { IRpbRelatorio, IRpbFiltro, IRpbConexao } from '../../types';
 import { rpbListFiltros, rpbExecuteQuery } from '../../services/rpbService';
 import { generateReportHtml } from '../renderer/rpbRenderer';
 import { emptyLayout } from '../../types';
-import { Play, Printer, Loader2, FileText, FileSpreadsheet, Monitor, X, Download } from 'lucide-react';
+import { Play, Printer, Loader2, FileText, FileSpreadsheet, Monitor, X, Download, Search } from 'lucide-react';
 import { toast } from 'sonner';
+import RpbSearchDialog from './RpbSearchDialog';
 
 interface Props {
   relatorio: IRpbRelatorio;
@@ -67,6 +68,7 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues }) =>
   const [showDestino, setShowDestino] = useState(false);
   const [previewHtml, setPreviewHtml] = useState<string>('');
   const [showPreviewInline, setShowPreviewInline] = useState(false);
+  const [searchFilter, setSearchFilter] = useState<IRpbFiltro | null>(null);
 
   useEffect(() => {
     if (relatorio.rpb_relatorio_id) {
@@ -224,6 +226,33 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues }) =>
         );
       }
 
+      case 'lista_dinamica': {
+        const val = valores[f.nome];
+        let label = 'Clique para selecionar...';
+        if (Array.isArray(val)) {
+          label = val.length > 0 ? `${val.length} selecionado(s)` : 'Clique para selecionar...';
+        } else if (val) {
+          label = String(val);
+        }
+
+        return (
+          <div className="flex gap-1">
+            <input 
+              readOnly 
+              value={label} 
+              className={cls + ' cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap'} 
+              onClick={() => setSearchFilter(f)} 
+            />
+            <button 
+              onClick={() => setSearchFilter(f)}
+              className="px-2 py-1.5 border border-border rounded bg-muted hover:bg-accent transition-colors"
+            >
+              <Search size={14} />
+            </button>
+          </div>
+        );
+      }
+
       default:
         return <input type="text" value={valores[f.nome] || ''} onChange={e => setVal(f.nome, e.target.value)} placeholder={f.label} className={cls} />;
     }
@@ -231,6 +260,29 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues }) =>
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {/* Diálogo de Busca Dinâmica */}
+      {searchFilter && (() => {
+        const [vField, lField, multiStr] = (searchFilter.opcoes_fixas || '').split(';');
+        return (
+          <RpbSearchDialog
+            open={!!searchFilter}
+            title={searchFilter.label}
+            onClose={() => setSearchFilter(null)}
+            sql={searchFilter.query_opcoes}
+            valueField={vField || 'id'}
+            labelField={lField || 'nome'}
+            multi={multiStr === 'true'}
+            onSelect={(rows) => {
+              const multi = multiStr === 'true';
+              if (multi) {
+                setVal(searchFilter.nome, rows.map(r => r[vField || 'id']));
+              } else {
+                setVal(searchFilter.nome, rows[0]?.[vField || 'id'] || '');
+              }
+            }}
+          />
+        );
+      })()}
       {/* Painel de filtros */}
       <div className="flex-shrink-0 border-b border-border bg-card p-4">
         <div className="flex items-center justify-between mb-3">

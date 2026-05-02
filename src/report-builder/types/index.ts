@@ -159,6 +159,7 @@ export interface RpbLayout {
     reportFooter:  RpbBand;
     pageFooter:    RpbBand;
   };
+  detailAltBgColor?: string;
 }
 
 export const BAND_LABELS: Record<RpbBandName, string> = {
@@ -196,6 +197,7 @@ export function emptyLayout(): RpbLayout {
       reportFooter: { ...emptyBand(10), visible: true },
       pageFooter:   emptyBand(10),
     },
+    detailAltBgColor: 'transparent',
   };
 }
 
@@ -221,7 +223,7 @@ export interface IRpbFiltro {
   empresa_id:       number;
   nome:             string;
   label:            string;
-  tipo:             'text' | 'date' | 'date_range' | 'number' | 'select' | 'boolean' | 'query_select';
+  tipo:             'text' | 'date' | 'date_range' | 'number' | 'select' | 'boolean' | 'query_select' | 'lista_dinamica';
   obrigatorio:      boolean;
   valor_padrao:     string;
   opcoes_fixas:     string;

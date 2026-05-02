@@ -51,6 +51,7 @@ const FILTRO_TIPOS = [
   { v: 'date_range',   l: 'Período (de/até)' },
   { v: 'number',       l: 'Número' },
   { v: 'select',       l: 'Lista Fixa' },
+  { v: 'lista_dinamica', l: 'Lista Dinâmica (Pesquisa)' },
   { v: 'boolean',      l: 'Sim/Não' },
 ];
 
@@ -89,6 +90,7 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
   const [mode, setMode]               = useState<'view'|'edit'|'insert'>(initialView ? 'view' : 'view');
   const [showHelp, setShowHelp]       = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [tempLayout, setTempLayout] = useState<RpbLayout | null>(null);
   const jasperInputRef = useRef<HTMLInputElement>(null);
   const rpbInputRef    = useRef<HTMLInputElement>(null);
 
@@ -682,6 +684,19 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
                       <input value={filtroForm.opcoes_fixas || ''} onChange={e => setFF('opcoes_fixas', e.target.value)} placeholder="Ativo|Inativo|Todos" className={inp} />
                     </div>
                   )}
+                  {filtroForm.tipo === 'lista_dinamica' && (
+                    <>
+                      <div className="col-span-2 md:col-span-3">
+                        <label className="text-[10px] text-muted-foreground font-bold uppercase">SQL de Pesquisa (SELECT ... FROM ...)</label>
+                        <textarea value={filtroForm.query_opcoes || ''} onChange={e => setFF('query_opcoes', e.target.value)} rows={3} placeholder="SELECT id, nome FROM produtos" className={inp + ' font-mono text-[10px]'} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground font-bold uppercase">Configurações (valor;label;multi)</label>
+                        <input value={filtroForm.opcoes_fixas || ''} onChange={e => setFF('opcoes_fixas', e.target.value)} placeholder="id;nome;true" className={inp} />
+                        <p className="text-[9px] text-muted-foreground mt-0.5">Ex: <strong>id;nome;true</strong> (multi) ou <strong>id;nome;false</strong> (único)</p>
+                      </div>
+                    </>
+                  )}
                   <div>
                     <label className="text-[10px] text-muted-foreground font-bold uppercase">Valor padrão</label>
                     <input value={filtroForm.valor_padrao || ''} onChange={e => setFF('valor_padrao', e.target.value)} className={inp} />
@@ -750,7 +765,7 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
                 relatorio={selected}
                 queryColumns={queryColumns}
                 onSave={handleSaveLayout}
-                onPreview={() => setView('execute')}
+                onPreview={(lay) => { setTempLayout(lay); setView('execute'); }}
               />
             </Suspense>
           </div>
@@ -758,7 +773,10 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
 
         {view === 'execute' && selected && (
           <div className="flex-1 overflow-hidden bg-card">
-            <RpbExecutor relatorio={selected} conexoes={conexoes} />
+            <RpbExecutor 
+              relatorio={tempLayout ? { ...selected, layout_json: tempLayout } : selected} 
+              conexoes={conexoes} 
+            />
           </div>
         )}
       </div>
@@ -790,11 +808,18 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
               </section>
 
               <section>
-                <h4 className="font-bold text-primary mb-1 uppercase text-xs">3. Parâmetros Automáticos</h4>
-                <p className="text-muted-foreground">Se o relatório estiver vinculado a uma tela, você pode capturar os dados do registro atual usando a sintaxe <code>&#123;&#123;nome_do_campo&#125;&#125;</code> na sua Query SQL.</p>
+                <h4 className="font-bold text-primary mb-1 uppercase text-xs">3. Parâmetros de Tela / Formulário</h4>
+                <p className="text-muted-foreground">
+                  Quando um relatório é aberto através do botão <strong>Imprimir</strong> de um formulário (ex: Pedidos), o sistema passa automaticamente <strong>todos os campos</strong> do registro atual como parâmetros.
+                </p>
+                <p className="text-muted-foreground mt-1">Capture esses valores na sua Query SQL usando a sintaxe <code>&#123;&#123;nome_do_campo&#125;&#125;</code>:</p>
                 <div className="bg-secondary/40 p-2 rounded font-mono text-[11px] border border-border mt-1">
+                  -- Exemplo em PedidoForm:<br/>
                   SELECT * FROM movimento WHERE movimento_id = &#123;&#123;movimento_id&#125;&#125;
                 </div>
+                <p className="text-[10px] text-slate-500 mt-1 italic">
+                  * Dica: Se o relatório for chamado avulsamente (pelo menu), os filtros configurados na aba <strong>Filtros</strong> serão exibidos para preenchimento.
+                </p>
               </section>
 
               <section>
@@ -803,40 +828,57 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
               </section>
 
               <section>
-                <h4 className="font-bold text-primary mb-1 uppercase text-xs">5. Designer e Layout</h4>
-                <p className="text-muted-foreground">Use o <strong>Designer</strong> para criar o visual do relatório. Você pode arrastar campos da query para as bandas (Cabeçalho, Detalhe, Rodapé). O sistema suporta até 2 níveis de agrupamento com totalizadores automáticos.</p>
+                <h4 className="font-bold text-blue-600 mb-1 uppercase text-xs">5. Lista Dinâmica (Pesquisa)</h4>
+                <p className="text-muted-foreground">
+                  O tipo <strong>Lista Dinâmica</strong> permite abrir uma tela de pesquisa para selecionar registros.
+                </p>
+                <div className="bg-blue-50 border border-blue-100 p-2 rounded mt-1 space-y-1">
+                  <p className="text-[10px] font-bold text-blue-700 uppercase">Como configurar:</p>
+                  <ul className="text-[11px] text-blue-800 space-y-0.5 list-disc list-inside">
+                    <li><strong>SQL de Pesquisa:</strong> A query que popula a busca (ex: <code>SELECT id, nome FROM clientes</code>)</li>
+                    <li><strong>Configurações:</strong> Informe <code>campo_id;campo_exibicao;multi</code></li>
+                    <li><strong>Ex:</strong> <code>id;nome;true</code> (permite selecionar vários e retorna 1,2,3)</li>
+                  </ul>
+                  <p className="text-[10px] text-blue-700 italic">Na query principal use: <code>WHERE cliente_id IN (&#123;&#123;meu_filtro_cliente&#125;&#125;)</code></p>
+                </div>
               </section>
 
               <section>
-                <h4 className="font-bold text-indigo-600 mb-1 uppercase text-xs">6. Importar do Jasper Reports (.jrxml)</h4>
-                <p className="text-muted-foreground mb-2">
-                  Na aba <strong>Query SQL</strong>, em modo de edição, clique em <strong>"Importar Jasper"</strong> e selecione um arquivo <code>.jrxml</code> exportado do iReport / Jasper Studio.
-                  O sistema irá automaticamente:
+                <h4 className="font-bold text-primary mb-1 uppercase text-xs">6. Designer e Layout</h4>
+                <p className="text-muted-foreground">Use o <strong>Designer</strong> para criar o visual. Você conta com <strong>arrasto fluido</strong> (vê o campo se mexer em tempo real) e suporte a multi-seleção para mover grupos de campos.</p>
+              </section>
+
+              <section>
+                <h4 className="font-bold text-pink-600 mb-1 uppercase text-xs">7. Estética e Zebrado</h4>
+                <p className="text-muted-foreground">
+                  Na aba <strong>Página</strong>, você pode configurar o **Zebrado** da banda de detalhe. 
                 </p>
-                <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside ml-2">
-                  <li>Extrair a query SQL do elemento <code>&lt;queryString&gt;</code></li>
-                  <li>Remover prefixos de banco/schema da SQL (<code>dbo.tabela</code>, <code>public.tabela</code>, <code>banco.dbo.tabela</code> → <code>tabela</code>)</li>
-                  <li>Listar os campos (<code>&lt;field&gt;</code>) detectados no arquivo</li>
+                <div className="bg-pink-50 border border-pink-100 p-2 rounded mt-1 text-[11px] text-pink-800">
+                  Defina a <strong>Cor Padrão</strong> e a <strong>Cor Alternada</strong>. O sistema aplicará o fundo colorido automaticamente em todas as linhas pares do relatório, melhorando a leitura.
+                </div>
+              </section>
+
+              <section>
+                <h4 className="font-bold text-amber-600 mb-1 uppercase text-xs">8. Atalhos de Produtividade</h4>
+                <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside ml-1">
+                  <li><strong>Setas (Teclado):</strong> Movem os campos selecionados de 1 em 1mm.</li>
+                  <li><strong>Shift + Setas:</strong> Redimensionam (largura/altura) os campos.</li>
+                  <li><strong>Ctrl + Clique:</strong> Seleciona múltiplos componentes.</li>
+                  <li><strong>Esc:</strong> Limpa a seleção atual.</li>
                 </ul>
-                <p className="text-xs text-amber-700 bg-amber-50 rounded p-2 mt-2">
-                  ⚠️ O <strong>posicionamento dos campos</strong> não é importado automaticamente, pois o Jasper usa coordenadas absolutas. Após importar a query, use o <strong>Designer</strong> para montar o layout.
+              </section>
+
+              <section>
+                <h4 className="font-bold text-indigo-600 mb-1 uppercase text-xs">9. Importar do Jasper Reports (.jrxml)</h4>
+                <p className="text-muted-foreground mb-2">
+                  Na aba <strong>Query SQL</strong>, em modo de edição, clique em <strong>"Importar Jasper"</strong> para extrair a query SQL de arquivos <code>.jrxml</code>.
                 </p>
               </section>
 
               <section>
-                <h4 className="font-bold text-amber-600 mb-1 uppercase text-xs">7. Exportar / Importar formato nativo (.rpb)</h4>
+                <h4 className="font-bold text-slate-600 mb-1 uppercase text-xs">10. Exportar / Importar (.rpb)</h4>
                 <p className="text-muted-foreground mb-2">
-                  Use os botões <strong>"Exportar .rpb"</strong> e <strong>"Importar .rpb"</strong> na barra de ferramentas da lista de relatórios para fazer backup ou migrar relatórios entre ambientes.
-                </p>
-                <p className="text-xs text-muted-foreground mb-1">O arquivo <code>.rpb</code> é um JSON que contém <strong>tudo</strong>:</p>
-                <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside ml-2">
-                  <li>Nome, descrição, categoria e vínculo com formulário</li>
-                  <li>Query SQL completa</li>
-                  <li>Layout visual (bandas, componentes, estilos, agrupamentos)</li>
-                  <li>Todos os filtros configurados (tipo, rótulo, valor padrão)</li>
-                </ul>
-                <p className="text-xs text-emerald-700 bg-emerald-50 rounded p-2 mt-2">
-                  ✓ Ao importar, o relatório é criado com o sufixo <strong>"(importado)"</strong> no nome para evitar conflitos. Renomeie após a importação se necessário.
+                  Use os botões <strong>"Exportar .rpb"</strong> e <strong>"Importar .rpb"</strong> para fazer backup completo (SQL + Layout + Filtros).
                 </p>
               </section>
             </div>

@@ -22,7 +22,7 @@ interface Props {
   relatorio: IRpbRelatorio;
   queryColumns: string[];
   onSave: (layout: RpbLayout) => Promise<void>;
-  onPreview: () => void;
+  onPreview: (layout: RpbLayout) => void;
 }
 
 const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent, onSave, onPreview }) => {
@@ -488,7 +488,7 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
 
         <div className="w-px h-5 bg-border mx-1" />
 
-        <button onClick={onPreview}
+        <button onClick={() => onPreview(layout)}
           className="flex items-center gap-1 px-3 py-1.5 text-xs rounded bg-secondary hover:bg-secondary/80 border border-border">
           <Eye className="w-3.5 h-3.5" /> Preview
         </button>
@@ -754,6 +754,53 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
       {/* ── Configurações da página ─────────────────────────── */}
       {activeTab === 'page' && (
         <div className="p-4 border-b border-border bg-card flex-shrink-0 overflow-auto">
+          <div className="mb-6 bg-blue-50 border border-blue-100 rounded-lg p-4">
+            <p className="text-[10px] text-blue-700 font-bold uppercase mb-3 flex items-center gap-1">
+              🎨 Zebrado da Banda de Detalhe
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] text-muted-foreground font-semibold uppercase block mb-1">Cor Padrão</label>
+                <div className="flex gap-2">
+                  <input type="color" 
+                    value={layout.bands.detail.bgColor === 'transparent' ? '#ffffff' : layout.bands.detail.bgColor}
+                    onChange={e => setLayout(p => ({
+                      ...p,
+                      bands: { ...p.bands, detail: { ...p.bands.detail, bgColor: e.target.value } },
+                    }))}
+                    className="w-8 h-8 rounded border border-border cursor-pointer bg-white" 
+                  />
+                  <input type="text" 
+                    value={layout.bands.detail.bgColor}
+                    onChange={e => setLayout(p => ({
+                      ...p,
+                      bands: { ...p.bands, detail: { ...p.bands.detail, bgColor: e.target.value } },
+                    }))}
+                    className="flex-1 border border-border rounded px-2 py-1 text-xs bg-white" 
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground font-semibold uppercase block mb-1">Cor Alternada (Zebrado)</label>
+                <div className="flex gap-2">
+                  <input type="color" 
+                    value={layout.detailAltBgColor === 'transparent' ? '#f1f5f9' : (layout.detailAltBgColor || '#f1f5f9')}
+                    onChange={e => setLayout(p => ({ ...p, detailAltBgColor: e.target.value }))}
+                    className="w-8 h-8 rounded border border-border cursor-pointer bg-white" 
+                  />
+                  <input type="text" 
+                    value={layout.detailAltBgColor || 'transparent'}
+                    onChange={e => setLayout(p => ({ ...p, detailAltBgColor: e.target.value }))}
+                    className="flex-1 border border-border rounded px-2 py-1 text-xs bg-white" 
+                  />
+                </div>
+              </div>
+            </div>
+            <p className="text-[9px] text-blue-600 mt-2 italic">
+              * Dica: As cores escolhidas aqui serão alternadas automaticamente nas linhas do relatório.
+            </p>
+          </div>
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div>
               <label className="text-[10px] text-muted-foreground font-semibold uppercase">Tamanho</label>
@@ -804,6 +851,7 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
               ))}
             </div>
           </div>
+
         </div>
       )}
 
