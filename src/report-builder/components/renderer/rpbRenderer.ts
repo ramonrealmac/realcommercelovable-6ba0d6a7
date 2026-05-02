@@ -10,12 +10,22 @@ import type {
 } from '../../types';
 import { formatValue, DEFAULT_STYLE } from '../../types';
 
+function getFieldValue(row: Record<string, any>, field: string): any {
+  if (row[field] !== undefined) return row[field];
+  // Case-insensitive lookup
+  const lowerField = field.toLowerCase();
+  for (const [k, v] of Object.entries(row)) {
+    if (k.toLowerCase() === lowerField) return v;
+  }
+  return undefined;
+}
+
 // ── Calcula totais de um dataset ──────────────────────────────
 function calcTotals(data: any[], columns: RpbTableColumn[]): Record<string, number> {
   const totals: Record<string, number> = {};
   for (const col of columns) {
     if (col.totalType === 'none') continue;
-    const vals = data.map(r => Number(r[col.field] || 0));
+    const vals = data.map(r => Number(getFieldValue(r, col.field) || 0));
     if (col.totalType === 'sum')   totals[col.field] = vals.reduce((a, b) => a + b, 0);
     if (col.totalType === 'avg')   totals[col.field] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
     if (col.totalType === 'count') totals[col.field] = vals.length;
@@ -27,7 +37,7 @@ function calcTotals(data: any[], columns: RpbTableColumn[]): Record<string, numb
 
 // ── Calcula totalizer ─────────────────────────────────────────
 function calcTotalizer(comp: RpbTotalizerComp, data: any[]): number {
-  const vals = data.map(r => Number(r[comp.field] || 0));
+  const vals = data.map(r => Number(getFieldValue(r, comp.field) || 0));
   if (!vals.length) return 0;
   switch (comp.operation) {
     case 'sum':   return vals.reduce((a, b) => a + b, 0);
@@ -76,29 +86,31 @@ function resolveText(
       valStr = formatValue(v, opts.format, { decimals: opts.decimals, dateFormat: opts.dateFormat });
     }
 
-    out = out.split(`{{${k}}}`).join(valStr);
-    out = out.split(`{${k}}`).join(valStr);
+    const escapedK = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\\{{1,2}\\s*${escapedK}\\s*\\}{1,2}`, 'gi');
+    out = out.replace(regex, () => valStr);
   }
 
-  // Variáveis de sistema — aplica máscara de data se configurada
+  // Variáveis de sistema
   const now = new Date();
   const dateFmt = opts?.dateFormat || 'dd/mm/yyyy';
-  const dataBR  = formatDateWithMask(now, dateFmt);
+  const dataBR = formatDateWithMask(now, dateFmt);
   const dataBRDefault = now.toLocaleDateString('pt-BR');
   const horaBR  = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  const horaBRFull = now.toLocaleTimeString('pt-BR');
+  const sysVarsMap: Record<string, any> = {
+    data: dataBR,
+    hora: now.toLocaleTimeString('pt-BR'),
+    data_emissao: dataBR,
+    hora_emissao: horaBR,
+    datetime_emissao: `${dataBRDefault} ${horaBR}`,
+  };
 
-  // {data} e {data_emissao} respeitam a máscara configurada no componente
-  out = out.split('{data}').join(dataBR)
-           .split('{{data}}').join(dataBR)
-           .split('{data_emissao}').join(dataBR)
-           .split('{{data_emissao}}').join(dataBR)
-           .split('{hora}').join(horaBRFull)
-           .split('{{hora}}').join(horaBRFull)
-           .split('{hora_emissao}').join(horaBR)
-           .split('{{hora_emissao}}').join(horaBR)
-           .split('{datetime_emissao}').join(`${dataBRDefault} ${horaBR}`)
-           .split('{{datetime_emissao}}').join(`${dataBRDefault} ${horaBR}`);
+  // Aplica substituição de sistema (usando o mesmo motor robusto)
+  for (const [k, v] of Object.entries(sysVarsMap)) {
+    const escapedK = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\\{{1,2}\\s*${escapedK}\\s*\\}{1,2}`, 'gi');
+    out = out.replace(regex, () => String(v ?? ''));
+  }
 
   return out;
 }
@@ -143,7 +155,14 @@ function renderComponent(
       const c = comp as RpbTextComp;
       const txt = resolveText(c.content, row, extraVars, { format: c.format, dateFormat: c.dateFormat, decimals: c.decimals });
       const s = c.style || DEFAULT_STYLE;
-      return `<div style="${pos} ${textStyle(s)}">${txt}</div>`;
+      const border = s.border === 'none' ? 'border:none;'
+        : s.border === 'all' ? `border:1px solid ${s.borderColor};`
+        : `border-${s.border}:1px solid ${s.borderColor};`;
+      const bgStyle = s.bgColor !== 'transparent' ? `background-color:${s.bgColor};` : '';
+      const justify = s.align === 'center' ? 'center' : s.align === 'right' ? 'flex-end' : 'flex-start';
+      return `<div style="${pos} display:flex; align-items:center; justify-content:${justify}; ${bgStyle} ${border} padding:${s.padding}px; font-size:${s.fontSize}pt; ${
+        s.bold ? 'font-weight:bold;' : ''}${ s.italic ? 'font-style:italic;' : ''}${
+        s.underline ? 'text-decoration:underline;' : ''} color:${s.color}; white-space:nowrap;">${txt}</div>`;
     }
 
     case 'image': {
@@ -177,9 +196,13 @@ function renderComponent(
       const c = comp as RpbTotalizerComp;
       const val = calcTotalizer(c, data);
       const s = c.style || DEFAULT_STYLE;
-      return `<div style="${pos} display:flex;align-items:center;gap:4px;${textStyle(s)}">
-        <span style="color:#666">${c.labelText}</span>
-        <span style="font-weight:bold">${formatValue(val, c.format, { decimals: (c as any).decimals, dateFormat: (c as any).dateFormat as RpbDateFormat })}</span>
+      const justify = s.align === 'center' ? 'center' : s.align === 'right' ? 'flex-end' : 'flex-start';
+      const bgStyle = s.bgColor !== 'transparent' ? `background-color:${s.bgColor};` : '';
+      const formattedVal = formatValue(val, c.format, { decimals: (c as any).decimals, dateFormat: (c as any).dateFormat as RpbDateFormat });
+      return `<div style="${pos} display:flex; align-items:center; justify-content:${justify}; gap:4px; ${bgStyle} font-size:${s.fontSize}pt; ${
+        s.bold ? 'font-weight:bold;' : ''} color:${s.color};">
+        <span style="color:#555;">${c.labelText}</span>
+        <span style="font-weight:bold;">${formattedVal}</span>
       </div>`;
     }
 
@@ -226,7 +249,7 @@ function renderComponent(
                   color:${colColor};
                   border:1px solid #e5e7eb;
                   box-sizing:border-box;">
-                  ${formatValue(row[col.field], col.format, { decimals: (col as any).decimals, dateFormat: (col as any).dateFormat as RpbDateFormat })}
+                  ${formatValue(getFieldValue(row, col.field), col.format, { decimals: (col as any).decimals, dateFormat: (col as any).dateFormat as RpbDateFormat })}
                 </td>`;
               }).join('')}
             </tr>`;
@@ -244,7 +267,7 @@ function renderComponent(
         </tfoot>` : '';
 
       // Tabela renderizada fora do position:absolute para fluir com o conteúdo
-      return `<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:${tableFontSize}pt;">
+      return `<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:${tableFontSize}pt;background-color:#ffffff;">
           <colgroup>${colWidths}</colgroup>
           ${thead}${tbody}${tfoot}
         </table>`;
@@ -392,27 +415,26 @@ export function generateReportHtml(
   const pageStyle = `
     @page {
       size: ${layout.pageSize} ${layout.orientation};
-      margin: ${top}mm ${right}mm ${bottom}mm ${left}mm;
+      margin: 0;
     }
     @media print {
-      body { margin: 0; padding: 0; background: #fff !important; }
-      .rpb-page-header { position: running(pageHeader); }
-      .rpb-page-footer { position: running(pageFooter); }
+      body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+      .rpb-margin-wrap { padding: ${top}mm ${right}mm ${bottom}mm ${left}mm !important; }
       tr { page-break-inside: avoid; }
     }
     * { box-sizing: border-box; }
-    html {
-      background: #ffffff;
-    }
-    body {
-      font-family: Arial, sans-serif;
-      font-size: 9pt;
-      color: #1a1a1a;
+    html, body {
       background: #ffffff;
       margin: 0;
-      padding: ${top}mm ${right}mm ${bottom}mm ${left}mm;
-      print-color-adjust: exact;
+      padding: 0;
+      font-family: 'Inter', Arial, sans-serif;
+      font-size: 9pt;
+      color: #1a1a1a;
       -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .rpb-margin-wrap {
+      padding: ${top}mm ${right}mm ${bottom}mm ${left}mm;
     }
     table { border-collapse: collapse; }
     td, th { word-break: break-word; }
@@ -437,6 +459,6 @@ export function generateReportHtml(
   <title>Relatório</title>
   <style>${pageStyle}</style>
 </head>
-<body>${body}</body>
+<body><div class="rpb-margin-wrap">${body}</div></body>
 </html>`;
 }

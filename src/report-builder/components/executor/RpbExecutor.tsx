@@ -151,21 +151,37 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
   // para evitar que apareca por tras do dialogo de impressao
   const openPrintWindow = (htmlContent: string, autoPrint: boolean) => {
     // Injeta CSS que oculta o corpo no modo tela
-    const printReadyHtml = htmlContent.replace(
-      '</style>',
-      `  @media screen {
+    // Injeta CSS e Scripts de forma robusta
+    const styles = `
+      @media screen {
         body > * { visibility: hidden !important; }
-        #rpb-aguarde { visibility: visible !important; position: fixed; inset: 0; display: flex !important; flex-direction: column; align-items: center; justify-content: center; background: #fff; font-family: Arial, sans-serif; z-index: 9999; }
+        #rpb-aguarde { 
+          visibility: visible !important; 
+          position: fixed; inset: 0; 
+          display: flex !important; flex-direction: column; align-items: center; justify-content: center; 
+          background: #ffffff; font-family: 'Inter', Arial, sans-serif; z-index: 99999; 
+        }
       }
       @media print {
         #rpb-aguarde { display: none !important; }
         body > * { visibility: visible !important; }
       }
-    </style>`
-    ).replace(
-      '<body>',
-      `<body><div id="rpb-aguarde"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg><div style="font-size:16px;color:#1e40af;margin:12px 0 4px;font-weight:bold">Preparando impressao...</div><div style="font-size:13px;color:#666">O dialogo de impressao sera aberto em instantes.</div></div>`
-    );
+    `;
+    
+    let printReadyHtml = htmlContent;
+    if (printReadyHtml.includes('</head>')) {
+      printReadyHtml = printReadyHtml.replace('</head>', `<style>${styles}</style></head>`);
+    } else if (printReadyHtml.includes('</style>')) {
+      printReadyHtml = printReadyHtml.replace('</style>', `</style><style>${styles}</style>`);
+    }
+
+    const waitHtml = `<div id="rpb-aguarde">
+      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+      <div style="font-size:16px;color:#1e40af;margin:12px 0 4px;font-weight:bold">Preparando impressão...</div>
+      <div style="font-size:13px;color:#666">O diálogo de impressão será aberto em instantes.</div>
+    </div>`;
+
+    printReadyHtml = printReadyHtml.replace('<body>', `<body>${waitHtml}`);
 
     const win = window.open('', '_blank', 'width=900,height=700');
     if (!win) { toast.error('Popup bloqueado. Habilite popups para imprimir.'); return; }
@@ -173,6 +189,86 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
     win.document.close();
     win.focus();
     if (autoPrint) setTimeout(() => win.print(), 700);
+  };
+
+  // ── Gera PDF e abre automaticamente numa nova aba ─────────
+  const openPdfWindow = async (htmlContent: string) => {
+    const loadingToast = toast.loading('Gerando PDF...');
+    try {
+      // Carrega html2pdf.js do CDN se ainda não estiver carregado
+      if (!(window as any).html2pdf) {
+        await new Promise<void>((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+          script.onload = () => resolve();
+          script.onerror = () => reject(new Error('Falha ao carregar html2pdf.js'));
+          document.head.appendChild(script);
+        });
+      }
+
+      // Cria iframe invisível para renderizar o HTML
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:210mm;height:297mm;border:none;visibility:hidden;';
+      document.body.appendChild(iframe);
+
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (!iframeDoc) throw new Error('Não foi possível criar o documento de renderização.');
+      iframeDoc.open();
+      iframeDoc.write(htmlContent);
+      iframeDoc.close();
+
+      // Aguarda imagens carregarem
+      await new Promise(r => setTimeout(r, 800));
+
+      const currentLayout = layout || relatorio.layout_json;
+      const pageSize = (currentLayout as any)?.pageSize?.toLowerCase() || 'a4';
+      const orientation = (currentLayout as any)?.orientation || 'portrait';
+      const margins = (currentLayout as any)?.margins || { top: 10, right: 10, bottom: 10, left: 10 };
+
+      // Remove o padding do wrapper para evitar margem dupla no PDF
+      // (html2pdf aplica as margens via sua própria opção 'margin')
+      const pdfHtml = htmlContent.replace(
+        /\.rpb-margin-wrap\s*\{[^}]*\}/g,
+        '.rpb-margin-wrap { padding: 0 !important; }'
+      );
+      iframeDoc.open();
+      iframeDoc.write(pdfHtml);
+      iframeDoc.close();
+      await new Promise(r => setTimeout(r, 500));
+
+      const pdfBlob: Blob = await (window as any).html2pdf()
+        .set({
+          // [top, right, bottom, left] em mm — usa as margens salvas no layout
+          margin: [margins.top, margins.right, margins.bottom, margins.left],
+          filename: `${relatorio.nome}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+          jsPDF: { unit: 'mm', format: pageSize, orientation },
+        })
+        .from(iframeDoc.body)
+        .outputPdf('blob');
+
+      document.body.removeChild(iframe);
+
+      // Abre o PDF numa nova aba
+      const url = URL.createObjectURL(pdfBlob);
+      const tab = window.open(url, '_blank');
+      if (!tab) {
+        // Fallback: download direto
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${relatorio.nome}.pdf`;
+        a.click();
+      }
+      // Libera a URL após 60s
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+      toast.dismiss(loadingToast);
+      toast.success('PDF gerado e aberto com sucesso!');
+    } catch (err: any) {
+      toast.dismiss(loadingToast);
+      toast.error('Erro ao gerar PDF: ' + (err?.message || err));
+    }
   };
 
   // ── Acoes por destino ────────────────────────────────────
@@ -183,7 +279,7 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
       setPreviewHtml(html);
       setShowPreviewInline(true);
     }
-    if (dest === 'pdf') openPrintWindow(html, true);
+    if (dest === 'pdf') openPdfWindow(html);
     if (dest === 'excel') exportCsv(data, relatorio.nome);
     if (dest === 'txt')   exportTxt(data, relatorio.nome);
   };

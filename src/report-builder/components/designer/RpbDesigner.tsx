@@ -57,12 +57,13 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
     });
   };
 
-  // Sincroniza layout quando relatório muda
+  // Sincroniza layout quando relatório muda (id ou layout salvo externamente)
   useEffect(() => {
     setLayout(relatorio.layout_json || emptyLayout());
     setActiveBand(null);
     setSelectedIds([]);
-  }, [relatorio.rpb_relatorio_id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [relatorio.rpb_relatorio_id, JSON.stringify(relatorio.layout_json?.margins)]);
 
   // ── Auto-detecta colunas ao abrir o designer ──────────────
   // Usa LIMIT 1 para ser rápido — não filtra por parâmetros
@@ -77,7 +78,13 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
       setDetecting(true);
       // Remove cláusulas com {{variaveis}} ou {variaveis} não preenchidas 
       // Substituímos por NULL para tentar manter a sintaxe SQL válida
-      const safeSql = relatorio.query_sql.replace(/\{{1,2}[^}]+\}{1,2}/g, 'NULL');
+      // Tenta substituir variáveis por '1' (para IDs numéricos comuns) ou 'NULL'
+      // Isso aumenta a chance de a query retornar ao menos 1 registro para detecção de colunas
+      const safeSql = relatorio.query_sql.replace(/\{{1,2}([\s\S]+?)\}{1,2}/g, (match, name) => {
+        const n = name.trim().toLowerCase();
+        if (n.includes('id') || n.includes('codigo') || n.includes('num')) return '1';
+        return 'NULL';
+      });
       // Usamos WHERE 1=0 para obter apenas o esquema sem processar dados
       const limitedSql = `SELECT * FROM (${safeSql}) __rpb_detect__ WHERE 1=0`;
       const { data, error } = await rpbExecuteQuery(limitedSql, {});
@@ -101,12 +108,19 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
   const handleDetectColumns = async () => {
     if (!relatorio.query_sql?.trim()) { toast.warning('Query SQL vazia — salve a query antes.'); return; }
     setDetecting(true);
-    const safeSql = relatorio.query_sql.replace(/\{{1,2}[^}]+\}{1,2}/g, 'NULL');
+    const safeSql = relatorio.query_sql.replace(/\{{1,2}([\s\S]+?)\}{1,2}/g, (match, name) => {
+      const n = name.trim().toLowerCase();
+      if (n.includes('id') || n.includes('codigo') || n.includes('num')) return '1';
+      return 'NULL';
+    });
     const limitedSql = `SELECT * FROM (${safeSql}) __rpb_detect__ LIMIT 1`;
     const { data, error } = await rpbExecuteQuery(limitedSql, {});
     setDetecting(false);
     if (error) { toast.error('Erro ao detectar colunas: ' + error); return; }
-    if (data.length === 0) { toast.warning('Query não retornou dados. Verifique a SQL.'); return; }
+    if (data.length === 0) { 
+      toast.warning('A query não retornou dados com os valores padrão (NULL). Para detectar as colunas, tente adicionar "OR 1=1" na sua cláusula WHERE temporariamente ou use valores fixos para teste.'); 
+      return; 
+    }
     const cols = Object.keys(data[0]);
     setQueryColumns(cols);
     toast.success(`${cols.length} coluna(s) detectada(s): ${cols.slice(0, 6).join(', ')}${cols.length > 6 ? '...' : ''}`);

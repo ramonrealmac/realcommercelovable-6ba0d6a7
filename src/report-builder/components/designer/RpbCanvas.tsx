@@ -24,10 +24,10 @@ interface Props {
 const CompItem: React.FC<{
   comp: RpbComponent;
   selected: boolean;
-  isRef: boolean;       // true = primeiro selecionado (referência de alinhamento)
+  isRef: boolean;
   dragOffset: { dx: number; dy: number } | null;
   onSelect: (multi: boolean) => void;
-  onStartDrag: (e: React.MouseEvent) => void;
+  onStartDrag: (e: React.MouseEvent, ctrlKey: boolean) => void;
 }> = ({ comp, selected, isRef, dragOffset, onSelect, onStartDrag }) => {
   const moved = useRef(false);
 
@@ -83,6 +83,7 @@ const CompItem: React.FC<{
         padding: `${s?.padding || 2}px`,
         width: '100%', height: '100%',
         display: 'flex', alignItems: 'center',
+        justifyContent: s?.align === 'center' ? 'center' : s?.align === 'right' ? 'flex-end' : 'flex-start',
         whiteSpace: 'nowrap', overflow: 'hidden',
       }}>
         {(comp as any).content || <span className="text-muted-foreground text-xs italic">Texto</span>}
@@ -97,7 +98,11 @@ const CompItem: React.FC<{
   } else if (comp.type === 'totalizer') {
     inner = (
       <div className="flex items-center w-full h-full px-1 gap-1 text-xs font-bold"
-        style={{ color: s?.color || '#1a1a1a', fontSize: `${s?.fontSize || 9}pt` }}>
+        style={{ 
+          color: s?.color || '#1a1a1a', 
+          fontSize: `${s?.fontSize || 9}pt`,
+          justifyContent: s?.align === 'center' ? 'center' : s?.align === 'right' ? 'flex-end' : 'flex-start'
+        }}>
         <span className="text-muted-foreground">{(comp as any).labelText || 'Total'}</span>
         <span className="text-primary">Σ {(comp as any).field || '—'}</span>
       </div>
@@ -136,7 +141,8 @@ const CompItem: React.FC<{
       style={style} 
       onMouseDown={(e) => {
         moved.current = false;
-        onStartDrag(e);
+        const isMulti = e.ctrlKey || e.metaKey;
+        onStartDrag(e, isMulti);
       }}
       onClick={(e) => {
         if (!moved.current) {
@@ -172,7 +178,7 @@ const BandRow: React.FC<{
   onActivate: () => void;
   onSelectComp: (id: string, bandName: RpbBandName, multi: boolean) => void;
   onClearSelection: () => void;
-  onStartDragComp: (e: React.MouseEvent, id: string, bandName: RpbBandName) => void;
+  onStartDragComp: (e: React.MouseEvent, id: string, bandName: RpbBandName, ctrlKey: boolean) => void;
   onResizeBand: (newH: number) => void;
 }> = ({ name, band, active, selectedIds, refId, dragOffset, pageW, onActivate, onSelectComp, onClearSelection, onStartDragComp, onResizeBand }) => {
   const resizing = useRef(false);
@@ -243,7 +249,7 @@ const BandRow: React.FC<{
               isRef={refId === comp.id}
               dragOffset={dragOffset}
               onSelect={(multi) => onSelectComp(comp.id, name, multi)}
-              onStartDrag={(e) => onStartDragComp(e, comp.id, name)}
+              onStartDrag={(e, ctrlKey) => onStartDragComp(e, comp.id, name, ctrlKey)}
             />
           ))}
         </div>
@@ -283,11 +289,12 @@ const RpbCanvas: React.FC<Props> = ({
     });
   };
 
-  const handleStartDragComp = (e: React.MouseEvent, id: string, bandName: RpbBandName) => {
+  const handleStartDragComp = (e: React.MouseEvent, id: string, bandName: RpbBandName, ctrlKey: boolean) => {
     e.stopPropagation();
-    
-    // Se o componente clicado não está selecionado, seleciona ele (sozinho) antes de arrastar
-    if (!selectedIds.includes(id)) {
+
+    // Se Ctrl não está pressionado e o componente não está selecionado, seleciona-o sozinho
+    // Se Ctrl está pressionado, não alteramos a seleção aqui — o onClick cuidará disso
+    if (!ctrlKey && !selectedIds.includes(id)) {
       onSelectComponent(id, bandName, false);
     }
 

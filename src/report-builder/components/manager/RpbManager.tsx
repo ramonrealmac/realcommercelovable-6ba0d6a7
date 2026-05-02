@@ -70,7 +70,7 @@ interface IProps {
 }
 
 const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
-  const { XEmpresaId, closeTab, XTabs, XActiveTabId, openTab } = useAppContext();
+  const { XEmpresaId, closeTab, XTabs, XActiveTabId, openTab, XLogomarca } = useAppContext();
 
   const [view, setView]               = useState<TView>(initialView || 'list');
   const [relatorios, setRelatorios]   = useState<IRpbRelatorio[]>([]);
@@ -316,7 +316,12 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
     if (!selected) return;
     const { error } = await rpbSaveLayout(selected.rpb_relatorio_id, layout);
     if (error) toast.error('Erro ao salvar layout.');
-    else { toast.success('Layout salvo!'); await load(); }
+    else {
+      toast.success('Layout salvo!');
+      // Atualiza localmente para manter sincronia (useEffect do designer depende de layout_json)
+      setSelected(prev => prev ? { ...prev, layout_json: layout } : prev);
+      load();
+    }
   };
 
   // ── Filtros CRUD ─────────────────────────────────────────
@@ -408,7 +413,12 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
             Designer
           </button>
           <button
-            onClick={() => selected && setView('execute')}
+            onClick={() => {
+              if (selected) {
+                setTempLayout(null);
+                setView('execute');
+              }
+            }}
             disabled={!selected}
             className={`px-4 py-2 text-xs font-bold uppercase tracking-wide border-b-2 transition-all whitespace-nowrap ${
               view === 'execute' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'

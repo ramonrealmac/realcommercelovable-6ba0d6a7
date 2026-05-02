@@ -86,8 +86,18 @@ export async function rpbExecuteQuery(
         ? `'${value.replace(/'/g, "''")}'`
         : value === null || value === undefined ? 'NULL' : String(value);
     }
-    finalSql = finalSql.split(`{{${key}}}`).join(escaped);
+    
+    // Suporta {{key}}, {key}, {{ key }} e { key }
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\\{{1,2}\\s*${escapedKey}\\s*\\}{1,2}`, 'gi');
+    finalSql = finalSql.replace(regex, () => escaped);
   }
+
+  // Cleanup final: substitui qualquer variável restante por NULL para evitar erro de sintaxe no Postgres
+  // Isso é vital para quando a query é testada no Manager ou colunas são detectadas no Designer
+  finalSql = finalSql.replace(/\{{1,2}[\s\S]+?\}{1,2}/g, 'NULL');
+
+  console.log('DEBUG RPB SQL:', finalSql);
 
   // Conexão externa (via API bridge)
   if (conexao?.url) {
