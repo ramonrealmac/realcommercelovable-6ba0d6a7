@@ -62,18 +62,22 @@ function resolveText(
   content: string,
   row: Record<string, any> = {},
   extraVars: Record<string, any> = {},
-  opts?: { dateFormat?: RpbDateFormat; decimals?: number }
+  opts?: { format?: RpbFormat; dateFormat?: RpbDateFormat; decimals?: number }
 ): string {
   let out = content;
   const allVars = { ...row, ...extraVars };
 
-  // Substitui {{campo}} primeiro (dois pares de chaves)
+  // Substitui variáveis do dataset e extras
   for (const [k, v] of Object.entries(allVars)) {
-    out = out.split(`{{${k}}}`).join(String(v ?? ''));
-  }
-  // Depois substitui {campo} (par simples de chaves)
-  for (const [k, v] of Object.entries(allVars)) {
-    out = out.split(`{${k}}`).join(String(v ?? ''));
+    let valStr = String(v ?? '');
+
+    // Se houver um formato definido (ex: número/moeda), tenta formatar o valor da variável
+    if (opts?.format && opts.format !== 'text' && v !== null && v !== undefined && v !== '') {
+      valStr = formatValue(v, opts.format, { decimals: opts.decimals, dateFormat: opts.dateFormat });
+    }
+
+    out = out.split(`{{${k}}}`).join(valStr);
+    out = out.split(`{${k}}`).join(valStr);
   }
 
   // Variáveis de sistema — aplica máscara de data se configurada
@@ -136,7 +140,7 @@ function renderComponent(
   switch (comp.type) {
     case 'text': {
       const c = comp as RpbTextComp;
-      const txt = resolveText(c.content, row, extraVars, { dateFormat: c.dateFormat, decimals: c.decimals });
+      const txt = resolveText(c.content, row, extraVars, { format: c.format, dateFormat: c.dateFormat, decimals: c.decimals });
       const s = c.style || DEFAULT_STYLE;
       return `<div style="${pos} ${textStyle(s)}">${txt}</div>`;
     }
@@ -326,7 +330,7 @@ function renderGroupSection(
       const pb = group1.pageBreakBefore ? 'page-break-before:always;' : '';
       html += `<div style="${pb}">`;
       const g1ExtraVars = { ...extraVars, grupo1_valor: key, [group1.field]: key };
-      html += renderBand(layout.bands.group1Header, g1Rows, { [group1.field]: key }, g1ExtraVars);
+      html += renderBand(layout.bands.group1Header, g1Rows, g1Rows[0] || { [group1.field]: key }, g1ExtraVars);
 
       if (group2 && group2.field) {
         const grouped2 = groupData(g1Rows, group2.field);
@@ -334,16 +338,16 @@ function renderGroupSection(
           const pb2 = group2.pageBreakBefore ? 'page-break-before:always;' : '';
           html += `<div style="${pb2}">`;
           const g2ExtraVars = { ...g1ExtraVars, grupo2_valor: key2, [group2.field]: key2 };
-          html += renderBand(layout.bands.group2Header, g2Rows, { [group2.field]: key2 }, g2ExtraVars);
+          html += renderBand(layout.bands.group2Header, g2Rows, g2Rows[0] || { [group2.field]: key2 }, g2ExtraVars);
           html += renderDetailBand(layout.bands.detail, g2Rows, g2ExtraVars);
-          html += renderBand(layout.bands.group2Footer, g2Rows, {}, g2ExtraVars, true);
+          html += renderBand(layout.bands.group2Footer, g2Rows, g2Rows[g2Rows.length - 1] || {}, g2ExtraVars, true);
           html += `</div>`;
         }
       } else {
         html += renderDetailBand(layout.bands.detail, g1Rows, g1ExtraVars);
       }
 
-      html += renderBand(layout.bands.group1Footer, g1Rows, {}, g1ExtraVars, true);
+      html += renderBand(layout.bands.group1Footer, g1Rows, g1Rows[g1Rows.length - 1] || {}, g1ExtraVars, true);
       html += `</div>`;
     }
   } else {
@@ -402,12 +406,15 @@ export function generateReportHtml(
     td, th { word-break: break-word; }
   `;
 
+  const firstRow = data[0] || {};
+  const lastRow  = data[data.length - 1] || {};
+
   const body = [
-    renderBand(layout.bands.pageHeader,   data, {}, sysVars),
-    renderBand(layout.bands.reportHeader, data, {}, sysVars),
+    renderBand(layout.bands.pageHeader,   data, firstRow, sysVars),
+    renderBand(layout.bands.reportHeader, data, firstRow, sysVars),
     renderGroupSection(layout, data, data, sysVars, group1, group2),
-    renderBand(layout.bands.reportFooter, data, {}, sysVars, true),
-    renderBand(layout.bands.pageFooter,   data, {}, sysVars),
+    renderBand(layout.bands.reportFooter, data, lastRow, sysVars, true),
+    renderBand(layout.bands.pageFooter,   data, lastRow, sysVars),
   ].join('');
 
   return `<!DOCTYPE html>

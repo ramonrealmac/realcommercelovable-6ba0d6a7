@@ -213,6 +213,7 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
     ]);
     setRelatorios(rels);
     setConexoes(cons);
+    return { relatorios: rels, conexoes: cons };
   }, [XEmpresaId]);
 
   useEffect(() => { load(); }, [load]);
@@ -269,14 +270,20 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
     if (mode === 'insert') {
       const { data, error } = await rpbInsertRelatorio(payload);
       if (error) { toast.error('Erro: ' + error.message); setSaving(false); return; }
-      await load();
-      const novo = relatorios.find(r => r.rpb_relatorio_id === data?.rpb_relatorio_id) || data;
+      const { relatorios: freshRels } = await load();
+      const novo = freshRels.find(r => r.rpb_relatorio_id === data?.rpb_relatorio_id) || data;
       setSelected(novo);
+      const newIdx = freshRels.findIndex(r => r.rpb_relatorio_id === novo?.rpb_relatorio_id);
+      if (newIdx !== -1) setSelectedIdx(newIdx);
       toast.success('Relatório criado!');
     } else if (selected) {
       const { error } = await rpbUpdateRelatorio(selected.rpb_relatorio_id, payload);
       if (error) { toast.error('Erro: ' + error.message); setSaving(false); return; }
-      await load();
+      const { relatorios: freshRels } = await load();
+      const atualizado = freshRels.find(r => r.rpb_relatorio_id === selected.rpb_relatorio_id);
+      if (atualizado) setSelected(atualizado);
+      const newIdx = freshRels.findIndex(r => r.rpb_relatorio_id === selected.rpb_relatorio_id);
+      if (newIdx !== -1) setSelectedIdx(newIdx);
       toast.success('Relatório salvo!');
     }
     setMode('view');
@@ -355,154 +362,84 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
 
 
       {/* ── Tabs de Navegação Principal ───────────────────── */}
-      <div className="flex items-center border-b border-border bg-card shrink-0 px-2 overflow-x-auto">
-        <button
-          onClick={() => setView('list')}
-          className={`px-4 py-2 text-xs font-bold uppercase tracking-wide border-b-2 transition-all whitespace-nowrap ${
-            view === 'list' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Pesquisa
-        </button>
-        <button
-          onClick={() => setView('dados')}
-          className={`px-4 py-2 text-xs font-bold uppercase tracking-wide border-b-2 transition-all whitespace-nowrap ${
-            view === 'dados' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Dados
-        </button>
-        <button
-          onClick={() => setView('query')}
-          className={`px-4 py-2 text-xs font-bold uppercase tracking-wide border-b-2 transition-all whitespace-nowrap ${
-            view === 'query' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          SQL Query
-        </button>
-        <button
-          onClick={() => setView('filtros')}
-          className={`px-4 py-2 text-xs font-bold uppercase tracking-wide border-b-2 transition-all whitespace-nowrap ${
-            view === 'filtros' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Filtros
-        </button>
-        <button
-          onClick={() => selected && setView('designer')}
-          disabled={!selected}
-          className={`px-4 py-2 text-xs font-bold uppercase tracking-wide border-b-2 transition-all whitespace-nowrap ${
-            view === 'designer' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-          } ${!selected ? 'opacity-30 cursor-not-allowed' : ''}`}
-        >
-          Designer
-        </button>
-        <button
-          onClick={() => selected && setView('execute')}
-          disabled={!selected}
-          className={`px-4 py-2 text-xs font-bold uppercase tracking-wide border-b-2 transition-all whitespace-nowrap ${
-            view === 'execute' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-          } ${!selected ? 'opacity-30 cursor-not-allowed' : ''}`}
-        >
-          Consulta
-        </button>
+      <div className="flex items-center justify-between border-b border-border bg-card shrink-0 px-2 overflow-x-auto">
+        <div className="flex items-center">
+          <button
+            onClick={() => setView('list')}
+            className={`px-4 py-2 text-xs font-bold uppercase tracking-wide border-b-2 transition-all whitespace-nowrap ${
+              view === 'list' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Pesquisa
+          </button>
+          <button
+            onClick={() => setView('dados')}
+            className={`px-4 py-2 text-xs font-bold uppercase tracking-wide border-b-2 transition-all whitespace-nowrap ${
+              view === 'dados' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Dados
+          </button>
+          <button
+            onClick={() => setView('query')}
+            className={`px-4 py-2 text-xs font-bold uppercase tracking-wide border-b-2 transition-all whitespace-nowrap ${
+              view === 'query' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            SQL Query
+          </button>
+          <button
+            onClick={() => setView('filtros')}
+            className={`px-4 py-2 text-xs font-bold uppercase tracking-wide border-b-2 transition-all whitespace-nowrap ${
+              view === 'filtros' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Filtros
+          </button>
+          <button
+            onClick={() => selected && setView('designer')}
+            disabled={!selected}
+            className={`px-4 py-2 text-xs font-bold uppercase tracking-wide border-b-2 transition-all whitespace-nowrap ${
+              view === 'designer' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+            } ${!selected ? 'opacity-30 cursor-not-allowed' : ''}`}
+          >
+            Designer
+          </button>
+          <button
+            onClick={() => selected && setView('execute')}
+            disabled={!selected}
+            className={`px-4 py-2 text-xs font-bold uppercase tracking-wide border-b-2 transition-all whitespace-nowrap ${
+              view === 'execute' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+            } ${!selected ? 'opacity-30 cursor-not-allowed' : ''}`}
+          >
+            Consulta
+          </button>
+        </div>
+
+        {/* Ações de Metadados (Salvar/Editar/Cancelar) */}
+        {view !== 'list' && view !== 'designer' && view !== 'execute' && (
+          <div className="flex items-center gap-2 px-2">
+            {isEditing ? (
+              <>
+                <button onClick={handleSave} disabled={saving}
+                  className="flex items-center gap-1 px-3 py-1 text-[10px] font-bold uppercase rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-all">
+                  <Save className="w-3 h-3" /> {saving ? 'Salvando...' : 'Salvar'}
+                </button>
+                <button onClick={() => { setMode('view'); if (!selected) setView('list'); }}
+                  className="flex items-center gap-1 px-3 py-1 text-[10px] font-bold uppercase rounded border border-border hover:bg-secondary transition-all">
+                  <X className="w-3 h-3" /> Cancelar
+                </button>
+              </>
+            ) : (
+              <button onClick={() => selected && handleEdit(selected)}
+                className="flex items-center gap-1 px-3 py-1 text-[10px] font-bold uppercase rounded border border-border hover:bg-secondary transition-all">
+                <Pencil className="w-3 h-3" /> Editar
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* ── Toolbar de Ações (Visível em todas as abas exceto Pesquisa) ── */}
-      {view !== 'list' && (
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-muted/10 shrink-0 overflow-x-auto">
-          {isEditing ? (
-            <>
-              <button onClick={handleSave} disabled={saving}
-                className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm transition-all active:scale-95 shrink-0">
-                <Save className="w-3.5 h-3.5" /> {saving ? 'Salvando...' : 'Salvar'}
-              </button>
-              <button onClick={() => { setMode('view'); if (!selected) setView('list'); }}
-                className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded border border-border bg-card hover:bg-secondary transition-all active:scale-95 shrink-0">
-                <X className="w-3.5 h-3.5" /> Cancelar
-              </button>
-            </>
-          ) : (
-            <>
-              <button onClick={() => selected && handleEdit(selected)}
-                className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded border border-border bg-card hover:bg-secondary shadow-sm transition-all active:scale-95 shrink-0">
-                <Pencil className="w-3.5 h-3.5" /> Editar
-              </button>
-            </>
-          )}
-
-          <div className="w-px h-6 bg-border mx-1 shrink-0" />
-
-          {/* Botões Específicos sugeridos pelo USER */}
-          <button
-            onClick={() => setView('execute')}
-            disabled={!selected}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded shadow-sm transition-all active:scale-95 shrink-0 ${
-              view === 'execute' ? 'bg-emerald-600 text-white' : 'border border-emerald-500 text-emerald-600 hover:bg-emerald-50'
-            } ${!selected ? 'opacity-30 cursor-not-allowed' : ''}`}
-          >
-            <Play className="w-3.5 h-3.5" /> Executar
-          </button>
-
-          <button
-            onClick={() => setView('designer')}
-            disabled={!selected}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded shadow-sm transition-all active:scale-95 shrink-0 ${
-              view === 'designer' ? 'bg-indigo-600 text-white' : 'border border-indigo-500 text-indigo-600 hover:bg-indigo-50'
-            } ${!selected ? 'opacity-30 cursor-not-allowed' : ''}`}
-          >
-            <PenTool className="w-3.5 h-3.5" /> Designer
-          </button>
-
-          {view === 'designer' && selected && (
-            <button
-              onClick={() => openTab({ 
-                component: 'rpb-designer', 
-                title: 'Design: ' + selected.nome, 
-                params: { relatorioId: selected.rpb_relatorio_id } 
-              })}
-              title="Abrir este designer em uma nova aba do sistema"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded border border-indigo-300 text-indigo-500 hover:bg-indigo-50 transition-all active:scale-95 shrink-0"
-            >
-              <Plus className="w-3.5 h-3.5" /> Abrir em Nova Aba
-            </button>
-          )}
-
-          <div className="w-px h-6 bg-border mx-1 shrink-0" />
-
-          <button
-            onClick={() => selected && handleExportRpb(selected)}
-            disabled={!selected}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded border border-amber-500 text-amber-600 hover:bg-amber-50 transition-all active:scale-95 shrink-0 disabled:opacity-30"
-          >
-            <Download className="w-3.5 h-3.5" /> Exportar RPB
-          </button>
-
-          <button
-            onClick={() => rpbInputRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded border border-emerald-500 text-emerald-600 hover:bg-emerald-50 transition-all active:scale-95 shrink-0"
-          >
-            <Upload className="w-3.5 h-3.5" /> Importar RPB
-          </button>
-
-          <button
-            onClick={() => jasperInputRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded border border-indigo-500 text-indigo-600 hover:bg-indigo-50 transition-all active:scale-95 shrink-0"
-          >
-            <FileUp className="w-3.5 h-3.5" /> Importar Jasper
-          </button>
-
-          <button onClick={() => setShowHelp(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded border border-slate-400 text-slate-600 hover:bg-slate-50 transition-all active:scale-95 shrink-0">
-            <HelpCircle className="w-3.5 h-3.5" /> Ajuda / Dicas
-          </button>
-
-          <div className="flex-1" />
-          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest bg-muted px-2 py-1 rounded hidden sm:inline">
-            {mode === 'insert' ? 'Novo' : mode === 'edit' ? 'Edição' : 'Visualização'}
-          </span>
-        </div>
-      )}
 
       {/* ── Lista ────────────────────────────────────── */}
       {view === 'list' && (
@@ -521,9 +458,9 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
               const rel = relatorios.find(r => r.rpb_relatorio_id === row.rpb_relatorio_id) || null;
               setSelected(rel);
             }}
-            onRowDoubleClick={(row) => {
+            onRowDoubleClick={(row, idx) => {
               const rel = relatorios.find(r => r.rpb_relatorio_id === row.rpb_relatorio_id);
-              if (rel) { setSelected(rel); setSelectedIdx(null); handleEdit(rel); }
+              if (rel) { setSelected(rel); setSelectedIdx(idx); handleEdit(rel); }
             }}
             showRecordCount={false}
             toolbarLeft={
@@ -568,7 +505,7 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
                     </button>
                     {/* Exportar / Importar .rpb */}
                     <div className="w-px h-5 bg-border mx-1" />
-                    <button
+                     <button
                       onClick={() => selected && handleExportRpb(selected)}
                       disabled={!selected}
                       title="Exportar relatório como arquivo .rpb"
@@ -586,6 +523,20 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
                       className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-emerald-500 text-emerald-600 hover:bg-emerald-50 hover:scale-105 active:scale-95 transition-all"
                     >
                       <Upload size={13} /> Importar .rpb
+                    </button>
+                    <button
+                      onClick={() => jasperInputRef.current?.click()}
+                      title="Importar relatório de um arquivo Jasper Reports (.jrxml)"
+                      className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-indigo-500 text-indigo-600 hover:bg-indigo-50 hover:scale-105 active:scale-95 transition-all"
+                    >
+                      <FileUp size={13} /> Importar Jasper
+                    </button>
+                    <button
+                      onClick={() => setShowHelp(true)}
+                      title="Ajuda e dicas de utilização"
+                      className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-400 text-slate-600 hover:bg-slate-50 hover:scale-105 active:scale-95 transition-all"
+                    >
+                      <HelpCircle size={13} /> Ajuda
                     </button>
                   </>
                 }

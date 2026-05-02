@@ -270,23 +270,36 @@ export function formatValue(
   const decimals = opts?.decimals;
   const dateFormat = opts?.dateFormat;
 
+  // Converte para número de forma robusta
+  const toNum = (v: any): number => {
+    if (typeof v === 'number') return v;
+    const s = String(v).replace(/\s/g, '').replace(',', '.');
+    // Se após a troca de vírgula por ponto ainda houver múltiplos pontos (ex: 1.234.56), remove os de milhar
+    const parts = s.split('.');
+    if (parts.length > 2) {
+      const last = parts.pop();
+      return parseFloat(parts.join('') + '.' + last) || 0;
+    }
+    return parseFloat(s) || 0;
+  };
+
   switch (format) {
     case 'currency': {
       const dec = decimals !== undefined ? decimals : 2;
-      return Number(val).toLocaleString('pt-BR', {
+      return toNum(val).toLocaleString('pt-BR', {
         style: 'currency', currency: 'BRL',
         minimumFractionDigits: dec, maximumFractionDigits: dec,
       });
     }
     case 'number': {
       const dec = decimals !== undefined ? decimals : 2;
-      return Number(val).toLocaleString('pt-BR', {
+      return toNum(val).toLocaleString('pt-BR', {
         minimumFractionDigits: dec, maximumFractionDigits: dec,
       });
     }
     case 'percent': {
       const dec = decimals !== undefined ? decimals : 2;
-      return Number(val).toLocaleString('pt-BR', {
+      return toNum(val).toLocaleString('pt-BR', {
         minimumFractionDigits: dec, maximumFractionDigits: dec,
       }) + '%';
     }

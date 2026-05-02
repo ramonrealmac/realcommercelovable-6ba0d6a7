@@ -373,6 +373,63 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
     }));
   };
 
+  // ── Atalhos de Teclado (Mover e Redimensionar) ──────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (selectedIds.length === 0) return;
+
+      // Não atua se estiver digitando em campos de texto
+      const target = e.target as HTMLElement;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable) {
+        return;
+      }
+
+      const step = 1; // 1mm
+      const isShift = e.shiftKey;
+      let dx = 0, dy = 0, dw = 0, dh = 0;
+
+      if (e.key === 'ArrowLeft')  isShift ? (dw = -step) : (dx = -step);
+      if (e.key === 'ArrowRight') isShift ? (dw = step)  : (dx = step);
+      if (e.key === 'ArrowUp')    isShift ? (dh = -step) : (dy = -step);
+      if (e.key === 'ArrowDown')  isShift ? (dh = step)  : (dy = step);
+
+      if (dx === 0 && dy === 0 && dw === 0 && dh === 0) return;
+
+      e.preventDefault();
+
+      setLayout(prev => {
+        const newBands = { ...prev.bands };
+        let changed = false;
+
+        for (const bandName of Object.keys(newBands) as RpbBandName[]) {
+          const band = newBands[bandName];
+          if (band.components.some(c => selectedIds.includes(c.id))) {
+            changed = true;
+            newBands[bandName] = {
+              ...band,
+              components: band.components.map(c => {
+                if (selectedIds.includes(c.id)) {
+                  return {
+                    ...c,
+                    x: Math.max(0, c.x + dx),
+                    y: Math.max(0, c.y + dy),
+                    w: Math.max(1, c.w + dw),
+                    h: Math.max(1, c.h + dh),
+                  };
+                }
+                return c;
+              }),
+            };
+          }
+        }
+        return changed ? { ...prev, bands: newBands } : prev;
+      });
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedIds]);
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
 
@@ -535,6 +592,8 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
                   <li>No <strong>Detalhe</strong>: adicione uma <strong>Tabela</strong> para listar os dados da query</li>
                   <li>Clique em qualquer variável nesta janela para <strong>copiar para a área de transferência</strong></li>
                   <li>No painel <strong>Campos</strong> (toolbar), clique para copiar e cole no campo de conteúdo do texto</li>
+                  <li>Use as <strong>Setas do teclado</strong> para mover componentes selecionados (1mm por vez)</li>
+                  <li>Use <strong>Shift + Setas</strong> para ajustar o tamanho dos componentes</li>
                 </ul>
               </section>
 
@@ -572,6 +631,24 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
                         <li><strong>Igualar:</strong> mesma largura ou mesma altura (baseado no 1º selecionado)</li>
                         <li><strong>Distribuir</strong> (3+ comp.): espaçamento igual horizontal ou vertical</li>
                       </ul>
+                    </div>
+                  </div>
+
+                  {/* Atalhos de Teclado */}
+                  <div className="border border-border rounded-lg overflow-hidden">
+                    <div className="bg-sky-50 px-3 py-1.5 font-semibold text-sky-700">⌨️ Atalhos de Teclado</div>
+                    <div className="px-3 py-2 space-y-2 text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <kbd className="px-1.5 py-0.5 rounded border border-border bg-secondary font-mono text-[10px] text-foreground">Setas</kbd>
+                        <span>Move o componente selecionado em 1mm</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <kbd className="px-1.5 py-0.5 rounded border border-border bg-secondary font-mono text-[10px] text-foreground">Shift + Setas</kbd>
+                        <span>Ajusta o tamanho do componente em 1mm</span>
+                      </div>
+                      <p className="text-[10px] italic mt-1 border-t border-border pt-1">
+                        Dica: Selecione múltiplos itens (Ctrl+Clique) para mover todos juntos!
+                      </p>
                     </div>
                   </div>
 
