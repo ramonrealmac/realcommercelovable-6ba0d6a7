@@ -599,7 +599,7 @@ const EmpresaForm: React.FC = () => {
                 <img
                   src={XDisplayVal("logomarca") as string}
                   alt="Logomarca"
-                  className="w-24 h-24 object-contain border rounded"
+                  className="w-24 h-24 object-contain border rounded bg-background"
                 />
               )}
               {XIsEditing && (
@@ -655,7 +655,7 @@ const EmpresaForm: React.FC = () => {
                   <img
                     src={XDisplayVal("imagem_caixa") as string}
                     alt="Imagem Caixa"
-                    className="w-24 h-24 object-contain border rounded"
+                    className="w-24 h-24 object-contain border rounded bg-background"
                   />
                 )}
                 {XIsEditing && (

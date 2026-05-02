@@ -653,7 +653,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto relative bg-card" style={{ fontSize: `${XFonteProd}px` }}>
+          <div className="flex-1 overflow-y-auto relative bg-background" style={{ fontSize: `${XFonteProd}px` }}>
             {XPedidoSel ? (
               <div>
                 {XPedidoSelItens.map((it: any, idx: number) => (
@@ -675,7 +675,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
               <>
                 {XCart.length === 0 && XParams?.imagem_caixa && (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <img src={XParams.imagem_caixa} alt="" className="max-w-[70%] max-h-[70%] object-contain opacity-30" />
+                    <img src={XParams.imagem_caixa} alt="" className="max-w-[70%] max-h-[70%] object-contain opacity-65" />
                   </div>
                 )}
                 <div className="relative">
@@ -834,7 +834,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       </div>
 
       {/* Barra de atalhos */}
-      <div className="flex-shrink-0 border-t border-border bg-card/80 px-3 py-1 flex items-center gap-4 text-[10px] text-muted-foreground flex-wrap">
+      <div className="flex-shrink-0 border-t border-border bg-card/80 px-3 py-1 flex items-center gap-4 text-[11px] text-muted-foreground flex-wrap">
         {[
           { key: 'F1', label: 'Ajuda', color: 'bg-primary/10 border-primary/20 text-primary' },
           { key: 'F2', label: 'Buscar Produto', color: 'bg-primary/10 border-primary/20 text-primary' },
