@@ -12,7 +12,10 @@ import { rpbExecuteQuery } from '../../services/rpbService';
 import RpbPalette    from './RpbPalette';
 import RpbCanvas     from './RpbCanvas';
 import RpbProperties from './RpbProperties';
-import { Save, Eye, Plus, Trash2, RefreshCw, Loader2, HelpCircle, List, X, Copy } from 'lucide-react';
+import { Save, Eye, Plus, Trash2, RefreshCw, Loader2, HelpCircle, List, X, Copy,
+  AlignLeft, AlignRight, AlignHorizontalJustifyCenter,
+  AlignStartHorizontal, AlignEndHorizontal, AlignCenterVertical,
+  Maximize2, Move } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Props {
@@ -25,7 +28,7 @@ interface Props {
 const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent, onSave, onPreview }) => {
   const [layout, setLayout]             = useState<RpbLayout>(() => relatorio.layout_json || emptyLayout());
   const [activeBand, setActiveBand]     = useState<RpbBandName | null>(null);
-  const [selectedId, setSelectedId]     = useState<string | null>(null);
+  const [selectedIds, setSelectedIds]   = useState<string[]>([]);
   const [activeTab, setActiveTab]       = useState<'canvas' | 'groups' | 'page'>('canvas');
   const [saving, setSaving]             = useState(false);
   const [queryColumns, setQueryColumns] = useState<string[]>(qColsFromParent);
@@ -57,7 +60,7 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
   useEffect(() => {
     setLayout(relatorio.layout_json || emptyLayout());
     setActiveBand(null);
-    setSelectedId(null);
+    setSelectedIds([]);
   }, [relatorio.rpb_relatorio_id]);
 
   // ── Auto-detecta colunas ao abrir o designer ──────────────
@@ -98,12 +101,128 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
     toast.success(`${cols.length} coluna(s) detectada(s): ${cols.slice(0, 6).join(', ')}${cols.length > 6 ? '...' : ''}`);
   };
 
-  // ── Componente selecionado ────────────────────────────────
-  const selectedComp = activeBand && selectedId
-    ? layout.bands[activeBand].components.find(c => c.id === selectedId) || null
+  // ── Componente selecionado (apenas 1 para propriedades) ─────
+  // Busca em TODAS as bandas (cross-band)
+  const selectedComp = selectedIds.length === 1
+    ? (() => {
+        for (const bandName of Object.keys(layout.bands) as (keyof typeof layout.bands)[]) {
+          const found = layout.bands[bandName].components.find(c => c.id === selectedIds[0]);
+          if (found) return found;
+        }
+        return null;
+      })()
     : null;
 
-  // ── Adicionar componente ──────────────────────────────────
+  // ── Multi-seleção cross-band ─────────────────────────────
+  // Ao clicar num componente, ativa automaticamente sua banda
+  const handleSelectComponent = (id: string, bandName: RpbBandName, multi: boolean) => {
+    // Sempre ativa a banda do componente clicado por último
+    setActiveBand(bandName);
+    if (multi) {
+      setSelectedIds(prev =>
+        prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+      );
+    } else {
+      setSelectedIds([id]);
+    }
+  };
+
+  const handleClearSelection = () => setSelectedIds([]);
+
+  // ── Alinhamento cross-band ────────────────────────────────
+  // A referência é SEMPRE o primeiro componente clicado (selectedIds[0]).
+  // Os demais itens selecionados copiam a propriedade do primeiro.
+  // Opera em TODAS as bandas onde há componentes selecionados.
+  const applyAlignment = (op: string) => {
+    if (selectedIds.length < 2) return;
+
+    // Mapeia id -> componente (de qualquer banda)
+    const allComps: Record<string, { comp: RpbComponent; band: RpbBandName }> = {};
+    for (const bandName of Object.keys(layout.bands) as RpbBandName[]) {
+      for (const comp of layout.bands[bandName].components) {
+        allComps[comp.id] = { comp, band: bandName };
+      }
+    }
+
+    // ref = primeiro componente clicado
+    const refEntry = allComps[selectedIds[0]];
+    if (!refEntry) return;
+    const ref = refEntry.comp;
+
+    // Componentes selecionados (exceto o ref para distribute)
+    const selEntries = selectedIds
+      .map(id => allComps[id])
+      .filter(Boolean);
+    if (selEntries.length < 2) return;
+
+    // Calcula patch por componente
+    const patches: Record<string, Partial<RpbComponent>> = {};
+
+    if (op === 'align-left') {
+      selEntries.forEach(({ comp }) => { patches[comp.id] = { x: ref.x }; });
+    } else if (op === 'align-right') {
+      const refRight = ref.x + ref.w;
+      selEntries.forEach(({ comp }) => { patches[comp.id] = { x: refRight - comp.w }; });
+    } else if (op === 'align-top') {
+      selEntries.forEach(({ comp }) => { patches[comp.id] = { y: ref.y }; });
+    } else if (op === 'align-bottom') {
+      const refBottom = ref.y + ref.h;
+      selEntries.forEach(({ comp }) => { patches[comp.id] = { y: refBottom - comp.h }; });
+    } else if (op === 'align-center-h') {
+      const refCx = ref.x + ref.w / 2;
+      selEntries.forEach(({ comp }) => { patches[comp.id] = { x: refCx - comp.w / 2 }; });
+    } else if (op === 'align-center-v') {
+      const refCy = ref.y + ref.h / 2;
+      selEntries.forEach(({ comp }) => { patches[comp.id] = { y: refCy - comp.h / 2 }; });
+    } else if (op === 'same-width') {
+      selEntries.forEach(({ comp }) => { patches[comp.id] = { w: ref.w }; });
+    } else if (op === 'same-height') {
+      selEntries.forEach(({ comp }) => { patches[comp.id] = { h: ref.h }; });
+    } else if (op === 'distribute-h') {
+      const sorted = [...selEntries].sort((a, b) => a.comp.x - b.comp.x);
+      const first = sorted[0].comp;
+      const last  = sorted[sorted.length - 1].comp;
+      const totalW = last.x + last.w - first.x;
+      const innerW = selEntries.reduce((acc, { comp }) => acc + comp.w, 0);
+      const gap = (totalW - innerW) / (sorted.length - 1);
+      let curX = first.x;
+      for (const { comp } of sorted) {
+        patches[comp.id] = { x: curX };
+        curX += comp.w + gap;
+      }
+    } else if (op === 'distribute-v') {
+      const sorted = [...selEntries].sort((a, b) => a.comp.y - b.comp.y);
+      const first = sorted[0].comp;
+      const last  = sorted[sorted.length - 1].comp;
+      const totalH = last.y + last.h - first.y;
+      const innerH = selEntries.reduce((acc, { comp }) => acc + comp.h, 0);
+      const gap = (totalH - innerH) / (sorted.length - 1);
+      let curY = first.y;
+      for (const { comp } of sorted) {
+        patches[comp.id] = { y: curY };
+        curY += comp.h + gap;
+      }
+    }
+
+    // Aplica patches agrupando por banda
+    setLayout(prev => {
+      const newBands = { ...prev.bands };
+      for (const bandName of Object.keys(newBands) as RpbBandName[]) {
+        const band = newBands[bandName];
+        const hasChanges = band.components.some(c => patches[c.id]);
+        if (!hasChanges) continue;
+        newBands[bandName] = {
+          ...band,
+          components: band.components.map(c =>
+            patches[c.id] ? { ...c, ...patches[c.id] } : c
+          ),
+        };
+      }
+      return { ...prev, bands: newBands };
+    });
+  };
+
+
   const handleAddComponent = useCallback((type: string, defaultW: number, defaultH: number) => {
     if (!activeBand) return;
     const base = { id: newId(), x: 10, y: 5, w: defaultW, h: defaultH };
@@ -143,6 +262,12 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
       case 'line':
         comp = { ...base, type: 'line', orientation: 'horizontal', color: '#cccccc', thickness: 1, h: 1 };
         break;
+      case 'line-v':
+        comp = { ...base, type: 'line', orientation: 'vertical', color: '#cccccc', thickness: 1, w: 1, h: defaultH };
+        break;
+      case 'box':
+        comp = { ...base, type: 'box', borderColor: '#cccccc', borderThickness: 1, bgColor: 'transparent', borderRadius: 0 };
+        break;
       default:
         return;
     }
@@ -157,41 +282,45 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
         },
       },
     }));
-    setSelectedId(comp.id);
+    setSelectedIds([comp.id]);
   }, [activeBand, queryColumns]);
 
-  // ── Atualizar componente ──────────────────────────────────
+  // ── Atualizar componente (cross-band) ──────────────────────
   const handleUpdateComponent = useCallback((updated: RpbComponent) => {
-    if (!activeBand) return;
-    setLayout(prev => ({
-      ...prev,
-      bands: {
-        ...prev.bands,
-        [activeBand]: {
-          ...prev.bands[activeBand],
-          components: prev.bands[activeBand].components.map(c =>
-            c.id === updated.id ? updated : c
-          ),
-        },
-      },
-    }));
-  }, [activeBand]);
+    setLayout(prev => {
+      const newBands = { ...prev.bands };
+      for (const bandName of Object.keys(newBands) as RpbBandName[]) {
+        const band = newBands[bandName];
+        if (band.components.some(c => c.id === updated.id)) {
+          newBands[bandName] = {
+            ...band,
+            components: band.components.map(c => c.id === updated.id ? updated : c),
+          };
+          break;
+        }
+      }
+      return { ...prev, bands: newBands };
+    });
+  }, []);
 
-  // ── Excluir componente ────────────────────────────────────
+  // ── Excluir componente (cross-band) ──────────────────────
   const handleDeleteComponent = useCallback(() => {
-    if (!activeBand || !selectedId) return;
-    setLayout(prev => ({
-      ...prev,
-      bands: {
-        ...prev.bands,
-        [activeBand]: {
-          ...prev.bands[activeBand],
-          components: prev.bands[activeBand].components.filter(c => c.id !== selectedId),
-        },
-      },
-    }));
-    setSelectedId(null);
-  }, [activeBand, selectedId]);
+    if (selectedIds.length === 0) return;
+    setLayout(prev => {
+      const newBands = { ...prev.bands };
+      for (const bandName of Object.keys(newBands) as RpbBandName[]) {
+        const band = newBands[bandName];
+        if (band.components.some(c => selectedIds.includes(c.id))) {
+          newBands[bandName] = {
+            ...band,
+            components: band.components.filter(c => !selectedIds.includes(c.id)),
+          };
+        }
+      }
+      return { ...prev, bands: newBands };
+    });
+    setSelectedIds([]);
+  }, [selectedIds]);
 
   // ── Salvar ────────────────────────────────────────────────
   const handleSave = async () => {
@@ -408,6 +537,76 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
                   <li>No painel <strong>Campos</strong> (toolbar), clique para copiar e cole no campo de conteúdo do texto</li>
                 </ul>
               </section>
+
+              {/* ── Novidades ───────────────────────────────────────── */}
+              <section>
+                <h3 className="font-semibold text-violet-600 mb-2">🚀 Novidades — Últimas Atualizações</h3>
+                <div className="space-y-3 text-xs">
+
+                  {/* Novos componentes */}
+                  <div className="border border-border rounded-lg overflow-hidden">
+                    <div className="bg-violet-50 px-3 py-1.5 font-semibold text-violet-700">🧱 Novos Componentes na Paleta</div>
+                    <table className="w-full text-xs">
+                      <tbody>
+                        {[
+                          ['Linha Horizontal', 'Separador horizontal clássico (cor e espessura configuráveis)'],
+                          ['Linha Vertical',   'Separador vertical — útil para dividir colunas em cabeçalhos'],
+                          ['Box / Retângulo',  'Caixa com borda, fundo e arredondamento configuráveis'],
+                        ].map(([n, d]) => (
+                          <tr key={n} className="border-t border-border">
+                            <td className="px-3 py-1.5 font-medium text-violet-700 whitespace-nowrap">{n}</td>
+                            <td className="px-3 py-1.5 text-muted-foreground">{d}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Multi-seleção e alinhamento */}
+                  <div className="border border-border rounded-lg overflow-hidden">
+                    <div className="bg-indigo-50 px-3 py-1.5 font-semibold text-indigo-700">🎯 Multi-seleção e Alinhamento</div>
+                    <div className="px-3 py-2 space-y-1 text-muted-foreground">
+                      <p>Selecione múltiplos componentes com <strong>Ctrl + Clique</strong> para ativar a barra de alinhamento flutuante na base do canvas.</p>
+                      <ul className="list-disc list-inside space-y-0.5 mt-1">
+                        <li><strong>Alinhar:</strong> esquerda, direita, topo, base, centro horizontal, centro vertical</li>
+                        <li><strong>Igualar:</strong> mesma largura ou mesma altura (baseado no 1º selecionado)</li>
+                        <li><strong>Distribuir</strong> (3+ comp.): espaçamento igual horizontal ou vertical</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Formatação avançada */}
+                  <div className="border border-border rounded-lg overflow-hidden">
+                    <div className="bg-emerald-50 px-3 py-1.5 font-semibold text-emerald-700">📐 Formatação Avançada de Colunas</div>
+                    <div className="px-3 py-2 space-y-2 text-muted-foreground">
+                      <div>
+                        <p className="font-medium text-foreground mb-1">Casas decimais <span className="text-xs font-normal text-muted-foreground">(Número, Moeda, %)</span></p>
+                        <div className="bg-secondary/40 rounded p-2 font-mono text-xs space-y-0.5">
+                          <div><span className="text-emerald-700">0</span> → 1.234</div>
+                          <div><span className="text-emerald-700">2</span> → 1.234,56 <span className="text-muted-foreground">(padrão)</span></div>
+                          <div><span className="text-emerald-700">4</span> → 1.234,5678</div>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground mb-1">Formato de data <span className="text-xs font-normal text-muted-foreground">(Data, Data+Hora)</span></p>
+                        <div className="bg-secondary/40 rounded p-2 font-mono text-xs space-y-0.5">
+                          {[
+                            ['dd/mm/yyyy',      '01/05/2026'],
+                            ['dd/mm/yy',        '01/05/26'],
+                            ['dd/mm/yyyy hh:mm','01/05/2026 22:43'],
+                            ['dd/mm/yy hh:mm',  '01/05/26 22:43'],
+                            ['hh:mm',           '22:43'],
+                          ].map(([fmt, ex]) => (
+                            <div key={fmt}><span className="text-emerald-700">{fmt}</span><span className="text-muted-foreground ml-2">→ {ex}</span></div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </section>
+
             </div>
           </div>
         </div>
@@ -533,7 +732,7 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
 
       {/* ── Designer: Paleta + [Campos] + Canvas + Propriedades ────── */}
       {activeTab === 'canvas' && (
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden relative">
           <RpbPalette activeBand={activeBand} onAddComponent={handleAddComponent} />
 
           {/* Painel lateral de campos e variáveis */}
@@ -585,13 +784,81 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
             </div>
           )}
 
+          {/* ── Barra de Alinhamento (aparece com 2+ selecionados) ─ */}
+          {selectedIds.length >= 2 && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 px-3 py-2 bg-card border border-primary/40 rounded-xl shadow-xl animate-in slide-in-from-bottom-2 duration-200">
+              <span className="text-[10px] font-bold text-primary uppercase tracking-wider mr-1">
+                {selectedIds.length} sel.
+              </span>
+              {/* Indicador: 1º clicado é a referência */}
+              <span className="text-[9px] bg-primary/10 text-primary rounded px-1.5 py-0.5 font-semibold" title="O primeiro componente clicado define posição/tamanho para os demais">
+                1º = ref.
+              </span>
+              <div className="w-px h-5 bg-border mx-1" />
+
+              {/* Alinhar horizontalmente */}
+              <span className="text-[9px] text-muted-foreground uppercase tracking-wide mr-0.5">Alinhar</span>
+              {[
+                { op: 'align-left',     icon: <AlignLeft size={14} />,                     title: 'Alinhar à esquerda — todos copiam o X do 1º selecionado'        },
+                { op: 'align-center-h', icon: <AlignHorizontalJustifyCenter size={14} />,  title: 'Centralizar horizontal — centro dos demais = centro do 1º'         },
+                { op: 'align-right',    icon: <AlignRight size={14} />,                    title: 'Alinhar à direita — borda direita dos demais = borda direita do 1º' },
+                { op: 'align-top',      icon: <AlignStartHorizontal size={14} />,          title: 'Alinhar ao topo — todos copiam o Y do 1º selecionado'            },
+                { op: 'align-center-v', icon: <AlignCenterVertical size={14} />,           title: 'Centralizar vertical — centro dos demais = centro do 1º'           },
+                { op: 'align-bottom',   icon: <AlignEndHorizontal size={14} />,            title: 'Alinhar à base — borda inferior dos demais = borda inferior do 1º'  },
+              ].map(btn => (
+                <button key={btn.op} onClick={() => applyAlignment(btn.op)} title={btn.title}
+                  className="p-1.5 rounded hover:bg-primary/10 text-foreground hover:text-primary transition-colors border border-transparent hover:border-primary/30">
+                  {btn.icon}
+                </button>
+              ))}
+
+              <div className="w-px h-5 bg-border mx-1" />
+
+              {/* Mesma dimensão */}
+              <span className="text-[9px] text-muted-foreground uppercase tracking-wide mr-0.5">Igualar</span>
+              {[
+                { op: 'same-width',  icon: <Maximize2 size={14} />, title: 'Mesma largura — todos ficam com a largura do 1º selecionado'  },
+                { op: 'same-height', icon: <Move size={14} />,      title: 'Mesma altura — todos ficam com a altura do 1º selecionado'    },
+              ].map(btn => (
+                <button key={btn.op} onClick={() => applyAlignment(btn.op)} title={btn.title}
+                  className="p-1.5 rounded hover:bg-primary/10 text-foreground hover:text-primary transition-colors border border-transparent hover:border-primary/30">
+                  {btn.icon}
+                </button>
+              ))}
+
+              {selectedIds.length >= 3 && (
+                <>
+                  <div className="w-px h-5 bg-border mx-1" />
+                  <span className="text-[9px] text-muted-foreground uppercase tracking-wide mr-0.5">Distribuir</span>
+                  {[
+                    { op: 'distribute-h', title: 'Distribuir horizontalmente com espaçamento igual', icon: <span className="text-xs font-mono">⇔</span> },
+                    { op: 'distribute-v', title: 'Distribuir verticalmente com espaçamento igual',   icon: <span className="text-xs font-mono">⇕</span> },
+                  ].map(btn => (
+                    <button key={btn.op} onClick={() => applyAlignment(btn.op)} title={btn.title}
+                      className="p-1.5 rounded hover:bg-primary/10 text-foreground hover:text-primary transition-colors border border-transparent hover:border-primary/30">
+                      {btn.icon}
+                    </button>
+                  ))}
+                </>
+              )}
+
+              <div className="w-px h-5 bg-border mx-1" />
+              <button onClick={handleClearSelection} title="Limpar seleção (Esc)"
+                className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors">
+                <X size={14} />
+
+              </button>
+            </div>
+          )}
+
           <RpbCanvas
             layout={layout}
             activeBand={activeBand}
-            selectedId={selectedId}
+            selectedIds={selectedIds}
             onChange={setLayout}
-            onSelectBand={setActiveBand}
-            onSelectComponent={setSelectedId}
+            onSelectBand={(band) => { setActiveBand(band); setSelectedIds([]); }}
+            onSelectComponent={handleSelectComponent}
+            onClearSelection={handleClearSelection}
           />
           <RpbProperties
             component={selectedComp}

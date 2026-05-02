@@ -7,6 +7,7 @@ export type RpbPageSize    = 'A4' | 'A3' | 'Letter';
 export type RpbOrientation = 'portrait' | 'landscape';
 export type RpbAlign       = 'left' | 'center' | 'right';
 export type RpbFormat      = 'text' | 'number' | 'currency' | 'date' | 'datetime' | 'percent';
+export type RpbDateFormat  = 'dd/mm/yyyy' | 'dd/mm/yy' | 'dd/mm/yy hh:mm' | 'dd/mm/yyyy hh:mm' | 'hh:mm';
 export type RpbTotalOp     = 'none' | 'sum' | 'avg' | 'count' | 'min' | 'max';
 export type RpbBorder      = 'none' | 'all' | 'bottom' | 'top' | 'left' | 'right';
 export type RpbFitMode     = 'contain' | 'cover' | 'fill';
@@ -50,18 +51,23 @@ export interface RpbTextComp extends RpbBaseComp {
   type: 'text';
   content: string;   // suporta {campo}, {pagina}, {paginas}, {data}, {hora}
   style: RpbStyle;
+  format?: RpbFormat;      // opcional: quando conteúdo é uma variável de data/número
+  dateFormat?: RpbDateFormat; // máscara de data quando format = 'date' | 'datetime'
+  decimals?: number;          // casas decimais quando format = 'number' | 'currency' | 'percent'
 }
 
 export interface RpbTableColumn {
-  field:      string;
-  label:      string;
-  w:          number;    // mm
-  align:      RpbAlign;
-  format:     RpbFormat;
-  totalType:  RpbTotalOp;
-  fontSize?:  number;    // pt — sobrescreve fonte da tabela para esta coluna
-  color?:     string;    // #hex — sobrescreve cor da tabela para esta coluna
-  style?:     Partial<RpbStyle>;
+  field:       string;
+  label:       string;
+  w:           number;       // mm
+  align:       RpbAlign;
+  format:      RpbFormat;
+  totalType:   RpbTotalOp;
+  decimals?:   number;       // casas decimais para number/currency/percent
+  dateFormat?: RpbDateFormat; // máscara de data para date/datetime
+  fontSize?:   number;       // pt
+  color?:      string;       // #hex
+  style?:      Partial<RpbStyle>;
 }
 
 export interface RpbTableComp extends RpbBaseComp {
@@ -82,6 +88,7 @@ export interface RpbTotalizerComp extends RpbBaseComp {
   labelText:  string;
   scope:      'report' | 'group1' | 'group2';
   style:      RpbStyle;
+  decimals?:  number;        // casas decimais para number/currency/percent
 }
 
 export interface RpbImageComp extends RpbBaseComp {
@@ -97,12 +104,21 @@ export interface RpbLineComp extends RpbBaseComp {
   thickness:   number;   // px
 }
 
+export interface RpbBoxComp extends RpbBaseComp {
+  type:        'box';
+  borderColor: string;
+  borderThickness: number;  // px
+  bgColor:     string;      // cor de fundo ('transparent' para nenhum)
+  borderRadius: number;     // px
+}
+
 export type RpbComponent =
   | RpbTextComp
   | RpbTableComp
   | RpbTotalizerComp
   | RpbImageComp
-  | RpbLineComp;
+  | RpbLineComp
+  | RpbBoxComp;
 
 // ── Banda ────────────────────────────────────────────────────
 export interface RpbBand {
@@ -235,19 +251,64 @@ export const MM_TO_PX = 3.7795;   // 96dpi
 export function mmToPx(mm: number): number { return Math.round(mm * MM_TO_PX); }
 export function pxToMm(px: number): number { return Math.round((px / MM_TO_PX) * 10) / 10; }
 
-export function formatValue(val: any, format: RpbFormat): string {
+// ── Helpers de formato de data ───────────────────────────────
+function parseDateBR(val: any): Date | null {
+  if (!val) return null;
+  if (val instanceof Date) return val;
+  // Tenta parse ISO
+  const d = new Date(val);
+  if (!isNaN(d.getTime())) return d;
+  return null;
+}
+
+export function formatValue(
+  val: any,
+  format: RpbFormat,
+  opts?: { decimals?: number; dateFormat?: RpbDateFormat }
+): string {
   if (val === null || val === undefined || val === '') return '';
+  const decimals = opts?.decimals;
+  const dateFormat = opts?.dateFormat;
+
   switch (format) {
-    case 'currency':
-      return Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    case 'number':
-      return Number(val).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-    case 'percent':
-      return Number(val).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '%';
+    case 'currency': {
+      const dec = decimals !== undefined ? decimals : 2;
+      return Number(val).toLocaleString('pt-BR', {
+        style: 'currency', currency: 'BRL',
+        minimumFractionDigits: dec, maximumFractionDigits: dec,
+      });
+    }
+    case 'number': {
+      const dec = decimals !== undefined ? decimals : 2;
+      return Number(val).toLocaleString('pt-BR', {
+        minimumFractionDigits: dec, maximumFractionDigits: dec,
+      });
+    }
+    case 'percent': {
+      const dec = decimals !== undefined ? decimals : 2;
+      return Number(val).toLocaleString('pt-BR', {
+        minimumFractionDigits: dec, maximumFractionDigits: dec,
+      }) + '%';
+    }
     case 'date':
-      return val ? new Date(val).toLocaleDateString('pt-BR') : '';
-    case 'datetime':
-      return val ? new Date(val).toLocaleString('pt-BR') : '';
+    case 'datetime': {
+      const d = parseDateBR(val);
+      if (!d) return String(val);
+      const dd   = String(d.getDate()).padStart(2, '0');
+      const mm   = String(d.getMonth() + 1).padStart(2, '0');
+      const yyyy = String(d.getFullYear());
+      const yy   = yyyy.slice(-2);
+      const hh   = String(d.getHours()).padStart(2, '0');
+      const mi   = String(d.getMinutes()).padStart(2, '0');
+      const fmt  = dateFormat || (format === 'datetime' ? 'dd/mm/yyyy hh:mm' : 'dd/mm/yyyy');
+      switch (fmt) {
+        case 'dd/mm/yy':          return `${dd}/${mm}/${yy}`;
+        case 'dd/mm/yy hh:mm':    return `${dd}/${mm}/${yy} ${hh}:${mi}`;
+        case 'dd/mm/yyyy hh:mm':  return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
+        case 'hh:mm':             return `${hh}:${mi}`;
+        default:                  return `${dd}/${mm}/${yyyy}`;
+      }
+    }
     default:
       return String(val);
   }

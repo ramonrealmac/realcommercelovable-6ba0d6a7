@@ -5,9 +5,10 @@
 import type {
   RpbLayout, RpbBand, RpbComponent, RpbGroupDef,
   RpbTableComp, RpbTextComp, RpbTotalizerComp,
-  RpbImageComp, RpbLineComp, RpbTableColumn,
+  RpbImageComp, RpbLineComp, RpbBoxComp, RpbTableColumn,
 } from '../../types';
 import { formatValue, DEFAULT_STYLE } from '../../types';
+import type { RpbDateFormat } from '../../types';
 
 // ── Calcula totais de um dataset ──────────────────────────────
 function calcTotals(data: any[], columns: RpbTableColumn[]): Record<string, number> {
@@ -38,12 +39,30 @@ function calcTotalizer(comp: RpbTotalizerComp, data: any[]): number {
   }
 }
 
+// ── Formata data com máscara ──────────────────────────────────
+function formatDateWithMask(d: Date, fmt: string): string {
+  const dd   = String(d.getDate()).padStart(2, '0');
+  const mm   = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = String(d.getFullYear());
+  const yy   = yyyy.slice(-2);
+  const hh   = String(d.getHours()).padStart(2, '0');
+  const mi   = String(d.getMinutes()).padStart(2, '0');
+  switch (fmt) {
+    case 'dd/mm/yy':          return `${dd}/${mm}/${yy}`;
+    case 'dd/mm/yy hh:mm':    return `${dd}/${mm}/${yy} ${hh}:${mi}`;
+    case 'dd/mm/yyyy hh:mm':  return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
+    case 'hh:mm':             return `${hh}:${mi}`;
+    default:                  return `${dd}/${mm}/${yyyy}`;
+  }
+}
+
 // ── Substitui variáveis de sistema num texto ──────────────────
 // Suporta tanto {campo} quanto {{campo}} (ambos funcionam)
 function resolveText(
   content: string,
   row: Record<string, any> = {},
-  extraVars: Record<string, any> = {}
+  extraVars: Record<string, any> = {},
+  opts?: { dateFormat?: RpbDateFormat; decimals?: number }
 ): string {
   let out = content;
   const allVars = { ...row, ...extraVars };
@@ -57,17 +76,25 @@ function resolveText(
     out = out.split(`{${k}}`).join(String(v ?? ''));
   }
 
-  // Variáveis de sistema
+  // Variáveis de sistema — aplica máscara de data se configurada
   const now = new Date();
-  const dataBR = now.toLocaleDateString('pt-BR');
-  const horaBR = now.toLocaleTimeString('pt-BR');
+  const dateFmt = opts?.dateFormat || 'dd/mm/yyyy';
+  const dataBR  = formatDateWithMask(now, dateFmt);
+  const dataBRDefault = now.toLocaleDateString('pt-BR');
+  const horaBR  = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const horaBRFull = now.toLocaleTimeString('pt-BR');
+
+  // {data} e {data_emissao} respeitam a máscara configurada no componente
   out = out.split('{data}').join(dataBR)
            .split('{{data}}').join(dataBR)
-           .split('{hora}').join(horaBR)
-           .split('{{hora}}').join(horaBR)
            .split('{data_emissao}').join(dataBR)
+           .split('{{data_emissao}}').join(dataBR)
+           .split('{hora}').join(horaBRFull)
+           .split('{{hora}}').join(horaBRFull)
            .split('{hora_emissao}').join(horaBR)
-           .split('{datetime_emissao}').join(`${dataBR} ${horaBR}`);
+           .split('{{hora_emissao}}').join(horaBR)
+           .split('{datetime_emissao}').join(`${dataBRDefault} ${horaBR}`)
+           .split('{{datetime_emissao}}').join(`${dataBRDefault} ${horaBR}`);
 
   return out;
 }
@@ -102,14 +129,14 @@ function renderComponent(
   const pos = `
     position: absolute;
     left: ${comp.x}mm; top: ${comp.y}mm;
-    width: ${comp.w}mm; height: ${comp.type === 'line' ? 'auto' : comp.h + 'mm'};
+    width: ${comp.w}mm; height: ${(comp.type === 'line' && (comp as RpbLineComp).orientation !== 'vertical') ? 'auto' : comp.h + 'mm'};
     overflow: hidden; box-sizing: border-box;
   `;
 
   switch (comp.type) {
     case 'text': {
       const c = comp as RpbTextComp;
-      const txt = resolveText(c.content, row, extraVars);
+      const txt = resolveText(c.content, row, extraVars, { dateFormat: c.dateFormat, decimals: c.decimals });
       const s = c.style || DEFAULT_STYLE;
       return `<div style="${pos} ${textStyle(s)}">${txt}</div>`;
     }
@@ -124,9 +151,21 @@ function renderComponent(
 
     case 'line': {
       const c = comp as RpbLineComp;
+      if (c.orientation === 'vertical') {
+        return `<div style="${pos}">
+          <div style="width:${c.thickness}px;height:100%;background-color:${c.color};margin:0;"></div>
+        </div>`;
+      }
       return `<div style="${pos}">
         <hr style="border:none;border-top:${c.thickness}px solid ${c.color};margin:0;" />
       </div>`;
+    }
+
+    case 'box': {
+      const c = comp as RpbBoxComp;
+      const bg = c.bgColor !== 'transparent' ? `background-color:${c.bgColor};` : '';
+      const radius = c.borderRadius ? `border-radius:${c.borderRadius}px;` : '';
+      return `<div style="${pos} border:${c.borderThickness}px solid ${c.borderColor};${bg}${radius}"></div>`;
     }
 
     case 'totalizer': {
@@ -135,7 +174,7 @@ function renderComponent(
       const s = c.style || DEFAULT_STYLE;
       return `<div style="${pos} display:flex;align-items:center;gap:4px;${textStyle(s)}">
         <span style="color:#666">${c.labelText}</span>
-        <span style="font-weight:bold">${formatValue(val, c.format)}</span>
+        <span style="font-weight:bold">${formatValue(val, c.format, { decimals: (c as any).decimals, dateFormat: (c as any).dateFormat as RpbDateFormat })}</span>
       </div>`;
     }
 
@@ -181,7 +220,7 @@ function renderComponent(
                   color:${colColor};
                   border:1px solid #e5e7eb;
                   box-sizing:border-box;">
-                  ${formatValue(row[col.field], col.format)}
+                  ${formatValue(row[col.field], col.format, { decimals: (col as any).decimals, dateFormat: (col as any).dateFormat as RpbDateFormat })}
                 </td>`;
               }).join('')}
             </tr>`;
@@ -193,7 +232,7 @@ function renderComponent(
           <tr style="font-weight:bold;background:#f1f5f9;">
             ${cols.map(col => `
               <td style="padding:${rs.padding}px;text-align:${col.align};border:1px solid #ddd;box-sizing:border-box;font-size:${rs.fontSize || tableFontSize}pt;">
-                ${totals[col.field] !== undefined ? formatValue(totals[col.field], col.format) : ''}
+                ${totals[col.field] !== undefined ? formatValue(totals[col.field], col.format, { decimals: (col as any).decimals }) : ''}
               </td>`).join('')}
           </tr>
         </tfoot>` : '';

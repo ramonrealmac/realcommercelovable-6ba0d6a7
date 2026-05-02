@@ -2,7 +2,7 @@
 // Report Builder Pro — Paleta de Componentes (sidebar esquerda)
 // ============================================================
 import React from 'react';
-import { Type, Table2, Hash, Image, Minus } from 'lucide-react';
+import { Type, Table2, Hash, Image, Minus, GripVertical, Square } from 'lucide-react';
 import type { RpbBandName } from '../../types';
 
 interface PaletteItem {
@@ -14,11 +14,13 @@ interface PaletteItem {
 }
 
 const ITEMS: PaletteItem[] = [
-  { type: 'text',       label: 'Caixa de Texto',  icon: <Type  className="w-4 h-4" />, defaultW: 60, defaultH: 8  },
-  { type: 'table',      label: 'Tabela de Dados',  icon: <Table2 className="w-4 h-4" />, defaultW: 190, defaultH: 60 },
-  { type: 'totalizer',  label: 'Totalizador',      icon: <Hash  className="w-4 h-4" />, defaultW: 50, defaultH: 8  },
-  { type: 'image',      label: 'Imagem / Logo',    icon: <Image className="w-4 h-4" />, defaultW: 40, defaultH: 20 },
-  { type: 'line',       label: 'Linha',            icon: <Minus className="w-4 h-4" />, defaultW: 190, defaultH: 1  },
+  { type: 'text',       label: 'Caixa de Texto',    icon: <Type  className="w-4 h-4" />, defaultW: 60,  defaultH: 8   },
+  { type: 'table',      label: 'Tabela de Dados',    icon: <Table2 className="w-4 h-4" />, defaultW: 190, defaultH: 60  },
+  { type: 'totalizer',  label: 'Totalizador',        icon: <Hash  className="w-4 h-4" />, defaultW: 50,  defaultH: 8   },
+  { type: 'image',      label: 'Imagem / Logo',      icon: <Image className="w-4 h-4" />, defaultW: 40,  defaultH: 20  },
+  { type: 'line',       label: 'Linha Horizontal',   icon: <Minus className="w-4 h-4" />, defaultW: 190, defaultH: 1   },
+  { type: 'line-v',     label: 'Linha Vertical',     icon: <GripVertical className="w-4 h-4" />, defaultW: 1, defaultH: 20 },
+  { type: 'box',        label: 'Box / Retângulo',    icon: <Square className="w-4 h-4" />, defaultW: 80,  defaultH: 20  },
 ];
 
 interface Props {

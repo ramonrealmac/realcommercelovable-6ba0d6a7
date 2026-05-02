@@ -4,8 +4,8 @@
 import React, { useState } from 'react';
 import type {
   RpbComponent, RpbStyle, RpbTableColumn, RpbTotalizerComp,
-  RpbTextComp, RpbTableComp, RpbImageComp, RpbLineComp,
-  RpbAlign, RpbFormat, RpbTotalOp,
+  RpbTextComp, RpbTableComp, RpbImageComp, RpbLineComp, RpbBoxComp,
+  RpbAlign, RpbFormat, RpbTotalOp, RpbDateFormat,
 } from '../../types';
 import { DEFAULT_STYLE } from '../../types';
 
@@ -68,7 +68,7 @@ const RpbProperties: React.FC<Props> = ({ component, queryColumns, onChange, onD
   };
 
   return (
-    <div className="w-60 flex-shrink-0 border-l border-border bg-card flex flex-col overflow-hidden">
+    <div className="w-72 flex-shrink-0 border-l border-border bg-card flex flex-col overflow-hidden">
       <div className="px-3 py-2 border-b border-border flex items-center justify-between">
         <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Propriedades</p>
         <button onClick={onDelete} className="text-[10px] text-destructive hover:bg-destructive/10 rounded px-1 py-0.5">
@@ -148,6 +148,80 @@ const RpbProperties: React.FC<Props> = ({ component, queryColumns, onChange, onD
                 </div>
               )}
             </div>
+
+            {/* Formato do campo — data do sistema */}
+            <div className="bg-violet-50 border border-violet-200 rounded p-2 space-y-1.5">
+              <span className="text-[9px] font-semibold text-violet-700 uppercase tracking-wide block">Formato do campo</span>
+              <Select
+                value={(component as RpbTextComp).format || 'text'}
+                onChange={e => upd({ format: e.target.value as any, dateFormat: undefined, decimals: undefined } as any)}
+              >
+                <option value="text">Texto (padrão)</option>
+                <option value="date">Data</option>
+                <option value="datetime">Data + Hora</option>
+                <option value="number">Número</option>
+                <option value="currency">Moeda (R$)</option>
+                <option value="percent">Percentual (%)</option>
+              </Select>
+
+              {/* Máscara de data */}
+              {['date', 'datetime'].includes((component as RpbTextComp).format || '') && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded p-1.5">
+                  <span className="text-[9px] font-semibold text-emerald-700 uppercase tracking-wide block mb-1">Máscara de data</span>
+                  <Select
+                    value={(component as RpbTextComp).dateFormat || ((component as RpbTextComp).format === 'datetime' ? 'dd/mm/yyyy hh:mm' : 'dd/mm/yyyy')}
+                    onChange={e => upd({ dateFormat: e.target.value as RpbDateFormat } as any)}
+                  >
+                    <option value="dd/mm/yyyy">dd/mm/yyyy</option>
+                    <option value="dd/mm/yy">dd/mm/yy</option>
+                    <option value="dd/mm/yyyy hh:mm">dd/mm/yyyy hh:mm</option>
+                    <option value="dd/mm/yy hh:mm">dd/mm/yy hh:mm</option>
+                    <option value="hh:mm">hh:mm (só hora)</option>
+                  </Select>
+                  <span className="text-[9px] text-emerald-600 font-mono mt-1 block">
+                    ex: {(() => {
+                      const fmt = (component as RpbTextComp).dateFormat || ((component as RpbTextComp).format === 'datetime' ? 'dd/mm/yyyy hh:mm' : 'dd/mm/yyyy');
+                      const now = new Date();
+                      const dd = String(now.getDate()).padStart(2,'0');
+                      const mm2 = String(now.getMonth()+1).padStart(2,'0');
+                      const yyyy = String(now.getFullYear());
+                      const yy = yyyy.slice(-2);
+                      const hh = String(now.getHours()).padStart(2,'0');
+                      const mi = String(now.getMinutes()).padStart(2,'0');
+                      if (fmt === 'dd/mm/yy') return `${dd}/${mm2}/${yy}`;
+                      if (fmt === 'dd/mm/yy hh:mm') return `${dd}/${mm2}/${yy} ${hh}:${mi}`;
+                      if (fmt === 'dd/mm/yyyy hh:mm') return `${dd}/${mm2}/${yyyy} ${hh}:${mi}`;
+                      if (fmt === 'hh:mm') return `${hh}:${mi}`;
+                      return `${dd}/${mm2}/${yyyy}`;
+                    })()}
+                  </span>
+                </div>
+              )}
+
+              {/* Casas decimais */}
+              {['number', 'currency', 'percent'].includes((component as RpbTextComp).format || '') && (
+                <div className="bg-blue-50 border border-blue-200 rounded p-1.5">
+                  <span className="text-[9px] font-semibold text-blue-700 uppercase tracking-wide block mb-1">Casas decimais</span>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number" min={0} max={10}
+                      value={(component as RpbTextComp).decimals !== undefined ? (component as RpbTextComp).decimals : ''}
+                      placeholder="2 (padrão)"
+                      className="w-20"
+                      onChange={e => {
+                        const v = parseInt(e.target.value);
+                        upd({ decimals: isNaN(v) ? undefined : v } as any);
+                      }} />
+                    <span className="text-[9px] text-blue-600 font-mono">
+                      ex: {Number(1234.5678).toLocaleString('pt-BR', {
+                        minimumFractionDigits: (component as RpbTextComp).decimals ?? 2,
+                        maximumFractionDigits: (component as RpbTextComp).decimals ?? 2,
+                      })}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -190,13 +264,37 @@ const RpbProperties: React.FC<Props> = ({ component, queryColumns, onChange, onD
             <div>
               <Label>Formato</Label>
               <Select value={(component as RpbTotalizerComp).format}
-                onChange={e => upd({ format: e.target.value as RpbFormat } as any)}>
+                onChange={e => upd({ format: e.target.value as RpbFormat, decimals: undefined } as any)}>
                 <option value="number">Número</option>
                 <option value="currency">Moeda (R$)</option>
                 <option value="percent">Percentual</option>
                 <option value="text">Texto</option>
               </Select>
             </div>
+
+            {/* Casas decimais — visível quando number/currency/percent */}
+            {['number', 'currency', 'percent'].includes((component as RpbTotalizerComp).format) && (
+              <div className="bg-blue-50 border border-blue-200 rounded p-2">
+                <span className="text-[9px] font-semibold text-blue-700 uppercase tracking-wide block mb-1">Casas decimais</span>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number" min={0} max={10}
+                    value={(component as RpbTotalizerComp).decimals !== undefined ? (component as RpbTotalizerComp).decimals : ''}
+                    placeholder="2 (padrão)"
+                    className="w-20"
+                    onChange={e => {
+                      const v = parseInt(e.target.value);
+                      upd({ decimals: isNaN(v) ? undefined : v } as any);
+                    }} />
+                  <span className="text-[9px] text-blue-600 font-mono">
+                    ex: {Number(1234.5678).toLocaleString('pt-BR', {
+                      minimumFractionDigits: (component as RpbTotalizerComp).decimals ?? 2,
+                      maximumFractionDigits: (component as RpbTotalizerComp).decimals ?? 2,
+                    })}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -225,6 +323,14 @@ const RpbProperties: React.FC<Props> = ({ component, queryColumns, onChange, onD
         {component.type === 'line' && (
           <div className="space-y-2">
             <div>
+              <Label>Orientação</Label>
+              <Select value={(component as RpbLineComp).orientation}
+                onChange={e => upd({ orientation: e.target.value as any } as any)}>
+                <option value="horizontal">Horizontal</option>
+                <option value="vertical">Vertical</option>
+              </Select>
+            </div>
+            <div>
               <Label>Cor</Label>
               <Input type="color" value={(component as RpbLineComp).color}
                 onChange={e => upd({ color: e.target.value } as any)} />
@@ -233,6 +339,37 @@ const RpbProperties: React.FC<Props> = ({ component, queryColumns, onChange, onD
               <Label>Espessura (px)</Label>
               <Input type="number" value={(component as RpbLineComp).thickness}
                 onChange={e => upd({ thickness: parseInt(e.target.value) || 1 } as any)} />
+            </div>
+          </div>
+        )}
+
+        {/* ── Box component ────────────────────────────────────── */}
+        {component.type === 'box' && (
+          <div className="space-y-2">
+            <div>
+              <Label>Cor da Borda</Label>
+              <Input type="color" value={(component as RpbBoxComp).borderColor}
+                onChange={e => upd({ borderColor: e.target.value } as any)} />
+            </div>
+            <div>
+              <Label>Espessura da Borda (px)</Label>
+              <Input type="number" value={(component as RpbBoxComp).borderThickness}
+                onChange={e => upd({ borderThickness: parseInt(e.target.value) || 1 } as any)} />
+            </div>
+            <div>
+              <Label>Cor de Fundo</Label>
+              <Input type="color"
+                value={(component as RpbBoxComp).bgColor === 'transparent' ? '#ffffff' : (component as RpbBoxComp).bgColor}
+                onChange={e => upd({ bgColor: e.target.value } as any)} />
+              <button
+                onClick={() => upd({ bgColor: 'transparent' } as any)}
+                className="text-[9px] text-primary underline mt-0.5"
+              >Sem fundo (transparente)</button>
+            </div>
+            <div>
+              <Label>Arredondamento (px)</Label>
+              <Input type="number" min={0} value={(component as RpbBoxComp).borderRadius}
+                onChange={e => upd({ borderRadius: parseInt(e.target.value) || 0 } as any)} />
             </div>
           </div>
         )}
@@ -293,8 +430,11 @@ const RpbProperties: React.FC<Props> = ({ component, queryColumns, onChange, onD
                         className="flex items-center justify-between px-1.5 py-1 bg-secondary/40 cursor-pointer hover:bg-secondary/70 select-none"
                         onClick={() => setExpandedColIdx(isExpanded ? null : idx)}
                       >
-                        <span className="text-[10px] font-mono text-primary truncate max-w-[100px]">{col.field}</span>
+                        <span className="text-[10px] font-mono text-primary truncate max-w-[90px]">{col.field}</span>
                         <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                            {col.format === 'number' ? '#.##' : col.format === 'currency' ? 'R$' : col.format === 'percent' ? '%' : col.format === 'date' ? '📅' : col.format === 'datetime' ? '🕐' : 'abc'}
+                          </span>
                           <span className="text-[9px] text-muted-foreground">{col.w}mm</span>
                           <span className="text-[9px] text-muted-foreground">{isExpanded ? '▲' : '▼'}</span>
                           <button
@@ -343,14 +483,73 @@ const RpbProperties: React.FC<Props> = ({ component, queryColumns, onChange, onD
                               <option value="right">Dir.</option>
                             </Select>
                             <Select value={col.format}
-                              onChange={e => updCol(idx, { format: e.target.value as RpbFormat })}>
+                              onChange={e => updCol(idx, { format: e.target.value as RpbFormat, decimals: undefined, dateFormat: undefined } as any)}>
                               <option value="text">Texto</option>
                               <option value="number">Número</option>
-                              <option value="currency">Moeda</option>
+                              <option value="currency">Moeda (R$)</option>
                               <option value="date">Data</option>
-                              <option value="percent">%</option>
+                              <option value="datetime">Data+Hora</option>
+                              <option value="percent">Percentual (%)</option>
                             </Select>
                           </div>
+
+                          {/* Casas decimais — visível e destacado quando number/currency/percent */}
+                          {['number', 'currency', 'percent'].includes(col.format) && (
+                            <div className="bg-blue-50 border border-blue-200 rounded p-2">
+                              <span className="text-[9px] font-semibold text-blue-700 uppercase tracking-wide block mb-1">Casas decimais</span>
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  type="number" min={0} max={10}
+                                  value={(col as any).decimals !== undefined ? (col as any).decimals : ''}
+                                  placeholder="2 (padrão)"
+                                  className="w-20"
+                                  onChange={e => {
+                                    const v = parseInt(e.target.value);
+                                    updCol(idx, { decimals: isNaN(v) ? undefined : v } as any);
+                                  }} />
+                                <span className="text-[9px] text-blue-600 font-mono">
+                                  ex: {Number(1234.5678).toLocaleString('pt-BR', {
+                                    minimumFractionDigits: (col as any).decimals ?? 2,
+                                    maximumFractionDigits: (col as any).decimals ?? 2,
+                                  })}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Formato de data — visível e destacado quando date/datetime */}
+                          {['date', 'datetime'].includes(col.format) && (
+                            <div className="bg-emerald-50 border border-emerald-200 rounded p-2">
+                              <span className="text-[9px] font-semibold text-emerald-700 uppercase tracking-wide block mb-1">Formato de data</span>
+                              <Select
+                                value={(col as any).dateFormat || (col.format === 'datetime' ? 'dd/mm/yyyy hh:mm' : 'dd/mm/yyyy')}
+                                onChange={e => updCol(idx, { dateFormat: e.target.value as RpbDateFormat } as any)}>
+                                <option value="dd/mm/yyyy">dd/mm/yyyy</option>
+                                <option value="dd/mm/yy">dd/mm/yy</option>
+                                <option value="dd/mm/yyyy hh:mm">dd/mm/yyyy hh:mm</option>
+                                <option value="dd/mm/yy hh:mm">dd/mm/yy hh:mm</option>
+                                <option value="hh:mm">hh:mm (só hora)</option>
+                              </Select>
+                              <span className="text-[9px] text-emerald-600 font-mono mt-1 block">
+                                ex: {(() => {
+                                  const fmt = (col as any).dateFormat || (col.format === 'datetime' ? 'dd/mm/yyyy hh:mm' : 'dd/mm/yyyy');
+                                  const now = new Date();
+                                  const dd = String(now.getDate()).padStart(2,'0');
+                                  const mm2 = String(now.getMonth()+1).padStart(2,'0');
+                                  const yyyy = String(now.getFullYear());
+                                  const yy = yyyy.slice(-2);
+                                  const hh = String(now.getHours()).padStart(2,'0');
+                                  const mi = String(now.getMinutes()).padStart(2,'0');
+                                  if (fmt === 'dd/mm/yy') return `${dd}/${mm2}/${yy}`;
+                                  if (fmt === 'dd/mm/yy hh:mm') return `${dd}/${mm2}/${yy} ${hh}:${mi}`;
+                                  if (fmt === 'dd/mm/yyyy hh:mm') return `${dd}/${mm2}/${yyyy} ${hh}:${mi}`;
+                                  if (fmt === 'hh:mm') return `${hh}:${mi}`;
+                                  return `${dd}/${mm2}/${yyyy}`;
+                                })()}
+                              </span>
+                            </div>
+                          )}
+
                           <Select value={col.totalType}
                             onChange={e => updCol(idx, { totalType: e.target.value as RpbTotalOp })}>
                             <option value="none">Sem total</option>
