@@ -412,6 +412,17 @@ const EmpresaForm: React.FC = () => {
     toast.success("Logomarca enviada com sucesso!");
   };
 
+  const handleUploadImagemCaixa = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const XFileName = `imgcaixa_${Date.now()}_${file.name}`;
+    const { data, error } = await supabase.storage.from("logos").upload(XFileName, file, { upsert: true });
+    if (error) { toast.error("Erro ao fazer upload: " + error.message); return; }
+    const { data: urlData } = supabase.storage.from("logos").getPublicUrl(data.path);
+    updateEdit("imagem_caixa", urlData.publicUrl);
+    toast.success("Imagem do caixa enviada com sucesso!");
+  };
+
   /* ── field helper ── */
   const XDisplayVal = (key: keyof TEmpresa) =>
     XIsEditing ? (XEdit as any)[key] ?? "" : (XCurrent as any)?.[key] ?? "";
@@ -632,10 +643,34 @@ const EmpresaForm: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {field("tp_operacao_caixa", "Tipo Operação Caixa", { type: "number" })}
               {field("valida_estoque", "Lógica Validação Estoque")}
-              {field("imagem_caixa", "URL Imagem Caixa")}
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold text-foreground mb-4 border-b pb-2">Imagem do Caixa</h3>
+              <div className="flex items-center gap-4">
+                {XDisplayVal("imagem_caixa") && (
+                  <img
+                    src={XDisplayVal("imagem_caixa") as string}
+                    alt="Imagem Caixa"
+                    className="w-24 h-24 object-contain border rounded"
+                  />
+                )}
+                {XIsEditing && (
+                  <div>
+                    <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded text-sm hover:opacity-90">
+                      <Upload className="w-4 h-4" />
+                      Upload Imagem Caixa
+                      <input type="file" accept="image/*" className="hidden" onChange={handleUploadImagemCaixa} />
+                    </label>
+                    {XEdit.imagem_caixa && (
+                      <Button variant="ghost" size="sm" className="ml-2" onClick={() => updateEdit("imagem_caixa", "")}>Remover</Button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
