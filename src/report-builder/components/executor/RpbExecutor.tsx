@@ -15,6 +15,7 @@ interface Props {
   relatorio: IRpbRelatorio;
   conexoes: IRpbConexao[];
   initialValues?: Record<string, any>;
+  empresaLogo?: string;
 }
 
 // ── Tipos de destino ─────────────────────────────────────────
@@ -56,7 +57,7 @@ function exportTxt(data: any[], title: string) {
 }
 
 // ── Componente Principal ──────────────────────────────────────
-const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues }) => {
+const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empresaLogo }) => {
   const [filtros, setFiltros]         = useState<IRpbFiltro[]>([]);
   const [valores, setValores]         = useState<Record<string, any>>(initialValues || {});
   const [loading, setLoading]         = useState(false);
@@ -132,6 +133,7 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues }) =>
       relatorio_nome:      relatorio.nome,
       relatorio_descricao: relatorio.descricao || '',
       total_registros:     rows.length,
+      empresa_logo:        empresaLogo || '',
       ...filtroVars,
     };
     setExtraVarsRef(evars);

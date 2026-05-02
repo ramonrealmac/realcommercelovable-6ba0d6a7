@@ -46,6 +46,7 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
     { v: '{relatorio_nome}',   d: 'Nome do relatório' },
     { v: '{total_registros}',  d: 'Total de registros' },
     { v: '{relatorio_descricao}', d: 'Descrição do relatório' },
+    { v: '{empresa_logo}',     d: 'URL da logomarca da empresa' },
   ];
 
   const copyToClipboard = (text: string) => {
@@ -74,24 +75,34 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
 
     const detect = async () => {
       setDetecting(true);
-      // Remove cláusulas com {{variaveis}} não preenchidas substituindo por NULL
-      const safeSql = relatorio.query_sql.replace(/\{\{[^}]+\}\}/g, 'NULL');
-      const limitedSql = `SELECT * FROM (${safeSql}) __rpb_detect__ LIMIT 1`;
+      // Remove cláusulas com {{variaveis}} ou {variaveis} não preenchidas 
+      // Substituímos por NULL para tentar manter a sintaxe SQL válida
+      const safeSql = relatorio.query_sql.replace(/\{{1,2}[^}]+\}{1,2}/g, 'NULL');
+      // Usamos WHERE 1=0 para obter apenas o esquema sem processar dados
+      const limitedSql = `SELECT * FROM (${safeSql}) __rpb_detect__ WHERE 1=0`;
       const { data, error } = await rpbExecuteQuery(limitedSql, {});
       setDetecting(false);
-      if (!error && data.length > 0) {
-        setQueryColumns(Object.keys(data[0]));
+      if (!error) {
+        // Mesmo com WHERE 1=0, o RPC do Supabase deve retornar as chaves do objeto (esquema)
+        // Se não retornar nada (array vazio sem chaves), tentamos com LIMIT 1
+        if (data && data.length > 0) {
+          setQueryColumns(Object.keys(data[0]));
+        } else {
+          const fallbackSql = `SELECT * FROM (${safeSql}) __rpb_detect__ LIMIT 1`;
+          const { data: fData } = await rpbExecuteQuery(fallbackSql, {});
+          if (fData && fData.length > 0) setQueryColumns(Object.keys(fData[0]));
+        }
       }
     };
     detect();
-  }, [relatorio.rpb_relatorio_id]); // eslint-disable-line
+  }, [relatorio.rpb_relatorio_id, relatorio.query_sql]); // eslint-disable-line
 
   // ── Detectar colunas manualmente (botão) ─────────────────
   const handleDetectColumns = async () => {
     if (!relatorio.query_sql?.trim()) { toast.warning('Query SQL vazia — salve a query antes.'); return; }
     setDetecting(true);
-    const safeSql = relatorio.query_sql.replace(/\{\{[^}]+\}\}/g, 'NULL');
-    const limitedSql = `SELECT * FROM (${safeSql}) __rpb_detect__ LIMIT 5`;
+    const safeSql = relatorio.query_sql.replace(/\{{1,2}[^}]+\}{1,2}/g, 'NULL');
+    const limitedSql = `SELECT * FROM (${safeSql}) __rpb_detect__ LIMIT 1`;
     const { data, error } = await rpbExecuteQuery(limitedSql, {});
     setDetecting(false);
     if (error) { toast.error('Erro ao detectar colunas: ' + error); return; }

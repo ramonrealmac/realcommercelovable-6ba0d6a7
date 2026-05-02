@@ -776,6 +776,7 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
             <RpbExecutor 
               relatorio={tempLayout ? { ...selected, layout_json: tempLayout } : selected} 
               conexoes={conexoes} 
+              empresaLogo={XLogomarca}
             />
           </div>
         )}
@@ -869,16 +870,21 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
               </section>
 
               <section>
-                <h4 className="font-bold text-indigo-600 mb-1 uppercase text-xs">9. Importar do Jasper Reports (.jrxml)</h4>
-                <p className="text-muted-foreground mb-2">
-                  Na aba <strong>Query SQL</strong>, em modo de edição, clique em <strong>"Importar Jasper"</strong> para extrair a query SQL de arquivos <code>.jrxml</code>.
+                <h4 className="font-bold text-emerald-600 mb-1 uppercase text-xs">11. Logomarca da Empresa</h4>
+                <p className="text-muted-foreground">
+                  Para exibir o logotipo da sua empresa automaticamente:
                 </p>
+                <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside ml-1">
+                  <li>Arraste um componente de <strong>Imagem</strong> para o cabeçalho.</li>
+                  <li>No campo <strong>URL da Imagem</strong>, digite exatamente: <code>&#123;empresa_logo&#125;</code></li>
+                </ul>
+                <p className="text-[10px] text-slate-500 mt-1 italic">* O sistema buscará automaticamente a imagem cadastrada nas configurações da sua empresa.</p>
               </section>
 
               <section>
-                <h4 className="font-bold text-slate-600 mb-1 uppercase text-xs">10. Exportar / Importar (.rpb)</h4>
+                <h4 className="font-bold text-slate-600 mb-1 uppercase text-xs">12. Exportar / Importar (.rpb)</h4>
                 <p className="text-muted-foreground mb-2">
-                  Use os botões <strong>"Exportar .rpb"</strong> e <strong>"Importar .rpb"</strong> para fazer backup completo (SQL + Layout + Filtros).
+                  Use os botões <strong>"Exportar .rpb"</strong> e <strong>"Importar .rpb"</strong> para fazer backup completo.
                 </p>
               </section>
             </div>
