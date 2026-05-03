@@ -102,14 +102,39 @@ const NfeRecebidasForm: React.FC = () => {
   useEffect(() => {
     if (XEmpresaId) {
       // Busca CNPJ e UF da empresa atual
-      db.from("empresa").select("cnpj").eq("empresa_id", XEmpresaId).maybeSingle()
-        .then(({ data, error }: any) => {
-          if (error) console.error("Erro ao buscar CNPJ:", error);
+      db.from("empresa")
+        .select("cnpj, endereco_cidade_id")
+        .eq("empresa_id", XEmpresaId)
+        .maybeSingle()
+        .then(async ({ data, error }: any) => {
+          if (error) {
+            console.error("Erro ao buscar dados da empresa:", error);
+            return;
+          }
+          
           if (data?.cnpj) {
             const cleanCnpj = data.cnpj.replace(/\D/g, "");
             setXCNPJ(cleanCnpj);
-          } else {
-            console.warn("Empresa sem CNPJ cadastrado.");
+          }
+
+          // Busca a UF da cidade se houver um ID vinculado
+          if (data?.endereco_cidade_id) {
+            const { data: cityData } = await db.from("cidade")
+              .select("uf")
+              .eq("cidade_id", data.endereco_cidade_id)
+              .maybeSingle();
+            
+            if (cityData?.uf) {
+              const ufMap: Record<string, string> = {
+                'RO': '11', 'AC': '12', 'AM': '13', 'RR': '14', 'PA': '15', 'AP': '16', 'TO': '17',
+                'MA': '21', 'PI': '22', 'CE': '23', 'RN': '24', 'PB': '25', 'PE': '26', 'AL': '27', 'SE': '28', 'BA': '29',
+                'MG': '31', 'ES': '32', 'RJ': '33', 'SP': '35',
+                'PR': '41', 'SC': '42', 'RS': '43',
+                'MS': '50', 'MT': '51', 'GO': '52', 'DF': '53'
+              };
+              const code = ufMap[cityData.uf.toUpperCase()] || cityData.uf;
+              setXUF(code);
+            }
           }
         });
       
@@ -117,62 +142,114 @@ const NfeRecebidasForm: React.FC = () => {
     }
   }, [XEmpresaId]);
 
-  const handleSincronizar = async () => {
+  const handleSincronizar = async (forceStart: boolean = false) => {
     if (!XCNPJ) { toast.error("CNPJ não informado."); return; }
     setXLoading(true);
+    
+    let currentNSU = "0";
+    let hasMore = true;
+    let totalNovos = 0;
+    let loopCount = 0;
+
     try {
-      // 1. Busca último NSU no banco para esta empresa
-      const { data: nsuData } = await db.from("nfe_recebida")
-        .select("nsu")
-        .eq("empresa_id", XEmpresaId)
-        .order("nsu", { ascending: false })
-        .limit(1);
-      
-      const lastNSU = nsuData?.[0]?.nsu || "0";
-      
-      // 2. Chama o Provedor
-      const resp = await provedorService.distribuicaoDFe(XUF, XCNPJ, lastNSU);
-      
-      if (resp.includes("ERRO:")) {
-        throw new Error(resp.replace("ERRO:", "").trim());
+      // 1. Define NSU inicial
+      if (!forceStart) {
+        const { data: nsuData } = await db.from("nfe_recebida")
+          .select("nsu")
+          .eq("empresa_id", XEmpresaId);
+        
+        if (nsuData && nsuData.length > 0) {
+          const maxNSU = nsuData.reduce((max: number, r: any) => {
+            const n = parseInt(r.nsu || "0");
+            return isNaN(n) ? max : Math.max(max, n);
+          }, 0);
+          currentNSU = maxNSU.toString();
+        }
       }
 
-      const parsed = provedorService.parseIni(resp);
-      
-      const dfeInfo = parsed.DistribuicaoDFe;
-      if (!dfeInfo || (dfeInfo.cStat !== "138" && dfeInfo.cStat !== "137")) {
-         toast.info(`Provedor: ${dfeInfo?.xMotivo || "Sem documentos novos ou erro na consulta"}`);
-         if (dfeInfo?.cStat !== "137") return;
+      // 2. Loop de Sincronização (Lotes de 50)
+      while (hasMore && loopCount < 10) { // Limite de 10 voltas (500 notas) por clique para segurança
+        loopCount++;
+        console.log(`[DFe] Lote ${loopCount}: Enviando Requisição UF=${XUF}, NSU=${currentNSU}`);
+        
+        const resp = await provedorService.distribuicaoDFe(XUF, XCNPJ, currentNSU);
+        
+        if (resp.includes("ERRO:")) {
+          const errorMsg = resp.replace("ERRO:", "").trim();
+          if (errorMsg.includes("640") || errorMsg.includes("superior ao maior NSU")) {
+            if (confirm("O NSU local está à frente da SEFAZ. Deseja reiniciar a sincronização do zero?")) {
+              setXLoading(false);
+              handleSincronizar(true);
+              return;
+            }
+            break;
+          }
+          if (errorMsg.includes("656") || errorMsg.includes("Consumo Indevido")) {
+            toast.warning("SEFAZ: Consumo Indevido. Aguarde alguns minutos ou uma hora para tentar novamente.");
+            break;
+          }
+          throw new Error(errorMsg);
+        }
+
+        const parsed = provedorService.parseIni(resp);
+        const dfeInfo = parsed.DistribuicaoDFe;
+
+        if (!dfeInfo) break;
+
+        // Verifica status da resposta
+        if (dfeInfo.cStat === "137") {
+          if (loopCount === 1) toast.info("Nenhum documento novo localizado na SEFAZ.");
+          hasMore = false;
+          break;
+        }
+
+        if (dfeInfo.cStat !== "138") {
+          toast.warning(`SEFAZ: ${dfeInfo.xMotivo || "Resposta inesperada"}`);
+          hasMore = false;
+          break;
+        }
+
+        // Processa documentos deste lote
+        const docs = Object.keys(parsed).filter(k => k.startsWith("resNFe") || k.startsWith("procNFe"));
+        for (const key of docs) {
+          const doc = parsed[key];
+          if (!doc.chNFe) continue;
+
+          const payload = {
+            empresa_id: XEmpresaId,
+            chave_nfe: doc.chNFe,
+            cnpj_emitente: doc.CNPJ || doc.CPF,
+            nm_emitente: (doc.xNome || "DESCONHECIDO").toUpperCase(),
+            dt_emissao: doc.dEmi,
+            vl_total: Number(doc.vNF || 0),
+            nr_nota: doc.chNFe.substring(25, 34),
+            serie: doc.chNFe.substring(22, 25),
+            nsu: doc.NSU,
+            xml_resumo: JSON.stringify(doc),
+            updated_at: new Date().toISOString()
+          };
+
+          const { error } = await db.from("nfe_recebida").upsert(payload, { onConflict: "chave_nfe" });
+          if (!error) totalNovos++;
+        }
+
+        // Prepara próxima volta
+        const ultNSU = dfeInfo.ultNSU;
+        const maxNSU = dfeInfo.maxNSU;
+
+        if (ultNSU && maxNSU && parseInt(ultNSU) < parseInt(maxNSU)) {
+          currentNSU = ultNSU;
+          // Pequena pausa para não sobrecarregar
+          await new Promise(r => setTimeout(r, 500));
+        } else {
+          hasMore = false;
+        }
       }
 
-      // 3. Processa documentos (resNFe, procNFe, resEvento, procEvento)
-      const docs = Object.keys(parsed).filter(k => k.startsWith("resNFe") || k.startsWith("procNFe"));
-      let novos = 0;
-
-      for (const key of docs) {
-        const doc = parsed[key];
-        if (!doc.chNFe) continue;
-
-        const payload = {
-          empresa_id: XEmpresaId,
-          chave_nfe: doc.chNFe,
-          cnpj_emitente: doc.CNPJ || doc.CPF,
-          nm_emitente: (doc.xNome || "DESCONHECIDO").toUpperCase(),
-          dt_emissao: doc.dEmi,
-          vl_total: Number(doc.vNF || 0),
-          nr_nota: doc.chNFe.substring(25, 34),
-          serie: doc.chNFe.substring(22, 25),
-          nsu: doc.NSU,
-          xml_resumo: JSON.stringify(doc),
-          updated_at: new Date().toISOString()
-        };
-
-        const { error } = await db.from("nfe_recebida").upsert(payload, { onConflict: "chave_nfe" });
-        if (!error) novos++;
+      if (totalNovos > 0) {
+        toast.success(`Sincronização concluída. ${totalNovos} novos documentos processados.`);
+        loadData();
       }
-
-      toast.success(`Sincronização concluída. ${novos} registros processados.`);
-      // loadData(); // O usuário solicitou que sincronizar não execute filtrar automaticamente
     } catch (e: any) {
       console.error(e);
       toast.error("Erro no Provedor: " + e.message);
