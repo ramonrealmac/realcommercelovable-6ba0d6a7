@@ -4,8 +4,9 @@ import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import { provedorService } from "@/services/provedorService";
-import { RefreshCw, Download, CheckCircle, AlertTriangle, ShieldCheck, ShieldAlert, FileSearch, Eye } from "lucide-react";
+import { RefreshCw, Download, CheckCircle, AlertTriangle, ShieldCheck, ShieldAlert, FileSearch, Eye, Terminal } from "lucide-react";
 import { formatCPFCNPJ } from "@/lib/validators";
+import AcbrLogDialog from "./AcbrLogDialog";
 
 const db = supabase as any;
 
@@ -59,6 +60,19 @@ const NfeRecebidasForm: React.FC = () => {
   const [XDtFim, setXDtFim] = useState(new Date().toISOString().substring(0, 10));
   const [XStatusFilter, setXStatusFilter] = useState("");
   const [XSearchFilters, setXSearchFilters] = useState<Record<string, string>>({});
+  const [XLogOpen, setXLogOpen] = useState(false);
+
+  const registrarLog = async (comando: string, resposta: string) => {
+    try {
+      await db.from("acbr_log").insert({
+        empresa_id: XEmpresaId,
+        comando: comando,
+        resposta: resposta
+      });
+    } catch (e) {
+      console.error("Erro ao registrar log ACBr:", e);
+    }
+  };
 
   const XFilteredData = XData.filter(row => {
     // Local data grid filters (colunas)
@@ -168,11 +182,17 @@ const NfeRecebidasForm: React.FC = () => {
       }
 
       // 2. Loop de Sincronização (Lotes de 50)
-      while (hasMore && loopCount < 10) { // Limite de 10 voltas (500 notas) por clique para segurança
+      while (hasMore && loopCount < 10) {
         loopCount++;
-        console.log(`[DFe] Lote ${loopCount}: Enviando Requisição UF=${XUF}, NSU=${currentNSU}`);
         
-        const resp = await provedorService.distribuicaoDFe(XUF, XCNPJ, currentNSU);
+        // Garante que temos uma UF válida (padrão 35 se estiver vazio ou 0)
+        const sendUF = (!XUF || XUF === "0") ? "35" : XUF;
+        
+        const comando = `NFE.DistribuicaoDFe(${sendUF}, "${XCNPJ}", "${currentNSU}")`;
+        console.log(`[DFe] Lote ${loopCount}: Enviando Comando -> ${comando}`);
+        
+        const resp = await provedorService.enviarComando(comando);
+        await registrarLog(comando, resp);
         
         if (resp.includes("ERRO:")) {
           const errorMsg = resp.replace("ERRO:", "").trim();
@@ -263,6 +283,7 @@ const NfeRecebidasForm: React.FC = () => {
     setXLoading(true);
     try {
       const resp = await provedorService.enviarManifesto(row.chave_nfe, tipo, XCNPJ);
+      await registrarLog(`Manifesto(${tipo}) - ${row.chave_nfe}`, resp);
       
       // Atualiza status localmente (em um cenário real leríamos o retorno do protocolo)
       const { error } = await db.from("nfe_recebida")
@@ -285,7 +306,10 @@ const NfeRecebidasForm: React.FC = () => {
       // Para baixar o XML completo, chamamos a distribuição novamente por chave
       // Ou esperamos a próxima sincronização se a SEFAZ já tiver liberado via NSU
       // Aqui vamos forçar uma consulta por chave
-      const resp = await provedorService.enviarComando(`NFE.DistribuicaoDFePorChave(${XUF}, "${XCNPJ}", "${row.chave_nfe}")`);
+      const comando = `NFE.DistribuicaoDFePorChave(${XUF}, "${XCNPJ}", "${row.chave_nfe}")`;
+      const resp = await provedorService.enviarComando(comando);
+      await registrarLog(comando, resp);
+
       const parsed = provedorService.parseIni(resp);
       
       const key = Object.keys(parsed).find(k => k.startsWith("procNFe"));
@@ -429,11 +453,25 @@ const NfeRecebidasForm: React.FC = () => {
                   <RefreshCw className={`w-3 h-3 ${XLoading ? "animate-spin" : ""}`} />
                   SINCRONIZAR
                 </button>
+                <button 
+                  onClick={() => setXLogOpen(true)}
+                  className="bg-secondary text-secondary-foreground px-3 py-1.5 rounded-md text-xs font-bold hover:bg-secondary/80 transition-colors flex items-center gap-1 border border-border shadow-sm"
+                  title="Ver Log de Comandos ACBr"
+                >
+                  <Terminal className="w-3 h-3" />
+                  LOG ACBr
+                </button>
               </div>
             </div>
           }
         />
       </div>
+
+      <AcbrLogDialog 
+        isOpen={XLogOpen} 
+        onClose={() => setXLogOpen(false)} 
+        empresaId={XEmpresaId} 
+      />
     </div>
   );
 };
