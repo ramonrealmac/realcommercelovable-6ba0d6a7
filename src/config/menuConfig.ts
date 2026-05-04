@@ -190,7 +190,14 @@ export const MENU_CONFIG: MenuItem[] = [
     icon: BadgeDollarSign,
     children: [
       { id: "mov-financeiras", title: "Movimentações Financeiras", icon: BarChart3 },
-      { id: "contas-receber", title: "Contas a Receber", icon: FileUp },
+      {
+        id: "contas-receber",
+        title: "Contas a Receber",
+        icon: FileUp,
+        children: [
+          { id: "consulta-titulos-receber", title: "Consulta de Títulos", icon: FileText },
+        ],
+      },
       { id: "contas-pagar", title: "Contas a Pagar", icon: FileDown },
       { id: "emissao-boletos", title: "Emissão de Boletos", icon: FileText },
     ],
