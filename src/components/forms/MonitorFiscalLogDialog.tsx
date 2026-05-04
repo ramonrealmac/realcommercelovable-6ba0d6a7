@@ -68,6 +68,9 @@ const XCols: IGridColumn[] = [
 ];
 
 const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen, onClose, empresaId }) => {
+  const [XData, setXData] = useState<any[]>([]);
+  const [XLoading, setXLoading] = useState(false);
+  const [XSelected, setXSelected] = useState<any>(null);
   const [XFilters, setXFilters] = useState<Record<string, string>>({});
 
   const XFilteredData = XData.filter(row => {
