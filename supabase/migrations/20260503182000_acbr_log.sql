@@ -3,7 +3,6 @@
 -- TABELA DE LOG DE COMANDOS ACBR (DFE NSU)
 -- ================================================
 
--- Removemos a antiga se existir
 DROP TABLE IF EXISTS public.ACBR_LOG;
 
 CREATE TABLE public.dfe_nsu_log (
@@ -12,8 +11,8 @@ CREATE TABLE public.dfe_nsu_log (
 	comando text NOT NULL,
 	resposta text NULL,
 	created_at timestamptz DEFAULT now() NOT NULL,
-	max_nsu varchar(20) DEFAULT ''::character varying NULL,
-	ult_nsu varchar(20) DEFAULT ''::character varying NULL,
+	max_nsu int8 DEFAULT 0 NULL,
+	ult_nsu int8 DEFAULT 0 NULL,
 	CONSTRAINT dfe_nsu_log_pe UNIQUE (empresa_id, dfe_log_id),
 	CONSTRAINT dfe_nsu_log_pk PRIMARY KEY (dfe_log_id)
 );

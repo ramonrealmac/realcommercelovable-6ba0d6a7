@@ -26,7 +26,11 @@ export const provedorService = {
       }
 
       const result = await response.text();
-      return result;
+      // Mascara retornos técnicos para manter a marca MonitorFiscal
+      return result
+        .replace(/ACBrMonitorPLUS/gi, "MonitorFiscal")
+        .replace(/ACBr/gi, "MonitorFiscal")
+        .replace(/SCBRMonitor/gi, "MonitorFiscal");
     } catch (error: any) {
       console.error("Erro provedorService:", error);
       toast.error("Falha ao comunicar com o provedor: " + error.message);
@@ -42,14 +46,14 @@ export const provedorService = {
   },
 
   /**
-   * Ativa o monitor do provedor
+   * Ativa o MonitorFiscal
    */
   async ativar(): Promise<string> {
     return this.enviarComando("ACBr.Ativar()");
   },
 
   /**
-   * Desativa o monitor do provedor
+   * Desativa o MonitorFiscal
    */
   async desativar(): Promise<string> {
     return this.enviarComando("ACBr.Desativar()");

@@ -41,6 +41,8 @@ import RpbStandaloneExecutor from "@/report-builder/components/executor/RpbStand
 import ProvedorTestForm from "@/components/forms/ProvedorTestForm";
 import PlanoContaForm from "@/components/forms/PlanoContaForm";
 import BancoForm from "@/components/forms/BancoForm";
+import FiscalRegraForm from "@/components/forms/FiscalRegraForm";
+import CfopForm from "@/components/forms/CfopForm";
 import ChatLauncher from "@/components/chat/ChatLauncher";
 
 const AppContent = () => {
@@ -131,6 +133,10 @@ const AppContent = () => {
         return <PlanoContaForm />;
       case "bancos":
         return <BancoForm />;
+      case "fiscal-regras":
+        return <FiscalRegraForm />;
+      case "cfop":
+        return <CfopForm />;
       default:
         if (component.startsWith("rpb-exec-")) {
           const XRelId = parseInt(component.replace("rpb-exec-", ""));

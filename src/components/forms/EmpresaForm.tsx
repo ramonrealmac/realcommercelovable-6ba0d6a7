@@ -11,8 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
-  RotateCcw, Copy, Eye, Palette, Clock, Link2, Upload, Plus, Download,
+  RotateCcw, Copy, Eye, Palette, Clock, Link2, Upload, Plus, Download, Search,
 } from "lucide-react";
+import CidadeSearchDialog from "@/components/shared/CidadeSearchDialog";
 import { useRef } from "react";
 
 const db = supabase as any;
@@ -151,12 +152,14 @@ const EmpresaForm: React.FC = () => {
   const [XCurrentIdx, setXCurrentIdx] = useState(0);
   const [XEdit, setXEdit] = useState<TEmpresa>(emptyEmpresa());
   const [XSearchFilters, setXSearchFilters] = useState<Record<string, string>>({});
+  const XIsEditing = XFormMode === "edit" || XFormMode === "insert";
 
   // Empresas lookup (for empresa_matriz)
   const [XEmpresasLookup, setXEmpresasLookup] = useState<{ empresa_id: number; razao_social: string }[]>([]);
 
-  // Cidades lookup
-  const [XCidades, setXCidades] = useState<{ cidade_id: number; descricao: string }[]>([]);
+  // Cidades lookup (dialog)
+  const [XCidadeSearchOpen, setXCidadeSearchOpen] = useState(false);
+  const [XCidadeDescricao, setXCidadeDescricao] = useState("");
 
   // Depositos lookup
   const [XDepositos, setXDepositos] = useState<{ deposito_id: number; nome: string }[]>([]);
@@ -171,13 +174,11 @@ const EmpresaForm: React.FC = () => {
   }, []);
 
   const loadLookups = useCallback(async () => {
-    const [empRes, cidRes, depRes] = await Promise.all([
+    const [empRes, depRes] = await Promise.all([
       db.from("empresa").select("empresa_id, razao_social").eq("excluido", false).order("razao_social"),
-      db.from("cidade").select("cidade_id, descricao").eq("excluido", false).order("descricao"),
       db.from("deposito").select("deposito_id, nome").eq("excluido", false).order("nome"),
     ]);
     if (empRes.data) setXEmpresasLookup(empRes.data);
-    if (cidRes.data) setXCidades(cidRes.data);
     if (depRes.data) setXDepositos(depRes.data);
   }, []);
 
@@ -226,6 +227,19 @@ const EmpresaForm: React.FC = () => {
       setXEdit({ ...emptyEmpresa(), ...XCurrent });
     }
   }, [XCurrent, XFormMode]);
+
+  // Load city name when city ID changes
+  useEffect(() => {
+    const cityId = XIsEditing ? XEdit.endereco_cidade_id : XCurrent?.endereco_cidade_id;
+    if (cityId) {
+      db.from("cidade").select("descricao").eq("cidade_id", cityId).maybeSingle().then(({ data }: any) => {
+        if (data) setXCidadeDescricao(data.descricao);
+        else setXCidadeDescricao("");
+      });
+    } else {
+      setXCidadeDescricao("");
+    }
+  }, [XIsEditing, XEdit.endereco_cidade_id, XCurrent?.endereco_cidade_id]);
 
   /* ── hexToHsl helper ── */
   const hexToHsl = (hex: string) => {
@@ -336,7 +350,6 @@ const EmpresaForm: React.FC = () => {
     if (idx >= 0) { setXCurrentIdx(idx); setXInnerTab("cadastro"); setXFormMode("view"); }
   };
 
-  const XIsEditing = XFormMode === "edit" || XFormMode === "insert";
 
   const updateEdit = (key: string, value: any) => setXEdit(prev => ({ ...prev, [key]: value }));
   const updateHorario = (idx: number, key: string, value: any) => {
@@ -569,17 +582,21 @@ const EmpresaForm: React.FC = () => {
               {field("endereco_cep", "CEP")}
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Cidade</label>
-                <select
-                  value={XDisplayVal("endereco_cidade_id") || ""}
-                  disabled={!XIsEditing}
-                  onChange={e => updateEdit("endereco_cidade_id", e.target.value ? Number(e.target.value) : 0)}
-                  className={`w-full border border-border rounded px-3 py-1.5 text-sm ${!XIsEditing ? "bg-secondary" : "bg-card"}`}
-                >
-                  <option value="0">(Selecione)</option>
-                  {XCidades.map(c => (
-                    <option key={c.cidade_id} value={c.cidade_id}>{c.descricao}</option>
-                  ))}
-                </select>
+                <div className="flex gap-2">
+                  <div className={`flex-1 border border-border rounded px-3 py-1.5 text-sm ${!XIsEditing ? "bg-secondary" : "bg-card"}`}>
+                    {XCidadeDescricao || (XIsEditing ? "(Selecione)" : "")}
+                  </div>
+                  {XIsEditing && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="px-2"
+                      onClick={() => setXCidadeSearchOpen(true)}
+                    >
+                      <Search className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -948,6 +965,14 @@ const EmpresaForm: React.FC = () => {
           />
         )}
       </div>
+      <CidadeSearchDialog
+        open={XCidadeSearchOpen}
+        onClose={() => setXCidadeSearchOpen(false)}
+        onSelect={(c) => {
+          updateEdit("endereco_cidade_id", c.cidade_id);
+          setXCidadeDescricao(c.descricao);
+        }}
+      />
     </div>
   );
 };

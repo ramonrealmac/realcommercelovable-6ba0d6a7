@@ -4,9 +4,10 @@ import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import { provedorService } from "@/services/provedorService";
-import { RefreshCw, Download, CheckCircle, AlertTriangle, ShieldCheck, ShieldAlert, FileSearch, Eye, Terminal } from "lucide-react";
+import { RefreshCw, Download, CheckCircle, AlertTriangle, ShieldCheck, ShieldAlert, FileSearch, Eye, Terminal, Target } from "lucide-react";
 import { formatCPFCNPJ } from "@/lib/validators";
-import AcbrLogDialog from "./AcbrLogDialog";
+import MonitorFiscalLogDialog from "./MonitorFiscalLogDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const db = supabase as any;
 
@@ -55,24 +56,27 @@ const NfeRecebidasForm: React.FC = () => {
   const [XData, setXData] = useState<any[]>([]);
   const [XLoading, setXLoading] = useState(false);
   const [XCNPJ, setXCNPJ] = useState("");
-  const [XUF, setXUF] = useState("35"); // Default SP
+  const [XUF, setXUF] = useState(""); 
   const [XDtIni, setXDtIni] = useState(new Date(new Date().setDate(new Date().getDate() - 90)).toISOString().substring(0, 10));
   const [XDtFim, setXDtFim] = useState(new Date().toISOString().substring(0, 10));
   const [XStatusFilter, setXStatusFilter] = useState("");
   const [XSearchFilters, setXSearchFilters] = useState<Record<string, string>>({});
   const [XLogOpen, setXLogOpen] = useState(false);
+  const [XMaxLoops, setXMaxLoops] = useState(10);
+  const [XAlertOpen, setXAlertOpen] = useState(false);
+  const [XAlertMsg, setXAlertMsg] = useState("");
 
-  const registrarLog = async (comando: string, resposta: string, ultNsu?: string, maxNsu?: string) => {
+  const registrarLog = async (comando: string, resposta: string, ultNsu?: any, maxNsu?: any) => {
     try {
       await db.from("dfe_nsu_log").insert({
         empresa_id: XEmpresaId,
         comando: comando,
         resposta: resposta,
-        ult_nsu: ultNsu || "",
-        max_nsu: maxNsu || ""
+        ult_nsu: Number(ultNsu || 0),
+        max_nsu: Number(maxNsu || 0)
       });
     } catch (e) {
-      console.error("Erro ao registrar log ACBr:", e);
+      console.error("Erro ao registrar log MonitorFiscal:", e);
     }
   };
 
@@ -119,7 +123,7 @@ const NfeRecebidasForm: React.FC = () => {
     if (XEmpresaId) {
       // Busca CNPJ e UF da empresa atual
       db.from("empresa")
-        .select("cnpj, endereco_cidade_id")
+        .select("*")
         .eq("empresa_id", XEmpresaId)
         .maybeSingle()
         .then(async ({ data, error }: any) => {
@@ -133,24 +137,26 @@ const NfeRecebidasForm: React.FC = () => {
             setXCNPJ(cleanCnpj);
           }
 
-          // Busca a UF da cidade se houver um ID vinculado
+          if (data?.max_nsu_busca) {
+            setXMaxLoops(Number(data.max_nsu_busca));
+          }
+
+          // Busca a UF da cidade pelo Código IBGE (2 primeiros dígitos)
+          setXUF(""); // Reset UF
           if (data?.endereco_cidade_id) {
             const { data: cityData } = await db.from("cidade")
-              .select("uf")
+              .select("cd_ibge, descricao")
               .eq("cidade_id", data.endereco_cidade_id)
               .maybeSingle();
             
-            if (cityData?.uf) {
-              const ufMap: Record<string, string> = {
-                'RO': '11', 'AC': '12', 'AM': '13', 'RR': '14', 'PA': '15', 'AP': '16', 'TO': '17',
-                'MA': '21', 'PI': '22', 'CE': '23', 'RN': '24', 'PB': '25', 'PE': '26', 'AL': '27', 'SE': '28', 'BA': '29',
-                'MG': '31', 'ES': '32', 'RJ': '33', 'SP': '35',
-                'PR': '41', 'SC': '42', 'RS': '43',
-                'MS': '50', 'MT': '51', 'GO': '52', 'DF': '53'
-              };
-              const code = ufMap[cityData.uf.toUpperCase()] || cityData.uf;
+            if (cityData?.cd_ibge && cityData.cd_ibge.length >= 2) {
+              const code = cityData.cd_ibge.substring(0, 2);
               setXUF(code);
+            } else {
+              toast.error(`Cidade vinculada (${cityData?.descricao || data.endereco_cidade_id}) não possui Código IBGE válido. Verifique o cadastro de cidades.`);
             }
+          } else {
+            toast.error("Empresa sem cidade vinculada no cadastro. Não será possível sincronizar NF-e.");
           }
         });
       
@@ -168,105 +174,140 @@ const NfeRecebidasForm: React.FC = () => {
     let loopCount = 0;
 
     try {
-      // 1. Define NSU inicial
+      // 1. Define NSU inicial baseado no LOG de consultas (Busca manual para precisão absoluta)
       if (!forceStart) {
-        const { data: nsuData } = await db.from("nfe_recebida")
-          .select("nsu")
-          .eq("empresa_id", XEmpresaId);
+        const currentId = Number(XEmpresaId || 0);
+
+        const { data: logs } = await db.from("dfe_nsu_log")
+          .select("ult_nsu")
+          .eq("empresa_id", currentId)
+          .order("created_at", { ascending: false })
+          .limit(50);
         
-        if (nsuData && nsuData.length > 0) {
-          const maxNSU = nsuData.reduce((max: number, r: any) => {
-            const n = parseInt(r.nsu || "0");
-            return isNaN(n) ? max : Math.max(max, n);
+        if (logs && logs.length > 0) {
+          const maxLogNSU = logs.reduce((max: number, l: any) => {
+            const n = Number(l.ult_nsu || 0);
+            return Math.max(max, n);
           }, 0);
-          currentNSU = maxNSU.toString();
+
+          if (maxLogNSU > 0) {
+            currentNSU = String(maxLogNSU);
+          }
+        }
+
+        if (currentNSU === "0") {
+          const { data: nsuData } = await db.from("nfe_recebida")
+            .select("nsu")
+            .eq("empresa_id", currentId)
+            .order("nsu", { ascending: false })
+            .limit(1);
+          
+          if (nsuData && nsuData.length > 0 && Number(nsuData[0].nsu) > 0) {
+            currentNSU = String(nsuData[0].nsu);
+          }
         }
       }
 
       // 2. Loop de Sincronização (Lotes de 50)
-      while (hasMore && loopCount < 10) {
+      while (hasMore && loopCount < XMaxLoops) {
         loopCount++;
         
-        // Garante que temos uma UF válida (padrão 35 se estiver vazio ou 0)
-        const sendUF = (!XUF || XUF === "0") ? "35" : XUF;
-        
+        if (!XUF) {
+          toast.error("UF não identificada. Verifique o Código IBGE da cidade no cadastro da empresa.");
+          setXLoading(false);
+          return;
+        }
+        const sendUF = XUF;
         const comando = `NFE.DistribuicaoDFe(${sendUF}, "${XCNPJ}", "${currentNSU}")`;
-        console.log(`[DFe] Lote ${loopCount}: Enviando Comando -> ${comando}`);
+        let resp = "";
         
-        const resp = await provedorService.enviarComando(comando);
-        const parsed = provedorService.parseIni(resp);
-        const dfeInfo = parsed.DistribuicaoDFe;
-
-        await registrarLog(comando, resp, dfeInfo?.ultNSU, dfeInfo?.maxNSU);
-        
-        if (resp.includes("ERRO:")) {
-          const errorMsg = resp.replace("ERRO:", "").trim();
-          if (errorMsg.includes("640") || errorMsg.includes("superior ao maior NSU")) {
-            if (confirm("O NSU local está à frente da SEFAZ. Deseja reiniciar a sincronização do zero?")) {
-              setXLoading(false);
-              handleSincronizar(true);
-              return;
+        try {
+          resp = await provedorService.enviarComando(comando);
+          
+          if (resp.includes("ERRO:")) {
+            const errorMsg = resp.replace("ERRO:", "").trim();
+            await registrarLog(comando, resp, 0, 0); // Log error without advancing NSU
+            
+            if (errorMsg.includes("640") || errorMsg.includes("superior ao maior NSU")) {
+              if (confirm("O NSU local está à frente da SEFAZ. Deseja reiniciar a sincronização do zero?")) {
+                setXLoading(false);
+                handleSincronizar(true);
+                return;
+              }
+              break;
             }
+            if (errorMsg.includes("656") || errorMsg.includes("Consumo Indevido")) {
+              setXAlertMsg("Consumo Indevido na SEFAZ. Aguarde alguns minutos ou uma hora para tentar novamente.");
+              setXAlertOpen(true);
+              break;
+            }
+            throw new Error(errorMsg);
+          }
+
+          const parsed = provedorService.parseIni(resp);
+          const dfeInfo = parsed.DistribuicaoDFe;
+
+          if (!dfeInfo) {
+            await registrarLog(comando, resp, 0, 0);
             break;
           }
-          if (errorMsg.includes("656") || errorMsg.includes("Consumo Indevido")) {
-            toast.warning("SEFAZ: Consumo Indevido. Aguarde alguns minutos ou uma hora para tentar novamente.");
+
+          // Registra log com NSUs retornados pela SEFAZ
+          // Importante: Só registramos o avanço se for 138 (documentos encontrados) ou 137 (nenhum novo)
+          if (dfeInfo.cStat === "138" || dfeInfo.cStat === "137") {
+            await registrarLog(comando, resp, dfeInfo.ultNSU, dfeInfo.maxNSU);
+          } else {
+            await registrarLog(comando, resp, 0, 0);
+            toast.warning(`SEFAZ: ${dfeInfo.xMotivo || "Resposta inesperada"}`);
+            hasMore = false;
             break;
           }
-          throw new Error(errorMsg);
-        }
+          
+          if (dfeInfo.cStat === "137") {
+            if (loopCount === 1) toast.info("Nenhum documento novo localizado na SEFAZ.");
+            hasMore = false;
+            break;
+          }
 
-        const dfeInfo = parsed.DistribuicaoDFe;
+          // Processa documentos deste lote
+          const docs = Object.keys(parsed).filter(k => k.startsWith("resNFe") || k.startsWith("procNFe"));
+          for (const key of docs) {
+            const doc = parsed[key];
+            if (!doc.chNFe) continue;
 
-        if (!dfeInfo) break;
+            const payload = {
+              empresa_id: XEmpresaId,
+              chave_nfe: doc.chNFe,
+              cnpj_emitente: doc.CNPJ || doc.CPF,
+              nm_emitente: (doc.xNome || "DESCONHECIDO").toUpperCase(),
+              dt_emissao: doc.dEmi,
+              vl_total: Number(doc.vNF || 0),
+              nr_nota: doc.chNFe.substring(25, 34),
+              serie: doc.chNFe.substring(22, 25),
+              nsu: doc.NSU,
+              xml_resumo: JSON.stringify(doc),
+              updated_at: new Date().toISOString()
+            };
 
-        // Verifica status da resposta
-        if (dfeInfo.cStat === "137") {
-          if (loopCount === 1) toast.info("Nenhum documento novo localizado na SEFAZ.");
-          hasMore = false;
-          break;
-        }
+            const { error } = await db.from("nfe_recebida").upsert(payload, { onConflict: "chave_nfe" });
+            if (!error) totalNovos++;
+          }
 
-        if (dfeInfo.cStat !== "138") {
-          toast.warning(`SEFAZ: ${dfeInfo.xMotivo || "Resposta inesperada"}`);
-          hasMore = false;
-          break;
-        }
+          // Prepara próxima volta
+          const ultNSU = dfeInfo.ultNSU;
+          const maxNSU = dfeInfo.maxNSU;
 
-        // Processa documentos deste lote
-        const docs = Object.keys(parsed).filter(k => k.startsWith("resNFe") || k.startsWith("procNFe"));
-        for (const key of docs) {
-          const doc = parsed[key];
-          if (!doc.chNFe) continue;
-
-          const payload = {
-            empresa_id: XEmpresaId,
-            chave_nfe: doc.chNFe,
-            cnpj_emitente: doc.CNPJ || doc.CPF,
-            nm_emitente: (doc.xNome || "DESCONHECIDO").toUpperCase(),
-            dt_emissao: doc.dEmi,
-            vl_total: Number(doc.vNF || 0),
-            nr_nota: doc.chNFe.substring(25, 34),
-            serie: doc.chNFe.substring(22, 25),
-            nsu: doc.NSU,
-            xml_resumo: JSON.stringify(doc),
-            updated_at: new Date().toISOString()
-          };
-
-          const { error } = await db.from("nfe_recebida").upsert(payload, { onConflict: "chave_nfe" });
-          if (!error) totalNovos++;
-        }
-
-        // Prepara próxima volta
-        const ultNSU = dfeInfo.ultNSU;
-        const maxNSU = dfeInfo.maxNSU;
-
-        if (ultNSU && maxNSU && parseInt(ultNSU) < parseInt(maxNSU)) {
-          currentNSU = ultNSU;
-          // Pequena pausa para não sobrecarregar
-          await new Promise(r => setTimeout(r, 500));
-        } else {
-          hasMore = false;
+          if (ultNSU && maxNSU && parseInt(ultNSU) < parseInt(maxNSU)) {
+            currentNSU = ultNSU;
+            await new Promise(r => setTimeout(r, 500));
+          } else {
+            hasMore = false;
+          }
+        } catch (e: any) {
+          // Se cair aqui, é erro de conexão ou exceção no processamento
+          const errorMsg = "FALHA DE COMUNICAÇÃO: " + (e.message || "Provedor/Bridge Offline");
+          await registrarLog(comando, errorMsg, 0, 0);
+          throw e; // Repassa para o catch externo mostrar o toast
         }
       }
 
@@ -277,6 +318,49 @@ const NfeRecebidasForm: React.FC = () => {
     } catch (e: any) {
       console.error(e);
       toast.error("Erro no Provedor: " + e.message);
+    } finally {
+      setXLoading(false);
+    }
+  };
+
+  const handleAlinharNSU = async () => {
+    if (!XCNPJ) { toast.error("CNPJ não informado."); return; }
+    if (!confirm("Isso irá alinhar o NSU local com o da SEFAZ, marcando como processadas todas as notas até o momento. Deseja continuar?")) return;
+    
+    setXLoading(true);
+    try {
+      const sendUF = XUF || "35";
+      const comando = `NFE.DistribuicaoDFe(${sendUF}, "${XCNPJ}", "0")`;
+      const resp = await provedorService.enviarComando(comando);
+      
+      if (resp.includes("ERRO:")) {
+        throw new Error(resp.replace("ERRO:", "").trim());
+      }
+
+      const parsed = provedorService.parseIni(resp);
+      const dfeInfo = parsed.DistribuicaoDFe;
+
+      if (dfeInfo) {
+        const { cStat, xMotivo, maxNSU } = dfeInfo;
+        const msg = `SEFAZ [${cStat}]: ${xMotivo}`;
+        
+        if (maxNSU && (cStat === "137" || cStat === "138")) {
+          // Registra o log com o MAX_NSU para que a próxima sincronização comece de lá
+          await registrarLog("ALINHAMENTO MANUAL", resp, maxNSU, maxNSU);
+          toast.success(`${msg}. Sistema alinhado com a SEFAZ no NSU ${maxNSU}.`);
+        } else {
+          if (cStat === "656") {
+            setXAlertMsg("Consumo Indevido na SEFAZ. Aguarde alguns minutos ou uma hora para tentar novamente.");
+            setXAlertOpen(true);
+          } else {
+            toast.warning(msg);
+          }
+        }
+      } else {
+        toast.error("Não foi possível interpretar a resposta da SEFAZ.");
+      }
+    } catch (e: any) {
+      toast.error("Erro ao alinhar NSU: " + e.message);
     } finally {
       setXLoading(false);
     }
@@ -432,13 +516,18 @@ const NfeRecebidasForm: React.FC = () => {
               <div className="h-6 w-px bg-border" />
               <div className="flex flex-col px-2">
                 <span className="text-[9px] text-muted-foreground uppercase font-bold">UF</span>
-                <select value={XUF} onChange={e => setXUF(e.target.value)} className="bg-transparent border-none text-xs p-0 focus:ring-0 w-10">
-                  <option value="11">RO</option><option value="12">AC</option><option value="13">AM</option><option value="14">RR</option><option value="15">PA</option><option value="16">AP</option><option value="17">TO</option>
-                  <option value="21">MA</option><option value="22">PI</option><option value="23">CE</option><option value="24">RN</option><option value="25">PB</option><option value="26">PE</option><option value="27">AL</option><option value="28">SE</option><option value="29">BA</option>
-                  <option value="31">MG</option><option value="32">ES</option><option value="33">RJ</option><option value="35">SP</option>
-                  <option value="41">PR</option><option value="42">SC</option><option value="43">RS</option>
-                  <option value="50">MS</option><option value="51">MT</option><option value="52">GO</option><option value="53">DF</option>
-                </select>
+                <span className="text-xs font-bold py-1">
+                  {(() => {
+                    const ufLabels: Record<string, string> = {
+                      '11': 'RO', '12': 'AC', '13': 'AM', '14': 'RR', '15': 'PA', '16': 'AP', '17': 'TO',
+                      '21': 'MA', '22': 'PI', '23': 'CE', '24': 'RN', '25': 'PB', '26': 'PE', '27': 'AL', '28': 'SE', '29': 'BA',
+                      '31': 'MG', '32': 'ES', '33': 'RJ', '35': 'SP',
+                      '41': 'PR', '42': 'SC', '43': 'RS',
+                      '50': 'MS', '51': 'MT', '52': 'GO', '53': 'DF'
+                    };
+                    return ufLabels[XUF] || XUF || "-";
+                  })()}
+                </span>
               </div>
               
               <div className="flex gap-1 ml-2">
@@ -450,7 +539,7 @@ const NfeRecebidasForm: React.FC = () => {
                   FILTRAR
                 </button>
                 <button 
-                  onClick={handleSincronizar}
+                  onClick={() => handleSincronizar()}
                   disabled={XLoading}
                   className="bg-primary text-primary-foreground px-3 py-1.5 rounded-md text-xs font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1 shadow-sm"
                 >
@@ -458,12 +547,21 @@ const NfeRecebidasForm: React.FC = () => {
                   SINCRONIZAR
                 </button>
                 <button 
+                  onClick={handleAlinharNSU}
+                  disabled={XLoading}
+                  className="bg-secondary text-secondary-foreground px-3 py-1.5 rounded-md text-xs font-bold hover:bg-secondary/80 transition-colors flex items-center gap-1 border border-border shadow-sm"
+                  title="Alinhar NSU com SEFAZ (Ignora notas antigas)"
+                >
+                  <Target className="w-3 h-3" />
+                  ALINHAR
+                </button>
+                <button 
                   onClick={() => setXLogOpen(true)}
                   className="bg-secondary text-secondary-foreground px-3 py-1.5 rounded-md text-xs font-bold hover:bg-secondary/80 transition-colors flex items-center gap-1 border border-border shadow-sm"
-                  title="Ver Log de Comandos ACBr"
+                  title="Ver Log de Comandos MonitorFiscal"
                 >
                   <Terminal className="w-3 h-3" />
-                  LOG ACBr
+                  LOG
                 </button>
               </div>
             </div>
@@ -471,11 +569,32 @@ const NfeRecebidasForm: React.FC = () => {
         />
       </div>
 
-      <AcbrLogDialog 
+      <MonitorFiscalLogDialog 
         isOpen={XLogOpen} 
         onClose={() => setXLogOpen(false)} 
         empresaId={XEmpresaId} 
       />
+
+      <Dialog open={XAlertOpen} onOpenChange={setXAlertOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="w-5 h-5" /> Alerta da SEFAZ
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-6 text-sm font-bold text-center leading-relaxed">
+            {XAlertMsg}
+          </div>
+          <div className="flex justify-center pb-2">
+            <button 
+              onClick={() => setXAlertOpen(false)}
+              className="bg-primary text-primary-foreground px-8 py-2 rounded-md font-bold hover:opacity-90 transition-opacity"
+            >
+              OK
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

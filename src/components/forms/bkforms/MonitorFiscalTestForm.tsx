@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Terminal, Send, Activity, Settings2 } from "lucide-react";
 
-const AcbrTestForm: React.FC = () => {
+const MonitorFiscalTestForm: React.FC = () => {
   const [config, setConfig] = useState({
     ip: "localhost",
     port: "3001", // Porta da ponte
@@ -43,9 +43,9 @@ const AcbrTestForm: React.FC = () => {
       setResponse(text);
       toast.success("Comando executado com sucesso!");
     } catch (error: any) {
-      console.error("Erro ACBr:", error);
-      setResponse(`Erro de Comunicação:\n${error.message}\n\nCertifique-se que:\n1. O script 'acbr-bridge.cjs' está rodando (node acbr-bridge.cjs).\n2. O ACBrMonitor está aberto na porta 3434.\n3. A porta no formulário (${config.port}) é a mesma do script da ponte.`);
-      toast.error("Falha na comunicação com ACBr");
+      console.error("Erro MonitorFiscal:", error);
+      setResponse(`Erro de Comunicação:\n${error.message}\n\nCertifique-se que:\n1. O script 'monitor-bridge.cjs' está rodando.\n2. O MonitorFiscal está aberto na porta 3434.`);
+      toast.error("Falha na comunicação com MonitorFiscal");
     } finally {
       setLoading(false);
     }
@@ -55,7 +55,7 @@ const AcbrTestForm: React.FC = () => {
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div className="flex items-center gap-3 mb-2">
         <Activity className="w-8 h-8 text-primary" />
-        <h1 className="text-2xl font-bold tracking-tight">Teste de Comunicação ACBr</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Teste de Comunicação MonitorFiscal</h1>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -109,8 +109,8 @@ const AcbrTestForm: React.FC = () => {
             <div className="pt-2">
               <p className="text-[10px] text-muted-foreground bg-secondary p-2 rounded">
                 {config.mode === 'bridge' ? 
-                  "Modo Ponte: Use o script acbr-bridge.js para converter HTTP em TCP (Porta 3434)." :
-                  "Modo Direto: Requer Servidor HTTP ativo no ACBrMonitor."}
+                  "Modo Ponte: Use o script monitor-bridge.cjs para converter HTTP em TCP (Porta 3434)." :
+                  "Modo Direto: Requer Servidor HTTP ativo no MonitorFiscal."}
               </p>
             </div>
           </CardContent>
@@ -125,7 +125,7 @@ const AcbrTestForm: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-4 pt-4">
             <div className="space-y-2">
-              <Label htmlFor="command">Comando ACBr</Label>
+              <Label htmlFor="command">Comando MonitorFiscal</Label>
               <div className="flex gap-2">
                 <Input 
                   id="command" 
@@ -170,4 +170,4 @@ const AcbrTestForm: React.FC = () => {
   );
 };
 
-export default AcbrTestForm;
+export default MonitorFiscalTestForm;
