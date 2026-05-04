@@ -75,12 +75,12 @@ const GerarContasReceberForm: React.FC = () => {
         supabase.from("cadastro").select("cadastro_id, nome_fantasia, tipo_cadastro").in("tipo_cadastro", ["C", "A"]).order("cadastro_id"),
         supabase.from("meio_pagamento").select("meio_pagamento_id, descricao").order("descricao"),
         supabase.from("portador").select("portador_id, nome").order("nome"),
-        supabase.from("plano").select("plano_id, nome, tp_conta, natureza").eq("tp_conta", "A").eq("natureza", "C").order("nome"),
+        supabase.from("plano_conta").select("plano_conta_id, nome, tp_conta, tp_natureza").eq("tp_conta", "A").eq("tp_natureza", "C").order("nome"),
       ]);
       setXClientes((cli ?? []).map((c: any) => ({ id: c.cadastro_id, label: `${c.cadastro_id} - ${c.nome_fantasia ?? ""}` })));
       setXTipoDocs((mp ?? []).map((m: any) => ({ id: m.meio_pagamento_id, label: m.descricao })));
       setXPortadores((po ?? []).map((p: any) => ({ id: p.portador_id, label: p.nome })));
-      setXPlanos((pl ?? []).map((p: any) => ({ id: p.plano_id, label: p.nome })));
+      setXPlanos((pl ?? []).map((p: any) => ({ id: p.plano_conta_id, label: p.nome })));
     })();
   }, [XEmpresas]);
 
