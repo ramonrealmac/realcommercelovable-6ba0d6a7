@@ -1308,6 +1308,7 @@ export type Database = {
       }
       cfop: {
         Row: {
+          aplicacao: string | null
           cd_cfop: string
           cfop_id: number
           descricao: string
@@ -1319,6 +1320,7 @@ export type Database = {
           obs_rodape: string | null
         }
         Insert: {
+          aplicacao?: string | null
           cd_cfop: string
           cfop_id?: number
           descricao: string
@@ -1330,6 +1332,7 @@ export type Database = {
           obs_rodape?: string | null
         }
         Update: {
+          aplicacao?: string | null
           cd_cfop?: string
           cfop_id?: number
           descricao?: string
@@ -2120,6 +2123,47 @@ export type Database = {
           },
         ]
       }
+      dfe_nsu_log: {
+        Row: {
+          comando: string
+          created_at: string
+          dfe_log_id: number
+          empresa_id: number
+          max_nsu: number | null
+          nfe_recebida_id: number | null
+          resposta: string | null
+          ult_nsu: number | null
+        }
+        Insert: {
+          comando: string
+          created_at?: string
+          dfe_log_id?: never
+          empresa_id: number
+          max_nsu?: number | null
+          nfe_recebida_id?: number | null
+          resposta?: string | null
+          ult_nsu?: number | null
+        }
+        Update: {
+          comando?: string
+          created_at?: string
+          dfe_log_id?: never
+          empresa_id?: number
+          max_nsu?: number | null
+          nfe_recebida_id?: number | null
+          resposta?: string | null
+          ult_nsu?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dfe_nsu_log_nfe_recebida_id_fkey"
+            columns: ["nfe_recebida_id"]
+            isOneToOne: false
+            referencedRelation: "nfe_recebida"
+            referencedColumns: ["nfe_recebida_id"]
+          },
+        ]
+      }
       empresa: {
         Row: {
           abacatepay_api_key: string | null
@@ -2146,6 +2190,7 @@ export type Database = {
           cor_texto_secundario: string | null
           css_customizado: string | null
           deposito_estoque_caixa: number
+          dfe_maxnsu_busca: number | null
           dt_alteracao: string | null
           dt_cadastro: string | null
           email_remetente: string | null
@@ -2171,6 +2216,8 @@ export type Database = {
           msg_pos_pagamento: string | null
           nm_escola: string | null
           nome_fantasia: string
+          pc_fcp_empresa: number | null
+          pc_icms_interestadual: number | null
           qt_saida_qt_decimais: number | null
           qt_venda_qt_decimais: number | null
           razao_social: string
@@ -2210,6 +2257,7 @@ export type Database = {
           cor_texto_secundario?: string | null
           css_customizado?: string | null
           deposito_estoque_caixa?: number
+          dfe_maxnsu_busca?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           email_remetente?: string | null
@@ -2235,6 +2283,8 @@ export type Database = {
           msg_pos_pagamento?: string | null
           nm_escola?: string | null
           nome_fantasia?: string
+          pc_fcp_empresa?: number | null
+          pc_icms_interestadual?: number | null
           qt_saida_qt_decimais?: number | null
           qt_venda_qt_decimais?: number | null
           razao_social?: string
@@ -2274,6 +2324,7 @@ export type Database = {
           cor_texto_secundario?: string | null
           css_customizado?: string | null
           deposito_estoque_caixa?: number
+          dfe_maxnsu_busca?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           email_remetente?: string | null
@@ -2299,6 +2350,8 @@ export type Database = {
           msg_pos_pagamento?: string | null
           nm_escola?: string | null
           nome_fantasia?: string
+          pc_fcp_empresa?: number | null
+          pc_icms_interestadual?: number | null
           qt_saida_qt_decimais?: number | null
           qt_venda_qt_decimais?: number | null
           razao_social?: string
@@ -2403,6 +2456,8 @@ export type Database = {
           icms_interno: number | null
           nm_estado: string | null
           pc_fcp: number | null
+          pc_fcp_st: number | null
+          reducao_bc_interna: number | null
         }
         Insert: {
           cd_ibge?: string | null
@@ -2414,6 +2469,8 @@ export type Database = {
           icms_interno?: number | null
           nm_estado?: string | null
           pc_fcp?: number | null
+          pc_fcp_st?: number | null
+          reducao_bc_interna?: number | null
         }
         Update: {
           cd_ibge?: string | null
@@ -2425,6 +2482,8 @@ export type Database = {
           icms_interno?: number | null
           nm_estado?: string | null
           pc_fcp?: number | null
+          pc_fcp_st?: number | null
+          reducao_bc_interna?: number | null
         }
         Relationships: []
       }
@@ -2528,144 +2587,496 @@ export type Database = {
       }
       financeiro: {
         Row: {
+          aplica_juros: string | null
+          aplica_multa: string | null
+          ativo: string | null
+          autenticacao: string | null
+          aviario: string | null
           cadastro_id: number | null
-          dt_alteracao: string | null
-          dt_cadastro: string | null
-          dt_cancelamento: string | null
+          cadastro_id_dest: number | null
+          cobranca_asaas: string | null
+          cod_barras: string | null
+          documento: string
           dt_emissao: string | null
-          dt_pagamento: string | null
-          dt_vencimento: string
+          dt_vencto: string | null
+          emitido_bol: string | null
           empresa_id: number
-          excluido: boolean | null
-          financeiro_id: number
+          enviado_remissa: string | null
+          financeiro_id: string
+          funcionario_id: number | null
+          gerou_cobranca: string | null
+          linha_digitavel: string | null
+          modelo: string | null
           movimento_id: number | null
-          nr_documento: string
-          nr_parcela: number | null
-          observacao: string
-          plano_conta_id: number | null
+          nosso_numero: string | null
+          observacao1: string | null
+          observacao2: string | null
+          parcela: number | null
+          pct_juros: number | null
+          pct_multa: number | null
+          plano_id: number | null
+          planoconta_id: number | null
           portador_id: number | null
-          st_financeiro: string | null
-          tp_financeiro: string
-          tp_pagamento: string
+          quantidade: number | null
+          serie: string | null
+          st_execucao: string | null
+          st_programacao: string | null
+          status: string | null
+          tp_conta: string | null
+          tp_documento_id: string | null
+          vl_adicional: number | null
           vl_desconto: number | null
-          vl_documento: number
-          vl_juros: number | null
-          vl_multa: number | null
+          vl_despesa: number | null
           vl_pago: number | null
-          vl_saldo: number | null
+          vl_titulo: number | null
         }
         Insert: {
+          aplica_juros?: string | null
+          aplica_multa?: string | null
+          ativo?: string | null
+          autenticacao?: string | null
+          aviario?: string | null
           cadastro_id?: number | null
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          dt_cancelamento?: string | null
+          cadastro_id_dest?: number | null
+          cobranca_asaas?: string | null
+          cod_barras?: string | null
+          documento?: string
           dt_emissao?: string | null
-          dt_pagamento?: string | null
-          dt_vencimento: string
+          dt_vencto?: string | null
+          emitido_bol?: string | null
           empresa_id?: number
-          excluido?: boolean | null
-          financeiro_id?: number
+          enviado_remissa?: string | null
+          financeiro_id: string
+          funcionario_id?: number | null
+          gerou_cobranca?: string | null
+          linha_digitavel?: string | null
+          modelo?: string | null
           movimento_id?: number | null
-          nr_documento?: string
-          nr_parcela?: number | null
-          observacao?: string
-          plano_conta_id?: number | null
+          nosso_numero?: string | null
+          observacao1?: string | null
+          observacao2?: string | null
+          parcela?: number | null
+          pct_juros?: number | null
+          pct_multa?: number | null
+          plano_id?: number | null
+          planoconta_id?: number | null
           portador_id?: number | null
-          st_financeiro?: string | null
-          tp_financeiro?: string
-          tp_pagamento?: string
+          quantidade?: number | null
+          serie?: string | null
+          st_execucao?: string | null
+          st_programacao?: string | null
+          status?: string | null
+          tp_conta?: string | null
+          tp_documento_id?: string | null
+          vl_adicional?: number | null
           vl_desconto?: number | null
-          vl_documento?: number
-          vl_juros?: number | null
-          vl_multa?: number | null
+          vl_despesa?: number | null
           vl_pago?: number | null
-          vl_saldo?: number | null
+          vl_titulo?: number | null
         }
         Update: {
+          aplica_juros?: string | null
+          aplica_multa?: string | null
+          ativo?: string | null
+          autenticacao?: string | null
+          aviario?: string | null
           cadastro_id?: number | null
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          dt_cancelamento?: string | null
+          cadastro_id_dest?: number | null
+          cobranca_asaas?: string | null
+          cod_barras?: string | null
+          documento?: string
           dt_emissao?: string | null
-          dt_pagamento?: string | null
-          dt_vencimento?: string
+          dt_vencto?: string | null
+          emitido_bol?: string | null
           empresa_id?: number
-          excluido?: boolean | null
-          financeiro_id?: number
+          enviado_remissa?: string | null
+          financeiro_id?: string
+          funcionario_id?: number | null
+          gerou_cobranca?: string | null
+          linha_digitavel?: string | null
+          modelo?: string | null
           movimento_id?: number | null
-          nr_documento?: string
-          nr_parcela?: number | null
-          observacao?: string
-          plano_conta_id?: number | null
+          nosso_numero?: string | null
+          observacao1?: string | null
+          observacao2?: string | null
+          parcela?: number | null
+          pct_juros?: number | null
+          pct_multa?: number | null
+          plano_id?: number | null
+          planoconta_id?: number | null
           portador_id?: number | null
-          st_financeiro?: string | null
-          tp_financeiro?: string
-          tp_pagamento?: string
+          quantidade?: number | null
+          serie?: string | null
+          st_execucao?: string | null
+          st_programacao?: string | null
+          status?: string | null
+          tp_conta?: string | null
+          tp_documento_id?: string | null
+          vl_adicional?: number | null
           vl_desconto?: number | null
-          vl_documento?: number
-          vl_juros?: number | null
-          vl_multa?: number | null
+          vl_despesa?: number | null
           vl_pago?: number | null
-          vl_saldo?: number | null
+          vl_titulo?: number | null
         }
         Relationships: []
       }
       financeiro_baixa: {
         Row: {
-          dt_baixa: string | null
+          cadastro_id: number | null
+          conta_id: string | null
+          documento: string | null
+          dt_operacao: string | null
+          dt_pagamento: string | null
+          empresa_id: number
+          financeiro_baixa_id: number
+          financeiro_id: string
+          funcionario_id: number | null
+          observacao: string | null
+          plano_id: number | null
+          planoconta_id: number | null
+          recibo: string | null
+          tipo_pag_rec_id: number | null
+          tp_conta: string | null
+          vl_desconto: number | null
+          vl_despesa: number | null
+          vl_juros: number | null
+          vl_pago: number | null
+        }
+        Insert: {
+          cadastro_id?: number | null
+          conta_id?: string | null
+          documento?: string | null
+          dt_operacao?: string | null
+          dt_pagamento?: string | null
+          empresa_id?: number
+          financeiro_baixa_id?: number
+          financeiro_id?: string
+          funcionario_id?: number | null
+          observacao?: string | null
+          plano_id?: number | null
+          planoconta_id?: number | null
+          recibo?: string | null
+          tipo_pag_rec_id?: number | null
+          tp_conta?: string | null
+          vl_desconto?: number | null
+          vl_despesa?: number | null
+          vl_juros?: number | null
+          vl_pago?: number | null
+        }
+        Update: {
+          cadastro_id?: number | null
+          conta_id?: string | null
+          documento?: string | null
+          dt_operacao?: string | null
+          dt_pagamento?: string | null
+          empresa_id?: number
+          financeiro_baixa_id?: number
+          financeiro_id?: string
+          funcionario_id?: number | null
+          observacao?: string | null
+          plano_id?: number | null
+          planoconta_id?: number | null
+          recibo?: string | null
+          tipo_pag_rec_id?: number | null
+          tp_conta?: string | null
+          vl_desconto?: number | null
+          vl_despesa?: number | null
+          vl_juros?: number | null
+          vl_pago?: number | null
+        }
+        Relationships: []
+      }
+      fiscal_regra: {
+        Row: {
+          cfop_id: number | null
+          descricao: string
+          dt_alteracao: string | null
           dt_cadastro: string | null
           empresa_id: number
           excluido: boolean | null
-          financeiro_baixa_id: number
-          financeiro_id: number
-          nr_autorizacao: string
-          observacao: string
-          tp_pagamento: string
-          usuario_id: string | null
-          vl_baixa: number
-          vl_desconto: number | null
-          vl_juros: number | null
-          vl_multa: number | null
+          fiscal_regra_id: number
+          observacao: string | null
+          regime_trib: string | null
         }
         Insert: {
-          dt_baixa?: string | null
+          cfop_id?: number | null
+          descricao: string
+          dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
           excluido?: boolean | null
-          financeiro_baixa_id?: number
-          financeiro_id: number
-          nr_autorizacao?: string
-          observacao?: string
-          tp_pagamento?: string
-          usuario_id?: string | null
-          vl_baixa?: number
-          vl_desconto?: number | null
-          vl_juros?: number | null
-          vl_multa?: number | null
+          fiscal_regra_id?: number
+          observacao?: string | null
+          regime_trib?: string | null
         }
         Update: {
-          dt_baixa?: string | null
+          cfop_id?: number | null
+          descricao?: string
+          dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
           excluido?: boolean | null
-          financeiro_baixa_id?: number
-          financeiro_id?: number
-          nr_autorizacao?: string
-          observacao?: string
-          tp_pagamento?: string
-          usuario_id?: string | null
-          vl_baixa?: number
-          vl_desconto?: number | null
-          vl_juros?: number | null
-          vl_multa?: number | null
+          fiscal_regra_id?: number
+          observacao?: string | null
+          regime_trib?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "financeiro_baixa_financeiro_id_fkey"
-            columns: ["financeiro_id"]
+            foreignKeyName: "fiscal_regra_cfop_id_fkey"
+            columns: ["cfop_id"]
             isOneToOne: false
-            referencedRelation: "financeiro"
-            referencedColumns: ["financeiro_id"]
+            referencedRelation: "cfop"
+            referencedColumns: ["cfop_id"]
+          },
+        ]
+      }
+      fiscal_regra_cfop: {
+        Row: {
+          cest_filtro: string | null
+          cfop_id: number
+          cliente_consumidor_final: boolean | null
+          cliente_contribuinte: boolean | null
+          dt_alteracao: string | null
+          dt_cadastro: string | null
+          empresa_id: number
+          fiscal_regra_cfop_id: number
+          fiscal_regra_id: number
+          grupo_icms_id: number | null
+          ncm_filtro: string | null
+          origem_produto: string | null
+          uf_destino: string | null
+        }
+        Insert: {
+          cest_filtro?: string | null
+          cfop_id: number
+          cliente_consumidor_final?: boolean | null
+          cliente_contribuinte?: boolean | null
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id?: number
+          fiscal_regra_cfop_id?: number
+          fiscal_regra_id: number
+          grupo_icms_id?: number | null
+          ncm_filtro?: string | null
+          origem_produto?: string | null
+          uf_destino?: string | null
+        }
+        Update: {
+          cest_filtro?: string | null
+          cfop_id?: number
+          cliente_consumidor_final?: boolean | null
+          cliente_contribuinte?: boolean | null
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id?: number
+          fiscal_regra_cfop_id?: number
+          fiscal_regra_id?: number
+          grupo_icms_id?: number | null
+          ncm_filtro?: string | null
+          origem_produto?: string | null
+          uf_destino?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_regra_cfop_cfop_id_fkey"
+            columns: ["cfop_id"]
+            isOneToOne: false
+            referencedRelation: "cfop"
+            referencedColumns: ["cfop_id"]
+          },
+          {
+            foreignKeyName: "fiscal_regra_cfop_fiscal_regra_id_fkey"
+            columns: ["fiscal_regra_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_regra"
+            referencedColumns: ["fiscal_regra_id"]
+          },
+        ]
+      }
+      fiscal_regra_imposto: {
+        Row: {
+          aliquota: number | null
+          base_reducao: number | null
+          cbs_aliquota: number | null
+          cst_csosn: string | null
+          cst_pis_cofins: string | null
+          dt_alteracao: string | null
+          dt_cadastro: string | null
+          empresa_id: number
+          fiscal_regra_id: number | null
+          fiscal_regra_imposto_id: number
+          ibs_aliquota: number | null
+          icms_st_aliquota: number | null
+          icms_st_base_reducao: number | null
+          icms_st_mva: number | null
+          ipi_c_enq: string | null
+          is_aliquota: number | null
+          mod_bc: number | null
+          mod_bc_st: number | null
+          motivo_desoneracao: number | null
+          nat_receita_pis_cofins: string | null
+          p_cre_sn: number | null
+          tipo_imposto: string
+        }
+        Insert: {
+          aliquota?: number | null
+          base_reducao?: number | null
+          cbs_aliquota?: number | null
+          cst_csosn?: string | null
+          cst_pis_cofins?: string | null
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id?: number
+          fiscal_regra_id?: number | null
+          fiscal_regra_imposto_id?: number
+          ibs_aliquota?: number | null
+          icms_st_aliquota?: number | null
+          icms_st_base_reducao?: number | null
+          icms_st_mva?: number | null
+          ipi_c_enq?: string | null
+          is_aliquota?: number | null
+          mod_bc?: number | null
+          mod_bc_st?: number | null
+          motivo_desoneracao?: number | null
+          nat_receita_pis_cofins?: string | null
+          p_cre_sn?: number | null
+          tipo_imposto: string
+        }
+        Update: {
+          aliquota?: number | null
+          base_reducao?: number | null
+          cbs_aliquota?: number | null
+          cst_csosn?: string | null
+          cst_pis_cofins?: string | null
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id?: number
+          fiscal_regra_id?: number | null
+          fiscal_regra_imposto_id?: number
+          ibs_aliquota?: number | null
+          icms_st_aliquota?: number | null
+          icms_st_base_reducao?: number | null
+          icms_st_mva?: number | null
+          ipi_c_enq?: string | null
+          is_aliquota?: number | null
+          mod_bc?: number | null
+          mod_bc_st?: number | null
+          motivo_desoneracao?: number | null
+          nat_receita_pis_cofins?: string | null
+          p_cre_sn?: number | null
+          tipo_imposto?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_regra_imposto_fiscal_regra_id_fkey"
+            columns: ["fiscal_regra_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_regra"
+            referencedColumns: ["fiscal_regra_id"]
+          },
+        ]
+      }
+      fiscal_regra_item: {
+        Row: {
+          aliquota: number | null
+          base_reducao: number | null
+          cbs_aliquota: number | null
+          cest_filtro: string | null
+          cliente_consumidor_final: boolean | null
+          cliente_contribuinte: boolean | null
+          cst_csosn: string | null
+          cst_pis_cofins: string | null
+          dt_alteracao: string | null
+          dt_cadastro: string | null
+          empresa_id: number
+          fiscal_regra_id: number
+          fiscal_regra_item_id: number
+          grupo_icms_id: number | null
+          ibs_aliquota: number | null
+          icms_st_aliquota: number | null
+          icms_st_base_reducao: number | null
+          icms_st_mva: number | null
+          ipi_c_enq: string | null
+          is_aliquota: number | null
+          mod_bc: number | null
+          mod_bc_st: number | null
+          motivo_desoneracao: number | null
+          nat_receita_pis_cofins: string | null
+          ncm_filtro: string | null
+          origem_produto: string | null
+          p_cre_sn: number | null
+          tipo_imposto: string
+          uf_destino: string | null
+        }
+        Insert: {
+          aliquota?: number | null
+          base_reducao?: number | null
+          cbs_aliquota?: number | null
+          cest_filtro?: string | null
+          cliente_consumidor_final?: boolean | null
+          cliente_contribuinte?: boolean | null
+          cst_csosn?: string | null
+          cst_pis_cofins?: string | null
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id?: number
+          fiscal_regra_id: number
+          fiscal_regra_item_id?: number
+          grupo_icms_id?: number | null
+          ibs_aliquota?: number | null
+          icms_st_aliquota?: number | null
+          icms_st_base_reducao?: number | null
+          icms_st_mva?: number | null
+          ipi_c_enq?: string | null
+          is_aliquota?: number | null
+          mod_bc?: number | null
+          mod_bc_st?: number | null
+          motivo_desoneracao?: number | null
+          nat_receita_pis_cofins?: string | null
+          ncm_filtro?: string | null
+          origem_produto?: string | null
+          p_cre_sn?: number | null
+          tipo_imposto: string
+          uf_destino?: string | null
+        }
+        Update: {
+          aliquota?: number | null
+          base_reducao?: number | null
+          cbs_aliquota?: number | null
+          cest_filtro?: string | null
+          cliente_consumidor_final?: boolean | null
+          cliente_contribuinte?: boolean | null
+          cst_csosn?: string | null
+          cst_pis_cofins?: string | null
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id?: number
+          fiscal_regra_id?: number
+          fiscal_regra_item_id?: number
+          grupo_icms_id?: number | null
+          ibs_aliquota?: number | null
+          icms_st_aliquota?: number | null
+          icms_st_base_reducao?: number | null
+          icms_st_mva?: number | null
+          ipi_c_enq?: string | null
+          is_aliquota?: number | null
+          mod_bc?: number | null
+          mod_bc_st?: number | null
+          motivo_desoneracao?: number | null
+          nat_receita_pis_cofins?: string | null
+          ncm_filtro?: string | null
+          origem_produto?: string | null
+          p_cre_sn?: number | null
+          tipo_imposto?: string
+          uf_destino?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_regra_item_fiscal_regra_id_fkey"
+            columns: ["fiscal_regra_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_regra"
+            referencedColumns: ["fiscal_regra_id"]
           },
         ]
       }
@@ -4366,7 +4777,7 @@ export type Database = {
           nfe_recebida_id: number
           nm_emitente: string
           nr_nota: string | null
-          nsu: string | null
+          nsu: number | null
           serie: string | null
           st_download: boolean
           st_manifesto: string
@@ -4384,7 +4795,7 @@ export type Database = {
           nfe_recebida_id?: never
           nm_emitente: string
           nr_nota?: string | null
-          nsu?: string | null
+          nsu?: number | null
           serie?: string | null
           st_download?: boolean
           st_manifesto?: string
@@ -4402,7 +4813,7 @@ export type Database = {
           nfe_recebida_id?: never
           nm_emitente?: string
           nr_nota?: string | null
-          nsu?: string | null
+          nsu?: number | null
           serie?: string | null
           st_download?: boolean
           st_manifesto?: string
@@ -5757,6 +6168,30 @@ export type Database = {
         }
         Relationships: []
       }
+      sys_sequencial: {
+        Row: {
+          empresa_id: number
+          nm_campo1: string | null
+          nm_campo3: string | null
+          tabela: string | null
+          ult_seq: number | null
+        }
+        Insert: {
+          empresa_id: number
+          nm_campo1?: string | null
+          nm_campo3?: string | null
+          tabela?: string | null
+          ult_seq?: number | null
+        }
+        Update: {
+          empresa_id?: number
+          nm_campo1?: string | null
+          nm_campo3?: string | null
+          tabela?: string | null
+          ult_seq?: number | null
+        }
+        Relationships: []
+      }
       tp_operacao: {
         Row: {
           altera_estoque: string | null
@@ -5854,7 +6289,156 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      financeiro_view: {
+        Row: {
+          aplica_juros: string | null
+          aplica_multa: string | null
+          ativo: string | null
+          autenticacao: string | null
+          aviario: string | null
+          cadastro_id: number | null
+          cadastro_id_dest: number | null
+          cobranca_asaas: string | null
+          cod_barras: string | null
+          dias_atraso: number | null
+          documento: string | null
+          dt_emissao: string | null
+          dt_vencto: string | null
+          emitido_bol: string | null
+          empresa_id: number | null
+          enviado_remissa: string | null
+          financeiro_id: string | null
+          funcionario_id: number | null
+          gerou_cobranca: string | null
+          linha_digitavel: string | null
+          modelo: string | null
+          movimento_id: number | null
+          nosso_numero: string | null
+          observacao1: string | null
+          observacao2: string | null
+          parcela: number | null
+          pct_juros: number | null
+          pct_multa: number | null
+          plano_id: number | null
+          planoconta_id: number | null
+          portador_id: number | null
+          quantidade: number | null
+          serie: string | null
+          situacao: string | null
+          st_execucao: string | null
+          st_programacao: string | null
+          status: string | null
+          tp_conta: string | null
+          tp_documento_id: string | null
+          vl_a_pagar: number | null
+          vl_adicional: number | null
+          vl_desconto: number | null
+          vl_despesa: number | null
+          vl_juros: number | null
+          vl_multa: number | null
+          vl_pago: number | null
+          vl_titulo: number | null
+        }
+        Insert: {
+          aplica_juros?: string | null
+          aplica_multa?: string | null
+          ativo?: string | null
+          autenticacao?: string | null
+          aviario?: string | null
+          cadastro_id?: number | null
+          cadastro_id_dest?: number | null
+          cobranca_asaas?: string | null
+          cod_barras?: string | null
+          dias_atraso?: never
+          documento?: string | null
+          dt_emissao?: string | null
+          dt_vencto?: string | null
+          emitido_bol?: string | null
+          empresa_id?: number | null
+          enviado_remissa?: string | null
+          financeiro_id?: string | null
+          funcionario_id?: number | null
+          gerou_cobranca?: string | null
+          linha_digitavel?: string | null
+          modelo?: string | null
+          movimento_id?: number | null
+          nosso_numero?: string | null
+          observacao1?: string | null
+          observacao2?: string | null
+          parcela?: number | null
+          pct_juros?: number | null
+          pct_multa?: number | null
+          plano_id?: number | null
+          planoconta_id?: number | null
+          portador_id?: number | null
+          quantidade?: number | null
+          serie?: string | null
+          situacao?: never
+          st_execucao?: string | null
+          st_programacao?: string | null
+          status?: string | null
+          tp_conta?: string | null
+          tp_documento_id?: string | null
+          vl_a_pagar?: never
+          vl_adicional?: number | null
+          vl_desconto?: number | null
+          vl_despesa?: number | null
+          vl_juros?: never
+          vl_multa?: never
+          vl_pago?: number | null
+          vl_titulo?: number | null
+        }
+        Update: {
+          aplica_juros?: string | null
+          aplica_multa?: string | null
+          ativo?: string | null
+          autenticacao?: string | null
+          aviario?: string | null
+          cadastro_id?: number | null
+          cadastro_id_dest?: number | null
+          cobranca_asaas?: string | null
+          cod_barras?: string | null
+          dias_atraso?: never
+          documento?: string | null
+          dt_emissao?: string | null
+          dt_vencto?: string | null
+          emitido_bol?: string | null
+          empresa_id?: number | null
+          enviado_remissa?: string | null
+          financeiro_id?: string | null
+          funcionario_id?: number | null
+          gerou_cobranca?: string | null
+          linha_digitavel?: string | null
+          modelo?: string | null
+          movimento_id?: number | null
+          nosso_numero?: string | null
+          observacao1?: string | null
+          observacao2?: string | null
+          parcela?: number | null
+          pct_juros?: number | null
+          pct_multa?: number | null
+          plano_id?: number | null
+          planoconta_id?: number | null
+          portador_id?: number | null
+          quantidade?: number | null
+          serie?: string | null
+          situacao?: never
+          st_execucao?: string | null
+          st_programacao?: string | null
+          status?: string | null
+          tp_conta?: string | null
+          tp_documento_id?: string | null
+          vl_a_pagar?: never
+          vl_adicional?: number | null
+          vl_desconto?: number | null
+          vl_despesa?: number | null
+          vl_juros?: never
+          vl_multa?: never
+          vl_pago?: number | null
+          vl_titulo?: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       fu_chat_is_membro: {
