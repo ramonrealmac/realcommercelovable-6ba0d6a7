@@ -7,7 +7,16 @@ import { provedorService } from "@/services/provedorService";
 import { RefreshCw, Download, CheckCircle, AlertTriangle, ShieldCheck, ShieldAlert, FileSearch, Eye, Terminal, Target } from "lucide-react";
 import { formatCPFCNPJ } from "@/lib/validators";
 import MonitorFiscalLogDialog from "./MonitorFiscalLogDialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
+} from "@/components/ui/dropdown-menu";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 const db = supabase as any;
 
@@ -65,15 +74,71 @@ const NfeRecebidasForm: React.FC = () => {
   const [XMaxLoops, setXMaxLoops] = useState(10);
   const [XAlertOpen, setXAlertOpen] = useState(false);
   const [XAlertMsg, setXAlertMsg] = useState("");
+  const [XManifOpen, setXManifOpen] = useState(false);
+  const [XSelectedNfe, setXSelectedNfe] = useState<any>(null);
+  const [XManifTipo, setXManifTipo] = useState("");
+  const [XJustificativa, setXJustificativa] = useState("");
 
-  const registrarLog = async (comando: string, resposta: string, ultNsu?: any, maxNsu?: any) => {
+  const handleOpenManif = (row: any, tipo: string) => {
+    setXSelectedNfe(row);
+    setXManifTipo(tipo);
+    setXJustificativa("");
+    if (tipo === "210240") {
+      setXManifOpen(true);
+    } else {
+      handleConfirmarManifesto(row, tipo);
+    }
+  };
+
+  const handleConfirmarManifesto = async (row: any, tipo: string, just?: string) => {
+    if (!just && tipo === "210240") {
+      toast.error("Justificativa obrigatória para esta operação.");
+      return;
+    }
+    
+    const labels: any = { 
+      "210200": "Confirmação da Operação", 
+      "210210": "Ciência da Operação", 
+      "210220": "Desconhecimento da Operação", 
+      "210240": "Operação não Realizada" 
+    };
+
+    if (!confirm(`Confirma o envio da manifestação "${labels[tipo]}"?`)) return;
+    
+    setXLoading(true);
+    try {
+      const resp = await provedorService.enviarManifesto(row.chave_nfe, tipo, XCNPJ, just);
+      await registrarLog(`Manifesto(${tipo}) - ${row.chave_nfe}`, resp, 0, 0, row.nfe_recebida_id);
+      
+      if (resp.includes("ERRO:")) {
+        throw new Error(resp.replace("ERRO:", "").trim());
+      }
+
+      // Atualiza status localmente
+      const { error } = await db.from("nfe_recebida")
+        .update({ st_manifesto: tipo, updated_at: new Date().toISOString() })
+        .eq("nfe_recebida_id", row.nfe_recebida_id);
+
+      if (error) throw error;
+      toast.success("Manifesto enviado com sucesso!");
+      setXManifOpen(false);
+      loadData();
+    } catch (e: any) {
+      toast.error("Erro ao manifestar: " + e.message);
+    } finally {
+      setXLoading(false);
+    }
+  };
+
+  const registrarLog = async (comando: string, resposta: string, ultNsu?: any, maxNsu?: any, nfeId?: any) => {
     try {
       await db.from("dfe_nsu_log").insert({
         empresa_id: XEmpresaId,
         comando: comando,
         resposta: resposta,
         ult_nsu: Number(ultNsu || 0),
-        max_nsu: Number(maxNsu || 0)
+        max_nsu: Number(maxNsu || 0),
+        nfe_recebida_id: nfeId || null
       });
     } catch (e) {
       console.error("Erro ao registrar log MonitorFiscal:", e);
@@ -245,46 +310,57 @@ const NfeRecebidasForm: React.FC = () => {
           }
 
           const parsed = provedorService.parseIni(resp);
-          const dfeInfo = parsed.DistribuicaoDFe;
+          const dfeInfo = parsed.DistribuicaoDFe || parsed; // JSON can sometimes be the root object
 
-          if (!dfeInfo) {
+          if (!dfeInfo || (!dfeInfo.cStat && !dfeInfo.CStat)) {
             await registrarLog(comando, resp, 0, 0);
             break;
           }
 
+          // Normaliza os dados do DFE (suporta INI e JSON com diferentes cases)
+          const cStat = String(dfeInfo.cStat || dfeInfo.CStat || "");
+          const ultNSU = String(dfeInfo.ultNSU || dfeInfo.ultnsu || "0");
+          const maxNSU = String(dfeInfo.maxNSU || dfeInfo.maxnsu || "0");
+
           // Registra log com NSUs retornados pela SEFAZ
           // Importante: Só registramos o avanço se for 138 (documentos encontrados) ou 137 (nenhum novo)
-          if (dfeInfo.cStat === "138" || dfeInfo.cStat === "137") {
-            await registrarLog(comando, resp, dfeInfo.ultNSU, dfeInfo.maxNSU);
+          if (cStat === "138" || cStat === "137") {
+            await registrarLog(comando, resp, ultNSU, maxNSU);
+            currentNSU = ultNSU; // Sempre avança para o ultNSU retornado
           } else {
             await registrarLog(comando, resp, 0, 0);
-            toast.warning(`SEFAZ: ${dfeInfo.xMotivo || "Resposta inesperada"}`);
+            toast.warning(`SEFAZ: ${dfeInfo.xMotivo || dfeInfo.XMotivo || "Resposta inesperada"}`);
             hasMore = false;
             break;
           }
           
-          if (dfeInfo.cStat === "137") {
+          if (cStat === "137") {
             if (loopCount === 1) toast.info("Nenhum documento novo localizado na SEFAZ.");
             hasMore = false;
             break;
           }
 
           // Processa documentos deste lote
-          const docs = Object.keys(parsed).filter(k => k.startsWith("resNFe") || k.startsWith("procNFe"));
+          const docs = Object.keys(parsed).filter(k => 
+            k.toUpperCase().startsWith("RESNFE") || 
+            k.toUpperCase().startsWith("PROCNFE")
+          );
+
           for (const key of docs) {
             const doc = parsed[key];
-            if (!doc.chNFe) continue;
+            const chNFe = doc.chNFe || doc.ChNFe || doc.CH_NFE;
+            if (!chNFe) continue;
 
             const payload = {
               empresa_id: XEmpresaId,
-              chave_nfe: doc.chNFe,
-              cnpj_emitente: doc.CNPJ || doc.CPF,
-              nm_emitente: (doc.xNome || "DESCONHECIDO").toUpperCase(),
-              dt_emissao: doc.dEmi,
-              vl_total: Number(doc.vNF || 0),
-              nr_nota: doc.chNFe.substring(25, 34),
-              serie: doc.chNFe.substring(22, 25),
-              nsu: doc.NSU,
+              chave_nfe: chNFe,
+              cnpj_emitente: doc.CNPJ || doc.Cnpj || doc.cnpj || doc.CPF || doc.Cpf || doc.cpf,
+              nm_emitente: (doc.xNome || doc.XNome || doc.nome || "DESCONHECIDO").toUpperCase(),
+              dt_emissao: doc.dEmi || doc.DEmi || doc.data_emissao,
+              vl_total: Number(doc.vNF || doc.VNF || doc.valor || 0),
+              nr_nota: chNFe.substring(25, 34),
+              serie: chNFe.substring(22, 25),
+              nsu: doc.NSU || doc.nsu,
               xml_resumo: JSON.stringify(doc),
               updated_at: new Date().toISOString()
             };
@@ -293,11 +369,8 @@ const NfeRecebidasForm: React.FC = () => {
             if (!error) totalNovos++;
           }
 
-          // Prepara próxima volta
-          const ultNSU = dfeInfo.ultNSU;
-          const maxNSU = dfeInfo.maxNSU;
-
-          if (ultNSU && maxNSU && parseInt(ultNSU) < parseInt(maxNSU)) {
+          // Prepara próxima volta se houver mais documentos
+          if (cStat === "138" && parseInt(ultNSU) < parseInt(maxNSU)) {
             currentNSU = ultNSU;
             await new Promise(r => setTimeout(r, 500));
           } else {
@@ -338,13 +411,16 @@ const NfeRecebidasForm: React.FC = () => {
       }
 
       const parsed = provedorService.parseIni(resp);
-      const dfeInfo = parsed.DistribuicaoDFe;
+      const dfeInfo = parsed.DistribuicaoDFe || parsed;
 
       if (dfeInfo) {
-        const { cStat, xMotivo, maxNSU } = dfeInfo;
+        const cStat = String(dfeInfo.cStat || dfeInfo.CStat || "");
+        const xMotivo = dfeInfo.xMotivo || dfeInfo.XMotivo || "";
+        const maxNSU = String(dfeInfo.maxNSU || dfeInfo.maxnsu || "0");
+        
         const msg = `SEFAZ [${cStat}]: ${xMotivo}`;
         
-        if (maxNSU && (cStat === "137" || cStat === "138")) {
+        if (maxNSU !== "0" && (cStat === "137" || cStat === "138")) {
           // Registra o log com o MAX_NSU para que a próxima sincronização comece de lá
           await registrarLog("ALINHAMENTO MANUAL", resp, maxNSU, maxNSU);
           toast.success(`${msg}. Sistema alinhado com a SEFAZ no NSU ${maxNSU}.`);
@@ -366,29 +442,18 @@ const NfeRecebidasForm: React.FC = () => {
     }
   };
 
-  const handleManifestar = async (row: any, tipo: string) => {
-    if (!confirm("Confirma o envio deste evento de manifestação?")) return;
-    setXLoading(true);
-    try {
-      const resp = await provedorService.enviarManifesto(row.chave_nfe, tipo, XCNPJ);
-      await registrarLog(`Manifesto(${tipo}) - ${row.chave_nfe}`, resp);
-      
-      // Atualiza status localmente (em um cenário real leríamos o retorno do protocolo)
-      const { error } = await db.from("nfe_recebida")
-        .update({ st_manifesto: tipo, updated_at: new Date().toISOString() })
-        .eq("nfe_recebida_id", row.nfe_recebida_id);
-
-      if (error) throw error;
-      toast.success("Manifesto enviado!");
-      loadData();
-    } catch (e: any) {
-      toast.error("Erro ao manifestar: " + e.message);
-    } finally {
-      setXLoading(false);
-    }
-  };
-
   const handleBaixarXml = async (row: any) => {
+    if (!row.st_manifesto || row.st_manifesto === "0") {
+      if (confirm("Para baixar o XML é necessário realizar a 'Ciência da Operação'. Deseja realizar agora?")) {
+        await handleConfirmarManifesto(row, "210210");
+        // Após manifestar, recarrega o dado da linha para ter o st_manifesto atualizado e tenta baixar
+        const { data: updatedRow } = await db.from("nfe_recebida").select("*").eq("nfe_recebida_id", row.nfe_recebida_id).maybeSingle();
+        if (updatedRow?.st_manifesto === "210210") {
+          handleBaixarXml(updatedRow);
+        }
+      }
+      return;
+    }
     setXLoading(true);
     try {
       // Para baixar o XML completo, chamamos a distribuição novamente por chave
@@ -396,16 +461,19 @@ const NfeRecebidasForm: React.FC = () => {
       // Aqui vamos forçar uma consulta por chave
       const comando = `NFE.DistribuicaoDFePorChave(${XUF}, "${XCNPJ}", "${row.chave_nfe}")`;
       const resp = await provedorService.enviarComando(comando);
-      await registrarLog(comando, resp);
+      await registrarLog(comando, resp, 0, 0, row.nfe_recebida_id);
 
       const parsed = provedorService.parseIni(resp);
       
-      const key = Object.keys(parsed).find(k => k.startsWith("procNFe"));
-      if (key && parsed[key].XML) {
+      const key = Object.keys(parsed).find(k => k.toUpperCase().startsWith("PROCNFE"));
+      const doc = key ? parsed[key] : null;
+      const xml = doc?.XML || doc?.xml || doc?.Xml;
+
+      if (xml) {
         await db.from("nfe_recebida")
           .update({ 
             st_download: true, 
-            xml_completo: parsed[key].XML,
+            xml_completo: xml,
             updated_at: new Date().toISOString() 
           })
           .eq("nfe_recebida_id", row.nfe_recebida_id);
@@ -444,37 +512,33 @@ const NfeRecebidasForm: React.FC = () => {
               width: "240px",
               render: r => (
                 <div className="flex items-center gap-2">
-                  {(r.st_manifesto === "0" || r.st_manifesto === "210210") && (
-                    <button 
-                      onClick={() => handleManifestar(r, "210200")}
-                      className="flex items-center gap-1 text-[11px] bg-green-50 text-green-700 px-2 py-1 rounded border border-green-100 hover:bg-green-100 transition-colors"
-                      title="Confirmar Operação"
-                    >
-                      <ShieldCheck className="w-3 h-3" /> Confirmar
-                    </button>
-                  )}
-                  {r.st_manifesto === "0" && (
-                    <button 
-                      onClick={() => handleManifestar(r, "210210")}
-                      className="flex items-center gap-1 text-[11px] bg-blue-50 text-blue-700 px-2 py-1 rounded border border-blue-100 hover:bg-blue-100 transition-colors"
-                      title="Ciência da Operação"
-                    >
-                      <Eye className="w-3 h-3" /> Ciência
-                    </button>
-                  )}
-                  {r.st_manifesto === "0" && (
-                    <button 
-                      onClick={() => handleManifestar(r, "210220")}
-                      className="flex items-center gap-1 text-[11px] bg-red-50 text-red-700 px-2 py-1 rounded border border-red-100 hover:bg-red-100 transition-colors"
-                      title="Desconhecimento"
-                    >
-                      <ShieldAlert className="w-3 h-3" /> Desconhecer
-                    </button>
-                  )}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center gap-1 text-[11px] bg-secondary text-secondary-foreground px-2 py-1 rounded border border-border hover:bg-secondary/80 transition-colors font-bold uppercase shadow-sm">
+                        Manifestar
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuItem onClick={() => handleOpenManif(r, "210210")}>
+                        <Eye className="w-4 h-4 mr-2 text-blue-500" /> Ciência da Operação
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleOpenManif(r, "210200")}>
+                        <ShieldCheck className="w-4 h-4 mr-2 text-green-500" /> Confirmação da Operação
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => handleOpenManif(r, "210240")}>
+                        <AlertTriangle className="w-4 h-4 mr-2 text-amber-500" /> Operação não Realizada
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleOpenManif(r, "210220")} className="text-destructive">
+                        <ShieldAlert className="w-4 h-4 mr-2" /> Desconhecimento
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
                   <button 
                     onClick={() => handleBaixarXml(r)}
-                    disabled={XLoading || r.st_manifesto === "0"}
-                    className="ml-auto p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors disabled:opacity-20"
+                    disabled={XLoading || !r.st_manifesto || r.st_manifesto === "0"}
+                    className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors disabled:opacity-20"
                     title="Baixar XML"
                   >
                     <Download className="w-4 h-4" />
@@ -574,6 +638,46 @@ const NfeRecebidasForm: React.FC = () => {
         onClose={() => setXLogOpen(false)} 
         empresaId={XEmpresaId} 
       />
+
+      <Dialog open={XManifOpen} onOpenChange={setXManifOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" /> Operação não Realizada
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="justificativa">Justificativa (mínimo 15 caracteres)</Label>
+              <Textarea 
+                id="justificativa"
+                placeholder="Descreva o motivo pelo qual a operação não foi realizada..."
+                value={XJustificativa}
+                onChange={(e) => setXJustificativa(e.target.value)}
+                className="min-h-[100px]"
+              />
+              <p className="text-[10px] text-muted-foreground italic">
+                Nota: Esta manifestação é conclusiva e indica que você reconhece a nota mas a mercadoria não foi recebida.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <button 
+              onClick={() => setXManifOpen(false)}
+              className="px-4 py-2 text-sm font-medium border border-border rounded-md hover:bg-secondary transition-colors"
+            >
+              Cancelar
+            </button>
+            <button 
+              onClick={() => handleConfirmarManifesto(XSelectedNfe, "210240", XJustificativa)}
+              disabled={XJustificativa.length < 15 || XLoading}
+              className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-bold hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              Enviar Manifestação
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={XAlertOpen} onOpenChange={setXAlertOpen}>
         <DialogContent className="max-w-md">

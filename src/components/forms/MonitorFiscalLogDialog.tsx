@@ -68,9 +68,16 @@ const XCols: IGridColumn[] = [
 ];
 
 const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen, onClose, empresaId }) => {
-  const [XData, setXData] = useState<any[]>([]);
-  const [XLoading, setXLoading] = useState(false);
-  const [XSelected, setXSelected] = useState<any>(null);
+  const [XFilters, setXFilters] = useState<Record<string, string>>({});
+
+  const XFilteredData = XData.filter(row => {
+    for (const [key, val] of Object.entries(XFilters)) {
+      if (!val) continue;
+      const rowVal = String(row[key] || "").toLowerCase();
+      if (!rowVal.includes(val.toLowerCase())) return false;
+    }
+    return true;
+  });
 
   const loadLogs = async () => {
     if (!empresaId || !isOpen) return;
@@ -81,7 +88,7 @@ const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen,
         .select("*")
         .eq("empresa_id", empresaId)
         .order("created_at", { ascending: false })
-        .limit(100);
+        .limit(200); // Aumentado para 200 para dar mais margem ao filtro
 
       if (error) throw error;
       setXData(data || []);
@@ -94,26 +101,30 @@ const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen,
 
   useEffect(() => {
     loadLogs();
+    if (isOpen) setXFilters({}); // Reseta filtros ao abrir
   }, [isOpen, empresaId]);
 
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
+        <DialogContent className="max-w-5xl h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Terminal className="w-5 h-5 text-primary" />
               Log de DFE
             </DialogTitle>
-            <p className="text-[10px] text-muted-foreground italic">* Clique duplo para ver detalhes do registro</p>
+            <p className="text-[10px] text-muted-foreground italic">* Use a linha de filtros abaixo dos títulos para pesquisar</p>
           </DialogHeader>
 
           <div className="flex-1 overflow-hidden">
             <DataGrid 
               columns={XCols}
-              data={XData}
+              data={XFilteredData}
               maxHeight="calc(80vh - 150px)"
               showRecordCount
+              showFilters
+              filterValues={XFilters}
+              onFilterChange={(k, v) => setXFilters(prev => ({ ...prev, [k]: v }))}
               onRowDoubleClick={(row) => setXSelected(row)}
             />
           </div>

@@ -74,19 +74,41 @@ export const provedorService = {
   },
 
   /**
-   * Envia evento de manifestação do destinatário
+   * Envia evento de manifestação do destinatário (210200, 210210, 210220, 210240)
    */
-  async enviarManifesto(chNFe: string, tipo: string, cnpj: string): Promise<string> {
-    return this.enviarComando(`NFE.EnviarEvento("ID110110${chNFe}01", "${chNFe}", "${cnpj}", 1, "${new Date().toISOString()}", ${tipo})`);
+  async enviarManifesto(chNFe: string, tipo: string, cnpj: string, justificativa?: string): Promise<string> {
+    // Mapeia códigos SEFAZ para índices ACBr se necessário, ou usa EnviarEvento
+    // NFE.ManifestacaoDestinatario(cChave, nTipo, [xJust])
+    // nTipo: 0-Confirmação, 1-Ciência, 2-Desconhecimento, 3-Não Realizada
+    const map: Record<string, string> = {
+      "210200": "0",
+      "210210": "1",
+      "210220": "2",
+      "210240": "3"
+    };
+    const nTipo = map[tipo] || "1";
+    const xJust = justificativa ? `, "${justificativa}"` : "";
+    return this.enviarComando(`NFE.ManifestacaoDestinatario("${chNFe}", ${nTipo}${xJust})`);
   },
 
   /**
-   * Converte uma resposta INI do provedor em um objeto JavaScript
+   * Converte uma resposta (INI ou JSON) do provedor em um objeto JavaScript
    */
   parseIni(text: string): any {
+    const cleanText = text.replace(/^OK:\s*/i, "").trim();
+    
+    // Se for JSON, parseia diretamente
+    if (cleanText.startsWith("{") && cleanText.endsWith("}")) {
+      try {
+        return JSON.parse(cleanText);
+      } catch (e) {
+        console.error("Erro ao parsear JSON do monitor:", e);
+      }
+    }
+
+    // Se não, assume formato INI
     const result: any = {};
     let currentSection: string | null = null;
-    const cleanText = text.replace(/^OK:\s*/i, "");
     const lines = cleanText.split(/\r?\n/);
 
     for (const line of lines) {
