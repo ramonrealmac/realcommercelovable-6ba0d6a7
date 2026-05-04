@@ -62,12 +62,14 @@ const NfeRecebidasForm: React.FC = () => {
   const [XSearchFilters, setXSearchFilters] = useState<Record<string, string>>({});
   const [XLogOpen, setXLogOpen] = useState(false);
 
-  const registrarLog = async (comando: string, resposta: string) => {
+  const registrarLog = async (comando: string, resposta: string, ultNsu?: string, maxNsu?: string) => {
     try {
-      await db.from("acbr_log").insert({
+      await db.from("dfe_nsu_log").insert({
         empresa_id: XEmpresaId,
         comando: comando,
-        resposta: resposta
+        resposta: resposta,
+        ult_nsu: ultNsu || "",
+        max_nsu: maxNsu || ""
       });
     } catch (e) {
       console.error("Erro ao registrar log ACBr:", e);
@@ -192,7 +194,10 @@ const NfeRecebidasForm: React.FC = () => {
         console.log(`[DFe] Lote ${loopCount}: Enviando Comando -> ${comando}`);
         
         const resp = await provedorService.enviarComando(comando);
-        await registrarLog(comando, resp);
+        const parsed = provedorService.parseIni(resp);
+        const dfeInfo = parsed.DistribuicaoDFe;
+
+        await registrarLog(comando, resp, dfeInfo?.ultNSU, dfeInfo?.maxNSU);
         
         if (resp.includes("ERRO:")) {
           const errorMsg = resp.replace("ERRO:", "").trim();
@@ -211,7 +216,6 @@ const NfeRecebidasForm: React.FC = () => {
           throw new Error(errorMsg);
         }
 
-        const parsed = provedorService.parseIni(resp);
         const dfeInfo = parsed.DistribuicaoDFe;
 
         if (!dfeInfo) break;

@@ -21,13 +21,13 @@ const XCols: IGridColumn[] = [
   { 
     key: "created_at", 
     label: "Data/Hora", 
-    width: "160px",
+    width: "140px",
     render: r => new Date(r.created_at).toLocaleString("pt-BR")
   },
   { 
     key: "comando", 
-    label: "Comando Enviado", 
-    width: "2fr",
+    label: "Comando", 
+    width: "1.5fr",
     render: r => (
       <div className="font-mono text-[10px] bg-secondary/50 p-1 rounded border border-border overflow-hidden text-ellipsis whitespace-nowrap" title={r.comando}>
         {r.comando}
@@ -35,11 +35,25 @@ const XCols: IGridColumn[] = [
     )
   },
   { 
+    key: "ult_nsu", 
+    label: "Últ. NSU", 
+    width: "110px",
+    align: "center",
+    render: r => <span className="font-mono text-[10px]">{r.ult_nsu || "-"}</span>
+  },
+  { 
+    key: "max_nsu", 
+    label: "Máx. NSU", 
+    width: "110px",
+    align: "center",
+    render: r => <span className="font-mono text-[10px]">{r.max_nsu || "-"}</span>
+  },
+  { 
     key: "resposta", 
     label: "Resposta do ACBr", 
     width: "2fr",
     render: r => {
-      const isError = String(r.resposta || "").includes("ERRO") || String(r.resposta || "").includes("Rejeicao");
+      const isError = String(r.resposta || "").includes("ERRO") || String(r.resposta || "").includes("Rejeicao") || String(r.resposta || "").includes("Consumo Indevido");
       return (
         <div className={`font-mono text-[10px] p-1 rounded border overflow-hidden text-ellipsis whitespace-nowrap ${isError ? "bg-red-50 text-red-700 border-red-100" : "bg-green-50 text-green-700 border-green-100"}`} title={r.resposta}>
           {r.resposta}
@@ -58,7 +72,7 @@ const AcbrLogDialog: React.FC<AcbrLogDialogProps> = ({ isOpen, onClose, empresaI
     setXLoading(true);
     try {
       const { data, error } = await db
-        .from("acbr_log")
+        .from("dfe_nsu_log")
         .select("*")
         .eq("empresa_id", empresaId)
         .order("created_at", { ascending: false })
