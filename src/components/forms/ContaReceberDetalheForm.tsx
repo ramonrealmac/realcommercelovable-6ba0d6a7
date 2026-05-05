@@ -273,6 +273,7 @@ const ContaReceberDetalheForm: React.FC<IProps> = ({ empresa_id, financeiro_id }
         .delete().eq("financeiro_baixa_id", b.financeiro_baixa_id);
       if (error) throw error;
       await recalcFinanceiroFromBaixas();
+      window.dispatchEvent(new CustomEvent("financeiro:baixa-changed"));
       toast.success("Baixa excluída");
       await load();
     } catch (e: any) {
