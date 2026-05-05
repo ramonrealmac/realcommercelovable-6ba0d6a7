@@ -145,7 +145,7 @@ const ContaReceberDetalheForm: React.FC<IProps> = ({ empresa_id, financeiro_id }
       const [td, po, pl, ct, mp] = await Promise.all([
         sb.from("tp_documento").select("tp_documento_id, descricao").order("descricao").then((r: any) => r).catch(() => ({ data: [] })),
         supabase.from("portador").select("portador_id, nome").order("nome"),
-        supabase.from("plano").select("plano_id, nome, tp_conta, natureza").eq("tp_conta", "R").eq("natureza", "A").order("nome"),
+        supabase.from("plano").select("plano_id, nome, tp_conta, tp_natureza").eq("tp_conta", "A").eq("tp_natureza", "C").order("nome"),
         supabase.from("conta").select("conta_id, nome_conta, empresa_id").eq("empresa_id", empresa_id).order("nome_conta"),
         supabase.from("meio_pagamento").select("meio_pagamento_id, descricao").order("descricao"),
       ]);
