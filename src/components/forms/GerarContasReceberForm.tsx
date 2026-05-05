@@ -304,15 +304,35 @@ const GerarContasReceberForm: React.FC = () => {
         </div>
 
         {/* Linha 5 - vencimento */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <FormDateField label="Primeiro Vencimento" value={XForm.primeiro_vencto} onChange={v => setF("primeiro_vencto", v)} />
           <div>
-            <label className={lbl}>Intervalo</label>
-            <select className={inputCls} value={XForm.intervalo_dias} onChange={e => setF("intervalo_dias", e.target.value)}>
-              {INTERVALOS.map(i => <option key={i.dias} value={i.dias}>{i.label}</option>)}
+            <label className={lbl}>Tipo Vencimento</label>
+            <select className={inputCls} value={XForm.tp_vencimento} onChange={e => setF("tp_vencimento", e.target.value)}>
+              <option value="I">Por Intervalo</option>
+              <option value="D">Dia Fixo do Mês</option>
             </select>
           </div>
+          {XForm.tp_vencimento === "I" ? (
+            <div className="md:col-span-2">
+              <label className={lbl}>Intervalo</label>
+              <select className={inputCls} value={XForm.intervalo_dias} onChange={e => setF("intervalo_dias", e.target.value)}>
+                {INTERVALOS.map(i => <option key={i.dias} value={i.dias}>{i.label}</option>)}
+              </select>
+            </div>
+          ) : (
+            <div className="md:col-span-2">
+              <label className={lbl}>Dia do Mês (1-31)</label>
+              <input
+                type="number" min="1" max="31"
+                className={inputCls}
+                value={XForm.dia_fixo}
+                onChange={e => setF("dia_fixo", e.target.value)}
+              />
+            </div>
+          )}
         </div>
+
       </div>
     </div>
   );
