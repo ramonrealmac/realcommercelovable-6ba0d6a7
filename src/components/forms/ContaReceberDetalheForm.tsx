@@ -256,6 +256,7 @@ const ContaReceberDetalheForm: React.FC<IProps> = ({ empresa_id, financeiro_id }
       });
       if (error) throw error;
       await recalcFinanceiroFromBaixas();
+      window.dispatchEvent(new CustomEvent("financeiro:baixa-changed"));
       toast.success("Baixa registrada");
       // reset
       setXNovoRecibo(""); setXNovoObs(""); setXNovoTipoPag(""); setXNovoContaId("");
