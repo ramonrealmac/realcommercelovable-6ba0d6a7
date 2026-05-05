@@ -144,6 +144,8 @@ const AppContent = () => {
         return <ConsultaTitulosReceberForm />;
       case "gerar-contas-receber":
         return <GerarContasReceberForm />;
+      case "conta-receber-detalhe":
+        return <ContaReceberDetalheForm empresa_id={params?.empresa_id} financeiro_id={params?.financeiro_id} />;
       default:
         if (component.startsWith("rpb-exec-")) {
           const XRelId = parseInt(component.replace("rpb-exec-", ""));
