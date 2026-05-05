@@ -126,8 +126,8 @@ const ContaReceberDetalheForm: React.FC<IProps> = ({ empresa_id, financeiro_id }
       setXPlanoId(data.plano_id?.toString() ?? "");
       setXPctJuros(String(data.pct_juros ?? 0));
       setXPctMulta(String(data.pct_multa ?? 0));
-      setXAplJuros((data.aplica_juros ?? "N") === "S");
-      setXAplMulta((data.aplica_multa ?? "N") === "S");
+      setXAplJuros(false);
+      setXAplMulta(false);
       setXObs(data.observacao1 ?? "");
       setXVlDesconto(String(data.vl_desconto ?? 0));
 
