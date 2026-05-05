@@ -237,8 +237,7 @@ const ContaReceberDetalheForm: React.FC<IProps> = ({ empresa_id, financeiro_id }
         .limit(1)
         .maybeSingle();
       const nextId = ((maxRow?.financeiro_baixa_id as number) ?? 0) + 1;
-      // próximo número de documento da baixa para esse título
-      const proxDoc = String((XBaixas.length ?? 0) + 1).padStart(4, "0");
+      const proxDoc = String(XRec?.documento ?? "").trim();
 
       const { error } = await supabase.from("financeiro_baixa").insert({
         financeiro_baixa_id: nextId,
