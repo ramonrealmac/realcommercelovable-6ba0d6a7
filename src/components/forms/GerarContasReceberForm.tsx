@@ -121,11 +121,25 @@ const GerarContasReceberForm: React.FC = () => {
       }
 
       const rows: any[] = [];
+      const diaFixo = Math.min(31, Math.max(1, parseInt(XForm.dia_fixo) || 1));
       for (let i = 1; i <= nrParc; i++) {
-        const dtVencto = new Date(dtVenc1);
-        dtVencto.setDate(dtVencto.getDate() + (i - 1) * intDias);
+        let dtVencto: Date;
+        if (XForm.tp_vencimento === "D") {
+          // Dia fixo: parcela 1 = primeiro_vencto; demais = dia fixo nos meses subsequentes
+          if (i === 1) {
+            dtVencto = new Date(dtVenc1);
+          } else {
+            const base = new Date(dtVenc1.getFullYear(), dtVenc1.getMonth() + (i - 1), 1);
+            const ultimoDia = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+            dtVencto = new Date(base.getFullYear(), base.getMonth(), Math.min(diaFixo, ultimoDia));
+          }
+        } else {
+          dtVencto = new Date(dtVenc1);
+          dtVencto.setDate(dtVencto.getDate() + (i - 1) * intDias);
+        }
         const docParcela = nrParc === 1 ? XForm.documento : `${XForm.documento}/${String(i).padStart(2, "0")}`;
         const vlParc = nrParc === 1 ? vlTitulo : Number((vlTitulo / nrParc).toFixed(2));
+
 
         rows.push({
           empresa_id: empId,
