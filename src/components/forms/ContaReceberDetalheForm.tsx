@@ -14,6 +14,7 @@ interface IProps {
 interface ITpDoc { tp_documento_id: string; descricao: string; }
 interface IPortador { portador_id: number; nome: string; }
 interface IPlano { plano_id: number; nome: string; }
+// uses plano_conta table: PLANO_CONTA_ID maps to plano_id field of financeiro
 interface IConta { conta_id: string; nome_conta: string; }
 interface IMeioPag { meio_pagamento_id: number; descricao: string; }
 interface IBaixa {
