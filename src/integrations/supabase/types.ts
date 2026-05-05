@@ -1563,57 +1563,6 @@ export type Database = {
         }
         Relationships: []
       }
-      cidadesx: {
-        Row: {
-          cidade_id: string
-          column_10: string | null
-          column_4: string | null
-          column_5: string | null
-          column_6: string | null
-          column_7: string | null
-          column_8: string | null
-          column_9: string | null
-          descricao: string | null
-          dt_alteracao: string | null
-          dt_cadastro: string | null
-          excluido: boolean | null
-          ibge: string | null
-          uf: string | null
-        }
-        Insert: {
-          cidade_id: string
-          column_10?: string | null
-          column_4?: string | null
-          column_5?: string | null
-          column_6?: string | null
-          column_7?: string | null
-          column_8?: string | null
-          column_9?: string | null
-          descricao?: string | null
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          excluido?: boolean | null
-          ibge?: string | null
-          uf?: string | null
-        }
-        Update: {
-          cidade_id?: string
-          column_10?: string | null
-          column_4?: string | null
-          column_5?: string | null
-          column_6?: string | null
-          column_7?: string | null
-          column_8?: string | null
-          column_9?: string | null
-          descricao?: string | null
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          excluido?: boolean | null
-          ibge?: string | null
-          uf?: string | null
-        }
-        Relationships: []
-      }
       clas_trib: {
         Row: {
           ativo: boolean | null
@@ -2786,6 +2735,78 @@ export type Database = {
         }
         Relationships: []
       }
+      fiscal_evento: {
+        Row: {
+          comando: string
+          created_at: string
+          empresa_id: number
+          id: number
+          mensagem_erro: string | null
+          payload: Json | null
+          resposta: string | null
+          status: string
+          tipo: string
+          updated_at: string
+          xml_retorno: string | null
+        }
+        Insert: {
+          comando: string
+          created_at?: string
+          empresa_id: number
+          id?: never
+          mensagem_erro?: string | null
+          payload?: Json | null
+          resposta?: string | null
+          status?: string
+          tipo: string
+          updated_at?: string
+          xml_retorno?: string | null
+        }
+        Update: {
+          comando?: string
+          created_at?: string
+          empresa_id?: number
+          id?: never
+          mensagem_erro?: string | null
+          payload?: Json | null
+          resposta?: string | null
+          status?: string
+          tipo?: string
+          updated_at?: string
+          xml_retorno?: string | null
+        }
+        Relationships: []
+      }
+      fiscal_grupo_produto: {
+        Row: {
+          dt_alteracao: string | null
+          dt_cadastro: string | null
+          empresa_id: number
+          excluido: boolean | null
+          fiscal_grupo_produto_id: number
+          nome: string
+          tp_imposto: string
+        }
+        Insert: {
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id?: number
+          excluido?: boolean | null
+          fiscal_grupo_produto_id?: number
+          nome: string
+          tp_imposto: string
+        }
+        Update: {
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id?: number
+          excluido?: boolean | null
+          fiscal_grupo_produto_id?: number
+          nome?: string
+          tp_imposto?: string
+        }
+        Relationships: []
+      }
       fiscal_regra: {
         Row: {
           cfop_id: number | null
@@ -2796,7 +2817,11 @@ export type Database = {
           excluido: boolean | null
           fiscal_regra_id: number
           observacao: string | null
+          prioridade: number | null
           regime_trib: string | null
+          tp_operacao_id: number | null
+          vigencia_fim: string | null
+          vigencia_inicio: string | null
         }
         Insert: {
           cfop_id?: number | null
@@ -2807,7 +2832,11 @@ export type Database = {
           excluido?: boolean | null
           fiscal_regra_id?: number
           observacao?: string | null
+          prioridade?: number | null
           regime_trib?: string | null
+          tp_operacao_id?: number | null
+          vigencia_fim?: string | null
+          vigencia_inicio?: string | null
         }
         Update: {
           cfop_id?: number | null
@@ -2818,7 +2847,11 @@ export type Database = {
           excluido?: boolean | null
           fiscal_regra_id?: number
           observacao?: string | null
+          prioridade?: number | null
           regime_trib?: string | null
+          tp_operacao_id?: number | null
+          vigencia_fim?: string | null
+          vigencia_inicio?: string | null
         }
         Relationships: [
           {
@@ -2839,9 +2872,9 @@ export type Database = {
           dt_alteracao: string | null
           dt_cadastro: string | null
           empresa_id: number
+          fiscal_grupo_produto_id: number | null
           fiscal_regra_cfop_id: number
           fiscal_regra_id: number
-          grupo_icms_id: number | null
           ncm_filtro: string | null
           origem_produto: string | null
           uf_destino: string | null
@@ -2854,9 +2887,9 @@ export type Database = {
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
+          fiscal_grupo_produto_id?: number | null
           fiscal_regra_cfop_id?: number
           fiscal_regra_id: number
-          grupo_icms_id?: number | null
           ncm_filtro?: string | null
           origem_produto?: string | null
           uf_destino?: string | null
@@ -2869,9 +2902,9 @@ export type Database = {
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
+          fiscal_grupo_produto_id?: number | null
           fiscal_regra_cfop_id?: number
           fiscal_regra_id?: number
-          grupo_icms_id?: number | null
           ncm_filtro?: string | null
           origem_produto?: string | null
           uf_destino?: string | null
@@ -2890,6 +2923,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "fiscal_regra"
             referencedColumns: ["fiscal_regra_id"]
+          },
+          {
+            foreignKeyName: "fk_fiscal_regra_cfop_grupo"
+            columns: ["fiscal_grupo_produto_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_grupo_produto"
+            referencedColumns: ["fiscal_grupo_produto_id"]
           },
         ]
       }
@@ -2989,9 +3029,9 @@ export type Database = {
           dt_alteracao: string | null
           dt_cadastro: string | null
           empresa_id: number
+          fiscal_grupo_produto_id: number | null
           fiscal_regra_id: number
           fiscal_regra_item_id: number
-          grupo_icms_id: number | null
           ibs_aliquota: number | null
           icms_st_aliquota: number | null
           icms_st_base_reducao: number | null
@@ -3020,9 +3060,9 @@ export type Database = {
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
+          fiscal_grupo_produto_id?: number | null
           fiscal_regra_id: number
           fiscal_regra_item_id?: number
-          grupo_icms_id?: number | null
           ibs_aliquota?: number | null
           icms_st_aliquota?: number | null
           icms_st_base_reducao?: number | null
@@ -3051,9 +3091,9 @@ export type Database = {
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
+          fiscal_grupo_produto_id?: number | null
           fiscal_regra_id?: number
           fiscal_regra_item_id?: number
-          grupo_icms_id?: number | null
           ibs_aliquota?: number | null
           icms_st_aliquota?: number | null
           icms_st_base_reducao?: number | null
@@ -3077,6 +3117,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "fiscal_regra"
             referencedColumns: ["fiscal_regra_id"]
+          },
+          {
+            foreignKeyName: "fk_fiscal_regra_item_grupo"
+            columns: ["fiscal_grupo_produto_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_grupo_produto"
+            referencedColumns: ["fiscal_grupo_produto_id"]
           },
         ]
       }
@@ -3185,82 +3232,6 @@ export type Database = {
         }
         Relationships: []
       }
-      grupo_ibscbs: {
-        Row: {
-          cst_ibscbs: string | null
-          descricao: string
-          dt_alteracao: string | null
-          dt_cadastro: string | null
-          empresa_id: number
-          excluido: boolean | null
-          grupo_ibscbs_id: number
-        }
-        Insert: {
-          cst_ibscbs?: string | null
-          descricao: string
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          grupo_ibscbs_id?: number
-        }
-        Update: {
-          cst_ibscbs?: string | null
-          descricao?: string
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          grupo_ibscbs_id?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "grupo_ibscbs_empresa_id_fkey"
-            columns: ["empresa_id"]
-            isOneToOne: false
-            referencedRelation: "empresa"
-            referencedColumns: ["empresa_id"]
-          },
-        ]
-      }
-      grupo_icms: {
-        Row: {
-          crt: string | null
-          descricao: string
-          dt_alteracao: string | null
-          dt_cadastro: string | null
-          empresa_id: number
-          excluido: boolean | null
-          grupo_icms_id: number
-        }
-        Insert: {
-          crt?: string | null
-          descricao: string
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          grupo_icms_id?: number
-        }
-        Update: {
-          crt?: string | null
-          descricao?: string
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          grupo_icms_id?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "grupo_icms_empresa_id_fkey"
-            columns: ["empresa_id"]
-            isOneToOne: false
-            referencedRelation: "empresa"
-            referencedColumns: ["empresa_id"]
-          },
-        ]
-      }
       grupo_icms_item: {
         Row: {
           cfop: string | null
@@ -3344,76 +3315,6 @@ export type Database = {
           uf_destino?: string
         }
         Relationships: []
-      }
-      grupo_ipi: {
-        Row: {
-          descricao: string
-          dt_alteracao: string | null
-          dt_cadastro: string | null
-          empresa_id: number
-          excluido: boolean | null
-          grupo_ipi_id: number
-        }
-        Insert: {
-          descricao: string
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          grupo_ipi_id?: number
-        }
-        Update: {
-          descricao?: string
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          grupo_ipi_id?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "grupo_ipi_empresa_id_fkey"
-            columns: ["empresa_id"]
-            isOneToOne: false
-            referencedRelation: "empresa"
-            referencedColumns: ["empresa_id"]
-          },
-        ]
-      }
-      grupo_pis_cofins: {
-        Row: {
-          descricao: string
-          dt_alteracao: string | null
-          dt_cadastro: string | null
-          empresa_id: number
-          excluido: boolean | null
-          grupo_pis_cofins_id: number
-        }
-        Insert: {
-          descricao: string
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          grupo_pis_cofins_id?: number
-        }
-        Update: {
-          descricao?: string
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          grupo_pis_cofins_id?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "grupo_pis_cofins_empresa_id_fkey"
-            columns: ["empresa_id"]
-            isOneToOne: false
-            referencedRelation: "empresa"
-            referencedColumns: ["empresa_id"]
-          },
-        ]
       }
       linha_produto: {
         Row: {
@@ -6196,7 +6097,10 @@ export type Database = {
         Row: {
           altera_estoque: string | null
           descricao: string
+          dt_alteracao: string | null
+          dt_cadastro: string | null
           empresa_id: number
+          excluido: boolean | null
           gera_boleto: string | null
           gera_financeiro: string | null
           gera_nf: string | null
@@ -6208,7 +6112,10 @@ export type Database = {
         Insert: {
           altera_estoque?: string | null
           descricao?: string
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
           empresa_id?: number
+          excluido?: boolean | null
           gera_boleto?: string | null
           gera_financeiro?: string | null
           gera_nf?: string | null
@@ -6220,7 +6127,10 @@ export type Database = {
         Update: {
           altera_estoque?: string | null
           descricao?: string
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
           empresa_id?: number
+          excluido?: boolean | null
           gera_boleto?: string | null
           gera_financeiro?: string | null
           gera_nf?: string | null

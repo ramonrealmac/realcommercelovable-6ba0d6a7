@@ -45,6 +45,7 @@ import FiscalRegraForm from "@/components/forms/FiscalRegraForm";
 import CfopForm from "@/components/forms/CfopForm";
 import ConsultaTitulosReceberForm from "@/components/forms/ConsultaTitulosReceberForm";
 import GerarContasReceberForm from "@/components/forms/GerarContasReceberForm";
+import ContaReceberDetalheForm from "@/components/forms/ContaReceberDetalheForm";
 import ChatLauncher from "@/components/chat/ChatLauncher";
 
 const AppContent = () => {
@@ -143,6 +144,8 @@ const AppContent = () => {
         return <ConsultaTitulosReceberForm />;
       case "gerar-contas-receber":
         return <GerarContasReceberForm />;
+      case "conta-receber-detalhe":
+        return <ContaReceberDetalheForm empresa_id={params?.empresa_id} financeiro_id={params?.financeiro_id} />;
       default:
         if (component.startsWith("rpb-exec-")) {
           const XRelId = parseInt(component.replace("rpb-exec-", ""));
