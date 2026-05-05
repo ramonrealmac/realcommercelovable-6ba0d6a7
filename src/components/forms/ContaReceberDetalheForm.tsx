@@ -152,7 +152,7 @@ const ContaReceberDetalheForm: React.FC<IProps> = ({ empresa_id, financeiro_id }
       ]);
       setXTpDocs((td.data ?? []) as any);
       setXPortadores((po.data ?? []) as any);
-      setXPlanos((pl.data ?? []) as any);
+      setXPlanos(((pl.data ?? []) as any[]).map((p: any) => ({ plano_id: p.plano_conta_id, nome: p.nome })));
       setXContas((ct.data ?? []) as any);
       setXMeios((mp.data ?? []) as any);
     })();
