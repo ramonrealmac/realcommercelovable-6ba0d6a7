@@ -350,7 +350,7 @@ const ContaReceberDetalheForm: React.FC<IProps> = ({ empresa_id, financeiro_id }
       </div>
 
       <div className="flex-1 overflow-auto p-6 bg-card space-y-4">
-        <h2 className="text-base font-semibold">Conta a Receber - Documento {XRec.documento}/{XRec.parcela}</h2>
+        <h2 className="text-base font-semibold">Conta a Receber - Documento {XRec.documento}</h2>
 
         {/* Linha 1 */}
         <div className="grid grid-cols-12 gap-3">
