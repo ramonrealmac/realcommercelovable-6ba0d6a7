@@ -56,6 +56,8 @@ const GerarContasReceberForm: React.FC = () => {
     pct_multa: "",
     primeiro_vencto: todayBR(),
     intervalo_dias: "30",
+    tp_vencimento: "I", // I = Intervalo, D = Dia fixo do mês
+    dia_fixo: "30",
   });
   const [XSaving, setXSaving] = useState(false);
 
