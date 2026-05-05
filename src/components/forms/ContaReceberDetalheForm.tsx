@@ -100,8 +100,9 @@ const ContaReceberDetalheForm: React.FC<IProps> = ({ empresa_id, financeiro_id }
 
   useEffect(() => {
     (async () => {
+      const sb: any = supabase;
       const [td, po, pl] = await Promise.all([
-        supabase.from("tp_documento").select("tp_documento_id, descricao").order("descricao"),
+        sb.from("tp_documento").select("tp_documento_id, descricao").order("descricao").then((r: any) => r).catch(() => ({ data: [] })),
         supabase.from("portador").select("portador_id, nome").order("nome"),
         supabase.from("plano").select("plano_id, nome, tp_conta, natureza").eq("tp_conta", "R").eq("natureza", "A").order("nome"),
       ]);
