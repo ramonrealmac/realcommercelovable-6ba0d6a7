@@ -132,16 +132,25 @@ const NfeRecebidasForm: React.FC = () => {
 
   const registrarLog = async (comando: string, resposta: string, ultNsu?: any, maxNsu?: any, nfeId?: any) => {
     try {
-      await db.from("dfe_nsu_log").insert({
+      const u = Number(ultNsu || 0);
+      const m = Number(maxNsu || 0);
+      
+      const { error } = await db.from("dfe_nsu_log").insert({
         empresa_id: XEmpresaId,
         comando: comando,
         resposta: resposta,
-        ult_nsu: Number(ultNsu || 0),
-        max_nsu: Number(maxNsu || 0),
+        ult_nsu: u,
+        max_nsu: m,
         nfe_recebida_id: nfeId || null
       });
+
+      if (error) {
+        console.error("Erro RLS/DB ao registrar log:", error);
+      } else {
+        console.log(`[Log] Comando registrado. NSU: ${u}/${m}`);
+      }
     } catch (e) {
-      console.error("Erro ao registrar log MonitorFiscal:", e);
+      console.error("Exceção ao registrar log MonitorFiscal:", e);
     }
   };
 
@@ -239,37 +248,44 @@ const NfeRecebidasForm: React.FC = () => {
     let loopCount = 0;
 
     try {
-      // 1. Define NSU inicial baseado no LOG de consultas (Busca manual para precisão absoluta)
+      // 1. Define NSU inicial baseado no LOG de consultas e nas notas já recebidas
       if (!forceStart) {
         const currentId = Number(XEmpresaId || 0);
+        let maxFound = 0;
 
+        // Busca nos logs recentes
         const { data: logs } = await db.from("dfe_nsu_log")
-          .select("ult_nsu")
+          .select("ult_nsu, max_nsu")
           .eq("empresa_id", currentId)
           .order("created_at", { ascending: false })
-          .limit(50);
+          .limit(100);
         
         if (logs && logs.length > 0) {
-          const maxLogNSU = logs.reduce((max: number, l: any) => {
-            const n = Number(l.ult_nsu || 0);
-            return Math.max(max, n);
-          }, 0);
-
-          if (maxLogNSU > 0) {
-            currentNSU = String(maxLogNSU);
-          }
+          logs.forEach((l: any) => {
+            const u = Number(l.ult_nsu || 0);
+            const m = Number(l.max_nsu || 0);
+            if (u > maxFound) maxFound = u;
+            // Se o max_nsu for maior e o cStat foi 137, poderíamos usar m, mas a SEFAZ pede para seguir o ultNSU
+          });
         }
 
-        if (currentNSU === "0") {
-          const { data: nsuData } = await db.from("nfe_recebida")
-            .select("nsu")
-            .eq("empresa_id", currentId)
-            .order("nsu", { ascending: false })
-            .limit(1);
-          
-          if (nsuData && nsuData.length > 0 && Number(nsuData[0].nsu) > 0) {
-            currentNSU = String(nsuData[0].nsu);
-          }
+        // Busca nas notas recebidas
+        const { data: nsuData } = await db.from("nfe_recebida")
+          .select("nsu")
+          .eq("empresa_id", currentId)
+          .order("nsu", { ascending: false })
+          .limit(1);
+        
+        if (nsuData && nsuData.length > 0) {
+          const n = Number(nsuData[0].nsu || 0);
+          if (n > maxFound) maxFound = n;
+        }
+
+        if (maxFound > 0) {
+          currentNSU = String(maxFound);
+          console.log(`[Sinc] Iniciando do NSU: ${currentNSU}`);
+        } else {
+          console.log(`[Sinc] Iniciando do ZERO (Nenhum NSU encontrado)`);
         }
       }
 
@@ -318,9 +334,22 @@ const NfeRecebidasForm: React.FC = () => {
           }
 
           // Normaliza os dados do DFE (suporta INI e JSON com diferentes cases)
-          const cStat = String(dfeInfo.cStat || dfeInfo.CStat || "");
-          const ultNSU = String(dfeInfo.ultNSU || dfeInfo.ultnsu || "0");
-          const maxNSU = String(dfeInfo.maxNSU || dfeInfo.maxnsu || "0");
+          const getVal = (obj: any, keys: string[]) => {
+            for (const k of keys) {
+              if (obj[k] !== undefined) return obj[k];
+              // Tenta case-insensitive
+              const foundK = Object.keys(obj).find(ok => ok.toLowerCase() === k.toLowerCase());
+              if (foundK) return obj[foundK];
+            }
+            return null;
+          };
+
+          const cStat = String(getVal(dfeInfo, ["cStat", "CStat"]) || "");
+          const ultNSU = String(getVal(dfeInfo, ["ultNSU", "ultnsu"]) || "0");
+          const maxNSU = String(getVal(dfeInfo, ["maxNSU", "maxnsu"]) || "0");
+          const xMotivo = String(getVal(dfeInfo, ["xMotivo", "XMotivo"]) || "");
+
+          console.log(`[Sinc] Lote ${loopCount}: cStat=${cStat}, ultNSU=${ultNSU}, maxNSU=${maxNSU}`);
 
           // Registra log com NSUs retornados pela SEFAZ
           // Importante: Só registramos o avanço se for 138 (documentos encontrados) ou 137 (nenhum novo)
@@ -329,7 +358,7 @@ const NfeRecebidasForm: React.FC = () => {
             currentNSU = ultNSU; // Sempre avança para o ultNSU retornado
           } else {
             await registrarLog(comando, resp, 0, 0);
-            toast.warning(`SEFAZ: ${dfeInfo.xMotivo || dfeInfo.XMotivo || "Resposta inesperada"}`);
+            toast.warning(`SEFAZ: ${xMotivo || "Resposta inesperada"}`);
             hasMore = false;
             break;
           }
@@ -337,6 +366,7 @@ const NfeRecebidasForm: React.FC = () => {
           if (cStat === "137") {
             if (loopCount === 1) toast.info("Nenhum documento novo localizado na SEFAZ.");
             hasMore = false;
+            console.log("[Sinc] Fim: Nenhum documento novo (137).");
             break;
           }
 

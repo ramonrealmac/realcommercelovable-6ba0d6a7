@@ -109,7 +109,7 @@ function downloadFile(content: string, filename: string, mimeType: string) {
 // --- DataGrid Component ---
 const DataGrid: React.FC<DataGridProps> = ({
   columns,
-  data,
+  data = [],
   onRowClick,
   onRowDoubleClick,
   selectedIdx,
@@ -288,7 +288,14 @@ const DataGrid: React.FC<DataGridProps> = ({
                   className="px-2 py-1.5 border-r border-border last:border-r-0"
                   style={{ textAlign: c.align || "left" }}
                 >
-                  {c.render ? c.render(row) : c.getValue ? c.getValue(row) : (row as any)[c.key]}
+                  {(() => {
+                    try {
+                      return c.render ? c.render(row) : c.getValue ? c.getValue(row) : (row as any)[c.key];
+                    } catch (err) {
+                      console.error("Erro ao renderizar célula:", err, c.key, row);
+                      return <span className="text-red-500 text-[9px]">Err</span>;
+                    }
+                  })()}
                 </div>
               ))}
             </div>

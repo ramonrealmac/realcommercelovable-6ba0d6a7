@@ -8,7 +8,7 @@ export interface IFiscalInput {
   produto_id: number;
   empresa_id: number;
   cliente_id?: number;
-  tipo_operacao_id: number;
+  tp_operacao_id: number;
   quantidade: number;
   vl_unitario: number;
   vl_frete?: number;
@@ -82,7 +82,7 @@ const r2 = (v: number) => Math.round(v * 100) / 100;
 // ─── Motor de Busca ──────────────────────────────────────────────────────────
 
 async function getBestMatch(table: string, regraId: number, produto: any, uf_destino: string, contribuinte: boolean, consumidorFinal: boolean, tipoImposto?: string) {
-  let query = db.from(table).select(table === "fiscal_regra_cfop" ? "*, cfop(codigo)" : "*")
+  let query = db.from(table).select(table === "fiscal_regra_cfop" ? "*, cfop(cd_cfop)" : "*")
     .eq("fiscal_regra_id", regraId)
     .eq("excluido", false);
 
@@ -160,7 +160,7 @@ export const fiscalService = {
     const hoje = new Date().toISOString().slice(0, 10);
     const { data: regras } = await db.from("fiscal_regra")
       .select("*")
-      .eq("tipo_operacao_id", input.tipo_operacao_id)
+      .eq("tp_operacao_id", input.tp_operacao_id)
       .eq("excluido", false)
       .or(`regime_trib.eq.${empresa.regime_trib},regime_trib.is.null`);
 
@@ -185,7 +185,7 @@ export const fiscalService = {
     ]);
 
     res.cfop_id = matchCfop?.cfop_id || regra.cfop_id;
-    res.cfop = matchCfop?.cfop?.codigo || "";
+    res.cfop = matchCfop?.cfop?.cd_cfop || "";
 
     // 4. Cálculos de Valores Base
     const vl_bruto = input.quantidade * input.vl_unitario;

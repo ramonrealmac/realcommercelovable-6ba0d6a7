@@ -161,14 +161,14 @@ const ProdutoForm: React.FC = () => {
       db.from("produto_subgrupo").select("produto_subgrupo_id,nome,produto_grupo_id").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("nome"),
       db.from("linha_produto").select("linha_id,nome").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("nome"),
       db.from("unidade").select("unidade_id,descricao").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("descricao"),
-      db.from("grupo_icms").select("grupo_icms_id,descricao").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("descricao"),
-      db.from("grupo_ipi").select("grupo_ipi_id,descricao").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("descricao"),
-      db.from("grupo_pis_cofins").select("grupo_pis_cofins_id,descricao").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("descricao"),
+      db.from("fiscal_grupo_produto").select("fiscal_grupo_produto_id,nome").eq("empresa_id", XEmpresaMatrizId).eq("tp_imposto", "ICMS").eq("excluido", false).order("nome"),
+      db.from("fiscal_grupo_produto").select("fiscal_grupo_produto_id,nome").eq("empresa_id", XEmpresaMatrizId).eq("tp_imposto", "IPI").eq("excluido", false).order("nome"),
+      db.from("fiscal_grupo_produto").select("fiscal_grupo_produto_id,nome").eq("empresa_id", XEmpresaMatrizId).eq("tp_imposto", "PIS/COFINS").eq("excluido", false).order("nome"),
       XGroupEmpresaIds.length > 0
         ? db.from("deposito").select("deposito_id,nome,empresa_id,st_privado").eq("excluido", false)
             .in("empresa_id", XGroupEmpresaIds).order("nome")
         : Promise.resolve({ data: [] }),
-      db.from("grupo_ibscbs").select("grupo_ibscbs_id,descricao").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("descricao"),
+      db.from("fiscal_grupo_produto").select("fiscal_grupo_produto_id,nome").eq("empresa_id", XEmpresaMatrizId).eq("tp_imposto", "IBS/CBS").eq("excluido", false).order("nome"),
     ]);
     setXGrupos(r1.data || []);
     setXSubgrupos(r2.data || []);
@@ -1032,12 +1032,12 @@ const ProdutoForm: React.FC = () => {
                   {renderField("MVA (%)", "mva", { align: "right" })}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {renderLookup("Grupo ICMS", "grupo_icms_id", XGrupoIcms, "grupo_icms_id", "descricao")}
-                  {renderLookup("Grupo IPI", "grupo_ipi_id", XGrupoIpi, "grupo_ipi_id", "descricao")}
-                  {renderLookup("Grupo PIS/COFINS", "grupo_pis_cofins_id", XGrupoPisCofins, "grupo_pis_cofins_id", "descricao")}
+                  {renderLookup("Grupo ICMS", "grupo_icms_id", XGrupoIcms, "fiscal_grupo_produto_id", "nome")}
+                  {renderLookup("Grupo IPI", "grupo_ipi_id", XGrupoIpi, "fiscal_grupo_produto_id", "nome")}
+                  {renderLookup("Grupo PIS/COFINS", "grupo_pis_cofins_id", XGrupoPisCofins, "fiscal_grupo_produto_id", "nome")}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {renderLookup("Grupo IBS/CBS", "grupo_ibscbs_id", XGrupoIbsCbs, "grupo_ibscbs_id", "descricao")}
+                  {renderLookup("Grupo IBS/CBS", "grupo_ibscbs_id", XGrupoIbsCbs, "fiscal_grupo_produto_id", "nome")}
                 </div>
               </div>
             )}

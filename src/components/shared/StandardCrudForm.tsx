@@ -111,14 +111,14 @@ function StandardCrudForm<T extends Record<string, any>>({
         })()}
       />
 
-      <div className="flex border-b border-border">
+      <div className="flex border-b border-border bg-card">
         {XTabsList.map(t => (
           <button
             key={t.key}
-            className={`px-6 py-3 text-xs font-bold uppercase tracking-widest border-b-2 transition-all ${
+            className={`px-5 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-all ${
               XInnerTab === t.key
                 ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+                : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
             onClick={() => setXInnerTab(t.key)}
           >

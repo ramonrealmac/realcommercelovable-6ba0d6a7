@@ -77,18 +77,33 @@ export const provedorService = {
    * Envia evento de manifestação do destinatário (210200, 210210, 210220, 210240)
    */
   async enviarManifesto(chNFe: string, tipo: string, cnpj: string, justificativa?: string): Promise<string> {
-    // Mapeia códigos SEFAZ para índices ACBr se necessário, ou usa EnviarEvento
-    // NFE.ManifestacaoDestinatario(cChave, nTipo, [xJust])
-    // nTipo: 0-Confirmação, 1-Ciência, 2-Desconhecimento, 3-Não Realizada
-    const map: Record<string, string> = {
-      "210200": "0",
-      "210210": "1",
-      "210220": "2",
-      "210240": "3"
-    };
-    const nTipo = map[tipo] || "1";
-    const xJust = justificativa ? `, "${justificativa}"` : "";
-    return this.enviarComando(`NFE.ManifestacaoDestinatario("${chNFe}", ${nTipo}${xJust})`);
+    const now = new Date();
+    const d = String(now.getDate()).padStart(2, "0");
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const y = now.getFullYear();
+    const h = String(now.getHours()).padStart(2, "0");
+    const i = String(now.getMinutes()).padStart(2, "0");
+    const s = String(now.getSeconds()).padStart(2, "0");
+    const dhEvento = `${d}/${m}/${y} ${h}:${i}:${s}`;
+    
+    const nSeqEvento = "1";
+    
+    let eventoIni = `[EVENTO]
+idLote=1
+[EVENTO001]
+cOrgao=91
+CNPJ=${cnpj.replace(/\D/g, "")}
+chNFe=${chNFe}
+dhEvento=${dhEvento}
+tpEvento=${tipo}
+nSeqEvento=${nSeqEvento}
+versaoEvento=1.00`;
+
+    if (tipo === "210240" && justificativa) {
+      eventoIni += `\nxJust=${justificativa}`;
+    }
+
+    return this.enviarComando(`NFE.EnviarEvento("${eventoIni}")`);
   },
 
   /**
