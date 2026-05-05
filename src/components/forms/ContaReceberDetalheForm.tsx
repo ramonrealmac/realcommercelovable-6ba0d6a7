@@ -473,54 +473,60 @@ const ContaReceberDetalheForm: React.FC<IProps> = ({ empresa_id, financeiro_id }
           <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Pagamentos / Baixas</div>
 
           {/* Linha de inclusão */}
-          <div className="grid grid-cols-12 gap-2 items-end p-3 border border-border rounded bg-secondary/30 mb-3">
-            <div className="col-span-1 space-y-1">
-              <label className="block text-[10px] font-medium text-muted-foreground">Documento</label>
-              <input readOnly value={String((XBaixas.length ?? 0) + 1).padStart(4, "0")}
-                className="w-full border border-border rounded px-2 py-1.5 text-xs bg-secondary" />
+          <div className="p-3 border border-border rounded bg-secondary/30 mb-3 space-y-2">
+            {/* Linha 1 */}
+            <div className="grid grid-cols-12 gap-2 items-end">
+              <div className="col-span-2 space-y-1">
+                <label className="block text-[10px] font-medium text-muted-foreground">Documento</label>
+                <input readOnly value={XRec.documento ?? ""}
+                  className="w-full border border-border rounded px-2 py-1.5 text-xs bg-secondary" />
+              </div>
+              <div className="col-span-3">
+                <FormDateField label="Dt. Pagamento" value={XNovoDtPag} onChange={setXNovoDtPag} />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <label className="block text-[10px] font-medium text-muted-foreground">Vlr. Pago</label>
+                <input type="number" step="0.01" value={XNovoVlPago} onChange={e => setXNovoVlPago(e.target.value)}
+                  className="w-full border border-border rounded px-2 py-1.5 text-xs bg-card text-right" />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <label className="block text-[10px] font-medium text-muted-foreground">Recibo</label>
+                <input value={XNovoRecibo} onChange={e => setXNovoRecibo(e.target.value)}
+                  className="w-full border border-border rounded px-2 py-1.5 text-xs bg-card" />
+              </div>
+              <div className="col-span-3 space-y-1">
+                <label className="block text-[10px] font-medium text-muted-foreground">Conta</label>
+                <select value={XNovoContaId} onChange={e => setXNovoContaId(e.target.value)}
+                  className="w-full border border-border rounded px-2 py-1.5 text-xs bg-card">
+                  <option value="">--</option>
+                  {XContas.map(c => <option key={c.conta_id} value={c.conta_id}>{c.nome_conta}</option>)}
+                </select>
+              </div>
             </div>
-            <div className="col-span-2">
-              <FormDateField label="Dt. Pagamento" value={XNovoDtPag} onChange={setXNovoDtPag} />
-            </div>
-            <div className="col-span-1 space-y-1">
-              <label className="block text-[10px] font-medium text-muted-foreground">Vlr. Pago</label>
-              <input type="number" step="0.01" value={XNovoVlPago} onChange={e => setXNovoVlPago(e.target.value)}
-                className="w-full border border-border rounded px-2 py-1.5 text-xs bg-card text-right" />
-            </div>
-            <div className="col-span-2 space-y-1">
-              <label className="block text-[10px] font-medium text-muted-foreground">Recibo</label>
-              <input value={XNovoRecibo} onChange={e => setXNovoRecibo(e.target.value)}
-                className="w-full border border-border rounded px-2 py-1.5 text-xs bg-card" />
-            </div>
-            <div className="col-span-2 space-y-1">
-              <label className="block text-[10px] font-medium text-muted-foreground">Conta</label>
-              <select value={XNovoContaId} onChange={e => setXNovoContaId(e.target.value)}
-                className="w-full border border-border rounded px-2 py-1.5 text-xs bg-card">
-                <option value="">--</option>
-                {XContas.map(c => <option key={c.conta_id} value={c.conta_id}>{c.nome_conta}</option>)}
-              </select>
-            </div>
-            <div className="col-span-2 space-y-1">
-              <label className="block text-[10px] font-medium text-muted-foreground">Tipo Pagto</label>
-              <select value={XNovoTipoPag} onChange={e => setXNovoTipoPag(e.target.value)}
-                className="w-full border border-border rounded px-2 py-1.5 text-xs bg-card">
-                <option value="">--</option>
-                {XMeios.map(m => <option key={m.meio_pagamento_id} value={m.meio_pagamento_id}>{m.descricao}</option>)}
-              </select>
-            </div>
-            <div className="col-span-1 space-y-1">
-              <label className="block text-[10px] font-medium text-muted-foreground">Obs.</label>
-              <input value={XNovoObs} onChange={e => setXNovoObs(e.target.value)}
-                className="w-full border border-border rounded px-2 py-1.5 text-xs bg-card" />
-            </div>
-            <div className="col-span-1">
-              <button
-                onClick={handleAddBaixa}
-                disabled={XSavingBaixa}
-                className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
-              >
-                <Plus size={12} /> Inserir
-              </button>
+            {/* Linha 2 */}
+            <div className="grid grid-cols-12 gap-2 items-end">
+              <div className="col-span-3 space-y-1">
+                <label className="block text-[10px] font-medium text-muted-foreground">Tipo Pagto</label>
+                <select value={XNovoTipoPag} onChange={e => setXNovoTipoPag(e.target.value)}
+                  className="w-full border border-border rounded px-2 py-1.5 text-xs bg-card">
+                  <option value="">--</option>
+                  {XMeios.map(m => <option key={m.meio_pagamento_id} value={m.meio_pagamento_id}>{m.descricao}</option>)}
+                </select>
+              </div>
+              <div className="col-span-7 space-y-1">
+                <label className="block text-[10px] font-medium text-muted-foreground">Observação</label>
+                <input value={XNovoObs} onChange={e => setXNovoObs(e.target.value)}
+                  className="w-full border border-border rounded px-2 py-1.5 text-xs bg-card" />
+              </div>
+              <div className="col-span-2">
+                <button
+                  onClick={handleAddBaixa}
+                  disabled={XSavingBaixa}
+                  className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                >
+                  <Plus size={12} /> Inserir Pagamento
+                </button>
+              </div>
             </div>
           </div>
 
