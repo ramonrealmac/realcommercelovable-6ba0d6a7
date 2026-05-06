@@ -1726,111 +1726,6 @@ export type Database = {
           },
         ]
       }
-      configura_nf: {
-        Row: {
-          ambiente_mdf: string | null
-          ambiente_nfce: string | null
-          ambiente_nfe: string | null
-          certificado: string | null
-          contingencia_mdf: string | null
-          contingencia_nfce: string | null
-          contingencia_nfe: string | null
-          dt_alteracao: string | null
-          dt_cadastro: string | null
-          empresa_id: number
-          excluido: boolean | null
-          licenca: string | null
-          licenca_mdf: string | null
-          modelo_mdf: string | null
-          modelo_nfce: string | null
-          modelo_nfe: string | null
-          serie_mdf: string | null
-          serie_nfce: string | null
-          serie_nfe: string | null
-          ti_emitente_mdf: number | null
-          ultima_nfce: number | null
-          ultima_nfe: number | null
-          ultimo_mdf: number | null
-          url_chave: string | null
-          url_chaveh: string | null
-          url_consulta: string | null
-          url_consultah: string | null
-          versao_mdf: string | null
-          versao_nf: string | null
-          webser_mdf: string | null
-          webser_nfce: string | null
-          webser_nfe: string | null
-        }
-        Insert: {
-          ambiente_mdf?: string | null
-          ambiente_nfce?: string | null
-          ambiente_nfe?: string | null
-          certificado?: string | null
-          contingencia_mdf?: string | null
-          contingencia_nfce?: string | null
-          contingencia_nfe?: string | null
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id: number
-          excluido?: boolean | null
-          licenca?: string | null
-          licenca_mdf?: string | null
-          modelo_mdf?: string | null
-          modelo_nfce?: string | null
-          modelo_nfe?: string | null
-          serie_mdf?: string | null
-          serie_nfce?: string | null
-          serie_nfe?: string | null
-          ti_emitente_mdf?: number | null
-          ultima_nfce?: number | null
-          ultima_nfe?: number | null
-          ultimo_mdf?: number | null
-          url_chave?: string | null
-          url_chaveh?: string | null
-          url_consulta?: string | null
-          url_consultah?: string | null
-          versao_mdf?: string | null
-          versao_nf?: string | null
-          webser_mdf?: string | null
-          webser_nfce?: string | null
-          webser_nfe?: string | null
-        }
-        Update: {
-          ambiente_mdf?: string | null
-          ambiente_nfce?: string | null
-          ambiente_nfe?: string | null
-          certificado?: string | null
-          contingencia_mdf?: string | null
-          contingencia_nfce?: string | null
-          contingencia_nfe?: string | null
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          licenca?: string | null
-          licenca_mdf?: string | null
-          modelo_mdf?: string | null
-          modelo_nfce?: string | null
-          modelo_nfe?: string | null
-          serie_mdf?: string | null
-          serie_nfce?: string | null
-          serie_nfe?: string | null
-          ti_emitente_mdf?: number | null
-          ultima_nfce?: number | null
-          ultima_nfe?: number | null
-          ultimo_mdf?: number | null
-          url_chave?: string | null
-          url_chaveh?: string | null
-          url_consulta?: string | null
-          url_consultah?: string | null
-          versao_mdf?: string | null
-          versao_nf?: string | null
-          webser_mdf?: string | null
-          webser_nfce?: string | null
-          webser_nfe?: string | null
-        }
-        Relationships: []
-      }
       conta: {
         Row: {
           agencia_dv: string | null
@@ -2069,47 +1964,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "empresa"
             referencedColumns: ["empresa_id"]
-          },
-        ]
-      }
-      dfe_nsu_log: {
-        Row: {
-          comando: string
-          created_at: string
-          dfe_log_id: number
-          empresa_id: number
-          max_nsu: number | null
-          nfe_recebida_id: number | null
-          resposta: string | null
-          ult_nsu: number | null
-        }
-        Insert: {
-          comando: string
-          created_at?: string
-          dfe_log_id?: never
-          empresa_id: number
-          max_nsu?: number | null
-          nfe_recebida_id?: number | null
-          resposta?: string | null
-          ult_nsu?: number | null
-        }
-        Update: {
-          comando?: string
-          created_at?: string
-          dfe_log_id?: never
-          empresa_id?: number
-          max_nsu?: number | null
-          nfe_recebida_id?: number | null
-          resposta?: string | null
-          ult_nsu?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "dfe_nsu_log_nfe_recebida_id_fkey"
-            columns: ["nfe_recebida_id"]
-            isOneToOne: false
-            referencedRelation: "nfe_recebida"
-            referencedColumns: ["nfe_recebida_id"]
           },
         ]
       }
@@ -2735,6 +2589,117 @@ export type Database = {
         }
         Relationships: []
       }
+      fiscal_config: {
+        Row: {
+          ambiente_mdf: string | null
+          ambiente_nfce: string | null
+          ambiente_nfe: string | null
+          certificado: string | null
+          contingencia_mdf: string | null
+          contingencia_nfce: string | null
+          contingencia_nfe: string | null
+          dt_alteracao: string | null
+          dt_cadastro: string | null
+          empresa_id: number
+          excluido: boolean | null
+          licenca: string | null
+          licenca_mdf: string | null
+          modelo_mdf: string | null
+          modelo_nfce: string | null
+          modelo_nfe: string | null
+          senha_certificado: string | null
+          serie_mdf: string | null
+          serie_nfce: string | null
+          serie_nfe: string | null
+          ti_emitente_mdf: number | null
+          tipo_certificado: string | null
+          ultima_nfce: number | null
+          ultima_nfe: number | null
+          ultimo_mdf: number | null
+          url_chave: string | null
+          url_chaveh: string | null
+          url_consulta: string | null
+          url_consultah: string | null
+          versao_mdf: string | null
+          versao_nf: string | null
+          webser_mdf: string | null
+          webser_nfce: string | null
+          webser_nfe: string | null
+        }
+        Insert: {
+          ambiente_mdf?: string | null
+          ambiente_nfce?: string | null
+          ambiente_nfe?: string | null
+          certificado?: string | null
+          contingencia_mdf?: string | null
+          contingencia_nfce?: string | null
+          contingencia_nfe?: string | null
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id: number
+          excluido?: boolean | null
+          licenca?: string | null
+          licenca_mdf?: string | null
+          modelo_mdf?: string | null
+          modelo_nfce?: string | null
+          modelo_nfe?: string | null
+          senha_certificado?: string | null
+          serie_mdf?: string | null
+          serie_nfce?: string | null
+          serie_nfe?: string | null
+          ti_emitente_mdf?: number | null
+          tipo_certificado?: string | null
+          ultima_nfce?: number | null
+          ultima_nfe?: number | null
+          ultimo_mdf?: number | null
+          url_chave?: string | null
+          url_chaveh?: string | null
+          url_consulta?: string | null
+          url_consultah?: string | null
+          versao_mdf?: string | null
+          versao_nf?: string | null
+          webser_mdf?: string | null
+          webser_nfce?: string | null
+          webser_nfe?: string | null
+        }
+        Update: {
+          ambiente_mdf?: string | null
+          ambiente_nfce?: string | null
+          ambiente_nfe?: string | null
+          certificado?: string | null
+          contingencia_mdf?: string | null
+          contingencia_nfce?: string | null
+          contingencia_nfe?: string | null
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id?: number
+          excluido?: boolean | null
+          licenca?: string | null
+          licenca_mdf?: string | null
+          modelo_mdf?: string | null
+          modelo_nfce?: string | null
+          modelo_nfe?: string | null
+          senha_certificado?: string | null
+          serie_mdf?: string | null
+          serie_nfce?: string | null
+          serie_nfe?: string | null
+          ti_emitente_mdf?: number | null
+          tipo_certificado?: string | null
+          ultima_nfce?: number | null
+          ultima_nfe?: number | null
+          ultimo_mdf?: number | null
+          url_chave?: string | null
+          url_chaveh?: string | null
+          url_consulta?: string | null
+          url_consultah?: string | null
+          versao_mdf?: string | null
+          versao_nf?: string | null
+          webser_mdf?: string | null
+          webser_nfce?: string | null
+          webser_nfe?: string | null
+        }
+        Relationships: []
+      }
       fiscal_evento: {
         Row: {
           comando: string
@@ -2806,6 +2771,910 @@ export type Database = {
           tp_imposto?: string
         }
         Relationships: []
+      }
+      fiscal_mdf_carrega: {
+        Row: {
+          cidade_id: number
+          dt_alteracao: string | null
+          dt_cadastro: string | null
+          empresa_id: number
+          excluido: boolean | null
+          mdf_carrega_id: number
+          mdf_manifesto_id: number
+        }
+        Insert: {
+          cidade_id: number
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id: number
+          excluido?: boolean | null
+          mdf_carrega_id?: number
+          mdf_manifesto_id: number
+        }
+        Update: {
+          cidade_id?: number
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id?: number
+          excluido?: boolean | null
+          mdf_carrega_id?: number
+          mdf_manifesto_id?: number
+        }
+        Relationships: []
+      }
+      fiscal_mdf_componente: {
+        Row: {
+          ds_componente: string | null
+          empresa_id: string
+          mdf_componente_id: number
+          mdf_manifesto_id: number
+          tp_componente: string | null
+          vl_componente: number | null
+        }
+        Insert: {
+          ds_componente?: string | null
+          empresa_id: string
+          mdf_componente_id?: number
+          mdf_manifesto_id: number
+          tp_componente?: string | null
+          vl_componente?: number | null
+        }
+        Update: {
+          ds_componente?: string | null
+          empresa_id?: string
+          mdf_componente_id?: number
+          mdf_manifesto_id?: number
+          tp_componente?: string | null
+          vl_componente?: number | null
+        }
+        Relationships: []
+      }
+      fiscal_mdf_condutor: {
+        Row: {
+          agencia: string | null
+          banco: string | null
+          condutor_id: number
+          conta: string | null
+          cpf: string
+          dt_alteracao: string | null
+          dt_cadastro: string | null
+          empresa_id: number
+          excluido: boolean | null
+          mdf_condutor_id: number
+          nome: string
+          pix: string | null
+          telefone: string | null
+        }
+        Insert: {
+          agencia?: string | null
+          banco?: string | null
+          condutor_id: number
+          conta?: string | null
+          cpf: string
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id: number
+          excluido?: boolean | null
+          mdf_condutor_id?: number
+          nome: string
+          pix?: string | null
+          telefone?: string | null
+        }
+        Update: {
+          agencia?: string | null
+          banco?: string | null
+          condutor_id?: number
+          conta?: string | null
+          cpf?: string
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id?: number
+          excluido?: boolean | null
+          mdf_condutor_id?: number
+          nome?: string
+          pix?: string | null
+          telefone?: string | null
+        }
+        Relationships: []
+      }
+      fiscal_mdf_descarrega: {
+        Row: {
+          cidade_id: number
+          dt_alteracao: string | null
+          dt_cadastro: string | null
+          empresa_id: number
+          excluido: boolean | null
+          mdf_descarrega_id: number
+          mdf_manifesto_id: number
+        }
+        Insert: {
+          cidade_id: number
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id: number
+          excluido?: boolean | null
+          mdf_descarrega_id?: number
+          mdf_manifesto_id: number
+        }
+        Update: {
+          cidade_id?: number
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id?: number
+          excluido?: boolean | null
+          mdf_descarrega_id?: number
+          mdf_manifesto_id?: number
+        }
+        Relationships: []
+      }
+      fiscal_mdf_documento: {
+        Row: {
+          chave: string
+          cidade_id: number
+          dt_alteracao: string | null
+          dt_cadastro: string | null
+          empresa_id: number
+          excluido: boolean | null
+          mdf_documento_id: number
+          mdf_manifesto_id: number
+        }
+        Insert: {
+          chave: string
+          cidade_id: number
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id: number
+          excluido?: boolean | null
+          mdf_documento_id?: number
+          mdf_manifesto_id: number
+        }
+        Update: {
+          chave?: string
+          cidade_id?: number
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id?: number
+          excluido?: boolean | null
+          mdf_documento_id?: number
+          mdf_manifesto_id?: number
+        }
+        Relationships: []
+      }
+      fiscal_mdf_historicoxml: {
+        Row: {
+          chave: string | null
+          dt_alteracao: string | null
+          dt_autorizado: string | null
+          dt_cadastro: string | null
+          dt_cancelado: string | null
+          dt_encerrado: string | null
+          empresa_id: number
+          excluido: boolean | null
+          hr_autorizado: string | null
+          hr_cancelado: string | null
+          hr_encerrado: string | null
+          mdf_historico_id: number
+          mdf_historicoxml_id: number
+          mdf_manifesto_id: number
+          protocolo_autorizado: string | null
+          protocolo_cancelado: string | null
+          protocolo_encerrado: string | null
+          status_retorno: number | null
+          xml_enviado: string | null
+          xml_retorno: string | null
+        }
+        Insert: {
+          chave?: string | null
+          dt_alteracao?: string | null
+          dt_autorizado?: string | null
+          dt_cadastro?: string | null
+          dt_cancelado?: string | null
+          dt_encerrado?: string | null
+          empresa_id: number
+          excluido?: boolean | null
+          hr_autorizado?: string | null
+          hr_cancelado?: string | null
+          hr_encerrado?: string | null
+          mdf_historico_id: number
+          mdf_historicoxml_id?: number
+          mdf_manifesto_id: number
+          protocolo_autorizado?: string | null
+          protocolo_cancelado?: string | null
+          protocolo_encerrado?: string | null
+          status_retorno?: number | null
+          xml_enviado?: string | null
+          xml_retorno?: string | null
+        }
+        Update: {
+          chave?: string | null
+          dt_alteracao?: string | null
+          dt_autorizado?: string | null
+          dt_cadastro?: string | null
+          dt_cancelado?: string | null
+          dt_encerrado?: string | null
+          empresa_id?: number
+          excluido?: boolean | null
+          hr_autorizado?: string | null
+          hr_cancelado?: string | null
+          hr_encerrado?: string | null
+          mdf_historico_id?: number
+          mdf_historicoxml_id?: number
+          mdf_manifesto_id?: number
+          protocolo_autorizado?: string | null
+          protocolo_cancelado?: string | null
+          protocolo_encerrado?: string | null
+          status_retorno?: number | null
+          xml_enviado?: string | null
+          xml_retorno?: string | null
+        }
+        Relationships: []
+      }
+      fiscal_mdf_manifesto: {
+        Row: {
+          dt_alteracao: string | null
+          dt_cadastro: string | null
+          dt_emissao: string | null
+          dt_viagem: string | null
+          empresa_id: number
+          excluido: boolean | null
+          hr_viagem: string | null
+          mdf_manifesto_id: number
+          modalidade: string | null
+          modelo: string
+          numero: number
+          peso_total: number | null
+          qtd_nfe: number | null
+          serie: string
+          status: string | null
+          tp_emitente: string | null
+          tp_transportador: string | null
+          uffim: string | null
+          ufini: string | null
+          unidade: string | null
+          valor_total: number | null
+        }
+        Insert: {
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          dt_emissao?: string | null
+          dt_viagem?: string | null
+          empresa_id: number
+          excluido?: boolean | null
+          hr_viagem?: string | null
+          mdf_manifesto_id?: number
+          modalidade?: string | null
+          modelo: string
+          numero: number
+          peso_total?: number | null
+          qtd_nfe?: number | null
+          serie: string
+          status?: string | null
+          tp_emitente?: string | null
+          tp_transportador?: string | null
+          uffim?: string | null
+          ufini?: string | null
+          unidade?: string | null
+          valor_total?: number | null
+        }
+        Update: {
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          dt_emissao?: string | null
+          dt_viagem?: string | null
+          empresa_id?: number
+          excluido?: boolean | null
+          hr_viagem?: string | null
+          mdf_manifesto_id?: number
+          modalidade?: string | null
+          modelo?: string
+          numero?: number
+          peso_total?: number | null
+          qtd_nfe?: number | null
+          serie?: string
+          status?: string | null
+          tp_emitente?: string | null
+          tp_transportador?: string | null
+          uffim?: string | null
+          ufini?: string | null
+          unidade?: string | null
+          valor_total?: number | null
+        }
+        Relationships: []
+      }
+      fiscal_mdf_motorista: {
+        Row: {
+          condutor_id: number
+          dt_alteracao: string | null
+          dt_cadastro: string | null
+          empresa_id: number
+          excluido: boolean | null
+          mdf_manifesto_id: number
+          mdf_motorista_id: number
+        }
+        Insert: {
+          condutor_id: number
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id: number
+          excluido?: boolean | null
+          mdf_manifesto_id: number
+          mdf_motorista_id?: number
+        }
+        Update: {
+          condutor_id?: number
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id?: number
+          excluido?: boolean | null
+          mdf_manifesto_id?: number
+          mdf_motorista_id?: number
+        }
+        Relationships: []
+      }
+      fiscal_mdf_pagamento: {
+        Row: {
+          adiantamento: number | null
+          agencia: string | null
+          banco: string | null
+          chave_pix: string | null
+          cnpjipef: string | null
+          empresa_id: string
+          forma_pagto: string | null
+          mdf_manifesto_id: number
+          mdf_pagamento_id: number
+          vl_contrato: number | null
+        }
+        Insert: {
+          adiantamento?: number | null
+          agencia?: string | null
+          banco?: string | null
+          chave_pix?: string | null
+          cnpjipef?: string | null
+          empresa_id: string
+          forma_pagto?: string | null
+          mdf_manifesto_id: number
+          mdf_pagamento_id?: number
+          vl_contrato?: number | null
+        }
+        Update: {
+          adiantamento?: number | null
+          agencia?: string | null
+          banco?: string | null
+          chave_pix?: string | null
+          cnpjipef?: string | null
+          empresa_id?: string
+          forma_pagto?: string | null
+          mdf_manifesto_id?: number
+          mdf_pagamento_id?: number
+          vl_contrato?: number | null
+        }
+        Relationships: []
+      }
+      fiscal_mdf_pagtos: {
+        Row: {
+          dt_vencimento: string | null
+          empresa_id: string
+          mdf_manifesto_id: number
+          mdf_pagtos_id: number
+          nr_parcela: string
+          vl_parcela: number | null
+        }
+        Insert: {
+          dt_vencimento?: string | null
+          empresa_id: string
+          mdf_manifesto_id: number
+          mdf_pagtos_id?: number
+          nr_parcela: string
+          vl_parcela?: number | null
+        }
+        Update: {
+          dt_vencimento?: string | null
+          empresa_id?: string
+          mdf_manifesto_id?: number
+          mdf_pagtos_id?: number
+          nr_parcela?: string
+          vl_parcela?: number | null
+        }
+        Relationships: []
+      }
+      fiscal_mdf_percurso: {
+        Row: {
+          dt_alteracao: string | null
+          dt_cadastro: string | null
+          empresa_id: number
+          excluido: boolean | null
+          mdf_manifesto_id: number
+          mdf_percurso_id: number
+          uf: string
+        }
+        Insert: {
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id: number
+          excluido?: boolean | null
+          mdf_manifesto_id: number
+          mdf_percurso_id?: number
+          uf: string
+        }
+        Update: {
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id?: number
+          excluido?: boolean | null
+          mdf_manifesto_id?: number
+          mdf_percurso_id?: number
+          uf?: string
+        }
+        Relationships: []
+      }
+      fiscal_mdf_veiculo: {
+        Row: {
+          dt_alteracao: string | null
+          dt_cadastro: string | null
+          empresa_id: number
+          excluido: boolean | null
+          mdf_manifesto_id: number
+          mdf_veiculo_id: number
+          veiculo_id: number
+        }
+        Insert: {
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id: number
+          excluido?: boolean | null
+          mdf_manifesto_id: number
+          mdf_veiculo_id?: number
+          veiculo_id: number
+        }
+        Update: {
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id?: number
+          excluido?: boolean | null
+          mdf_manifesto_id?: number
+          mdf_veiculo_id?: number
+          veiculo_id?: number
+        }
+        Relationships: []
+      }
+      fiscal_nfe_cabecalho: {
+        Row: {
+          c_stat: number | null
+          cadastro_id: number | null
+          chave_nfe: string
+          created_at: string
+          deposito_id: number | null
+          dt_alteracao: string | null
+          dt_emissao: string | null
+          dt_entrada: string | null
+          dt_saida: string | null
+          empresa_id: number
+          excluido: boolean
+          fin_nfe: number
+          modelo: string
+          nat_op: string
+          nfe_cabecalho_id: number
+          nr_nota: string
+          nr_protocolo: string
+          obs_nf: string
+          origem_inclusao: string
+          recibo_sefaz: string | null
+          serie: string
+          st_nf: string
+          tp_emis: number
+          tp_nf: number
+          updated_at: string
+          vl_cbs: number
+          vl_cofins: number
+          vl_desconto: number
+          vl_despesa: number
+          vl_frete: number
+          vl_ibs: number
+          vl_icms_st: number
+          vl_ipi: number
+          vl_is: number
+          vl_pis: number
+          vl_produtos: number
+          vl_seguro: number
+          vl_total_nf: number
+          x_motivo: string | null
+          xml_nf: string | null
+        }
+        Insert: {
+          c_stat?: number | null
+          cadastro_id?: number | null
+          chave_nfe?: string
+          created_at?: string
+          deposito_id?: number | null
+          dt_alteracao?: string | null
+          dt_emissao?: string | null
+          dt_entrada?: string | null
+          dt_saida?: string | null
+          empresa_id: number
+          excluido?: boolean
+          fin_nfe?: number
+          modelo?: string
+          nat_op?: string
+          nfe_cabecalho_id?: never
+          nr_nota?: string
+          nr_protocolo?: string
+          obs_nf?: string
+          origem_inclusao?: string
+          recibo_sefaz?: string | null
+          serie?: string
+          st_nf?: string
+          tp_emis?: number
+          tp_nf?: number
+          updated_at?: string
+          vl_cbs?: number
+          vl_cofins?: number
+          vl_desconto?: number
+          vl_despesa?: number
+          vl_frete?: number
+          vl_ibs?: number
+          vl_icms_st?: number
+          vl_ipi?: number
+          vl_is?: number
+          vl_pis?: number
+          vl_produtos?: number
+          vl_seguro?: number
+          vl_total_nf?: number
+          x_motivo?: string | null
+          xml_nf?: string | null
+        }
+        Update: {
+          c_stat?: number | null
+          cadastro_id?: number | null
+          chave_nfe?: string
+          created_at?: string
+          deposito_id?: number | null
+          dt_alteracao?: string | null
+          dt_emissao?: string | null
+          dt_entrada?: string | null
+          dt_saida?: string | null
+          empresa_id?: number
+          excluido?: boolean
+          fin_nfe?: number
+          modelo?: string
+          nat_op?: string
+          nfe_cabecalho_id?: never
+          nr_nota?: string
+          nr_protocolo?: string
+          obs_nf?: string
+          origem_inclusao?: string
+          recibo_sefaz?: string | null
+          serie?: string
+          st_nf?: string
+          tp_emis?: number
+          tp_nf?: number
+          updated_at?: string
+          vl_cbs?: number
+          vl_cofins?: number
+          vl_desconto?: number
+          vl_despesa?: number
+          vl_frete?: number
+          vl_ibs?: number
+          vl_icms_st?: number
+          vl_ipi?: number
+          vl_is?: number
+          vl_pis?: number
+          vl_produtos?: number
+          vl_seguro?: number
+          vl_total_nf?: number
+          x_motivo?: string | null
+          xml_nf?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nfe_cabecalho_cadastro_id_fkey"
+            columns: ["cadastro_id"]
+            isOneToOne: false
+            referencedRelation: "cadastro"
+            referencedColumns: ["cadastro_id"]
+          },
+          {
+            foreignKeyName: "nfe_cabecalho_deposito_id_fkey"
+            columns: ["deposito_id"]
+            isOneToOne: false
+            referencedRelation: "deposito"
+            referencedColumns: ["deposito_id"]
+          },
+        ]
+      }
+      fiscal_nfe_item: {
+        Row: {
+          c_enq: string
+          cd_prod_fornec: string
+          cest: string
+          cfop: string
+          created_at: string
+          csosn: string
+          cst_cbs: string
+          cst_cofins: string
+          cst_ibs: string
+          cst_icms: string
+          cst_ipi: string
+          cst_is: string
+          cst_pis: string
+          empresa_id: number
+          excluido: boolean
+          gtin: string
+          ncm: string
+          nfe_cabecalho_id: number
+          nfe_item_id: number
+          nm_produto: string
+          nr_item: number
+          origem: number
+          pc_cbs: number
+          pc_cofins: number
+          pc_fcp_st: number
+          pc_ibs: number
+          pc_icms: number
+          pc_icms_st: number
+          pc_ipi: number
+          pc_is: number
+          pc_mva: number
+          pc_pis: number
+          produto_id: number | null
+          qt_entrada: number
+          unidade: string
+          updated_at: string
+          vl_bc_st: number
+          vl_cbs: number
+          vl_cofins: number
+          vl_desconto: number
+          vl_fcp_st: number
+          vl_ibs: number
+          vl_icms_st: number
+          vl_ipi: number
+          vl_is: number
+          vl_pis: number
+          vl_total: number
+          vl_unit: number
+        }
+        Insert: {
+          c_enq?: string
+          cd_prod_fornec?: string
+          cest?: string
+          cfop?: string
+          created_at?: string
+          csosn?: string
+          cst_cbs?: string
+          cst_cofins?: string
+          cst_ibs?: string
+          cst_icms?: string
+          cst_ipi?: string
+          cst_is?: string
+          cst_pis?: string
+          empresa_id: number
+          excluido?: boolean
+          gtin?: string
+          ncm?: string
+          nfe_cabecalho_id: number
+          nfe_item_id?: never
+          nm_produto?: string
+          nr_item?: number
+          origem?: number
+          pc_cbs?: number
+          pc_cofins?: number
+          pc_fcp_st?: number
+          pc_ibs?: number
+          pc_icms?: number
+          pc_icms_st?: number
+          pc_ipi?: number
+          pc_is?: number
+          pc_mva?: number
+          pc_pis?: number
+          produto_id?: number | null
+          qt_entrada?: number
+          unidade?: string
+          updated_at?: string
+          vl_bc_st?: number
+          vl_cbs?: number
+          vl_cofins?: number
+          vl_desconto?: number
+          vl_fcp_st?: number
+          vl_ibs?: number
+          vl_icms_st?: number
+          vl_ipi?: number
+          vl_is?: number
+          vl_pis?: number
+          vl_total?: number
+          vl_unit?: number
+        }
+        Update: {
+          c_enq?: string
+          cd_prod_fornec?: string
+          cest?: string
+          cfop?: string
+          created_at?: string
+          csosn?: string
+          cst_cbs?: string
+          cst_cofins?: string
+          cst_ibs?: string
+          cst_icms?: string
+          cst_ipi?: string
+          cst_is?: string
+          cst_pis?: string
+          empresa_id?: number
+          excluido?: boolean
+          gtin?: string
+          ncm?: string
+          nfe_cabecalho_id?: number
+          nfe_item_id?: never
+          nm_produto?: string
+          nr_item?: number
+          origem?: number
+          pc_cbs?: number
+          pc_cofins?: number
+          pc_fcp_st?: number
+          pc_ibs?: number
+          pc_icms?: number
+          pc_icms_st?: number
+          pc_ipi?: number
+          pc_is?: number
+          pc_mva?: number
+          pc_pis?: number
+          produto_id?: number | null
+          qt_entrada?: number
+          unidade?: string
+          updated_at?: string
+          vl_bc_st?: number
+          vl_cbs?: number
+          vl_cofins?: number
+          vl_desconto?: number
+          vl_fcp_st?: number
+          vl_ibs?: number
+          vl_icms_st?: number
+          vl_ipi?: number
+          vl_is?: number
+          vl_pis?: number
+          vl_total?: number
+          vl_unit?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nfe_item_nfe_cabecalho_id_fkey"
+            columns: ["nfe_cabecalho_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_nfe_cabecalho"
+            referencedColumns: ["nfe_cabecalho_id"]
+          },
+          {
+            foreignKeyName: "nfe_item_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "produto"
+            referencedColumns: ["produto_id"]
+          },
+        ]
+      }
+      fiscal_nfe_pagamento: {
+        Row: {
+          c_aut: string | null
+          cnpj_credenciadora: string | null
+          created_at: string
+          nfe_cabecalho_id: number
+          nfe_pagamento_id: number
+          t_pag: string
+          tp_integra: number | null
+          v_pag: number
+        }
+        Insert: {
+          c_aut?: string | null
+          cnpj_credenciadora?: string | null
+          created_at?: string
+          nfe_cabecalho_id: number
+          nfe_pagamento_id?: never
+          t_pag: string
+          tp_integra?: number | null
+          v_pag?: number
+        }
+        Update: {
+          c_aut?: string | null
+          cnpj_credenciadora?: string | null
+          created_at?: string
+          nfe_cabecalho_id?: number
+          nfe_pagamento_id?: never
+          t_pag?: string
+          tp_integra?: number | null
+          v_pag?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_nfe_pagamento_nfe_cabecalho_id_fkey"
+            columns: ["nfe_cabecalho_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_nfe_cabecalho"
+            referencedColumns: ["nfe_cabecalho_id"]
+          },
+        ]
+      }
+      fiscal_nfe_recebida: {
+        Row: {
+          chave_nfe: string
+          cnpj_emitente: string
+          created_at: string
+          dt_emissao: string | null
+          empresa_id: number
+          nfe_recebida_id: number
+          nm_emitente: string
+          nr_nota: string | null
+          nsu: number | null
+          serie: string | null
+          st_download: boolean
+          st_manifesto: string
+          updated_at: string
+          vl_total: number | null
+          xml_completo: string | null
+          xml_resumo: string | null
+        }
+        Insert: {
+          chave_nfe: string
+          cnpj_emitente: string
+          created_at?: string
+          dt_emissao?: string | null
+          empresa_id: number
+          nfe_recebida_id?: never
+          nm_emitente: string
+          nr_nota?: string | null
+          nsu?: number | null
+          serie?: string | null
+          st_download?: boolean
+          st_manifesto?: string
+          updated_at?: string
+          vl_total?: number | null
+          xml_completo?: string | null
+          xml_resumo?: string | null
+        }
+        Update: {
+          chave_nfe?: string
+          cnpj_emitente?: string
+          created_at?: string
+          dt_emissao?: string | null
+          empresa_id?: number
+          nfe_recebida_id?: never
+          nm_emitente?: string
+          nr_nota?: string | null
+          nsu?: number | null
+          serie?: string | null
+          st_download?: boolean
+          st_manifesto?: string
+          updated_at?: string
+          vl_total?: number | null
+          xml_completo?: string | null
+          xml_resumo?: string | null
+        }
+        Relationships: []
+      }
+      fiscal_nfe_referenciada: {
+        Row: {
+          chave_ref: string
+          created_at: string
+          nfe_cabecalho_id: number
+          nfe_referenciada_id: number
+        }
+        Insert: {
+          chave_ref: string
+          created_at?: string
+          nfe_cabecalho_id: number
+          nfe_referenciada_id?: never
+        }
+        Update: {
+          chave_ref?: string
+          created_at?: string
+          nfe_cabecalho_id?: number
+          nfe_referenciada_id?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_nfe_referenciada_nfe_cabecalho_id_fkey"
+            columns: ["nfe_cabecalho_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_nfe_cabecalho"
+            referencedColumns: ["nfe_cabecalho_id"]
+          },
+        ]
       }
       fiscal_regra: {
         Row: {
@@ -3350,471 +4219,6 @@ export type Database = {
             referencedColumns: ["empresa_id"]
           },
         ]
-      }
-      mdf_carrega: {
-        Row: {
-          cidade_id: number
-          dt_alteracao: string | null
-          dt_cadastro: string | null
-          empresa_id: number
-          excluido: boolean | null
-          mdf_carrega_id: number
-          mdf_manifesto_id: number
-        }
-        Insert: {
-          cidade_id: number
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id: number
-          excluido?: boolean | null
-          mdf_carrega_id?: number
-          mdf_manifesto_id: number
-        }
-        Update: {
-          cidade_id?: number
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          mdf_carrega_id?: number
-          mdf_manifesto_id?: number
-        }
-        Relationships: []
-      }
-      mdf_componente: {
-        Row: {
-          ds_componente: string | null
-          empresa_id: string
-          mdf_componente_id: number
-          mdf_manifesto_id: number
-          tp_componente: string | null
-          vl_componente: number | null
-        }
-        Insert: {
-          ds_componente?: string | null
-          empresa_id: string
-          mdf_componente_id?: number
-          mdf_manifesto_id: number
-          tp_componente?: string | null
-          vl_componente?: number | null
-        }
-        Update: {
-          ds_componente?: string | null
-          empresa_id?: string
-          mdf_componente_id?: number
-          mdf_manifesto_id?: number
-          tp_componente?: string | null
-          vl_componente?: number | null
-        }
-        Relationships: []
-      }
-      mdf_condutor: {
-        Row: {
-          agencia: string | null
-          banco: string | null
-          condutor_id: number
-          conta: string | null
-          cpf: string
-          dt_alteracao: string | null
-          dt_cadastro: string | null
-          empresa_id: number
-          excluido: boolean | null
-          mdf_condutor_id: number
-          nome: string
-          pix: string | null
-          telefone: string | null
-        }
-        Insert: {
-          agencia?: string | null
-          banco?: string | null
-          condutor_id: number
-          conta?: string | null
-          cpf: string
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id: number
-          excluido?: boolean | null
-          mdf_condutor_id?: number
-          nome: string
-          pix?: string | null
-          telefone?: string | null
-        }
-        Update: {
-          agencia?: string | null
-          banco?: string | null
-          condutor_id?: number
-          conta?: string | null
-          cpf?: string
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          mdf_condutor_id?: number
-          nome?: string
-          pix?: string | null
-          telefone?: string | null
-        }
-        Relationships: []
-      }
-      mdf_descarrega: {
-        Row: {
-          cidade_id: number
-          dt_alteracao: string | null
-          dt_cadastro: string | null
-          empresa_id: number
-          excluido: boolean | null
-          mdf_descarrega_id: number
-          mdf_manifesto_id: number
-        }
-        Insert: {
-          cidade_id: number
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id: number
-          excluido?: boolean | null
-          mdf_descarrega_id?: number
-          mdf_manifesto_id: number
-        }
-        Update: {
-          cidade_id?: number
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          mdf_descarrega_id?: number
-          mdf_manifesto_id?: number
-        }
-        Relationships: []
-      }
-      mdf_documento: {
-        Row: {
-          chave: string
-          cidade_id: number
-          dt_alteracao: string | null
-          dt_cadastro: string | null
-          empresa_id: number
-          excluido: boolean | null
-          mdf_documento_id: number
-          mdf_manifesto_id: number
-        }
-        Insert: {
-          chave: string
-          cidade_id: number
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id: number
-          excluido?: boolean | null
-          mdf_documento_id?: number
-          mdf_manifesto_id: number
-        }
-        Update: {
-          chave?: string
-          cidade_id?: number
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          mdf_documento_id?: number
-          mdf_manifesto_id?: number
-        }
-        Relationships: []
-      }
-      mdf_historicoxml: {
-        Row: {
-          chave: string | null
-          dt_alteracao: string | null
-          dt_autorizado: string | null
-          dt_cadastro: string | null
-          dt_cancelado: string | null
-          dt_encerrado: string | null
-          empresa_id: number
-          excluido: boolean | null
-          hr_autorizado: string | null
-          hr_cancelado: string | null
-          hr_encerrado: string | null
-          mdf_historico_id: number
-          mdf_historicoxml_id: number
-          mdf_manifesto_id: number
-          protocolo_autorizado: string | null
-          protocolo_cancelado: string | null
-          protocolo_encerrado: string | null
-          status_retorno: number | null
-          xml_enviado: string | null
-          xml_retorno: string | null
-        }
-        Insert: {
-          chave?: string | null
-          dt_alteracao?: string | null
-          dt_autorizado?: string | null
-          dt_cadastro?: string | null
-          dt_cancelado?: string | null
-          dt_encerrado?: string | null
-          empresa_id: number
-          excluido?: boolean | null
-          hr_autorizado?: string | null
-          hr_cancelado?: string | null
-          hr_encerrado?: string | null
-          mdf_historico_id: number
-          mdf_historicoxml_id?: number
-          mdf_manifesto_id: number
-          protocolo_autorizado?: string | null
-          protocolo_cancelado?: string | null
-          protocolo_encerrado?: string | null
-          status_retorno?: number | null
-          xml_enviado?: string | null
-          xml_retorno?: string | null
-        }
-        Update: {
-          chave?: string | null
-          dt_alteracao?: string | null
-          dt_autorizado?: string | null
-          dt_cadastro?: string | null
-          dt_cancelado?: string | null
-          dt_encerrado?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          hr_autorizado?: string | null
-          hr_cancelado?: string | null
-          hr_encerrado?: string | null
-          mdf_historico_id?: number
-          mdf_historicoxml_id?: number
-          mdf_manifesto_id?: number
-          protocolo_autorizado?: string | null
-          protocolo_cancelado?: string | null
-          protocolo_encerrado?: string | null
-          status_retorno?: number | null
-          xml_enviado?: string | null
-          xml_retorno?: string | null
-        }
-        Relationships: []
-      }
-      mdf_manifesto: {
-        Row: {
-          dt_alteracao: string | null
-          dt_cadastro: string | null
-          dt_emissao: string | null
-          dt_viagem: string | null
-          empresa_id: number
-          excluido: boolean | null
-          hr_viagem: string | null
-          mdf_manifesto_id: number
-          modalidade: string | null
-          modelo: string
-          numero: number
-          peso_total: number | null
-          qtd_nfe: number | null
-          serie: string
-          status: string | null
-          tp_emitente: string | null
-          tp_transportador: string | null
-          uffim: string | null
-          ufini: string | null
-          unidade: string | null
-          valor_total: number | null
-        }
-        Insert: {
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          dt_emissao?: string | null
-          dt_viagem?: string | null
-          empresa_id: number
-          excluido?: boolean | null
-          hr_viagem?: string | null
-          mdf_manifesto_id?: number
-          modalidade?: string | null
-          modelo: string
-          numero: number
-          peso_total?: number | null
-          qtd_nfe?: number | null
-          serie: string
-          status?: string | null
-          tp_emitente?: string | null
-          tp_transportador?: string | null
-          uffim?: string | null
-          ufini?: string | null
-          unidade?: string | null
-          valor_total?: number | null
-        }
-        Update: {
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          dt_emissao?: string | null
-          dt_viagem?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          hr_viagem?: string | null
-          mdf_manifesto_id?: number
-          modalidade?: string | null
-          modelo?: string
-          numero?: number
-          peso_total?: number | null
-          qtd_nfe?: number | null
-          serie?: string
-          status?: string | null
-          tp_emitente?: string | null
-          tp_transportador?: string | null
-          uffim?: string | null
-          ufini?: string | null
-          unidade?: string | null
-          valor_total?: number | null
-        }
-        Relationships: []
-      }
-      mdf_motorista: {
-        Row: {
-          condutor_id: number
-          dt_alteracao: string | null
-          dt_cadastro: string | null
-          empresa_id: number
-          excluido: boolean | null
-          mdf_manifesto_id: number
-          mdf_motorista_id: number
-        }
-        Insert: {
-          condutor_id: number
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id: number
-          excluido?: boolean | null
-          mdf_manifesto_id: number
-          mdf_motorista_id?: number
-        }
-        Update: {
-          condutor_id?: number
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          mdf_manifesto_id?: number
-          mdf_motorista_id?: number
-        }
-        Relationships: []
-      }
-      mdf_pagamento: {
-        Row: {
-          adiantamento: number | null
-          agencia: string | null
-          banco: string | null
-          chave_pix: string | null
-          cnpjipef: string | null
-          empresa_id: string
-          forma_pagto: string | null
-          mdf_manifesto_id: number
-          mdf_pagamento_id: number
-          vl_contrato: number | null
-        }
-        Insert: {
-          adiantamento?: number | null
-          agencia?: string | null
-          banco?: string | null
-          chave_pix?: string | null
-          cnpjipef?: string | null
-          empresa_id: string
-          forma_pagto?: string | null
-          mdf_manifesto_id: number
-          mdf_pagamento_id?: number
-          vl_contrato?: number | null
-        }
-        Update: {
-          adiantamento?: number | null
-          agencia?: string | null
-          banco?: string | null
-          chave_pix?: string | null
-          cnpjipef?: string | null
-          empresa_id?: string
-          forma_pagto?: string | null
-          mdf_manifesto_id?: number
-          mdf_pagamento_id?: number
-          vl_contrato?: number | null
-        }
-        Relationships: []
-      }
-      mdf_pagtos: {
-        Row: {
-          dt_vencimento: string | null
-          empresa_id: string
-          mdf_manifesto_id: number
-          mdf_pagtos_id: number
-          nr_parcela: string
-          vl_parcela: number | null
-        }
-        Insert: {
-          dt_vencimento?: string | null
-          empresa_id: string
-          mdf_manifesto_id: number
-          mdf_pagtos_id?: number
-          nr_parcela: string
-          vl_parcela?: number | null
-        }
-        Update: {
-          dt_vencimento?: string | null
-          empresa_id?: string
-          mdf_manifesto_id?: number
-          mdf_pagtos_id?: number
-          nr_parcela?: string
-          vl_parcela?: number | null
-        }
-        Relationships: []
-      }
-      mdf_percurso: {
-        Row: {
-          dt_alteracao: string | null
-          dt_cadastro: string | null
-          empresa_id: number
-          excluido: boolean | null
-          mdf_manifesto_id: number
-          mdf_percurso_id: number
-          uf: string
-        }
-        Insert: {
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id: number
-          excluido?: boolean | null
-          mdf_manifesto_id: number
-          mdf_percurso_id?: number
-          uf: string
-        }
-        Update: {
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          mdf_manifesto_id?: number
-          mdf_percurso_id?: number
-          uf?: string
-        }
-        Relationships: []
-      }
-      mdf_veiculo: {
-        Row: {
-          dt_alteracao: string | null
-          dt_cadastro: string | null
-          empresa_id: number
-          excluido: boolean | null
-          mdf_manifesto_id: number
-          mdf_veiculo_id: number
-          veiculo_id: number
-        }
-        Insert: {
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id: number
-          excluido?: boolean | null
-          mdf_manifesto_id: number
-          mdf_veiculo_id?: number
-          veiculo_id: number
-        }
-        Update: {
-          dt_alteracao?: string | null
-          dt_cadastro?: string | null
-          empresa_id?: number
-          excluido?: boolean | null
-          mdf_manifesto_id?: number
-          mdf_veiculo_id?: number
-          veiculo_id?: number
-        }
-        Relationships: []
       }
       meio_pagamento: {
         Row: {
@@ -4433,297 +4837,6 @@ export type Database = {
             referencedColumns: ["movimento_id"]
           },
         ]
-      }
-      nfe_cabecalho: {
-        Row: {
-          cadastro_id: number | null
-          chave_nfe: string
-          created_at: string
-          deposito_id: number | null
-          dt_alteracao: string | null
-          dt_emissao: string | null
-          dt_entrada: string | null
-          dt_saida: string | null
-          empresa_id: number
-          excluido: boolean
-          nfe_cabecalho_id: number
-          nr_nota: string
-          nr_protocolo: string
-          obs_nf: string
-          serie: string
-          st_nf: string
-          tp_entrada: string
-          updated_at: string
-          vl_desconto: number
-          vl_despesa: number
-          vl_frete: number
-          vl_icms_st: number
-          vl_ipi: number
-          vl_produtos: number
-          vl_seguro: number
-          vl_total_nf: number
-          xml_nf: string | null
-        }
-        Insert: {
-          cadastro_id?: number | null
-          chave_nfe?: string
-          created_at?: string
-          deposito_id?: number | null
-          dt_alteracao?: string | null
-          dt_emissao?: string | null
-          dt_entrada?: string | null
-          dt_saida?: string | null
-          empresa_id: number
-          excluido?: boolean
-          nfe_cabecalho_id?: never
-          nr_nota?: string
-          nr_protocolo?: string
-          obs_nf?: string
-          serie?: string
-          st_nf?: string
-          tp_entrada?: string
-          updated_at?: string
-          vl_desconto?: number
-          vl_despesa?: number
-          vl_frete?: number
-          vl_icms_st?: number
-          vl_ipi?: number
-          vl_produtos?: number
-          vl_seguro?: number
-          vl_total_nf?: number
-          xml_nf?: string | null
-        }
-        Update: {
-          cadastro_id?: number | null
-          chave_nfe?: string
-          created_at?: string
-          deposito_id?: number | null
-          dt_alteracao?: string | null
-          dt_emissao?: string | null
-          dt_entrada?: string | null
-          dt_saida?: string | null
-          empresa_id?: number
-          excluido?: boolean
-          nfe_cabecalho_id?: never
-          nr_nota?: string
-          nr_protocolo?: string
-          obs_nf?: string
-          serie?: string
-          st_nf?: string
-          tp_entrada?: string
-          updated_at?: string
-          vl_desconto?: number
-          vl_despesa?: number
-          vl_frete?: number
-          vl_icms_st?: number
-          vl_ipi?: number
-          vl_produtos?: number
-          vl_seguro?: number
-          vl_total_nf?: number
-          xml_nf?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "nfe_cabecalho_cadastro_id_fkey"
-            columns: ["cadastro_id"]
-            isOneToOne: false
-            referencedRelation: "cadastro"
-            referencedColumns: ["cadastro_id"]
-          },
-          {
-            foreignKeyName: "nfe_cabecalho_deposito_id_fkey"
-            columns: ["deposito_id"]
-            isOneToOne: false
-            referencedRelation: "deposito"
-            referencedColumns: ["deposito_id"]
-          },
-        ]
-      }
-      nfe_item: {
-        Row: {
-          cd_prod_fornec: string
-          cfop: string
-          created_at: string
-          cst_cofins: string
-          cst_icms: string
-          cst_ipi: string
-          cst_pis: string
-          empresa_id: number
-          excluido: boolean
-          gtin: string
-          ncm: string
-          nfe_cabecalho_id: number
-          nfe_item_id: number
-          nm_produto: string
-          nr_item: number
-          pc_cofins: number
-          pc_fcp_st: number
-          pc_icms: number
-          pc_icms_st: number
-          pc_ipi: number
-          pc_mva: number
-          pc_pis: number
-          produto_id: number | null
-          qt_entrada: number
-          unidade: string
-          updated_at: string
-          vl_bc_st: number
-          vl_cofins: number
-          vl_desconto: number
-          vl_fcp_st: number
-          vl_icms_st: number
-          vl_ipi: number
-          vl_pis: number
-          vl_total: number
-          vl_unit: number
-        }
-        Insert: {
-          cd_prod_fornec?: string
-          cfop?: string
-          created_at?: string
-          cst_cofins?: string
-          cst_icms?: string
-          cst_ipi?: string
-          cst_pis?: string
-          empresa_id: number
-          excluido?: boolean
-          gtin?: string
-          ncm?: string
-          nfe_cabecalho_id: number
-          nfe_item_id?: never
-          nm_produto?: string
-          nr_item?: number
-          pc_cofins?: number
-          pc_fcp_st?: number
-          pc_icms?: number
-          pc_icms_st?: number
-          pc_ipi?: number
-          pc_mva?: number
-          pc_pis?: number
-          produto_id?: number | null
-          qt_entrada?: number
-          unidade?: string
-          updated_at?: string
-          vl_bc_st?: number
-          vl_cofins?: number
-          vl_desconto?: number
-          vl_fcp_st?: number
-          vl_icms_st?: number
-          vl_ipi?: number
-          vl_pis?: number
-          vl_total?: number
-          vl_unit?: number
-        }
-        Update: {
-          cd_prod_fornec?: string
-          cfop?: string
-          created_at?: string
-          cst_cofins?: string
-          cst_icms?: string
-          cst_ipi?: string
-          cst_pis?: string
-          empresa_id?: number
-          excluido?: boolean
-          gtin?: string
-          ncm?: string
-          nfe_cabecalho_id?: number
-          nfe_item_id?: never
-          nm_produto?: string
-          nr_item?: number
-          pc_cofins?: number
-          pc_fcp_st?: number
-          pc_icms?: number
-          pc_icms_st?: number
-          pc_ipi?: number
-          pc_mva?: number
-          pc_pis?: number
-          produto_id?: number | null
-          qt_entrada?: number
-          unidade?: string
-          updated_at?: string
-          vl_bc_st?: number
-          vl_cofins?: number
-          vl_desconto?: number
-          vl_fcp_st?: number
-          vl_icms_st?: number
-          vl_ipi?: number
-          vl_pis?: number
-          vl_total?: number
-          vl_unit?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "nfe_item_nfe_cabecalho_id_fkey"
-            columns: ["nfe_cabecalho_id"]
-            isOneToOne: false
-            referencedRelation: "nfe_cabecalho"
-            referencedColumns: ["nfe_cabecalho_id"]
-          },
-          {
-            foreignKeyName: "nfe_item_produto_id_fkey"
-            columns: ["produto_id"]
-            isOneToOne: false
-            referencedRelation: "produto"
-            referencedColumns: ["produto_id"]
-          },
-        ]
-      }
-      nfe_recebida: {
-        Row: {
-          chave_nfe: string
-          cnpj_emitente: string
-          created_at: string
-          dt_emissao: string | null
-          empresa_id: number
-          nfe_recebida_id: number
-          nm_emitente: string
-          nr_nota: string | null
-          nsu: number | null
-          serie: string | null
-          st_download: boolean
-          st_manifesto: string
-          updated_at: string
-          vl_total: number | null
-          xml_completo: string | null
-          xml_resumo: string | null
-        }
-        Insert: {
-          chave_nfe: string
-          cnpj_emitente: string
-          created_at?: string
-          dt_emissao?: string | null
-          empresa_id: number
-          nfe_recebida_id?: never
-          nm_emitente: string
-          nr_nota?: string | null
-          nsu?: number | null
-          serie?: string | null
-          st_download?: boolean
-          st_manifesto?: string
-          updated_at?: string
-          vl_total?: number | null
-          xml_completo?: string | null
-          xml_resumo?: string | null
-        }
-        Update: {
-          chave_nfe?: string
-          cnpj_emitente?: string
-          created_at?: string
-          dt_emissao?: string | null
-          empresa_id?: number
-          nfe_recebida_id?: never
-          nm_emitente?: string
-          nr_nota?: string | null
-          nsu?: number | null
-          serie?: string | null
-          st_download?: boolean
-          st_manifesto?: string
-          updated_at?: string
-          vl_total?: number | null
-          xml_completo?: string | null
-          xml_resumo?: string | null
-        }
-        Relationships: []
       }
       operadora: {
         Row: {
@@ -6454,6 +6567,10 @@ export type Database = {
       fu_user_in_empresa: {
         Args: { _empresa_id: number; _user_id: string }
         Returns: boolean
+      }
+      get_or_create_nsu_seq: {
+        Args: { p_empresa_id: number; p_tipo_campo: string }
+        Returns: number
       }
       rpb_execute_query: { Args: { p_sql: string }; Returns: Json }
     }
