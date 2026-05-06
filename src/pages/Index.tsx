@@ -46,6 +46,8 @@ import CfopForm from "@/components/forms/CfopForm";
 import ConsultaTitulosReceberForm from "@/components/forms/ConsultaTitulosReceberForm";
 import GerarContasReceberForm from "@/components/forms/GerarContasReceberForm";
 import ContaReceberDetalheForm from "@/components/forms/ContaReceberDetalheForm";
+import FiscalConfigForm from "@/components/forms/FiscalConfigForm";
+import BaixaPorClienteForm from "@/components/forms/BaixaPorClienteForm";
 import ChatLauncher from "@/components/chat/ChatLauncher";
 
 const AppContent = () => {

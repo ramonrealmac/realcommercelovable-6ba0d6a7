@@ -1,6 +1,16 @@
 import { supabase } from './db.js';
 import { executarComandoFiscal } from './fiscalLib.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import winston from 'winston';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Injeta a pasta das DLLs no PATH do sistema para o OpenSSL encontrar as dependências
+const dllPath = path.resolve(__dirname, '../AcbrDLL/Windows/MT/Cdecl');
+process.env.PATH = `${dllPath};${process.env.PATH}`;
+console.log(`[Worker] PATH injetado com sucesso: ${dllPath}`);
 
 // Configuração do Logger
 const logger = winston.createLogger({

@@ -42,14 +42,12 @@ const FiscalConfigForm = () => {
 
   const tipoCertificadoAtual = form.watch("tipo_certificado");
 
-  // Carregar dados iniciais
+  // Carregar dados iniciais sempre que mudar a empresa
   useEffect(() => {
     const carregarConfig = async () => {
       if (!XEmpresaId) return;
       setLoading(true);
       try {
-        // Assume that uf might be stored in the empresa or config, for now we mock uf if not present.
-        // Actually fiscal_config doesn't have UF, it should be in empresa, but we'll add a local state or use default for the test
         const { data, error } = await supabase
           .from("fiscal_config")
           .select("tipo_certificado, certificado, senha_certificado, ambiente_nfe")
@@ -64,7 +62,16 @@ const FiscalConfigForm = () => {
             certificado: data.certificado || "",
             senha_certificado: data.senha_certificado ? atob(data.senha_certificado) : "",
             ambiente_nfe: data.ambiente_nfe || "2",
-            uf: "SP" // Fixo para teste ou pode ser buscado da empresa
+            uf: "SP" 
+          });
+        } else {
+          // Se não houver configuração para esta empresa, reseta para os padrões
+          form.reset({
+            tipo_certificado: "ARQUIVO",
+            certificado: "",
+            senha_certificado: "",
+            ambiente_nfe: "2",
+            uf: "SP"
           });
         }
       } catch (err: any) {
@@ -75,7 +82,7 @@ const FiscalConfigForm = () => {
     };
 
     carregarConfig();
-  }, [XEmpresaId, form]);
+  }, [XEmpresaId]);
 
   const onSubmit = async (values: FiscalConfigFormValues) => {
     if (!XEmpresaId) return;
@@ -175,7 +182,9 @@ const FiscalConfigForm = () => {
       const comando = tipoCertificadoAtual === 'REPOSITORIO' ? "LISTAR_CERTIFICADOS_WINDOWS" : "LISTAR_CERTIFICADOS";
       const payload = tipoCertificadoAtual === 'REPOSITORIO' ? {} : { diretorio: "C:/Certificados" };
       
+      console.log(`[FiscalConfig] Buscando certificados do tipo: ${tipoCertificadoAtual}...`);
       const response = await dispatchWorkerCommand(comando, payload);
+      console.log(`[FiscalConfig] Resposta do Worker:`, response);
       
       if (response && response.sucesso) {
         if (tipoCertificadoAtual === 'REPOSITORIO') {
@@ -185,7 +194,7 @@ const FiscalConfigForm = () => {
         }
         setModalCertOpen(true);
       } else {
-        toast.error("Falha ao buscar certificados no servidor: " + (response.erro || ""));
+        toast.error("Falha ao buscar certificados: " + (response.erro || response.mensagem || "Verifique se a pasta C:/Certificados existe no servidor."));
       }
     } catch (err: any) {
       toast.error(err.message);
@@ -373,9 +382,11 @@ const FiscalConfigForm = () => {
       </div>
 
       <Dialog open={modalCertOpen} onOpenChange={setModalCertOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Certificados no Servidor</DialogTitle>
+            <DialogTitle>
+              {tipoCertificadoAtual === 'REPOSITORIO' ? "Certificados no Windows" : "Arquivos no Servidor (C:/Certificados)"}
+            </DialogTitle>
           </DialogHeader>
           <ScrollArea className="max-h-[400px] mt-4">
             {certificadosServidor.length === 0 ? (
@@ -384,18 +395,21 @@ const FiscalConfigForm = () => {
               <div className="flex flex-col gap-2">
                 {certificadosServidor.map((cert, index) => {
                   const isWindows = tipoCertificadoAtual === 'REPOSITORIO';
-                  const label = isWindows ? cert.Subject : cert;
+                  
+                  // Se for arquivo, o label é o nome do arquivo. O valor é o caminho completo.
+                  const label = isWindows ? cert.Subject : cert.split('/').pop()?.split('\\').pop() || cert;
                   const value = isWindows ? cert.SerialNumber : cert;
                   
                   return (
                     <Button 
                       key={index} 
                       variant="outline" 
-                      className="justify-start h-auto py-3 px-4 text-left whitespace-normal flex flex-col items-start gap-1"
+                      className="justify-start h-auto py-3 px-4 text-left whitespace-normal flex flex-col items-start gap-1 overflow-hidden"
                       onClick={() => selecionarCertificado(value)}
                     >
-                      <span className="font-medium text-sm leading-tight">{label}</span>
+                      <span className="font-medium text-sm leading-tight truncate w-full">{label}</span>
                       {isWindows && <span className="text-xs text-muted-foreground font-mono">Série: {value}</span>}
+                      {!isWindows && <span className="text-[10px] text-muted-foreground font-mono truncate w-full">{cert}</span>}
                     </Button>
                   );
                 })}

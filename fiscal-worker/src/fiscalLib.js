@@ -121,7 +121,7 @@ const configurarHandle = (lib, handle, configPayload) => {
             lib.ConfigGravarValor(handle, "DFe", "Senha", "");
         }
     } else {
-        // Usa Arquivo PFX - FORÇA TODAS AS CHAVES SSL
+        // Usa Arquivo PFX - MOTOR OPENSSL (1) - Agora com PATH injetado no index.js
         lib.ConfigGravarValor(handle, "DFe", "SSLLib", "1");        // libOpenSSL
         lib.ConfigGravarValor(handle, "DFe", "SSLCryptLib", "1");   // cryOpenSSL
         lib.ConfigGravarValor(handle, "DFe", "SSLHttpLib", "3");    // httpOpenSSL

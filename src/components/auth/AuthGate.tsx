@@ -74,41 +74,58 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
     const loadEmpresas = async () => {
       setXLoadingEmpresas(true);
       try {
+        console.log("[AuthGate] Iniciando carregamento de empresas para o usuário:", session.user.id);
+        
         // Get empresa_usuario links for this user
-        const { data: XLinks } = await (supabase as any)
+        const { data: XLinks, error: XLinkError } = await (supabase as any)
           .from("empresa_usuario")
           .select("empresa_id")
           .eq("user_id", session.user.id)
           .eq("fl_excluido", false);
 
+        if (XLinkError) {
+          console.error("[AuthGate] Erro ao buscar vínculos:", XLinkError);
+          throw XLinkError;
+        }
+
+        console.log("[AuthGate] Vínculos encontrados:", XLinks?.length || 0);
+
         if (!XLinks || XLinks.length === 0) {
           setXEmpresasVinculadas([]);
-          setXLoadingEmpresas(false);
           return;
         }
 
         const XEmpresaIds = XLinks.map((l: any) => l.empresa_id);
 
-        const { data: XEmpresas } = await (supabase as any)
+        const { data: XEmpresas, error: XEmpError } = await (supabase as any)
           .from("empresa")
           .select("empresa_id, razao_social, nome_fantasia, empresa_matriz_id, identificacao")
           .in("empresa_id", XEmpresaIds)
           .eq("excluido", false)
           .order("razao_social");
 
+        if (XEmpError) {
+          console.error("[AuthGate] Erro ao buscar detalhes das empresas:", XEmpError);
+          throw XEmpError;
+        }
+
         const XList = (XEmpresas || []) as IEmpresaVinculada[];
+        console.log("[AuthGate] Empresas carregadas com sucesso:", XList.length);
         setXEmpresasVinculadas(XList);
 
         // Auto-select if only one empresa
         if (XList.length === 1) {
+          console.log("[AuthGate] Auto-selecionando única empresa disponível:", XList[0].empresa_id);
           setXEmpresaSelecionada(XList[0].empresa_id);
           setXEmpresaConfirmada(true);
           onEmpresaSelected?.(XList[0], XList);
         }
-      } catch (e) {
-        console.error("Erro ao carregar empresas:", e);
+      } catch (e: any) {
+        console.error("❌ Erro fatal ao carregar empresas:", e);
+        toast.error("Erro ao carregar lista de empresas. Tente recarregar a página.");
+      } finally {
+        setXLoadingEmpresas(false);
       }
-      setXLoadingEmpresas(false);
     };
 
     loadEmpresas();
