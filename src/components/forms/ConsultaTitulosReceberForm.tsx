@@ -40,6 +40,7 @@ const ConsultaTitulosReceberForm: React.FC = () => {
   const [XPlanos, setXPlanos] = useState<IPlanoOpt[]>([]);
 
   const [XClienteId, setXClienteId] = useState<string>("");
+  const [XDtEmissao, setXDtEmissao] = useState<string>("");
   const [XDtVencto, setXDtVencto] = useState<string>("");
   const [XSituacao, setXSituacao] = useState<string>("");
   const [XPlanoId, setXPlanoId] = useState<string>("");
