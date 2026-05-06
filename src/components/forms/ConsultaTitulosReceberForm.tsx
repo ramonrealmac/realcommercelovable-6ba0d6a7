@@ -65,12 +65,12 @@ const ConsultaTitulosReceberForm: React.FC = () => {
       );
 
       const { data: plData } = await supabase
-        .from("plano")
-        .select("plano_id, nome, tp_conta, natureza")
-        .eq("tp_conta", "R")
-        .eq("natureza", "A")
+        .from("plano_conta")
+        .select("plano_conta_id, nome")
+        .eq("tp_conta", "A")
+        .eq("tp_natureza", "C")
         .order("nome");
-      setXPlanos((plData ?? []).map((p: any) => ({ plano_id: p.plano_id, nome: p.nome })));
+      setXPlanos((plData ?? []).map((p: any) => ({ plano_id: p.plano_conta_id, nome: p.nome })));
     })();
   }, []);
 
