@@ -9,7 +9,7 @@ const SITUACOES: SituacaoOpt[] = ["A VENCER", "PAGTO PARCIAL", "VENCIDO", "BAIXA
 
 interface IRow {
   empresa_id: number | null;
-  financeiro_id: string | null;
+  financeiro_id: number | null;
   empresa: string;
   titulo: string | null;
   cliente: string;

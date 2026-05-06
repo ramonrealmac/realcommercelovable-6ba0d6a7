@@ -106,20 +106,6 @@ const GerarContasReceberForm: React.FC = () => {
 
     setXSaving(true);
     try {
-      // Buscar próximo financeiro_id (numérico) para esta empresa
-      const { data: maxRow } = await supabase
-        .from("financeiro")
-        .select("financeiro_id")
-        .eq("empresa_id", empId)
-        .order("financeiro_id", { ascending: false })
-        .limit(1);
-      let nextId = 1;
-      if (maxRow && maxRow.length > 0) {
-        const cur = String(maxRow[0].financeiro_id);
-        const n = parseInt(cur);
-        nextId = isNaN(n) ? Date.now() : n + 1;
-      }
-
       const rows: any[] = [];
       const diaFixo = Math.min(31, Math.max(1, parseInt(XForm.dia_fixo) || 1));
       for (let i = 1; i <= nrParc; i++) {
@@ -143,7 +129,6 @@ const GerarContasReceberForm: React.FC = () => {
 
         rows.push({
           empresa_id: empId,
-          financeiro_id: String(nextId + i - 1),
           movimento_id: parseInt(XForm.pedido) || 0,
           documento: docParcela,
           parcela: i,
