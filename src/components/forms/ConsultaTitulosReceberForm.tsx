@@ -191,7 +191,7 @@ const ConsultaTitulosReceberForm: React.FC = () => {
   ], [openTitulo]);
 
   const clearFilters = () => {
-    setXClienteId(""); setXDtVencto(""); setXSituacao(""); setXPlanoId("");
+    setXClienteId(""); setXDtEmissao(""); setXDtVencto(""); setXSituacao(""); setXPlanoId("");
   };
 
   return (
