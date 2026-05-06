@@ -46,7 +46,6 @@ import CfopForm from "@/components/forms/CfopForm";
 import ConsultaTitulosReceberForm from "@/components/forms/ConsultaTitulosReceberForm";
 import GerarContasReceberForm from "@/components/forms/GerarContasReceberForm";
 import ContaReceberDetalheForm from "@/components/forms/ContaReceberDetalheForm";
-import FiscalConfigForm from "@/components/forms/FiscalConfigForm";
 import ChatLauncher from "@/components/chat/ChatLauncher";
 
 const AppContent = () => {
@@ -149,6 +148,8 @@ const AppContent = () => {
         return <GerarContasReceberForm />;
       case "conta-receber-detalhe":
         return <ContaReceberDetalheForm empresa_id={params?.empresa_id} financeiro_id={params?.financeiro_id} />;
+      case "baixa-por-cliente":
+        return <BaixaPorClienteForm />;
       default:
         if (component.startsWith("rpb-exec-")) {
           const XRelId = parseInt(component.replace("rpb-exec-", ""));
@@ -182,10 +183,10 @@ const AppContent = () => {
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm p-8 text-center">
               {XThemeLogomarca || XLogomarca ? (
                 <div className="animate-in fade-in zoom-in duration-1000">
-                  <img 
-                    src={XThemeLogomarca || XLogomarca} 
-                    alt="Logo" 
-                    className="max-w-[600px] max-h-[400px] object-contain opacity-80 select-none pointer-events-none" 
+                  <img
+                    src={XThemeLogomarca || XLogomarca}
+                    alt="Logo"
+                    className="max-w-[600px] max-h-[400px] object-contain opacity-80 select-none pointer-events-none"
                   />
                 </div>
               ) : (

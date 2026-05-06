@@ -9,7 +9,7 @@ const SITUACOES: SituacaoOpt[] = ["A VENCER", "PAGTO PARCIAL", "VENCIDO", "BAIXA
 
 interface IRow {
   empresa_id: number | null;
-  financeiro_id: string | null;
+  financeiro_id: number | null;
   empresa: string;
   titulo: string | null;
   cliente: string;
@@ -40,6 +40,7 @@ const ConsultaTitulosReceberForm: React.FC = () => {
   const [XPlanos, setXPlanos] = useState<IPlanoOpt[]>([]);
 
   const [XClienteId, setXClienteId] = useState<string>("");
+  const [XDtEmissao, setXDtEmissao] = useState<string>("");
   const [XDtVencto, setXDtVencto] = useState<string>("");
   const [XSituacao, setXSituacao] = useState<string>("");
   const [XPlanoId, setXPlanoId] = useState<string>("");
@@ -64,12 +65,12 @@ const ConsultaTitulosReceberForm: React.FC = () => {
       );
 
       const { data: plData } = await supabase
-        .from("plano")
-        .select("plano_id, nome, tp_conta, natureza")
-        .eq("tp_conta", "R")
-        .eq("natureza", "A")
+        .from("plano_conta")
+        .select("plano_conta_id, nome")
+        .eq("tp_conta", "A")
+        .eq("tp_natureza", "C")
         .order("nome");
-      setXPlanos((plData ?? []).map((p: any) => ({ plano_id: p.plano_id, nome: p.nome })));
+      setXPlanos((plData ?? []).map((p: any) => ({ plano_id: p.plano_conta_id, nome: p.nome })));
     })();
   }, []);
 
@@ -84,6 +85,7 @@ const ConsultaTitulosReceberForm: React.FC = () => {
         .limit(1000);
 
       if (XClienteId) q = q.eq("cadastro_id", Number(XClienteId));
+      if (XDtEmissao) q = q.eq("dt_emissao", XDtEmissao);
       if (XDtVencto) q = q.eq("dt_vencto", XDtVencto);
       if (XSituacao) q = q.eq("situacao", XSituacao);
       if (XPlanoId) q = q.eq("plano_id", Number(XPlanoId));
@@ -124,15 +126,24 @@ const ConsultaTitulosReceberForm: React.FC = () => {
     } finally {
       setXLoading(false);
     }
-  }, [XClienteId, XDtVencto, XSituacao, XPlanoId]);
+  }, [XClienteId, XDtEmissao, XDtVencto, XSituacao, XPlanoId]);
 
   useEffect(() => { loadGrid(); }, [loadGrid]);
 
-  // Atualiza a grade automaticamente quando uma baixa for registrada/excluída em outra aba
+  // Atualiza a grade automaticamente quando algo mudar no financeiro ou ao reativar a aba
   useEffect(() => {
     const handler = () => { loadGrid(); };
+    const onVis = () => { if (document.visibilityState === "visible") loadGrid(); };
     window.addEventListener("financeiro:baixa-changed", handler);
-    return () => window.removeEventListener("financeiro:baixa-changed", handler);
+    window.addEventListener("financeiro:changed", handler);
+    window.addEventListener("focus", handler);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("financeiro:baixa-changed", handler);
+      window.removeEventListener("financeiro:changed", handler);
+      window.removeEventListener("focus", handler);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [loadGrid]);
 
   const openTitulo = useCallback((row: IRow) => {
@@ -189,7 +200,7 @@ const ConsultaTitulosReceberForm: React.FC = () => {
   ], [openTitulo]);
 
   const clearFilters = () => {
-    setXClienteId(""); setXDtVencto(""); setXSituacao(""); setXPlanoId("");
+    setXClienteId(""); setXDtEmissao(""); setXDtVencto(""); setXSituacao(""); setXPlanoId("");
   };
 
   return (
@@ -203,8 +214,8 @@ const ConsultaTitulosReceberForm: React.FC = () => {
         <div className="flex items-center gap-2 mb-2 text-xs font-medium text-muted-foreground">
           <FilterIcon size={12} /> Filtros
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <div>
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+          <div className="md:col-span-2">
             <label className="block text-xs font-medium text-muted-foreground mb-1">Cliente</label>
             <select
               value={XClienteId}
@@ -216,6 +227,15 @@ const ConsultaTitulosReceberForm: React.FC = () => {
                 <option key={c.cadastro_id} value={c.cadastro_id}>{c.nome}</option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Dt. Emissão</label>
+            <input
+              type="date"
+              value={XDtEmissao}
+              onChange={(e) => setXDtEmissao(e.target.value)}
+              className="w-full border border-border rounded px-2 py-1.5 text-sm bg-card"
+            />
           </div>
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">Dt. Vencimento</label>
