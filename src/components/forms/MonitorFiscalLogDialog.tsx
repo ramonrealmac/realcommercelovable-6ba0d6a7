@@ -18,6 +18,7 @@ interface MonitorFiscalLogDialogProps {
 }
 
 const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen, onClose, empresaId }) => {
+  // Versão de Diagnóstico: 2026-05-06 18:43 (Papai, agora o sync vai fluir!)
   const [XData, setXData] = useState<any[]>([]);
   const [XLoading, setXLoading] = useState(false);
   const [XSelected, setXSelected] = useState<any>(null);

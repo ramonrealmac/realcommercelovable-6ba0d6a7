@@ -61,6 +61,7 @@ const XGridCols: IGridColumn[] = [
 ];
 
 const NfeRecebidasForm: React.FC = () => {
+  // Sincronização Estabilizada: 2026-05-06 18:43
   const { XEmpresaId } = useAppContext();
   const [XData, setXData] = useState<any[]>([]);
   const [XLoading, setXLoading] = useState(false);
