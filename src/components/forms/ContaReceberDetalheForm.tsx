@@ -8,7 +8,7 @@ import { toast } from "sonner";
 
 interface IProps {
   empresa_id: number;
-  financeiro_id: string;
+  financeiro_id: number;
 }
 
 interface ITpDoc { tp_documento_id: string; descricao: string; }
