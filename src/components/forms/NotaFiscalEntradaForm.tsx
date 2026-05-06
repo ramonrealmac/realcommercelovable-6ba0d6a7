@@ -30,10 +30,13 @@ const XGridCols: IGridColumn[] = [
 ];
 
 const XDefault: Partial<INfeCabecalho> = {
-  tp_entrada: "M", st_nf: "A",
+  origem_inclusao: "M", st_nf: "A",
+  tp_nf: 0, fin_nfe: 1, tp_emis: 1, modelo: "55", nat_op: "Entrada de Mercadoria",
   nr_nota: "", serie: "1", chave_nfe: "", nr_protocolo: "",
   vl_produtos: 0, vl_desconto: 0, vl_frete: 0, vl_seguro: 0,
-  vl_despesa: 0, vl_ipi: 0, vl_icms_st: 0, vl_total_nf: 0,
+  vl_despesa: 0, vl_ipi: 0, vl_icms_st: 0,
+  vl_pis: 0, vl_cofins: 0, vl_ibs: 0, vl_cbs: 0, vl_is: 0,
+  vl_total_nf: 0,
   obs_nf: "",
   dt_emissao: new Date().toISOString().substring(0, 10),
   dt_entrada: new Date().toISOString().substring(0, 10),
@@ -225,7 +228,11 @@ const NotaFiscalEntradaForm: React.FC = () => {
     // Aplica dados do cabeçalho ao formulário
     setRecord((prev: any) => ({
       ...prev,
-      tp_entrada: "X",
+      origem_inclusao: "X",
+      tp_nf: 0,
+      fin_nfe: 1,
+      tp_emis: 1,
+      modelo: "55",
       cadastro_id: cadastroId,
       nr_nota:     dados.nr_nota,
       serie:       dados.serie,
@@ -241,6 +248,11 @@ const NotaFiscalEntradaForm: React.FC = () => {
       vl_despesa:  dados.vl_despesa,
       vl_ipi:      dados.vl_ipi,
       vl_icms_st:  dados.vl_icms_st,
+      vl_pis:      dados.vl_pis || 0,
+      vl_cofins:   dados.vl_cofins || 0,
+      vl_ibs:      dados.vl_ibs || 0,
+      vl_cbs:      dados.vl_cbs || 0,
+      vl_is:       dados.vl_is || 0,
       vl_total_nf: dados.vl_total_nf,
       obs_nf:      dados.obs_nf,
       xml_nf:      dados.xmlRaw,
@@ -344,10 +356,19 @@ const NotaFiscalEntradaForm: React.FC = () => {
                 pc_cofins:        Number(item.pc_cofins || 0),
                 vl_fcp_st:        Number(item.vl_fcp_st || 0),
                 pc_fcp_st:        Number(item.pc_fcp_st || 0),
+                vl_ibs:           Number(item.vl_ibs || 0),
+                pc_ibs:           Number(item.pc_ibs || 0),
+                vl_cbs:           Number(item.vl_cbs || 0),
+                pc_cbs:           Number(item.pc_cbs || 0),
+                vl_is:            Number(item.vl_is || 0),
+                pc_is:            Number(item.pc_is || 0),
                 cst_icms:         item.cst_icms || "",
                 cst_ipi:          item.cst_ipi || "",
                 cst_pis:          item.cst_pis || "",
                 cst_cofins:       item.cst_cofins || "",
+                cst_ibs:          item.cst_ibs || "",
+                cst_cbs:          item.cst_cbs || "",
+                cst_is:           item.cst_is || "",
                 pc_mva:           Number(item.pc_mva || 0),
                 vl_bc_st:         Number(item.vl_bc_st || 0),
               }));
@@ -410,8 +431,8 @@ const NotaFiscalEntradaForm: React.FC = () => {
                       <input readOnly={ro} value={record.nr_protocolo ?? ""} onChange={e => setField("nr_protocolo" as any, e.target.value)} className="w-full border border-border rounded px-2 py-1 text-sm" />
                     </div>
                     <div className="col-span-3">
-                      <label className="text-xs text-muted-foreground">Tp. Entrada</label>
-                      <input readOnly value={record.tp_entrada === "X" ? "XML" : "Manual"} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary" />
+                      <label className="text-xs text-muted-foreground">Origem Inclusão</label>
+                      <input readOnly value={record.origem_inclusao === "X" ? "XML" : "Manual"} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary" />
                     </div>
                   </div>
                   <div>

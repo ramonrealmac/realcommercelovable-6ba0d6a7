@@ -3,7 +3,7 @@
 // ============================================================
 
 export type TNfeSt = "A" | "C" | "E"; // Aberto | Cancelado | Escriturado
-export type TNfeTpEntrada = "M" | "X"; // Manual | XML
+export type TNfeOrigemInclusao = "M" | "X"; // Manual | XML
 
 export const NFE_ST_LABELS: Record<TNfeSt, string> = {
   A: "Aberto",
@@ -16,8 +16,16 @@ export interface INfeCabecalho {
   empresa_id: number;
   cadastro_id: number | null;
   deposito_id: number | null;
-  tp_entrada: TNfeTpEntrada;
+  origem_inclusao: TNfeOrigemInclusao;
+  modelo: string;
+  tp_nf: number;
+  fin_nfe: number;
+  nat_op: string;
+  tp_emis: number;
   st_nf: TNfeSt;
+  c_stat: number | null;
+  x_motivo: string | null;
+  recibo_sefaz: string | null;
   nr_nota: string;
   serie: string;
   dt_emissao: string | null;
@@ -32,6 +40,11 @@ export interface INfeCabecalho {
   vl_despesa: number;
   vl_ipi: number;
   vl_icms_st: number;
+  vl_pis: number;
+  vl_cofins: number;
+  vl_ibs: number;
+  vl_cbs: number;
+  vl_is: number;
   vl_total_nf: number;
   obs_nf: string;
   xml_nf: string | null;
@@ -50,6 +63,10 @@ export interface INfeItem {
   cfop: string;
   unidade: string;
   gtin: string;
+  origem: number;
+  csosn: string;
+  cest: string;
+  c_enq: string;
   qt_entrada: number;
   vl_unit: number;
   vl_desconto: number;
@@ -60,6 +77,9 @@ export interface INfeItem {
   vl_pis: number;
   vl_cofins: number;
   vl_fcp_st: number;
+  vl_ibs: number;
+  vl_cbs: number;
+  vl_is: number;
   // Alíquotas
   pc_ipi: number;
   pc_icms: number;
@@ -67,11 +87,17 @@ export interface INfeItem {
   pc_pis: number;
   pc_cofins: number;
   pc_fcp_st: number;
+  pc_ibs: number;
+  pc_cbs: number;
+  pc_is: number;
   // CSTs
   cst_icms: string;
   cst_ipi: string;
   cst_pis: string;
   cst_cofins: string;
+  cst_ibs: string;
+  cst_cbs: string;
+  cst_is: string;
   // MVA/ST
   pc_mva: number;
   vl_bc_st: number;
@@ -103,6 +129,10 @@ export interface INfeXmlItem {
   cfop: string;
   unidade: string;
   gtin: string;
+  origem?: number;
+  csosn?: string;
+  cest?: string;
+  c_enq?: string;
   qt_entrada: number;
   vl_unit: number;
   vl_desconto: number;
@@ -112,16 +142,25 @@ export interface INfeXmlItem {
   vl_pis: number;
   vl_cofins: number;
   vl_fcp_st: number;
+  vl_ibs?: number;
+  vl_cbs?: number;
+  vl_is?: number;
   pc_ipi: number;
   pc_icms: number;
   pc_icms_st: number;
   pc_pis: number;
   pc_cofins: number;
   pc_fcp_st: number;
+  pc_ibs?: number;
+  pc_cbs?: number;
+  pc_is?: number;
   cst_icms: string;
   cst_ipi: string;
   cst_pis: string;
   cst_cofins: string;
+  cst_ibs?: string;
+  cst_cbs?: string;
+  cst_is?: string;
   pc_mva: number;
   vl_bc_st: number;
 }
@@ -141,6 +180,11 @@ export interface INfeDadosXml {
   vl_despesa: number;
   vl_ipi: number;
   vl_icms_st: number;
+  vl_pis?: number;
+  vl_cofins?: number;
+  vl_ibs?: number;
+  vl_cbs?: number;
+  vl_is?: number;
   vl_total_nf: number;
   obs_nf: string;
   itens: INfeXmlItem[];

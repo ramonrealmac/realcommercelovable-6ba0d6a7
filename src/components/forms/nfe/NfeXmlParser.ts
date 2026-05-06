@@ -69,6 +69,8 @@ export function parseNfeXml(xmlString: string): INfeDadosXml | null {
     const vl_despesa  = num(total, "vOutro");
     const vl_ipi_total= num(total, "vIPI");
     const vl_st_total = num(total, "vST");
+    const vl_pis_total= num(total, "vPIS");
+    const vl_cofins_total= num(total, "vCOFINS");
     const vl_total_nf = num(total, "vNF");
 
     // Informações adicionais
@@ -140,6 +142,8 @@ export function parseNfeXml(xmlString: string): INfeDadosXml | null {
       vl_despesa,
       vl_ipi: vl_ipi_total,
       vl_icms_st: vl_st_total,
+      vl_pis: vl_pis_total,
+      vl_cofins: vl_cofins_total,
       vl_total_nf,
       obs_nf,
       itens,
