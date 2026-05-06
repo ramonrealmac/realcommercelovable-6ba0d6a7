@@ -1,36 +1,88 @@
-import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Serviço de integração com o Provedor via Ponte Node.js (provedor-bridge.cjs)
+ * Serviço de integração com o Provedor via Worker Nativo (Supabase Realtime)
  */
 export const provedorService = {
-  // Configurações padrão
-  config: {
-    baseUrl: "http://localhost:3434",
-  },
-
   /**
-   * Envia um comando genérico para o provedor
+   * Envia um comando para o worker através da tabela fiscal_evento e aguarda a resposta
    */
-  async enviarComando(comando: string): Promise<string> {
+  async enviarComando(comando: string, empresaId?: string, ambiente?: string | number, configPayload?: any): Promise<string> {
+    if (!empresaId) {
+      console.error("Tentativa de enviar comando fiscal sem empresaId:", comando);
+      throw new Error("ID da empresa não informado para o comando fiscal.");
+    }
+
     try {
-      const response = await fetch(this.config.baseUrl, {
-        method: "POST",
-        body: comando,
-        headers: { "Content-Type": "text/plain" },
+      // Obtém o usuário logado para auditoria
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // 1. Insere o comando na fila
+      const { data, error } = await supabase
+        .from("fiscal_evento")
+        .insert({
+          empresa_id: empresaId,
+          user_id: user?.id,
+          ambiente: ambiente ? Number(ambiente) : null,
+          comando: comando.split('(')[0], // Extrai o nome do comando (ex: NFE.StatusServico)
+          payload: { 
+            comando_full: comando, // Para referência
+            dados: comando.includes('("') ? comando.match(/\("(.+)"\)/)?.[1] : "", // Tenta extrair o conteúdo do INI se houver
+            config: configPayload || {}
+          },
+          status: "PENDENTE",
+          tipo: "NFE"
+        })
+        .select("id")
+        .single();
+
+      if (error) throw error;
+      const eventoId = data.id;
+
+      // 2. Aguarda a resposta via Realtime
+      return new Promise((resolve, reject) => {
+        const timeoutMs = 25000; // 25 segundos
+        
+        const channel = supabase
+          .channel(`provedor_res_${eventoId}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "UPDATE",
+              schema: "public",
+              table: "fiscal_evento",
+              filter: `id=eq.${eventoId}`
+            },
+            (payload) => {
+              const row = payload.new as any;
+              if (row.status === "CONCLUIDO") {
+                channel.unsubscribe();
+                // O worker retorna um JSON, mas os forms esperam a string "OK: ..." ou similar do padrão ACBr
+                const resObj = JSON.parse(row.resposta || "{}");
+                let responseText = "";
+                
+                if (resObj.sucesso) {
+                  // Tenta reconstruir a string de resposta padrão ACBr para manter compatibilidade com os parsers legados
+                  responseText = resObj.retorno_completo || resObj.status_retorno || resObj.xml_retorno || "OK: Operação realizada";
+                  if (!responseText.startsWith("OK:")) responseText = "OK: " + responseText;
+                } else {
+                  responseText = "ERRO: " + (resObj.erro || "Falha desconhecida");
+                }
+                
+                resolve(responseText.replace(/ACBr/gi, "MonitorFiscal"));
+              } else if (row.status === "ERRO") {
+                channel.unsubscribe();
+                reject(new Error(row.mensagem_erro || "Erro no processamento do worker."));
+              }
+            }
+          )
+          .subscribe();
+
+        setTimeout(() => {
+          channel.unsubscribe();
+          reject(new Error("O Worker Fiscal não respondeu no tempo limite (Timeout). Verifique se o serviço está rodando."));
+        }, timeoutMs);
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || "Erro na ponte do provedor");
-      }
-
-      const result = await response.text();
-      // Mascara retornos técnicos para manter a marca MonitorFiscal
-      return result
-        .replace(/ACBrMonitorPLUS/gi, "MonitorFiscal")
-        .replace(/ACBr/gi, "MonitorFiscal")
-        .replace(/SCBRMonitor/gi, "MonitorFiscal");
     } catch (error: any) {
       console.error("Erro provedorService:", error);
       toast.error("Falha ao comunicar com o provedor: " + error.message);
@@ -41,42 +93,42 @@ export const provedorService = {
   /**
    * Consulta o status do serviço na SEFAZ
    */
-  async consultarStatus(): Promise<string> {
-    return this.enviarComando("NFE.StatusServico()");
+  async consultarStatus(empresaId?: string): Promise<string> {
+    return this.enviarComando("NFE.StatusServico()", empresaId);
   },
 
   /**
    * Ativa o MonitorFiscal
    */
-  async ativar(): Promise<string> {
-    return this.enviarComando("ACBr.Ativar()");
+  async ativar(empresaId?: string): Promise<string> {
+    return this.enviarComando("ACBr.Ativar()", empresaId);
   },
 
   /**
    * Desativa o MonitorFiscal
    */
-  async desativar(): Promise<string> {
-    return this.enviarComando("ACBr.Desativar()");
+  async desativar(empresaId?: string): Promise<string> {
+    return this.enviarComando("ACBr.Desativar()", empresaId);
   },
 
   /**
    * Cria e envia uma NFe a partir de um arquivo INI ou comandos
    */
-  async enviarNFe(dadosIni: string): Promise<string> {
-    return this.enviarComando(`NFE.CriarEnviarNFe("${dadosIni}", 1, 1, 1)`);
+  async enviarNFe(dadosIni: string, empresaId?: string): Promise<string> {
+    return this.enviarComando(`NFE.CriarEnviarNFe("${dadosIni}", 1, 1, 1)`, empresaId);
   },
 
   /**
    * Busca documentos fiscais eletrônicos emitidos contra o CNPJ
    */
-  async distribuicaoDFe(cUF: string, cnpj: string, nNSU: string = "0"): Promise<string> {
-    return this.enviarComando(`NFE.DistribuicaoDFe(${cUF}, "${cnpj}", "${nNSU}")`);
+  async distribuicaoDFe(cUF: string, cnpj: string, nNSU: string = "0", empresaId?: string): Promise<string> {
+    return this.enviarComando(`NFE.DistribuicaoDFe(${cUF}, "${cnpj}", "${nNSU}")`, empresaId);
   },
 
   /**
    * Envia evento de manifestação do destinatário (210200, 210210, 210220, 210240)
    */
-  async enviarManifesto(chNFe: string, tipo: string, cnpj: string, justificativa?: string): Promise<string> {
+  async enviarManifesto(chNFe: string, tipo: string, cnpj: string, justificativa?: string, empresaId?: string): Promise<string> {
     const now = new Date();
     const d = String(now.getDate()).padStart(2, "0");
     const m = String(now.getMonth() + 1).padStart(2, "0");
@@ -103,7 +155,7 @@ versaoEvento=1.00`;
       eventoIni += `\nxJust=${justificativa}`;
     }
 
-    return this.enviarComando(`NFE.EnviarEvento("${eventoIni}")`);
+    return this.enviarComando(`NFE.EnviarEvento("${eventoIni}")`, empresaId);
   },
 
   /**

@@ -66,7 +66,7 @@ const NotaFiscalEntradaForm: React.FC = () => {
 
   const handleConsultarSefaz = async () => {
     try {
-      const resp = await provedorService.consultarStatus();
+      const resp = await provedorService.consultarStatus(XEmpresaId);
       alert(resp);
     } catch (e) {
       // Erro já tratado no serviço

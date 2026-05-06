@@ -46,6 +46,7 @@ import CfopForm from "@/components/forms/CfopForm";
 import ConsultaTitulosReceberForm from "@/components/forms/ConsultaTitulosReceberForm";
 import GerarContasReceberForm from "@/components/forms/GerarContasReceberForm";
 import ContaReceberDetalheForm from "@/components/forms/ContaReceberDetalheForm";
+import FiscalConfigForm from "@/components/forms/FiscalConfigForm";
 import ChatLauncher from "@/components/chat/ChatLauncher";
 
 const AppContent = () => {
@@ -138,6 +139,8 @@ const AppContent = () => {
         return <BancoForm />;
       case "fiscal-regras":
         return <FiscalRegraForm />;
+      case "fiscal-config":
+        return <FiscalConfigForm />;
       case "cfop":
         return <CfopForm />;
       case "consulta-titulos-receber":

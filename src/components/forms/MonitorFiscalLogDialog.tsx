@@ -7,7 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
-import { Clock, Terminal, ChevronRight } from "lucide-react";
+import { Clock, Terminal, ChevronRight, CheckCircle2, XCircle, Timer } from "lucide-react";
 
 const db = supabase as any;
 
@@ -21,46 +21,111 @@ const XCols: IGridColumn[] = [
   { 
     key: "created_at", 
     label: "Data/Hora", 
-    width: "140px",
-    render: r => new Date(r.created_at).toLocaleString("pt-BR")
+    width: "150px",
+    render: r => <span className="text-[10px]">{new Date(r.created_at).toLocaleString("pt-BR")}</span>
+  },
+  { 
+    key: "status", 
+    label: "Status", 
+    width: "120px",
+    align: "center",
+    render: r => {
+      const colors: any = {
+        "PENDENTE": "bg-gray-100 text-gray-600",
+        "PROCESSANDO": "bg-blue-100 text-blue-600 animate-pulse",
+        "CONCLUIDO": "bg-green-100 text-green-700",
+        "ERRO": "bg-red-100 text-red-700"
+      };
+      const icons: any = {
+        "PENDENTE": <Clock className="w-3 h-3 mr-1" />,
+        "PROCESSANDO": <Timer className="w-3 h-3 mr-1" />,
+        "CONCLUIDO": <CheckCircle2 className="w-3 h-3 mr-1" />,
+        "ERRO": <XCircle className="w-3 h-3 mr-1" />
+      };
+      return (
+        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold flex items-center justify-center ${colors[r.status] || "bg-gray-100"}`}>
+          {icons[r.status]} {r.status}
+        </span>
+      );
+    }
   },
   { 
     key: "comando", 
     label: "Comando", 
-    width: "1.5fr",
+    width: "160px",
     render: r => (
-      <div className="font-mono text-[10px] bg-secondary/50 p-1 rounded border border-border overflow-hidden text-ellipsis whitespace-nowrap" title={String(r.comando || "").replace(/ACBr/gi, "MonitorFiscal")}>
-        {String(r.comando || "").replace(/ACBr/gi, "MonitorFiscal")}
+      <div className="font-mono text-[10px] font-bold text-primary truncate" title={r.comando}>
+        {r.comando}
       </div>
     )
   },
   { 
-    key: "ult_nsu", 
-    label: "Últ. NSU", 
+    key: "ambiente", 
+    label: "Ambiente", 
     width: "110px",
     align: "center",
-    render: r => <span className="font-mono text-[10px]">{r.ult_nsu || "-"}</span>
+    render: r => {
+      const isProd = String(r.ambiente) === "1";
+      return (
+        <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${isProd ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"}`}>
+          {isProd ? "PRODUÇÃO" : "HOMOLOGAÇÃO"}
+        </span>
+      );
+    }
+  },
+  { 
+    key: "user_name", 
+    label: "Usuário", 
+    width: "100px",
+    render: r => {
+      const nome = r.profiles?.full_name || (r.user_id ? `ID:${r.user_id.substring(0, 4)}` : "Sistema");
+      return <span className="text-[10px] font-medium text-muted-foreground truncate" title={r.user_id}>{nome}</span>
+    }
+  },
+  { 
+    key: "ult_nsu", 
+    label: "Últ. NSU", 
+    width: "80px",
+    align: "center",
+    render: r => {
+      try {
+        const res = r.resposta ? JSON.parse(r.resposta) : null;
+        // Tenta pegar de vários caminhos possíveis no JSON
+        const nsu = res?.ult_nsu || res?.retorno?.ult_nsu || res?.retorno_completo?.match(/ultNSU=(\d+)/)?.[1] || "-";
+        return <span className="text-[10px] font-mono">{nsu}</span>;
+      } catch { return "-" }
+    }
   },
   { 
     key: "max_nsu", 
     label: "Máx. NSU", 
-    width: "110px",
+    width: "80px",
     align: "center",
-    render: r => <span className="font-mono text-[10px]">{r.max_nsu || "-"}</span>
+    render: r => {
+      try {
+        const res = r.resposta ? JSON.parse(r.resposta) : null;
+        const nsu = res?.max_nsu || res?.retorno?.max_nsu || res?.retorno_completo?.match(/maxNSU=(\d+)/)?.[1] || "-";
+        return <span className="text-[10px] font-mono">{nsu}</span>;
+      } catch { return "-" }
+    }
   },
   { 
     key: "resposta", 
-    label: "Resposta do MonitorFiscal", 
-    width: "2fr",
+    label: "Resultado / Erro", 
+    width: "1fr",
     render: r => {
-      const masked = String(r.resposta || "")
-        .replace(/ACBrMonitorPLUS/gi, "MonitorFiscal")
-        .replace(/ACBr/gi, "MonitorFiscal")
-        .replace(/SCBRMonitor/gi, "MonitorFiscal");
-      const isError = masked.includes("ERRO") || masked.includes("Rejeicao") || masked.includes("Consumo Indevido");
+      if (r.status === "ERRO") {
+        return <span className="text-[10px] text-red-600 font-medium italic truncate block">{r.mensagem_erro}</span>;
+      }
+      
+      const res = r.resposta ? JSON.parse(r.resposta) : null;
+      if (!res) return <span className="text-[10px] text-muted-foreground">-</span>;
+
+      const resumo = res.status_retorno || res.retorno_completo || res.mensagem || (res.sucesso ? "Operação realizada" : "Falha");
+      
       return (
-        <div className={`font-mono text-[10px] p-1 rounded border overflow-hidden text-ellipsis whitespace-nowrap ${isError ? "bg-red-50 text-red-700 border-red-100" : "bg-green-50 text-green-700 border-green-100"}`} title={masked}>
-          {masked}
+        <div className="font-mono text-[10px] overflow-hidden text-ellipsis whitespace-nowrap" title={typeof resumo === 'string' ? resumo : JSON.stringify(resumo)}>
+          {typeof resumo === 'string' ? resumo : JSON.stringify(resumo)}
         </div>
       );
     }
@@ -86,12 +151,13 @@ const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen,
     if (!empresaId || !isOpen) return;
     setXLoading(true);
     try {
+      // Busca os logs puros para garantir que a tela nunca fique vazia
       const { data, error } = await db
-        .from("dfe_nsu_log")
+        .from("fiscal_evento")
         .select("*")
         .eq("empresa_id", empresaId)
         .order("created_at", { ascending: false })
-        .limit(200); // Aumentado para 200 para dar mais margem ao filtro
+        .limit(100);
 
       if (error) throw error;
       setXData(data || []);
@@ -152,38 +218,46 @@ const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen,
                   <span className="text-sm">{new Date(XSelected.created_at).toLocaleString("pt-BR")}</span>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase">Log ID / Empresa ID</span>
-                  <span className="text-sm">#{XSelected.dfe_log_id} / <span className="font-bold text-primary">ID: {XSelected.empresa_id}</span></span>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase">Evento ID</span>
+                  <span className="text-sm">#{XSelected.id}</span>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase">Último NSU</span>
-                  <span className="text-sm font-mono">{XSelected.ult_nsu || "0"}</span>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase">Status</span>
+                  <span className="text-sm font-bold">{XSelected.status}</span>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase">Máximo NSU</span>
-                  <span className="text-sm font-mono">{XSelected.max_nsu || "0"}</span>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase">Tipo</span>
+                  <span className="text-sm font-mono">{XSelected.tipo || "NFE"}</span>
                 </div>
               </div>
 
               <div className="flex flex-col">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Comando Enviado</span>
+                <span className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Comando</span>
                 <pre className="bg-secondary/50 p-3 rounded-md text-xs font-mono border border-border whitespace-pre-wrap break-all">
-                  {String(XSelected.comando || "").replace(/ACBr/gi, "MonitorFiscal")}
+                  {XSelected.comando}
                 </pre>
               </div>
 
+              {XSelected.payload && (
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Parâmetros (Payload)</span>
+                  <pre className="bg-secondary/20 p-3 rounded-md text-[10px] font-mono border border-border whitespace-pre-wrap break-all">
+                    {JSON.stringify(XSelected.payload, null, 2)}
+                  </pre>
+                </div>
+              )}
+
               <div className="flex flex-col">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Resposta do MonitorFiscal</span>
-                <pre className={`p-3 rounded-md text-xs font-mono border whitespace-pre-wrap break-all ${
-                  String(XSelected.resposta || "").includes("ERRO") || String(XSelected.resposta || "").includes("Rejeicao")
-                    ? "bg-red-50 text-red-700 border-red-200"
-                    : "bg-green-50 text-green-700 border-green-200"
-                }`}>
-                  {String(XSelected.resposta || "Sem resposta registrada")
-                    .replace(/ACBrMonitorPLUS/gi, "MonitorFiscal")
-                    .replace(/ACBr/gi, "MonitorFiscal")
-                    .replace(/SCBRMonitor/gi, "MonitorFiscal")}
-                </pre>
+                <span className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Resposta do Worker</span>
+                {XSelected.status === "ERRO" ? (
+                   <pre className="bg-red-50 text-red-700 p-3 rounded-md text-xs font-mono border border-red-200 whitespace-pre-wrap break-all">
+                     {XSelected.mensagem_erro}
+                   </pre>
+                ) : (
+                  <pre className="bg-green-50 text-green-700 p-3 rounded-md text-xs font-mono border border-green-200 whitespace-pre-wrap break-all">
+                    {XSelected.resposta ? JSON.stringify(JSON.parse(XSelected.resposta), null, 2) : "Sem resposta ainda..."}
+                  </pre>
+                )}
               </div>
             </div>
           )}

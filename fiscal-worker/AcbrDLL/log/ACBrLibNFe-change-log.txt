@@ -1,0 +1,489 @@
+{******************************************************************************}
+{ Projeto: Componentes ACBr                                                    }
+{  Biblioteca multiplataforma de componentes Delphi para interação com equipa- }
+{ mentos de Automação Comercial utilizados no Brasil                           }
+{                                                                              }
+{  Você pode obter a última versão desse arquivo na pagina do  Projeto ACBr    }
+{ Componentes localizado em      http://www.sourceforge.net/projects/acbr      }
+{                                                                              }
+{  Esta biblioteca é software livre; você pode redistribuí-la e/ou modificá-la }
+{ sob os termos da Licença Pública Geral Menor do GNU conforme publicada pela  }
+{ Free Software Foundation; tanto a versão 2.1 da Licença, ou (a seu critério) }
+{ qualquer versão posterior.                                                   }
+{                                                                              }
+{  Esta biblioteca é distribuída na expectativa de que seja útil, porém, SEM   }
+{ NENHUMA GARANTIA; nem mesmo a garantia implícita de COMERCIABILIDADE OU      }
+{ ADEQUAÇÃO A UMA FINALIDADE ESPECÍFICA. Consulte a Licença Pública Geral Menor}
+{ do GNU para mais detalhes. (Arquivo LICENÇA.TXT ou LICENSE.TXT)              }
+{                                                                              }
+{  Você deve ter recebido uma cópia da Licença Pública Geral Menor do GNU junto}
+{ com esta biblioteca; se não, escreva para a Free Software Foundation, Inc.,  }
+{ no endereço 59 Temple Street, Suite 330, Boston, MA 02111-1307 USA.          }
+{ Você também pode obter uma copia da licença em:                              }
+{ http://www.opensource.org/licenses/lgpl-license.php                          }
+{                                                                              }
+{ Daniel Simões de Almeida - daniel@projetoacbr.com.br - www.projetoacbr.com.br}
+{       Rua Coronel Aureliano de Camargo, 963 - Tatuí - SP - 18270-170         }
+{******************************************************************************}
+Agradecimentos:
+
+* Administradores:
+- Daniel Simões de Almeida
+
+{******************************************************************************
+|* ACBrLibNFe
+|*
+|* PROPÓSITO: Registro de Alterações
+******************************************************************************}
+
+Símbolo : Significado
+
+[+]     : Novo recurso
+[*]     : Recurso modificado/melhorado
+[-]     : Correção de Bug (assim esperamos)
+
+19/03/2026
+-- ACBrLibNFeBase --
+[*] ACBr-8018 - https://www.projetoacbr.com.br/forum/topic/85510-ajustes-no-evento-cancelamento-por-substitui%C3%A7%C3%A3o/
+   Por: Luiz Alberto da Silva Lope
+
+30/12/2025
+-- ACBrLibNFe.lpi, ACBrLibNFeDemo.lpi --
+[*] Alterado opções do projeto para UseXPManifest solucionar problemas com a escala do monitor em fortes
+    ACBr-8573 - https://www.projetoacbr.com.br/forum/topic/83895-impress%C3%A3o-danfe-lib-java-errada-quando-escala-windows-alterada/?&_rid=1706#findComment-572945
+Por: Daniel Morais InfoCodiano
+
+27/11/2025
+-- ACBrLibNFeBase.pas --
+[-] Corrige deadlock quando exceção chave "inválida é lançada" ACBR-8501
+
+Por: doszapro
+
+09/10/2025
+-- ACBrLibNFeConsoleMT.lpi, ACBrLibNFeConsoleMTDemo.lpi --
+[+] TK-7487 - Habilita 16KB de alinhamento nos LPI console da ACBrLibNFe, obs: para ndk <=r22b
+   Adiciona flags de linker -k-z" common-page-size=16384" e -k-z" max-page-size=16384" 
+   no perfil de compilação android-arm64-v8a para resolver problemas de alinhamento de página e compatibilizar com Android 15+.
+   Por: doszapro
+
+01/10/2025
+-- ACBrLibNFeBase.pas --
+[-] Atualização de pcn para ACBrXMLDocuments da distribuição DFe gerou modificação no codigo. Realizada correção.
+  Por: Alexandre de Paula / Elton Barbosa / Italo Jurisato
+
+23/07/2025
+-- ACBrLibNFe --
+[-] Fix #TK-7406 - Corrige ordem no método EnviarEmail. O load do xml ocorria depois do ConfigurarImpressao, por esse motivo o primeiro envio de e-mail nunca ia no padrão DANFECe (mesmo sendo configurado). 
+Veja: https://www.projetoacbr.com.br/forum/topic/83656-libnfe-problema-para-enviar-e-mail-de-nfc-e-a4/#comment-547758
+    Por: Júlio Cavalcanti e Elton Barbosa
+
+-- ACBrLibNFeBase --
+[-] Corrige ordem de validações
+[*] Remoção do owner no Create(TACBrNFe não precisa do owner)
+[*] Remove else desnecessário
+
+-- ACBrLibNFeDataModule --
+[*] Implementa injeção do TACBrNFe por construtor
+[*] Refatora referencias para o objeto recebido
+
+05/06/2025
+-- Diversos --
+[*] #TK-7037 - Implementada classe em c# para leitura do retorno do evento ECONF e Cancelamento do ECONF - https://www.projetoacbr.com.br/forum/topic/83169-atualiza%C3%A7%C3%A3o-fontes-c-nuget-acbrlibnfemt-econf/
+    Por: Renato Rubinho
+
+04/04/2025
+-- ConsultaNFeProcEventoResposta.cs, ConsultaNFeResposta.cs, ConsultaNFeRetEventoResposta.cs --
+[*] #TK-6748 - Implementada classe em c# para leitura dos dados de RetEvento, na consulta de NFe 
+    https://www.projetoacbr.com.br/forum/topic/82222-detalhes-do-evento-da-nfe-n%C3%A3o-vem-na-consulta-classes-c
+    Por: Renato Rubinho
+
+17/03/2025
+-- ACBrLibNFeDataModule.pas --
+[*] #TK-6752 - Homologação NFe CSRT
+    https://www.projetoacbr.com.br/forum/topic/82309-homologa%C3%A7%C3%A3o-nfe-com-csrt/
+    Implementada função B64CryptToString.
+    Por: Antonio Carlos Junior.
+
+03/03/2025
+-- ACBrLibNFeBase.pas --
+[+] #TK-6678: Criado componente de envio em tempo de execução, envia email atraves dos parametros conforme manual. 
+	https://www.projetoacbr.com.br/forum/topic/82072-acbrnfe-erro-enviaremail-com-mais-de-uma-nf-e-urgente	
+	Por: Daniel Morais InfoCodiano
+
+22/01/2025
+-- ACBrLibNFeConsts, ACBrLibNFeConfig --
+[+] #TK-6504: Adiciona propriedade DetRastros na seção [DANFeNFe] - https://www.projetoacbr.com.br/forum/topic/81399-propriedade-detmedicamentos-acbrnfe/
+  Por: Diego Folieni 
+
+20/12/2024
+-- ACBrLibNFeConsoleMT.lpi, ACBrLibNFeConsoleMTDemo.lpi --
+[*] Adicionado path \Fontes\ACBrDFe\ACBrNFe\Base para uso da unit ACBrNFe.Consts
+   Por: Antonio Carlos Junior
+
+10/12/2024
+-- ACBrLibNFeDataModule --
+[*] #TK-6337: Ajuste para que a config ViaConsumidor definida seja considera caso parâmetro do comando vazio.
+  Por: Diego Folieni 
+
+09/12/2024
+-- ACBrNFeMT.php --
+[*] TK-6219: Aumentado buffer do retorno da Consulta de NFe pela chave para não truncar mais o conteúdo retornado
+  Por: Renato Rubinho
+
+05/12/2024
+-- ACBrLibNFeConsoleMT.lpi, ACBrLibNFeConsoleMTDemo.lpi--
+[*] Por conta do commit 36367, foi realizada a inclusão da nova unit de constants para compilação ACBrLibNFe Android.
+    Por: Antonio Carlos Junior
+
+25/11/2024
+-- ACBrNFeBase.php --
+[*] #TK-6220: Corrigido título do campo de UF para UF do Emitente.
+  Por: Renato Rubinho
+
+23/10/2024
+-- ACBrNFeBase.php, ACBrNFeMT.php, ACBrNFeServicosMT.php, ACBrNFeServicosST.php --
+[+] Sem TK: Adicionado método ObterCertificados nos programas de exemplo ST e MT em php
+  Por: Renato Rubinho
+
+03/10/2024
+-- ACBrLibNFeConsoleMTDemo.lpi --
+[+] Adicionado novo Projeto, 100% CONSOLE e MT versão Demonstração.
+[+] Compatível com compilação em Linux 64 e Android 32 e 64
+   Por: Antonio Carlos Junior
+
+06/09/2024
+-- ACBrNFeBase.php, ACBrNFeServicosMT.php, ACBrNFeServicosST.php --
+[+] #TK-4956-1: Adicionados campos no programa de exemplo em PHP para configuração do LogPath e LogNivel 
+  Por: Renato Rubinho
+
+23/08/2024
+-- Diversos --
+[+] #TK-4956-1: Implementados programas de exemplo em PHP da NFe ST e MT.
+  Por: Renato Rubinho
+
+15/08/2024
+-- ACBrLibNFeRespostas --
+[*] #TK-5833: Adiciona a propriedade NomeArquivo na resposta.
+  Por: Diego Folieni
+
+10/08/2024
+-- ACBrLibNFeConsoleMT.lpi --
+[+] Adicionado novo Projeto, 100% CONSOLE e MT
+[+] Compatível com compilação em Linux 64 e Android 32 e 64
+
+-- ACBrLibNFeBase, ACBrLibNFeMT, ACBrLibNFeST, ACBrLibNFeStaticImportMT,
+   ACBrLibNFeStaticImportST --
+[*] Ajustes para usar 'PAnsiChar' no lugar de 'PChar' e 'Integer' ao inves de 'LongInt'
+[*] Ajustes para usar 'ConverterStringEntrada' e 'ConverterStringSaida'
+[*] Remoção de Units não utilizadas
+
+-- ACBrLibNFeConfig --
+[*] Ajuste para compilação com a diretiva 'NOREPORT', para não incluir o Fortes
+    Report na compilação final
+
+-- ACBrLibNFeRespostas --
+[*] Ajustes para usar nova nomenclatura de 'Codificacao'
+
+-- ACBrLibNFeDataModule --
+[*] Ajustes para compilação em Delphi
+[*] Ajuste para compilação com a diretiva 'NOREPORT', para não incluir o Fortes
+    Report na compilação final
+[+] Criado método 'TLibNFeDM.FreeReports', para liberar todos os DANFEs criados
+[*] Refatoração no método 'LibNFeDM.ConfigurarImpressao', para simplificar
+    código e ficar compatível com a diretiva 'NOREPORT', usando FPDF.
+    Melhorias no Log
+
+11/06/2024
+-- ACBrLibNFeRespostas --
+[*] Substituidas as units pcnEventoNFe, pcnRetEnvEventoNFe e pcnRetConsSitNFe
+    pelas novas units ACBrNFe.EventoClass, ACBrNFe.RetEnvEvento e ACBrNFe.RetConsSit
+   Por: Italo Giurizzato Junior
+
+19/04/2024
+--- ACBrLibNFeBase ---
+[*] Correção Resposta Tipo JSON - #TK-5254
+    Por: Antonio Carlos Junior
+
+04/01/2024
+--- ACBrLibNFeDataModule, ACBrLibNFeConfig, ACBrLibNFeBase ---
+[*] Remoção Integrador
+    Por: Antonio Carlos Junior
+
+03/04/2023
+--- ACBrLibNFeConfig, ACBrLibNFeConsts, ACBrLibNFeDataModule ---
+[+] Adicionado propriedade ImprimeDescAcrescItemNFe - #TK-3788
+    Por: Antonio Carlos Junior
+
+26/01/2023
+--- ACBrLibNFeBase ---
+[*] Realizado ajuste no método ImprimirPDF - #TK-271
+Por: Antonio Carlos Junior / Juliomar Marchetti
+
+22/12/2022
+--- ACBrLibNFeConsts, ACBrLibNFeConfig ---
+[+] Adicionado propriedade ImprimeXPedNItemPed - #TK-3373-2
+Por: Antonio Carlos Junior 
+
+21/12/2022
+--- ACBrLibNFeConsts, ACBrLibNFeConfig --- 
+[+] Adicionado propriedade ImprimeInscSuframa - #TK-2947-3
+    Por: Antonio Carlos Junior
+
+06/02/2022
+--- ACBrLibNFeBase ---
+[-] Correção para conversão das respostas com Erros, em ANSI, se assim estiver
+    configurado
+    (por: DSA)
+
+30/11/2022
+--- ACBrLibNFeBase ---
+[*] Concatenação E.Message junto ao xMotivo para saber real motivo do Exception - #TK-3293
+	Por: Antonio Carlos Junior
+
+31/10/2022
+--- ACBrLibNFeBase ---
+[*] Limpar as propriedades do componente referente a consultas anteriores
+    Por: Renato Rubinho
+
+24/10/2022
+--- ACBrLibNFe ---
+[*] Leitura de arquivo de Distribuição DFe #TK-3182
+    Por: Renato Rubinho
+
+20/07/2022
+--- ACBrLibNFe ---
+[*] Remoção de Warning @deprecated ref. ACBrUtils
+
+05/07/2022
+--- ACBrLibNFeDataModule ---
+[*] Ajuste na validação de uso do Integrador Fiscal para não obrigar o Uso do Integrador para a UF: CE
+    (por: José M S Junior)
+
+22/12/2021
+--- ACBrLibNFeDataModule ---
+[-] Correção para herença visual em Lazarus de "TLibDataModule"
+    (por: DSA)
+
+09/12/2021
+--- ACBrLiNFeBase ---
+[*] Ajustado os métodos da ACBrLibNFe para que possam ser usados CPF e CNPJ.
+	Por: Rafael Dias, Jose Junior
+
+08/12/2021
+--- ACBrLiNFeBase ---
+[+] Adicionado os métodos NFE_SalvarPDF, NFE_SalvarEventoPDF e NFE_SalvarInutilizacaoPDF. Esses métodos tem os mesmo parâmetros dos métodos de impressão PDF adicionando 2 novos apenas para receber o PDF em Base64.
+	Por: Rafael Dias
+
+24/03/2021
+--- ACBrLiNFeResposta, ACBrLibNFeConst ---
+[+] Adicionado classe Resposta realizando agrupamento dos retornos Assíncro da NFe, 
+isso deve resolver problema da geração de Retornos no Formato Json e XML para esse tipo de retorno 
+	Por: José M S Junior
+	
+12/02/2021
+--- ACBrLiNFeBase ---
+[-] Correção no metodo Validar o mesmo estava fazendo o retorno errado.
+	Por: Rafael Dias
+
+30/10/2020
+--- ACBrLibNFeDataModule ---
+[-] Correção do metodo ConfigurarImpressao para quando for impressão de inutilização.
+	Por: Rafael Dias
+
+29/10/2020
+--- ACBrLibNFeBase ---
+[-] Correção nos métodos de impressão de evento e inutilização para carregar o conteúdo do xml quando passado o mesmo.
+	Por: Rafael Dias
+[-] Correção nos métodos de envio de email para carregar o conteudo do xml quando passado o mesmo.
+	Por: Rafael Dias
+
+21/10/2020
+--- ACBrLibNFeDataModule ---
+[-] Correção da impressão em PDF da NFCe quando setado tipo de impressão EscPos ou Fortes.
+	Por: Rafael Dias
+[-] Correção de erro na impressão EscPos.
+	Por: Rafael Dias
+
+20/10/2020
+--- ACBrLibNFeDataModule ---
+[-] Correção na geração de PDF quando é NFCe.
+    Por: Rafael Dias
+
+13/10/2020
+--- ACBrLibNFeRepostas ---
+[*] Compatibilização da seção [NFe...] no resposta de Envio Sincrono da NFe retornando apenas numero da NFe no retorno.
+    Por: José M S Junior
+
+19/08/2020
+--- ACBrLibNFeConfig ---
+[+] Adicionado a nova propriedade Fonte.TamanhoFonteInformacoesComplementares.
+    Por: Rafael Dias
+
+28/02/2020
+--- ACBrLibNFeConfig ---
+[+] Adicionado as configurações de FonteLinha para impressão NFCe Fortes.
+    Por: Rafael Dias
+
+27/02/2020
+--- ACBrLibNFeClass ---
+[+] Adicionado o metodo um novo parametro ao metodo NFE_Consultar, para definir se deve ou não extrair os eventos, se houverem, da resposta.
+    Por: Rafael Dias
+
+17/01/2020
+--- ACBrLibNFeClass ---
+[+] Adicionado o metodo NFE_GetPath e NFE_GetPathEvento.
+    Por: Rafael Dias
+[-] Corrigido erro ao enviar email com PDF.
+    Por: Rafael Dias
+
+08/01/2020
+--- ACBrLibNFeConfig ---
+[+] Adicionado propriedades que estavam faltando na configuração de impressão.
+    Por: Rafael Dias
+
+07/01/2020
+--- ACBrLibNFeClass ---
+[+] Adicionado o metodo NFE_ObterCertificados.
+   Por: Rafael Dias
+
+03/01/2020
+--- ACBrLibNFeClass ---
+[+] Adicionado o metodo NFE_ImportarConfig.
+   Por: Rafael Dias
+
+30/12/2019
+--- ACBrLibNFeClass ---
+[+] Adicionado os metodos NFE_ObterIni e NFE_GravarIni.
+   Por: Rafael Dias
+
+26/12/2019
+-- ACBrLibNFeDataModule --
+[-] Correção para acatar o layout de impressão quando é PDF e caso não o layout não seja nenhum fortes setar por padrão a impressão em fortes.
+    Por: Rafael Dias
+
+19/12/2019
+--- ACBrLibNFeRespostas ---
+[+] Incluido a propriedade Protocolo no retorno do Envio.
+   Por: Italo Jurisato Junior
+
+16/11/2019
+-- ACBrLibNFeClass --
+[-] Corrigido erro de não preencher dados de respostas no metodo NFE_GerarChave.
+    Por: Rafael Dias
+
+01/11/2019
+-- ACBrLibNFeConfig --
+[+] Adicionado as novas propriedades de impressão da DANFe.
+    Por: Rafael Dias
+
+18/10/2019
+-- ACBrLibNFeClass --
+[-] Correção no metodo NFE_Consultar.
+    Por: Rafael Dias
+
+15/10/2019
+-- ACBrLibNFeDataModule --
+[-] Ajustes no metodo ValidarIntegradorNFCe.
+    Por: Rafael Dias
+
+01/10/2019
+-- ACBrLibNFeClass --
+[-] Correção no metodo NFE_CarregarEventoINI.
+    Por: Rafael Dias
+
+29/09/2019
+-- ACBrLibNFeClass --
+[*] Melhorias nos metodos distribuição DFe.
+    Por: Rafael Dias
+
+27/09/2019
+-- ACBrLibNFeClass --
+[-] Correção do metodo inutilização.
+    Por: Rafael Dias
+[-] Correção do metodo cancelar.
+    Por: Rafael Dias
+
+13/09/2019
+-- ACBrLibNFeClass --
+[-] Corrigido erro ao salvar a ultima resposta.
+    Por: Rafael Dias
+
+21/05/2019
+-- ACBrLibNFeRespostas --
+[-] Adicionado campo Protocolo na resposta do método InutilizarNFe
+    Por: José M S Junior
+
+24/04/2019
+-- ACBrLibNFeRespostas --
+[+] Adicionado campos de Resposta da Sefaz na ConsultaNFe (cMsg e xMsg).
+    Por: José M S Junior
+
+23/04/2019
+-- ACBrLibNFeRespostas --
+[-] Corrigido metodo ProcessarResposta da classe TDistribuicaoDFeResposta, para retornar corretamente o ultNsu e os itens do retorno.
+    Por: Rafael Dias
+
+18/04/2019
+-- ACBrLibNFeRespostas --
+[-] Corrigido metodo ProcessarResposta com path do XML retorno.
+    Por: Jose M S Junior
+
+15/04/2019
+-- ACBrLibNFeClass --
+[-] Corrigido metodo NFe_Cancelar adicionado a declaração de convenção de chamada.
+    Por: Rafael Dias
+
+11/04/2019
+-- ACBrLibNFeClass --
+[-] Corrigido metodo NFe_ConsultarRecibo.
+    Por: Rafael Dias
+
+10/04/2019
+-- ACBrLibNFeRespostas --
+[-] Corrigido erro ao enviar a NFe/NFCe para tratar o retorno correto.
+    Por: Rafael Dias
+[*] Melhoria na forma de tratar os retornos da lib.
+    Por: Rafael Dias
+[-] Corrigido nome campo chNFe, no retorno dos itens da NFe.
+    Por: Jose m S Junior
+
+28/03/2019
+-- ACBrLibNFe --
+[-] Corrigido erro ao salvar senha do certificado.
+    Por: Rafael Dias
+	
+27/03/2019
+-- ACBrLibNFe --
+[+] Ajustados metodos de impressão para ficar mais parecido com os metodos do ACBrMonitor.
+   Por: Rafael Dias
+[+] Adicionado metodos para carregar eventos.
+   Por: Rafael Dias
+
+07/08/2018
+-- ACBrLibNFeRespostas / ACBrLibNFeConst --
+[+] Adicionado todas as possíveis tags de retorno da Consulta de NFe
+   Por: José M S Junior
+
+07/08/2018
+-- ACBrLibNFeRespostas --
+[*] Adicionado tags de retorno que estavam faltando.
+   Por: José M S Junior
+
+05/07/2018
+-- ACBrLibNFeRespostas --
+[*] Em algumas classes estava faltando definir que as propriedades são Published
+    em vez de Public.
+   Por: Italo Jurisato Junior
+
+02/07/2018
+-- ACBrLibNFeConst / ACBrLibNFeRespostas
+[+] Adicionado novas constantes e classes referente as respostas de envio e retorno.
+   Por: Italo Jurisato Junior
+
+23/03/2018
+--- ACBrLibNFe ---
+
+[+] Adicionado método para validação do Xml.
+[+] Adicionado método para validação das Regras de Negocio.
+[+] Adicionado método para validação a assinatura.
+[+] Adicionado serviço de consulta da NFe por chave.

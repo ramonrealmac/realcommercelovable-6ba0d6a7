@@ -34,14 +34,43 @@ const processarEvento = async (evento) => {
 
         if (updateError) throw updateError;
 
-        // 2. Chama a biblioteca nativa passando o JSON payload
-        const resultado = await executarComandoFiscal(evento.comando, evento.payload || {});
+        // 2. Busca configuração fiscal se não vier completa no payload
+        let payload = evento.payload || {};
+        if (!payload.config || !payload.config.certificadoPath) {
+            logger.info(`Buscando configurações fiscais para empresa ${evento.empresa_id}...`);
+            const { data: configDb } = await supabase
+                .from('fiscal_config')
+                .select('*')
+                .eq('empresa_id', evento.empresa_id)
+                .maybeSingle();
+            
+            if (configDb) {
+                payload.config = {
+                    tipo_certificado: configDb.tipo_certificado || 'ARQUIVO',
+                    certificadoPath: configDb.certificado,
+                    certificadoSenha: configDb.senha_certificado ? Buffer.from(configDb.senha_certificado, 'base64').toString('ascii') : "",
+                    ambiente: parseInt(configDb.ambiente_nfe || "2"),
+                    uf: "SP", // Fallback, mas o ideal é vir no comando
+                    modelo: 55
+                };
+                logger.info(`Configurações carregadas: Tipo=${payload.config.tipo_certificado}`);
+                
+                // Atualiza o registro do evento com o ambiente descoberto
+                await supabase.from('fiscal_evento').update({ ambiente: payload.config.ambiente }).eq('id', evento.id);
+            } else {
+                logger.warn(`Empresa ${evento.empresa_id} não possui configurações fiscais cadastradas.`);
+            }
+        }
 
-        // 3. Salva o resultado (JSON) como string/jsonb no banco e marca como CONCLUIDO
+        // 3. Chama a biblioteca nativa passando o JSON payload atualizado
+        const resultado = await executarComandoFiscal(evento.comando, payload);
+
+        // 4. Salva o resultado (JSON) como string/jsonb no banco e marca como CONCLUIDO
         await supabase
             .from('fiscal_evento')
             .update({ 
                 status: 'CONCLUIDO', 
+                ambiente: payload.config?.ambiente, // Garante que o ambiente esteja salvo
                 resposta: JSON.stringify(resultado),
                 updated_at: new Date().toISOString()
             })

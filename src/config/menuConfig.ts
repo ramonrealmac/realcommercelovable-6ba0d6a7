@@ -219,6 +219,7 @@ export const MENU_CONFIG: MenuItem[] = [
     title: "5. Fiscal",
     icon: Receipt,
     children: [
+      { id: "fiscal-config", title: "Configurações Fiscais", icon: Settings2 },
       { id: "nfe-nfce", title: "Nfe/Nfce", icon: FileText },
       { id: "mdfe", title: "Mdfe", icon: FileText },
       { id: "cte", title: "Cte", icon: FileText },

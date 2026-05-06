@@ -107,7 +107,7 @@ const NfeRecebidasForm: React.FC = () => {
     
     setXLoading(true);
     try {
-      const resp = await provedorService.enviarManifesto(row.chave_nfe, tipo, XCNPJ, just);
+      const resp = await provedorService.enviarManifesto(row.chave_nfe, tipo, XCNPJ, just, XEmpresaId);
       await registrarLog(`Manifesto(${tipo}) - ${row.chave_nfe}`, resp, 0, 0, row.nfe_recebida_id);
       
       if (resp.includes("ERRO:")) {
@@ -135,20 +135,23 @@ const NfeRecebidasForm: React.FC = () => {
       const u = Number(ultNsu || 0);
       const m = Number(maxNsu || 0);
       
-      const { error } = await db.from("dfe_nsu_log").insert({
-        empresa_id: XEmpresaId,
-        comando: comando,
-        resposta: resposta,
-        ult_nsu: u,
-        max_nsu: m,
-        nfe_recebida_id: nfeId || null
-      });
-
-      if (error) {
-        console.error("Erro RLS/DB ao registrar log:", error);
-      } else {
-        console.log(`[Log] Comando registrado. NSU: ${u}/${m}`);
+      // 1. Atualiza o sequencial oficial do sistema para a próxima sincronização
+      if (u > 0) {
+        const { error: seqError } = await db.from("sys_sequencial").upsert({
+          empresa_id: XEmpresaId,
+          tabela: "dfe_nsu",
+          nm_campo1: "nsu",
+          ult_seq: u
+        }, { onConflict: "empresa_id,tabela" });
+        
+        if (seqError) console.error("Erro ao atualizar sys_sequencial:", seqError);
       }
+
+      // 2. Mantém compatibilidade com a tabela de log antiga se necessário, 
+      // mas o foco agora é a fiscal_evento que o enviarComando já preencheu.
+      // Vou apenas logar no console que o NSU avançou.
+      console.log(`[NSU] Avançou para ${u}. Próxima consulta usará este valor.`);
+      
     } catch (e) {
       console.error("Exceção ao registrar log MonitorFiscal:", e);
     }
@@ -248,44 +251,31 @@ const NfeRecebidasForm: React.FC = () => {
     let loopCount = 0;
 
     try {
-      // 1. Define NSU inicial baseado no LOG de consultas e nas notas já recebidas
+      // 1. Define NSU inicial baseado na tabela de sequenciais sys_sequencial
       if (!forceStart) {
         const currentId = Number(XEmpresaId || 0);
-        let maxFound = 0;
-
-        // Busca nos logs recentes
-        const { data: logs } = await db.from("dfe_nsu_log")
-          .select("ult_nsu, max_nsu")
-          .eq("empresa_id", currentId)
-          .order("created_at", { ascending: false })
-          .limit(100);
         
-        if (logs && logs.length > 0) {
-          logs.forEach((l: any) => {
-            const u = Number(l.ult_nsu || 0);
-            const m = Number(l.max_nsu || 0);
-            if (u > maxFound) maxFound = u;
-            // Se o max_nsu for maior e o cStat foi 137, poderíamos usar m, mas a SEFAZ pede para seguir o ultNSU
-          });
-        }
-
-        // Busca nas notas recebidas
-        const { data: nsuData } = await db.from("fiscal_nfe_recebida")
-          .select("nsu")
+        const { data: seqData } = await db.from("sys_sequencial")
+          .select("ult_seq")
           .eq("empresa_id", currentId)
-          .order("nsu", { ascending: false })
-          .limit(1);
+          .eq("tabela", "dfe_nsu")
+          .maybeSingle();
         
-        if (nsuData && nsuData.length > 0) {
-          const n = Number(nsuData[0].nsu || 0);
-          if (n > maxFound) maxFound = n;
-        }
-
-        if (maxFound > 0) {
-          currentNSU = String(maxFound);
-          console.log(`[Sinc] Iniciando do NSU: ${currentNSU}`);
+        if (seqData) {
+          currentNSU = String(seqData.ult_seq || "0");
+          console.log(`[Sinc] Iniciando do NSU (sys_sequencial): ${currentNSU}`);
         } else {
-          console.log(`[Sinc] Iniciando do ZERO (Nenhum NSU encontrado)`);
+          // Fallback: se não tiver no sequencial, tenta buscar a última nota recebida
+          const { data: lastNfe } = await db.from("fiscal_nfe_recebida")
+            .select("nsu")
+            .eq("empresa_id", currentId)
+            .order("nsu", { ascending: false })
+            .limit(1);
+          
+          if (lastNfe && lastNfe.length > 0) {
+            currentNSU = String(lastNfe[0].nsu || "0");
+            console.log(`[Sinc] Iniciando do NSU (fiscal_nfe_recebida): ${currentNSU}`);
+          }
         }
       }
 
@@ -303,7 +293,7 @@ const NfeRecebidasForm: React.FC = () => {
         let resp = "";
         
         try {
-          resp = await provedorService.enviarComando(comando);
+          resp = await provedorService.enviarComando(comando, XEmpresaId);
           
           if (resp.includes("ERRO:")) {
             const errorMsg = resp.replace("ERRO:", "").trim();
@@ -434,7 +424,7 @@ const NfeRecebidasForm: React.FC = () => {
     try {
       const sendUF = XUF || "35";
       const comando = `NFE.DistribuicaoDFe(${sendUF}, "${XCNPJ}", "0")`;
-      const resp = await provedorService.enviarComando(comando);
+      const resp = await provedorService.enviarComando(comando, XEmpresaId);
       
       if (resp.includes("ERRO:")) {
         throw new Error(resp.replace("ERRO:", "").trim());
@@ -490,7 +480,7 @@ const NfeRecebidasForm: React.FC = () => {
       // Ou esperamos a próxima sincronização se a SEFAZ já tiver liberado via NSU
       // Aqui vamos forçar uma consulta por chave
       const comando = `NFE.DistribuicaoDFePorChave(${XUF}, "${XCNPJ}", "${row.chave_nfe}")`;
-      const resp = await provedorService.enviarComando(comando);
+      const resp = await provedorService.enviarComando(comando, XEmpresaId);
       await registrarLog(comando, resp, 0, 0, row.nfe_recebida_id);
 
       const parsed = provedorService.parseIni(resp);
