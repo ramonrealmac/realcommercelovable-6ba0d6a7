@@ -43,7 +43,6 @@ const BaixaPorClienteForm: React.FC = () => {
   const handleBaixar = async () => {
     if (!XCadastroId) { toast({ title: "Selecione um Cliente", variant: "destructive" }); return; }
     if (!XValor.trim()) { toast({ title: "Informe o Valor", variant: "destructive" }); return; }
-    if (!XContaId) { toast({ title: "Selecione a Conta", variant: "destructive" }); return; }
     if (!XMeioId) { toast({ title: "Selecione a Forma de Pagamento", variant: "destructive" }); return; }
 
     setXLoading(true);
@@ -52,7 +51,7 @@ const BaixaPorClienteForm: React.FC = () => {
         p_cadastro_id: Number(XCadastroId),
         p_vl_recebido: XValor,
         p_recibo: XRecibo,
-        p_conta_id: XContaId,
+        p_conta_id: XContaId || null,
         p_tipo_pag_rec_id: Number(XMeioId),
       } as any);
       if (error) throw error;
