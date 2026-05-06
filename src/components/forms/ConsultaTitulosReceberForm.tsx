@@ -128,6 +128,13 @@ const ConsultaTitulosReceberForm: React.FC = () => {
 
   useEffect(() => { loadGrid(); }, [loadGrid]);
 
+  // Atualiza a grade automaticamente quando uma baixa for registrada/excluída em outra aba
+  useEffect(() => {
+    const handler = () => { loadGrid(); };
+    window.addEventListener("financeiro:baixa-changed", handler);
+    return () => window.removeEventListener("financeiro:baixa-changed", handler);
+  }, [loadGrid]);
+
   const openTitulo = useCallback((row: IRow) => {
     if (!row.financeiro_id) return;
     openTab({

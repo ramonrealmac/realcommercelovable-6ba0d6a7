@@ -56,6 +56,8 @@ const GerarContasReceberForm: React.FC = () => {
     pct_multa: "",
     primeiro_vencto: todayBR(),
     intervalo_dias: "30",
+    tp_vencimento: "I", // I = Intervalo, D = Dia fixo do mês
+    dia_fixo: "30",
   });
   const [XSaving, setXSaving] = useState(false);
 
@@ -119,11 +121,25 @@ const GerarContasReceberForm: React.FC = () => {
       }
 
       const rows: any[] = [];
+      const diaFixo = Math.min(31, Math.max(1, parseInt(XForm.dia_fixo) || 1));
       for (let i = 1; i <= nrParc; i++) {
-        const dtVencto = new Date(dtVenc1);
-        dtVencto.setDate(dtVencto.getDate() + (i - 1) * intDias);
+        let dtVencto: Date;
+        if (XForm.tp_vencimento === "D") {
+          // Dia fixo: parcela 1 = primeiro_vencto; demais = dia fixo nos meses subsequentes
+          if (i === 1) {
+            dtVencto = new Date(dtVenc1);
+          } else {
+            const base = new Date(dtVenc1.getFullYear(), dtVenc1.getMonth() + (i - 1), 1);
+            const ultimoDia = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+            dtVencto = new Date(base.getFullYear(), base.getMonth(), Math.min(diaFixo, ultimoDia));
+          }
+        } else {
+          dtVencto = new Date(dtVenc1);
+          dtVencto.setDate(dtVencto.getDate() + (i - 1) * intDias);
+        }
         const docParcela = nrParc === 1 ? XForm.documento : `${XForm.documento}/${String(i).padStart(2, "0")}`;
         const vlParc = nrParc === 1 ? vlTitulo : Number((vlTitulo / nrParc).toFixed(2));
+
 
         rows.push({
           empresa_id: empId,
@@ -288,15 +304,35 @@ const GerarContasReceberForm: React.FC = () => {
         </div>
 
         {/* Linha 5 - vencimento */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <FormDateField label="Primeiro Vencimento" value={XForm.primeiro_vencto} onChange={v => setF("primeiro_vencto", v)} />
           <div>
-            <label className={lbl}>Intervalo</label>
-            <select className={inputCls} value={XForm.intervalo_dias} onChange={e => setF("intervalo_dias", e.target.value)}>
-              {INTERVALOS.map(i => <option key={i.dias} value={i.dias}>{i.label}</option>)}
+            <label className={lbl}>Tipo Vencimento</label>
+            <select className={inputCls} value={XForm.tp_vencimento} onChange={e => setF("tp_vencimento", e.target.value)}>
+              <option value="I">Por Intervalo</option>
+              <option value="D">Dia Fixo do Mês</option>
             </select>
           </div>
+          {XForm.tp_vencimento === "I" ? (
+            <div className="md:col-span-2">
+              <label className={lbl}>Intervalo</label>
+              <select className={inputCls} value={XForm.intervalo_dias} onChange={e => setF("intervalo_dias", e.target.value)}>
+                {INTERVALOS.map(i => <option key={i.dias} value={i.dias}>{i.label}</option>)}
+              </select>
+            </div>
+          ) : (
+            <div className="md:col-span-2">
+              <label className={lbl}>Dia do Mês (1-31)</label>
+              <input
+                type="number" min="1" max="31"
+                className={inputCls}
+                value={XForm.dia_fixo}
+                onChange={e => setF("dia_fixo", e.target.value)}
+              />
+            </div>
+          )}
         </div>
+
       </div>
     </div>
   );
