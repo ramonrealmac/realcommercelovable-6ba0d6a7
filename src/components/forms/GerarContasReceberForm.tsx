@@ -129,7 +129,6 @@ const GerarContasReceberForm: React.FC = () => {
 
         rows.push({
           empresa_id: empId,
-          financeiro_id: String(nextId + i - 1),
           movimento_id: parseInt(XForm.pedido) || 0,
           documento: docParcela,
           parcela: i,
