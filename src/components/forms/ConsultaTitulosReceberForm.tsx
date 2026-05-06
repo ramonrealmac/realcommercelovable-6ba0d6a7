@@ -126,7 +126,7 @@ const ConsultaTitulosReceberForm: React.FC = () => {
     } finally {
       setXLoading(false);
     }
-  }, [XClienteId, XDtVencto, XSituacao, XPlanoId]);
+  }, [XClienteId, XDtEmissao, XDtVencto, XSituacao, XPlanoId]);
 
   useEffect(() => { loadGrid(); }, [loadGrid]);
 
