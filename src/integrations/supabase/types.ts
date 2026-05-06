@@ -719,7 +719,7 @@ export type Database = {
           dt_vencimento: string | null
           empresa_id: number
           excluido: boolean | null
-          financeiro_id: string | null
+          financeiro_id: number | null
           instrucoes: string | null
           local_pagamento1: string | null
           local_pagamento2: string | null
@@ -766,7 +766,7 @@ export type Database = {
           dt_vencimento?: string | null
           empresa_id: number
           excluido?: boolean | null
-          financeiro_id?: string | null
+          financeiro_id?: number | null
           instrucoes?: string | null
           local_pagamento1?: string | null
           local_pagamento2?: string | null
@@ -813,7 +813,7 @@ export type Database = {
           dt_vencimento?: string | null
           empresa_id?: number
           excluido?: boolean | null
-          financeiro_id?: string | null
+          financeiro_id?: number | null
           instrucoes?: string | null
           local_pagamento1?: string | null
           local_pagamento2?: string | null
@@ -2405,7 +2405,7 @@ export type Database = {
           emitido_bol: string | null
           empresa_id: number
           enviado_remissa: string | null
-          financeiro_id: string
+          financeiro_id: number
           funcionario_id: number | null
           gerou_cobranca: string | null
           linha_digitavel: string | null
@@ -2449,7 +2449,7 @@ export type Database = {
           emitido_bol?: string | null
           empresa_id?: number
           enviado_remissa?: string | null
-          financeiro_id: string
+          financeiro_id?: number
           funcionario_id?: number | null
           gerou_cobranca?: string | null
           linha_digitavel?: string | null
@@ -2493,7 +2493,7 @@ export type Database = {
           emitido_bol?: string | null
           empresa_id?: number
           enviado_remissa?: string | null
-          financeiro_id?: string
+          financeiro_id?: number
           funcionario_id?: number | null
           gerou_cobranca?: string | null
           linha_digitavel?: string | null
@@ -2532,7 +2532,7 @@ export type Database = {
           dt_pagamento: string | null
           empresa_id: number
           financeiro_baixa_id: number
-          financeiro_id: string
+          financeiro_id: number
           funcionario_id: number | null
           observacao: string | null
           plano_id: number | null
@@ -2553,7 +2553,7 @@ export type Database = {
           dt_pagamento?: string | null
           empresa_id?: number
           financeiro_baixa_id?: number
-          financeiro_id?: string
+          financeiro_id: number
           funcionario_id?: number | null
           observacao?: string | null
           plano_id?: number | null
@@ -2574,7 +2574,7 @@ export type Database = {
           dt_pagamento?: string | null
           empresa_id?: number
           financeiro_baixa_id?: number
-          financeiro_id?: string
+          financeiro_id?: number
           funcionario_id?: number | null
           observacao?: string | null
           plano_id?: number | null
@@ -6330,7 +6330,7 @@ export type Database = {
           emitido_bol: string | null
           empresa_id: number | null
           enviado_remissa: string | null
-          financeiro_id: string | null
+          financeiro_id: number | null
           funcionario_id: number | null
           gerou_cobranca: string | null
           linha_digitavel: string | null
@@ -6379,7 +6379,7 @@ export type Database = {
           emitido_bol?: string | null
           empresa_id?: number | null
           enviado_remissa?: string | null
-          financeiro_id?: string | null
+          financeiro_id?: number | null
           funcionario_id?: number | null
           gerou_cobranca?: string | null
           linha_digitavel?: string | null
@@ -6428,7 +6428,7 @@ export type Database = {
           emitido_bol?: string | null
           empresa_id?: number | null
           enviado_remissa?: string | null
-          financeiro_id?: string | null
+          financeiro_id?: number | null
           funcionario_id?: number | null
           gerou_cobranca?: string | null
           linha_digitavel?: string | null
