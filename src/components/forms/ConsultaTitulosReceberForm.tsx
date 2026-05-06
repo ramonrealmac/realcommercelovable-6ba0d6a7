@@ -85,6 +85,7 @@ const ConsultaTitulosReceberForm: React.FC = () => {
         .limit(1000);
 
       if (XClienteId) q = q.eq("cadastro_id", Number(XClienteId));
+      if (XDtEmissao) q = q.eq("dt_emissao", XDtEmissao);
       if (XDtVencto) q = q.eq("dt_vencto", XDtVencto);
       if (XSituacao) q = q.eq("situacao", XSituacao);
       if (XPlanoId) q = q.eq("plano_id", Number(XPlanoId));
