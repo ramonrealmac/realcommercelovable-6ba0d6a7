@@ -4,7 +4,7 @@ import { provedorService } from "@/services/provedorService";
 export const emitirMdfe = async (manifestoId: number, empresaId: number) => {
   // 1. Validar e buscar dados
   const { data: manifesto, error: errMdf } = await supabase
-    .from("mdf_manifesto")
+    .from("fiscal_mdf_manifesto")
     .select("*")
     .eq("mdf_manifesto_id", manifestoId)
     .single();
@@ -13,31 +13,31 @@ export const emitirMdfe = async (manifestoId: number, empresaId: number) => {
 
   // Buscar dados das abas vinculadas
   const { data: carregamentos } = await supabase
-    .from("mdf_carrega")
+    .from("fiscal_mdf_carrega")
     .select("*")
     .eq("mdf_manifesto_id", manifestoId)
     .eq("excluido", false);
 
   const { data: descarregamentos } = await supabase
-    .from("mdf_descarrega")
+    .from("fiscal_mdf_descarrega")
     .select("*")
     .eq("mdf_manifesto_id", manifestoId)
     .eq("excluido", false);
 
   const { data: documentos } = await supabase
-    .from("mdf_documento")
+    .from("fiscal_mdf_documento")
     .select("*")
     .eq("mdf_manifesto_id", manifestoId)
     .eq("excluido", false);
 
   const { data: veiculos } = await supabase
-    .from("mdf_veiculo")
+    .from("fiscal_mdf_veiculo")
     .select("*")
     .eq("mdf_manifesto_id", manifestoId)
     .eq("excluido", false);
 
   const { data: motoristas } = await supabase
-    .from("mdf_motorista")
+    .from("fiscal_mdf_motorista")
     .select("condutor_id")
     .eq("mdf_manifesto_id", manifestoId)
     .eq("excluido", false);
@@ -104,12 +104,12 @@ export const emitirMdfe = async (manifestoId: number, empresaId: number) => {
   // 7. Atualizar status no cabeçalho
   const novoStatus = sucesso ? "A" : "R";
   await supabase
-    .from("mdf_manifesto")
+    .from("fiscal_mdf_manifesto")
     .update({ status: novoStatus })
     .eq("mdf_manifesto_id", manifestoId);
 
   // 8. Salvar histórico XML
-  await supabase.from("mdf_historicoxml").insert({
+  await supabase.from("fiscal_mdf_historicoxml").insert({
     mdf_manifesto_id: manifestoId,
     empresa_id: empresaId,
     protocolo_autorizado: nProt,
@@ -126,3 +126,4 @@ export const emitirMdfe = async (manifestoId: number, empresaId: number) => {
 
   return { sucesso: true, mensagem: xMotivo, json: jsonResponse };
 };
+

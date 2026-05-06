@@ -20,7 +20,7 @@ const MdfComponenteTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
   const load = useCallback(async () => {
     if (!mdfManifestoId) return;
     const { data } = await supabase
-      .from("fiscal_mdf_componente")
+      .from("mdf_componente")
       .select("*")
       .eq("mdf_manifesto_id", mdfManifestoId)
       .eq("excluido", false)
@@ -33,7 +33,7 @@ const MdfComponenteTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
   const handleAdd = async () => {
     if (!mdfManifestoId) { toast.warning("Salve o cabeçalho primeiro."); return; }
     if (Number(vlComp) <= 0) { toast.warning("Informe um valor maior que zero."); return; }
-    const { error } = await supabase.from("fiscal_mdf_componente").insert({
+    const { error } = await supabase.from("mdf_componente").insert({
       mdf_manifesto_id: mdfManifestoId,
       empresa_id: empresaId,
       tp_componente: tpComp,
@@ -49,7 +49,7 @@ const MdfComponenteTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
 
   const handleRemove = async (id: number) => {
     if (!confirm("Remover este componente?")) return;
-    await supabase.from("fiscal_mdf_componente").update({ excluido: true, dt_alteracao: new Date().toISOString() }).eq("mdf_componente_id", id);
+    await supabase.from("mdf_componente").update({ excluido: true, dt_alteracao: new Date().toISOString() }).eq("mdf_componente_id", id);
     load();
   };
 
@@ -121,4 +121,3 @@ const MdfComponenteTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
 };
 
 export default MdfComponenteTab;
-

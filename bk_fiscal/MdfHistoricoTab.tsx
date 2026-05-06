@@ -15,7 +15,7 @@ const MdfHistoricoTab: React.FC<IProps> = ({ mdfManifestoId }) => {
   const load = useCallback(async () => {
     if (!mdfManifestoId) return;
     const { data } = await supabase
-      .from("fiscal_mdf_historicoxml")
+      .from("mdf_historicoxml")
       .select("*")
       .eq("mdf_manifesto_id", mdfManifestoId)
       .eq("excluido", false)
@@ -91,4 +91,3 @@ const MdfHistoricoTab: React.FC<IProps> = ({ mdfManifestoId }) => {
 };
 
 export default MdfHistoricoTab;
-

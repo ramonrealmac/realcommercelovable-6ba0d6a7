@@ -18,7 +18,7 @@ const MdfParcelasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
   const load = useCallback(async () => {
     if (!mdfManifestoId) return;
     const { data } = await supabase
-      .from("fiscal_mdf_pagtos")
+      .from("mdf_pagtos")
       .select("*")
       .eq("mdf_manifesto_id", mdfManifestoId)
       .eq("excluido", false)
@@ -32,7 +32,7 @@ const MdfParcelasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
     if (!mdfManifestoId) { toast.warning("Salve o cabeçalho primeiro."); return; }
     if (!dtVenc) { toast.warning("Informe a data de vencimento."); return; }
     if (Number(vlParcela) <= 0) { toast.warning("Valor da parcela deve ser maior que zero."); return; }
-    const { error } = await supabase.from("fiscal_mdf_pagtos").insert({
+    const { error } = await supabase.from("mdf_pagtos").insert({
       mdf_manifesto_id: mdfManifestoId,
       empresa_id: empresaId,
       nr_parcela: Number(nrParcela),
@@ -49,7 +49,7 @@ const MdfParcelasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
 
   const handleRemove = async (id: number) => {
     if (!confirm("Remover esta parcela?")) return;
-    await supabase.from("fiscal_mdf_pagtos").update({ excluido: true, dt_alteracao: new Date().toISOString() }).eq("mdf_pagtos_id", id);
+    await supabase.from("mdf_pagtos").update({ excluido: true, dt_alteracao: new Date().toISOString() }).eq("mdf_pagtos_id", id);
     load();
   };
 
@@ -120,4 +120,3 @@ const MdfParcelasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
 };
 
 export default MdfParcelasTab;
-

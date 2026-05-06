@@ -86,7 +86,7 @@ const MdfeForm: React.FC = () => {
 
   const handleEncerrar = useCallback(async (manifestoId: number) => {
     if (!confirm("Confirma o encerramento do MDF-e?")) return;
-    const { error } = await supabase.from("fiscal_mdf_manifesto").update({ status: "E" }).eq("mdf_manifesto_id", manifestoId);
+    const { error } = await supabase.from("mdf_manifesto").update({ status: "E" }).eq("mdf_manifesto_id", manifestoId);
     if (error) { toast.error("Erro ao encerrar: " + error.message); return; }
     toast.success("MDF-e encerrado!");
     XRefreshRef.current?.();
@@ -95,7 +95,7 @@ const MdfeForm: React.FC = () => {
   const handleCancelar = useCallback(async (manifestoId: number) => {
     const just = prompt("Informe a justificativa do cancelamento (mín. 15 caracteres):");
     if (!just || just.length < 15) { toast.warning("Justificativa inválida (mín. 15 caracteres)."); return; }
-    const { error } = await supabase.from("fiscal_mdf_manifesto").update({ status: "C" }).eq("mdf_manifesto_id", manifestoId);
+    const { error } = await supabase.from("mdf_manifesto").update({ status: "C" }).eq("mdf_manifesto_id", manifestoId);
     if (error) { toast.error("Erro ao cancelar: " + error.message); return; }
     toast.success("MDF-e cancelado!");
     XRefreshRef.current?.();
@@ -104,7 +104,7 @@ const MdfeForm: React.FC = () => {
   return (
     <StandardCrudForm
       config={{
-        XTableName: "fiscal_mdf_manifesto",
+        XTableName: "mdf_manifesto",
         XPrimaryKey: "mdf_manifesto_id",
         XTitle: "MDF-e — Manifesto Eletrônico",
         XEmpresaId,
@@ -421,4 +421,3 @@ const MdfeForm: React.FC = () => {
 };
 
 export default MdfeForm;
-

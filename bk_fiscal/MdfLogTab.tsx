@@ -24,7 +24,7 @@ const MdfLogTab: React.FC<Props> = ({ mdfCabecalhoId }) => {
   const carregar = useCallback(async () => {
     if (!mdfCabecalhoId) return;
     setLoading(true);
-    const { data } = await db.from("fiscal_mdf_log")
+    const { data } = await db.from("mdf_log")
       .select("*")
       .eq("mdf_cabecalho_id", mdfCabecalhoId)
       .order("dt_log", { ascending: false });
@@ -76,4 +76,3 @@ const MdfLogTab: React.FC<Props> = ({ mdfCabecalhoId }) => {
 };
 
 export default MdfLogTab;
-

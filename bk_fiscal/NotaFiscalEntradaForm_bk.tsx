@@ -11,7 +11,7 @@ import NfeProdutosVinculoList from "./nfe/NfeProdutosVinculoList";
 import type { INfeCabecalho, INfeDadosXml, INfeXmlItem, TNfeSt, INfeXmlEmitente } from "./nfe/types";
 import { NFE_ST_LABELS } from "./nfe/types";
 import { Search, ClipboardCheck, Activity } from "lucide-react";
-import { provedorService } from "@/services/provedorService";
+import { acbrService } from "@/services/acbrService";
 import { formatCPFCNPJ } from "@/lib/validators";
 import { setPendingSupplier } from "@/utils/nfePendingStore";
 
@@ -58,12 +58,12 @@ const NotaFiscalEntradaForm: React.FC = () => {
   // Callback para aplicar vínculos após confirmação do lote
   const XPendingSetRecord  = useRef<((r: any) => void) | null>(null);
   const XPendingXmlDados   = useRef<INfeDadosXml | null>(null);
-  // Itens prontos para inserção no fiscal_nfe_item após salvar o cabeçalho
+  // Itens prontos para inserção no nfe_item após salvar o cabeçalho
   const XPendingNfeItens   = useRef<{ item: INfeXmlItem; produto_id: number | null; fator_conversao: number }[]>([]);
 
   const handleConsultarSefaz = async () => {
     try {
-      const resp = await provedorService.consultarStatus();
+      const resp = await acbrService.consultarStatus();
       alert(resp);
     } catch (e) {
       // Erro já tratado no serviço
@@ -104,7 +104,7 @@ const NotaFiscalEntradaForm: React.FC = () => {
     if (!depositoId) { toast.error("Selecione o Depósito antes de escriturar."); return; }
     if (!confirm("Confirma a escrituração desta NF-e? O estoque e custos dos produtos serão atualizados.")) return;
 
-    const { data: itens } = await db.from("fiscal_nfe_item")
+    const { data: itens } = await db.from("nfe_item")
       .select("*").eq("nfe_cabecalho_id", cabId).eq("excluido", false);
 
     for (const item of (itens || [])) {
@@ -171,7 +171,7 @@ const NotaFiscalEntradaForm: React.FC = () => {
       }
     }
 
-    await db.from("fiscal_nfe_cabecalho").update({
+    await db.from("nfe_cabecalho").update({
       st_nf: "E", updated_at: new Date().toISOString(),
     }).eq("nfe_cabecalho_id", cabId);
 
@@ -293,7 +293,7 @@ const NotaFiscalEntradaForm: React.FC = () => {
     <>
       <StandardCrudForm<INfeCabecalho>
         config={{
-          XTableName: "fiscal_nfe_cabecalho",
+          XTableName: "nfe_cabecalho",
           XPrimaryKey: "nfe_cabecalho_id",
           XTitle: "Entrada NF-e",
           XDefaultRecord: { ...XDefault, empresa_id: XEmpresaId } as any,
@@ -317,7 +317,7 @@ const NotaFiscalEntradaForm: React.FC = () => {
               const itensParaInserir = XPendingNfeItens.current;
               XPendingNfeItens.current = [];
 
-              // Insere itens no fiscal_nfe_item
+              // Insere itens no nfe_item
               const payloads = itensParaInserir.map(({ item, produto_id }) => ({
                 nfe_cabecalho_id: cabId,
                 empresa_id:       XEmpresaId,
@@ -352,7 +352,7 @@ const NotaFiscalEntradaForm: React.FC = () => {
                 vl_bc_st:         Number(item.vl_bc_st || 0),
               }));
 
-              const { error: errItens } = await db.from("fiscal_nfe_item").insert(payloads);
+              const { error: errItens } = await db.from("nfe_item").insert(payloads);
               if (errItens) {
                 toast.error("Erro ao gravar itens: " + errItens.message);
               } else {
@@ -638,4 +638,3 @@ const NotaFiscalEntradaForm: React.FC = () => {
 };
 
 export default NotaFiscalEntradaForm;
-

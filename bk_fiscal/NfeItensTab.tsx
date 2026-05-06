@@ -57,7 +57,7 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
 
   const loadItens = useCallback(async () => {
     if (!nfeCabecalhoId) { setXItens([]); return; }
-    const { data, error } = await db.from("fiscal_nfe_item").select("*").eq("nfe_cabecalho_id", nfeCabecalhoId).eq("excluido", false).order("nr_item");
+    const { data, error } = await db.from("nfe_item").select("*").eq("nfe_cabecalho_id", nfeCabecalhoId).eq("excluido", false).order("nr_item");
     if (error) { toast.error("Erro ao carregar itens: " + error.message); return; }
 
     const rows = data || [];
@@ -105,9 +105,9 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
     if (!XF.nm_produto?.trim()) { toast.error("Informe a descrição do produto."); return; }
     const payload: any = { ...XF, nfe_cabecalho_id: nfeCabecalhoId, empresa_id: empresaId, nm_produto: XF.nm_produto!.toUpperCase(), qt_entrada: parseNum(XF.qt_entrada), vl_unit: parseNum(XF.vl_unit), vl_desconto: parseNum(XF.vl_desconto), vl_total: recalcTotal(XF) };
     if (XMode === "edit" && XCurrentIdx !== null) {
-      await db.from("fiscal_nfe_item").update({ ...payload, updated_at: new Date().toISOString() }).eq("nfe_item_id", XItens[XCurrentIdx].nfe_item_id);
+      await db.from("nfe_item").update({ ...payload, updated_at: new Date().toISOString() }).eq("nfe_item_id", XItens[XCurrentIdx].nfe_item_id);
     } else {
-      await db.from("fiscal_nfe_item").insert(payload);
+      await db.from("nfe_item").insert(payload);
     }
     setXMode("view"); setXCurrentIdx(null); await loadItens();
   };
@@ -185,4 +185,3 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
 };
 
 export default NfeItensTab;
-

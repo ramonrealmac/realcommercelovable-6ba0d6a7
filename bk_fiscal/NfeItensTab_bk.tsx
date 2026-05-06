@@ -57,7 +57,7 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
   const loadItens = useCallback(async () => {
     if (!nfeCabecalhoId) { setXItens([]); return; }
     const { data, error } = await db
-      .from("fiscal_nfe_item")
+      .from("nfe_item")
       .select("*")
       .eq("nfe_cabecalho_id", nfeCabecalhoId)
       .eq("excluido", false)
@@ -178,13 +178,13 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
     };
 
     if (XMode === "edit" && XCurrentIdx >= 0) {
-      const { error } = await db.from("fiscal_nfe_item")
+      const { error } = await db.from("nfe_item")
         .update({ ...payload, updated_at: new Date().toISOString() })
         .eq("nfe_item_id", XItens[XCurrentIdx].nfe_item_id);
       if (error) { toast.error("Erro: " + error.message); return; }
       toast.success("Item atualizado.");
     } else {
-      const { error } = await db.from("fiscal_nfe_item").insert(payload);
+      const { error } = await db.from("nfe_item").insert(payload);
       if (error) { toast.error("Erro: " + error.message); return; }
       toast.success("Item incluído.");
     }
@@ -196,7 +196,7 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
   const handleExcluir = async () => {
     if (XCurrentIdx < 0) return;
     if (!confirm("Excluir este item?")) return;
-    await db.from("fiscal_nfe_item")
+    await db.from("nfe_item")
       .update({ excluido: true, updated_at: new Date().toISOString() })
       .eq("nfe_item_id", XItens[XCurrentIdx].nfe_item_id);
     toast.success("Item excluído.");
@@ -438,4 +438,3 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
 };
 
 export default NfeItensTab;
-

@@ -19,8 +19,8 @@ const MdfMotoristasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
   const load = useCallback(async () => {
     if (!mdfManifestoId) return;
     const { data } = await supabase
-      .from("fiscal_mdf_motorista")
-      .select("mdf_motorista_id, condutor_id, excluido, fiscal_mdf_condutor(cpf, nome, telefone, pix)")
+      .from("mdf_motorista")
+      .select("mdf_motorista_id, condutor_id, excluido, mdf_condutor(cpf, nome, telefone, pix)")
       .eq("mdf_manifesto_id", mdfManifestoId)
       .eq("excluido", false);
     setMotoristas(data || []);
@@ -37,7 +37,7 @@ const MdfMotoristasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
     // Cria ou busca o condutor pelo CPF
     let condutorId: number;
     const { data: existing } = await supabase
-      .from("fiscal_mdf_condutor")
+      .from("mdf_condutor")
       .select("condutor_id")
       .eq("cpf", cpfClean)
       .eq("empresa_id", empresaId)
@@ -45,9 +45,9 @@ const MdfMotoristasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
 
     if (existing) {
       condutorId = existing.condutor_id;
-      await supabase.from("fiscal_mdf_condutor").update({ nome: nome.toUpperCase(), telefone, pix }).eq("condutor_id", condutorId);
+      await supabase.from("mdf_condutor").update({ nome: nome.toUpperCase(), telefone, pix }).eq("condutor_id", condutorId);
     } else {
-      const { data: novo, error } = await supabase.from("fiscal_mdf_condutor").insert({
+      const { data: novo, error } = await supabase.from("mdf_condutor").insert({
         empresa_id: empresaId,
         cpf: cpfClean,
         nome: nome.toUpperCase(),
@@ -59,7 +59,7 @@ const MdfMotoristasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
       condutorId = novo.condutor_id;
     }
 
-    const { error: errMotorista } = await supabase.from("fiscal_mdf_motorista").insert({
+    const { error: errMotorista } = await supabase.from("mdf_motorista").insert({
       mdf_manifesto_id: mdfManifestoId,
       empresa_id: empresaId,
       condutor_id: condutorId,
@@ -73,7 +73,7 @@ const MdfMotoristasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
 
   const handleRemove = async (id: number) => {
     if (!confirm("Remover este motorista?")) return;
-    await supabase.from("fiscal_mdf_motorista").update({ excluido: true, dt_alteracao: new Date().toISOString() }).eq("mdf_motorista_id", id);
+    await supabase.from("mdf_motorista").update({ excluido: true, dt_alteracao: new Date().toISOString() }).eq("mdf_motorista_id", id);
     load();
   };
 
@@ -133,7 +133,7 @@ const MdfMotoristasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
         </thead>
         <tbody>
           {motoristas.map(m => {
-            const c = (m.fiscal_mdf_condutor || {}) as any;
+            const c = (m.mdf_condutor || {}) as any;
             return (
               <tr key={m.mdf_motorista_id} className="hover:bg-accent/30">
                 <td className="px-3 py-1.5 border border-border font-mono">{formatCPF(c.cpf || "")}</td>
@@ -156,4 +156,3 @@ const MdfMotoristasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
 };
 
 export default MdfMotoristasTab;
-

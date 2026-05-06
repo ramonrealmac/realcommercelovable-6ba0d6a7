@@ -20,7 +20,7 @@ const MdfDocumentosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
   const load = useCallback(async () => {
     if (!mdfManifestoId) return;
     const { data } = await supabase
-      .from("fiscal_mdf_documento")
+      .from("mdf_documento")
       .select("*")
       .eq("mdf_manifesto_id", mdfManifestoId)
       .eq("excluido", false)
@@ -37,7 +37,7 @@ const MdfDocumentosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
     if (!mdfManifestoId) { toast.warning("Salve o cabeçalho primeiro."); return; }
     // Verifica duplicidade
     if (rows.some(r => r.chave === chaveClean)) { toast.warning("Esta chave já foi adicionada."); return; }
-    const { error } = await supabase.from("fiscal_mdf_documento").insert({
+    const { error } = await supabase.from("mdf_documento").insert({
       mdf_manifesto_id: mdfManifestoId,
       empresa_id: empresaId,
       cidade_id: Number(cidadeId),
@@ -50,7 +50,7 @@ const MdfDocumentosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
     if (error) { toast.error("Erro ao adicionar: " + error.message); return; }
     // Atualiza qtd_nfe no manifesto
     const novaQtd = rows.length + 1;
-    await supabase.from("fiscal_mdf_manifesto").update({ qtd_nfe: novaQtd }).eq("mdf_manifesto_id", mdfManifestoId);
+    await supabase.from("mdf_manifesto").update({ qtd_nfe: novaQtd }).eq("mdf_manifesto_id", mdfManifestoId);
     toast.success("Documento adicionado.");
     setChave(""); setCidadeId(""); setCidadeNome(""); setPeso("0"); setValor("0");
     load();
@@ -58,9 +58,9 @@ const MdfDocumentosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
 
   const handleRemove = async (id: number) => {
     if (!confirm("Remover este documento?")) return;
-    await supabase.from("fiscal_mdf_documento").update({ excluido: true, dt_alteracao: new Date().toISOString() }).eq("mdf_documento_id", id);
+    await supabase.from("mdf_documento").update({ excluido: true, dt_alteracao: new Date().toISOString() }).eq("mdf_documento_id", id);
     const novaQtd = Math.max(0, rows.length - 1);
-    if (mdfManifestoId) await supabase.from("fiscal_mdf_manifesto").update({ qtd_nfe: novaQtd }).eq("mdf_manifesto_id", mdfManifestoId);
+    if (mdfManifestoId) await supabase.from("mdf_manifesto").update({ qtd_nfe: novaQtd }).eq("mdf_manifesto_id", mdfManifestoId);
     load();
   };
 
@@ -139,4 +139,3 @@ const MdfDocumentosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
 };
 
 export default MdfDocumentosTab;
-

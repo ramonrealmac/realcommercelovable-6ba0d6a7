@@ -146,3 +146,4 @@ export interface INfeDadosXml {
   itens: INfeXmlItem[];
   xmlRaw: string;
 }
+

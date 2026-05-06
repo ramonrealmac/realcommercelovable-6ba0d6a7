@@ -38,7 +38,7 @@ const MdfNfsTab: React.FC<Props> = ({ mdfCabecalhoId, empresaId, podeEditar }) =
   const carregar = useCallback(async () => {
     if (!mdfCabecalhoId) return;
     setLoading(true);
-    const { data } = await db.from("fiscal_mdf_nf")
+    const { data } = await db.from("mdf_nf")
       .select("*")
       .eq("mdf_cabecalho_id", mdfCabecalhoId)
       .eq("excluido", false)
@@ -54,8 +54,8 @@ const MdfNfsTab: React.FC<Props> = ({ mdfCabecalhoId, empresaId, podeEditar }) =
       toast.warning("Chave de acesso deve ter 44 dígitos.");
       return;
     }
-    // Tenta buscar automaticamente no banco (fiscal_nfe_cabecalho)
-    const { data } = await db.from("fiscal_nfe_cabecalho")
+    // Tenta buscar automaticamente no banco (nfe_cabecalho)
+    const { data } = await db.from("nfe_cabecalho")
       .select("nr_nota,serie,vl_total_nf,cnpj_emit")
       .eq("chave_nfe", novaChave)
       .maybeSingle();
@@ -70,7 +70,7 @@ const MdfNfsTab: React.FC<Props> = ({ mdfCabecalhoId, empresaId, podeEditar }) =
     if (novaChave.length !== 44) { toast.warning("Chave deve ter 44 dígitos."); return; }
     if (!novaCidade.trim()) { toast.warning("Informe a cidade de descarregamento."); return; }
     setAdicionando(true);
-    const { error } = await db.from("fiscal_mdf_nf").insert({
+    const { error } = await db.from("mdf_nf").insert({
       mdf_cabecalho_id:  mdfCabecalhoId,
       empresa_id:        empresaId,
       tp_doc:            novaTpDoc,
@@ -92,7 +92,7 @@ const MdfNfsTab: React.FC<Props> = ({ mdfCabecalhoId, empresaId, podeEditar }) =
 
   const handleRemover = async (id: number) => {
     if (!confirm("Remover este documento do MDF-e?")) return;
-    await db.from("fiscal_mdf_nf").update({ excluido: true }).eq("mdf_nf_id", id);
+    await db.from("mdf_nf").update({ excluido: true }).eq("mdf_nf_id", id);
     setNfs(prev => prev.filter(n => n.mdf_nf_id !== id));
     toast.success("Documento removido.");
   };
@@ -246,4 +246,3 @@ const MdfNfsTab: React.FC<Props> = ({ mdfCabecalhoId, empresaId, podeEditar }) =
 };
 
 export default MdfNfsTab;
-

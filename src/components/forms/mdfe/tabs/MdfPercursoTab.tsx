@@ -18,7 +18,7 @@ const MdfPercursoTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
   const load = useCallback(async () => {
     if (!mdfManifestoId) return;
     const { data } = await supabase
-      .from("mdf_percurso")
+      .from("fiscal_mdf_percurso")
       .select("*")
       .eq("mdf_manifesto_id", mdfManifestoId)
       .eq("excluido", false)
@@ -32,7 +32,7 @@ const MdfPercursoTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
     if (!uf) { toast.warning("Selecione a UF."); return; }
     if (!mdfManifestoId) { toast.warning("Salve o cabeçalho primeiro."); return; }
     if (rows.some(r => r.uf === uf)) { toast.warning("Esta UF já foi adicionada."); return; }
-    const { error } = await supabase.from("mdf_percurso").insert({
+    const { error } = await supabase.from("fiscal_mdf_percurso").insert({
       mdf_manifesto_id: mdfManifestoId,
       empresa_id: empresaId,
       uf,
@@ -47,7 +47,7 @@ const MdfPercursoTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
 
   const handleRemove = async (id: number) => {
     if (!confirm("Remover esta UF do percurso?")) return;
-    await supabase.from("mdf_percurso").update({ excluido: true, dt_alteracao: new Date().toISOString() }).eq("mdf_percurso_id", id);
+    await supabase.from("fiscal_mdf_percurso").update({ excluido: true, dt_alteracao: new Date().toISOString() }).eq("mdf_percurso_id", id);
     load();
   };
 
@@ -99,3 +99,4 @@ const MdfPercursoTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
 };
 
 export default MdfPercursoTab;
+

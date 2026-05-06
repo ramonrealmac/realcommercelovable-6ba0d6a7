@@ -8,7 +8,7 @@ export const MdfCondutorTab: React.FC<{ mdfManifestoId: number; empresaId: numbe
     <div className="h-[400px]">
       <StandardCrudForm
         config={{
-          XTableName: "fiscal_mdf_motorista",
+          XTableName: "mdf_motorista",
           XPrimaryKey: "mdf_motorista_id",
           XTitle: "CondutorTab",
           XEmpresaId: empresaId,
@@ -38,4 +38,3 @@ export const MdfCondutorTab: React.FC<{ mdfManifestoId: number; empresaId: numbe
     </div>
   );
 };
-

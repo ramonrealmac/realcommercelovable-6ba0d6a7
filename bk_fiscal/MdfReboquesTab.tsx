@@ -27,7 +27,7 @@ const MdfReboquesTab: React.FC<Props> = ({ mdfCabecalhoId, empresaId, podeEditar
   const carregar = useCallback(async () => {
     if (!mdfCabecalhoId) return;
     setLoading(true);
-    const { data } = await db.from("fiscal_mdf_veiculo_reboque")
+    const { data } = await db.from("mdf_veiculo_reboque")
       .select("*")
       .eq("mdf_cabecalho_id", mdfCabecalhoId)
       .eq("excluido", false)
@@ -42,7 +42,7 @@ const MdfReboquesTab: React.FC<Props> = ({ mdfCabecalhoId, empresaId, podeEditar
     if (!mdfCabecalhoId) { toast.warning("Salve o MDF-e antes."); return; }
     if (!novaPlaca.trim()) { toast.warning("Informe a placa."); return; }
     setAdicionando(true);
-    const { error } = await db.from("fiscal_mdf_veiculo_reboque").insert({
+    const { error } = await db.from("mdf_veiculo_reboque").insert({
       mdf_cabecalho_id: mdfCabecalhoId,
       empresa_id:       empresaId,
       placa:            novaPlaca.trim().toUpperCase(),
@@ -61,7 +61,7 @@ const MdfReboquesTab: React.FC<Props> = ({ mdfCabecalhoId, empresaId, podeEditar
 
   const handleRemover = async (id: number) => {
     if (!confirm("Remover este reboque?")) return;
-    await db.from("fiscal_mdf_veiculo_reboque").update({ excluido: true }).eq("mdf_reboque_id", id);
+    await db.from("mdf_veiculo_reboque").update({ excluido: true }).eq("mdf_reboque_id", id);
     setReboques(prev => prev.filter(r => r.mdf_reboque_id !== id));
     toast.success("Reboque removido.");
   };
@@ -163,4 +163,3 @@ const MdfReboquesTab: React.FC<Props> = ({ mdfCabecalhoId, empresaId, podeEditar
 };
 
 export default MdfReboquesTab;
-

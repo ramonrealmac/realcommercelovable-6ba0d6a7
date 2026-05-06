@@ -18,7 +18,7 @@ const MdfVeiculosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
   const load = useCallback(async () => {
     if (!mdfManifestoId) return;
     const { data } = await supabase
-      .from("fiscal_mdf_veiculo")
+      .from("mdf_veiculo")
       .select("*")
       .eq("mdf_manifesto_id", mdfManifestoId)
       .eq("excluido", false)
@@ -33,7 +33,7 @@ const MdfVeiculosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
     if (!mdfManifestoId) { toast.warning("Salve o cabeçalho primeiro."); return; }
     const tracao = rows.filter(r => r.tipo === "TRACAO");
     if (tipo === "TRACAO" && tracao.length > 0) { toast.warning("Já existe um veículo de tração. Para adicionar outro, remova o atual."); return; }
-    const { error } = await supabase.from("fiscal_mdf_veiculo").insert({
+    const { error } = await supabase.from("mdf_veiculo").insert({
       mdf_manifesto_id: mdfManifestoId,
       empresa_id: empresaId,
       veiculo_id: Number(veiculoId) || 0,
@@ -49,7 +49,7 @@ const MdfVeiculosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
 
   const handleRemove = async (id: number) => {
     if (!confirm("Remover este veículo?")) return;
-    await supabase.from("fiscal_mdf_veiculo").update({ excluido: true, dt_alteracao: new Date().toISOString() }).eq("mdf_veiculo_id", id);
+    await supabase.from("mdf_veiculo").update({ excluido: true, dt_alteracao: new Date().toISOString() }).eq("mdf_veiculo_id", id);
     load();
   };
 
@@ -112,4 +112,3 @@ const MdfVeiculosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
 };
 
 export default MdfVeiculosTab;
-

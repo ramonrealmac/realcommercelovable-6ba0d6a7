@@ -19,7 +19,7 @@ const MdfPagamentoTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdit
   const load = useCallback(async () => {
     if (!mdfManifestoId) return;
     const { data } = await supabase
-      .from("fiscal_mdf_pagamento")
+      .from("mdf_pagamento")
       .select("*")
       .eq("mdf_manifesto_id", mdfManifestoId)
       .eq("excluido", false)
@@ -56,9 +56,9 @@ const MdfPagamentoTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdit
         dt_alteracao: new Date().toISOString(),
       };
       if (rec) {
-        await supabase.from("fiscal_mdf_pagamento").update(payload).eq("mdf_pagamento_id", rec.mdf_pagamento_id);
+        await supabase.from("mdf_pagamento").update(payload).eq("mdf_pagamento_id", rec.mdf_pagamento_id);
       } else {
-        await supabase.from("fiscal_mdf_pagamento").insert({ ...payload, dt_cadastro: new Date().toISOString() });
+        await supabase.from("mdf_pagamento").insert({ ...payload, dt_cadastro: new Date().toISOString() });
       }
       toast.success("Pagamento salvo.");
       load();
@@ -144,4 +144,3 @@ const MdfPagamentoTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdit
 };
 
 export default MdfPagamentoTab;
-

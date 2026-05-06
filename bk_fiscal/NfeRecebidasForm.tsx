@@ -115,7 +115,7 @@ const NfeRecebidasForm: React.FC = () => {
       }
 
       // Atualiza status localmente
-      const { error } = await db.from("fiscal_nfe_recebida")
+      const { error } = await db.from("nfe_recebida")
         .update({ st_manifesto: tipo, updated_at: new Date().toISOString() })
         .eq("nfe_recebida_id", row.nfe_recebida_id);
 
@@ -173,7 +173,7 @@ const NfeRecebidasForm: React.FC = () => {
     }
     setXLoading(true);
     try {
-      let query = db.from("fiscal_nfe_recebida")
+      let query = db.from("nfe_recebida")
         .select("*")
         .eq("empresa_id", XEmpresaId);
 
@@ -270,7 +270,7 @@ const NfeRecebidasForm: React.FC = () => {
         }
 
         // Busca nas notas recebidas
-        const { data: nsuData } = await db.from("fiscal_nfe_recebida")
+        const { data: nsuData } = await db.from("nfe_recebida")
           .select("nsu")
           .eq("empresa_id", currentId)
           .order("nsu", { ascending: false })
@@ -395,7 +395,7 @@ const NfeRecebidasForm: React.FC = () => {
               updated_at: new Date().toISOString()
             };
 
-            const { error } = await db.from("fiscal_nfe_recebida").upsert(payload, { onConflict: "chave_nfe" });
+            const { error } = await db.from("nfe_recebida").upsert(payload, { onConflict: "chave_nfe" });
             if (!error) totalNovos++;
           }
 
@@ -477,7 +477,7 @@ const NfeRecebidasForm: React.FC = () => {
       if (confirm("Para baixar o XML é necessário realizar a 'Ciência da Operação'. Deseja realizar agora?")) {
         await handleConfirmarManifesto(row, "210210");
         // Após manifestar, recarrega o dado da linha para ter o st_manifesto atualizado e tenta baixar
-        const { data: updatedRow } = await db.from("fiscal_nfe_recebida").select("*").eq("nfe_recebida_id", row.nfe_recebida_id).maybeSingle();
+        const { data: updatedRow } = await db.from("nfe_recebida").select("*").eq("nfe_recebida_id", row.nfe_recebida_id).maybeSingle();
         if (updatedRow?.st_manifesto === "210210") {
           handleBaixarXml(updatedRow);
         }
@@ -500,7 +500,7 @@ const NfeRecebidasForm: React.FC = () => {
       const xml = doc?.XML || doc?.xml || doc?.Xml;
 
       if (xml) {
-        await db.from("fiscal_nfe_recebida")
+        await db.from("nfe_recebida")
           .update({ 
             st_download: true, 
             xml_completo: xml,
@@ -734,4 +734,3 @@ const NfeRecebidasForm: React.FC = () => {
 };
 
 export default NfeRecebidasForm;
-

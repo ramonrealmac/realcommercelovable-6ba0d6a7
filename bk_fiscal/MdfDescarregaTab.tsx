@@ -17,7 +17,7 @@ const MdfDescarregaTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
   const load = useCallback(async () => {
     if (!mdfManifestoId) return;
     const { data } = await supabase
-      .from("fiscal_mdf_descarrega")
+      .from("mdf_descarrega")
       .select("*")
       .eq("mdf_manifesto_id", mdfManifestoId)
       .eq("excluido", false)
@@ -30,7 +30,7 @@ const MdfDescarregaTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
   const handleAdd = async () => {
     if (!cidadeId || !cidadeNome.trim()) { toast.warning("Informe o ID e o nome da cidade."); return; }
     if (!mdfManifestoId) { toast.warning("Salve o cabeçalho primeiro."); return; }
-    const { error } = await supabase.from("fiscal_mdf_descarrega").insert({
+    const { error } = await supabase.from("mdf_descarrega").insert({
       mdf_manifesto_id: mdfManifestoId,
       empresa_id: empresaId,
       cidade_id: Number(cidadeId),
@@ -45,7 +45,7 @@ const MdfDescarregaTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
 
   const handleRemove = async (id: number) => {
     if (!confirm("Remover esta cidade de descarregamento?")) return;
-    await supabase.from("fiscal_mdf_descarrega").update({ excluido: true, dt_alteracao: new Date().toISOString() }).eq("mdf_descarrega_id", id);
+    await supabase.from("mdf_descarrega").update({ excluido: true, dt_alteracao: new Date().toISOString() }).eq("mdf_descarrega_id", id);
     load();
   };
 
@@ -100,4 +100,3 @@ const MdfDescarregaTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
 };
 
 export default MdfDescarregaTab;
-
