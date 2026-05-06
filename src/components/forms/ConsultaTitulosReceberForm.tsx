@@ -130,11 +130,20 @@ const ConsultaTitulosReceberForm: React.FC = () => {
 
   useEffect(() => { loadGrid(); }, [loadGrid]);
 
-  // Atualiza a grade automaticamente quando uma baixa for registrada/excluída em outra aba
+  // Atualiza a grade automaticamente quando algo mudar no financeiro ou ao reativar a aba
   useEffect(() => {
     const handler = () => { loadGrid(); };
+    const onVis = () => { if (document.visibilityState === "visible") loadGrid(); };
     window.addEventListener("financeiro:baixa-changed", handler);
-    return () => window.removeEventListener("financeiro:baixa-changed", handler);
+    window.addEventListener("financeiro:changed", handler);
+    window.addEventListener("focus", handler);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("financeiro:baixa-changed", handler);
+      window.removeEventListener("financeiro:changed", handler);
+      window.removeEventListener("focus", handler);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [loadGrid]);
 
   const openTitulo = useCallback((row: IRow) => {
