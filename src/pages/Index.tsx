@@ -1,32 +1,22 @@
 import { useEffect, useRef } from "react";
-import { Palette } from "lucide-react";
+import { useAppContext, AppProvider } from "@/contexts/AppContext";
 import TopBar from "@/components/layout/TopBar";
 import TabBar from "@/components/layout/TabBar";
 import SidebarMenu from "@/components/layout/SidebarMenu";
-import { AppProvider, useAppContext } from "@/contexts/AppContext";
-import GrupoProdutosForm from "@/components/forms/GrupoProdutosForm";
+import { Palette } from "lucide-react";
 import ClienteForm from "@/components/forms/ClienteForm";
-import FornecedorTransportadorForm from "@/components/forms/FornecedorTransportadorForm";
-import CadastroGrupoForm from "@/components/forms/CadastroGrupoForm";
-import CondicaoPagamentoForm from "@/components/forms/CondicaoPagamentoForm";
-import PerfilForm from "@/components/forms/PerfilForm";
-import ControleAcessoForm from "@/components/forms/ControleAcessoForm";
-import UsuarioForm from "@/components/forms/UsuarioForm";
-import TrocaSenhaForm from "@/components/forms/TrocaSenhaForm";
-import EmpresaForm from "@/components/forms/EmpresaForm";
-import CidadeForm from "@/components/forms/CidadeForm";
-import EstadoForm from "@/components/forms/EstadoForm";
-import RotaForm from "@/components/forms/RotaForm";
-import LinhaProdutoForm from "@/components/forms/LinhaProdutoForm";
-import UnidadeForm from "@/components/forms/UnidadeForm";
-import DepositoForm from "@/components/forms/DepositoForm";
-import EstoqueForm from "@/components/forms/EstoqueForm";
+import FornecedorForm from "@/components/forms/FornecedorForm";
 import ProdutoForm from "@/components/forms/ProdutoForm";
-import PedidoForm from "@/components/forms/PedidoForm";
-import PdvCaixaForm from "@/components/forms/pdv/PdvCaixaForm";
-import FechamentoCaixaForm from "@/components/forms/pdv/FechamentoCaixaForm";
-import AberturaCaixaForm from "@/components/forms/pdv/AberturaCaixaForm";
-import SuprimentoSangriaForm from "@/components/forms/pdv/SuprimentoSangriaForm";
+import ServicoForm from "@/components/forms/ServicoForm";
+import VendedorForm from "@/components/forms/VendedorForm";
+import CondicaoPagamentoForm from "@/components/forms/CondicaoPagamentoForm";
+import FormaPagamentoForm from "@/components/forms/FormaPagamentoForm";
+import CategoriaProdutoForm from "@/components/forms/CategoriaProdutoForm";
+import UnidadeMedidaForm from "@/components/forms/UnidadeMedidaForm";
+import TransportadoraForm from "@/components/forms/TransportadoraForm";
+import ContaPagarForm from "@/components/forms/ContaPagarForm";
+import ContaReceberForm from "@/components/forms/ContaReceberForm";
+import MovimentacaoEstoqueForm from "@/components/forms/MovimentacaoEstoqueForm";
 import NotaFiscalEntradaForm from "@/components/forms/NotaFiscalEntradaForm";
 import NfeRecebidasForm from "@/components/forms/NfeRecebidasForm";
 import MdfeForm from "@/components/forms/mdfe/MdfeForm";
@@ -64,86 +54,59 @@ const AppContent = () => {
   }, [XThemeLogomarca, setXLogomarca]);
 
   const renderTabContent = (component: string, params?: any) => {
-    console.log("Renderizando aba:", component);
     switch (component) {
-      case "GrupoProdutosForm":
-      case "grupo-produtos":
-        return <GrupoProdutosForm />;
-      case "cadastro-completo":
+      case "clientes":
         return <ClienteForm />;
-      case "fornecedores-transportadores":
-        return <FornecedorTransportadorForm />;
-      case "grupo-cadastros":
-        return <CadastroGrupoForm />;
-      case "cond-pagamento":
-        return <CondicaoPagamentoForm />;
-      case "PerfilForm":
-        return <PerfilForm />;
-      case "ControleAcessoForm":
-        return <ControleAcessoForm />;
-      case "UsuarioForm":
-        return <UsuarioForm />;
-      case "TrocaSenhaForm":
-        return <TrocaSenhaForm />;
-      case "empresas":
-        return <EmpresaForm />;
-      case "estados":
-        return <EstadoForm />;
-      case "cidades":
-        return <CidadeForm />;
-      case "rotas":
-        return <RotaForm />;
-      case "linhas-produtos":
-        return <LinhaProdutoForm />;
-      case "unidades":
-        return <UnidadeForm />;
-      case "depositos":
-        return <DepositoForm />;
-      case "estoque":
-        return <EstoqueForm />;
+      case "fornecedores":
+        return <FornecedorForm />;
       case "produtos":
         return <ProdutoForm />;
-      case "pdv":
-        return <PedidoForm />;
-      case "nova-entrada":
-      case "minhas-entradas":
+      case "servicos":
+        return <ServicoForm />;
+      case "vendedores":
+        return <VendedorForm />;
+      case "condicoes-pagamento":
+        return <CondicaoPagamentoForm />;
+      case "formas-pagamento":
+        return <FormaPagamentoForm />;
+      case "categorias-produto":
+        return <CategoriaProdutoForm />;
+      case "unidades-medida":
+        return <UnidadeMedidaForm />;
+      case "transportadoras":
+        return <TransportadoraForm />;
+      case "contas-pagar":
+        return <ContaPagarForm />;
+      case "contas-receber":
+        return <ContaReceberForm />;
+      case "movimentacao-estoque":
+        return <MovimentacaoEstoqueForm />;
+      case "nfe-entrada":
         return <NotaFiscalEntradaForm />;
       case "nfe-recebidas":
         return <NfeRecebidasForm />;
-      case "pdv-caixa":
-        return <PdvCaixaForm />;
-      case "fechamento-caixa":
-        return <FechamentoCaixaForm />;
-      case "abertura-caixa":
-        return <AberturaCaixaForm />;
-      case "suprimento-caixa":
-        return <SuprimentoSangriaForm tipo="SUP" />;
-      case "sangria-caixa":
-        return <SuprimentoSangriaForm tipo="SAN" />;
+      case "mdfe":
+        return <MdfeForm />;
       case "rb-conexoes":
         return <RbConexaoForm />;
       case "rb-templates":
         return <RbTemplatePesquisaForm />;
       case "rb-relatorios":
         return <RbRelatorioForm />;
-      case "mdfe":
-        return <MdfeForm />;
-      case "rpb-relatorios":
+      case "rpb-manager":
         return <RpbManager />;
-      case "rpb-designer":
-        return <RpbManager initialView="designer" initialSelectedId={params?.relatorioId} />;
-      case "provedor-test":
+      case "provedor-teste":
         return <ProvedorTestForm />;
       case "plano-contas":
         return <PlanoContaForm />;
       case "bancos":
         return <BancoForm />;
-      case "fiscal-regras":
+      case "fiscal-regra":
         return <FiscalRegraForm />;
-      case "fiscal-config":
-        return <FiscalConfigForm />;
       case "cfop":
         return <CfopForm />;
+      case "fiscal-config":
+        return <FiscalConfigForm />;
       case "consulta-titulos-receber":
         return <ConsultaTitulosReceberForm />;
       case "gerar-contas-receber":
@@ -164,7 +127,6 @@ const AppContent = () => {
         return <div className="p-4 text-muted-foreground">Componente não encontrado.</div>;
     }
   };
-
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
