@@ -157,6 +157,7 @@ const GerarContasReceberForm: React.FC = () => {
         return;
       }
       toast.success(`${nrParc} parcela(s) gerada(s) com sucesso`);
+      window.dispatchEvent(new CustomEvent("financeiro:baixa-changed"));
     } catch (e: any) {
       console.error(e);
       toast.error("Erro: " + (e?.message || "desconhecido"));
