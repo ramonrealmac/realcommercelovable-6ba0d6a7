@@ -205,8 +205,8 @@ const ConsultaTitulosReceberForm: React.FC = () => {
         <div className="flex items-center gap-2 mb-2 text-xs font-medium text-muted-foreground">
           <FilterIcon size={12} /> Filtros
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <div>
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+          <div className="md:col-span-2">
             <label className="block text-xs font-medium text-muted-foreground mb-1">Cliente</label>
             <select
               value={XClienteId}
@@ -218,6 +218,15 @@ const ConsultaTitulosReceberForm: React.FC = () => {
                 <option key={c.cadastro_id} value={c.cadastro_id}>{c.nome}</option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Dt. Emissão</label>
+            <input
+              type="date"
+              value={XDtEmissao}
+              onChange={(e) => setXDtEmissao(e.target.value)}
+              className="w-full border border-border rounded px-2 py-1.5 text-sm bg-card"
+            />
           </div>
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">Dt. Vencimento</label>
