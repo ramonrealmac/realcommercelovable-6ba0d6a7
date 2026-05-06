@@ -6464,6 +6464,16 @@ export type Database = {
       }
     }
     Functions: {
+      fu_baixar_titulos_cliente: {
+        Args: {
+          p_cadastro_id: number
+          p_conta_id: string
+          p_recibo: string
+          p_tipo_pag_rec_id: number
+          p_vl_recebido: string
+        }
+        Returns: undefined
+      }
       fu_chat_is_membro: {
         Args: { _sala_id: number; _user_id: string }
         Returns: boolean
