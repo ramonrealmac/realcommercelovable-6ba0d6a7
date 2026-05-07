@@ -32,6 +32,10 @@ import BaixaPorClienteForm from "@/components/forms/BaixaPorClienteForm";
 import FiscalConfigForm from "@/components/forms/FiscalConfigForm";
 import MdfeForm from "@/components/forms/mdfe/MdfeForm";
 import EmpresaForm from "@/components/forms/EmpresaForm";
+import PerfilForm from "@/components/forms/PerfilForm";
+import ControleAcessoForm from "@/components/forms/ControleAcessoForm";
+import UsuarioForm from "@/components/forms/UsuarioForm";
+import TrocaSenhaForm from "@/components/forms/TrocaSenhaForm";
 import ProvedorTestForm from "@/components/forms/ProvedorTestForm";
 import AuthGate from "@/components/auth/AuthGate";
 import { useThemeColors } from "@/hooks/useThemeColors";
@@ -115,6 +119,14 @@ const AppContent = () => {
         return <MdfeForm />;
       case "empresas":
         return <EmpresaForm />;
+      case "PerfilForm":
+        return <PerfilForm />;
+      case "ControleAcessoForm":
+        return <ControleAcessoForm />;
+      case "UsuarioForm":
+        return <UsuarioForm />;
+      case "TrocaSenhaForm":
+        return <TrocaSenhaForm />;
       case "provedor-test":
         return <ProvedorTestForm />;
       case "rpb-relatorios":
