@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { Save, Search, Activity, ShieldCheck } from "lucide-react";
+import { Save, Search, Activity, ShieldCheck, Terminal } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppContext } from "@/contexts/AppContext";
+import MonitorFiscalLogDialog from "./MonitorFiscalLogDialog";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,8 +12,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import FiscalConfigItemGrid from "./FiscalConfigItemGrid";
 
 interface FiscalConfigFormValues {
   tipo_certificado: string;
@@ -29,6 +32,7 @@ const FiscalConfigForm = () => {
   const [searchingCerts, setSearchingCerts] = useState(false);
   const [certificadosServidor, setCertificadosServidor] = useState<any[]>([]);
   const [modalCertOpen, setModalCertOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
 
   const form = useForm<FiscalConfigFormValues>({
     defaultValues: {
@@ -55,14 +59,14 @@ const FiscalConfigForm = () => {
           .maybeSingle();
 
         if (error) throw error;
-        
+
         if (data) {
           form.reset({
             tipo_certificado: data.tipo_certificado || "ARQUIVO",
             certificado: data.certificado || "",
             senha_certificado: data.senha_certificado ? atob(data.senha_certificado) : "",
             ambiente_nfe: data.ambiente_nfe || "2",
-            uf: "SP" 
+            uf: "SP"
           });
         } else {
           // Se não houver configuração para esta empresa, reseta para os padrões
@@ -181,11 +185,11 @@ const FiscalConfigForm = () => {
     try {
       const comando = tipoCertificadoAtual === 'REPOSITORIO' ? "LISTAR_CERTIFICADOS_WINDOWS" : "LISTAR_CERTIFICADOS";
       const payload = tipoCertificadoAtual === 'REPOSITORIO' ? {} : { diretorio: "C:/Certificados" };
-      
+
       console.log(`[FiscalConfig] Buscando certificados do tipo: ${tipoCertificadoAtual}...`);
       const response = await dispatchWorkerCommand(comando, payload);
       console.log(`[FiscalConfig] Resposta do Worker:`, response);
-      
+
       if (response && response.sucesso) {
         if (tipoCertificadoAtual === 'REPOSITORIO') {
           setCertificadosServidor(response.certificados || []);
@@ -209,7 +213,7 @@ const FiscalConfigForm = () => {
       toast.warning("Preencha o caminho ou o número de série do certificado antes de testar!");
       return;
     }
-    
+
     if (values.tipo_certificado === 'ARQUIVO' && !values.senha_certificado) {
       toast.warning("Preencha a senha do certificado!");
       return;
@@ -217,7 +221,7 @@ const FiscalConfigForm = () => {
 
     setTesting(true);
     const idToast = toast.loading("Conectando à SEFAZ...");
-    
+
     try {
       const payload = {
         config: {
@@ -229,9 +233,9 @@ const FiscalConfigForm = () => {
           modelo: 55
         }
       };
-      
+
       const response = await dispatchWorkerCommand("STATUS_SERVICO", payload);
-      
+
       if (response.sucesso) {
         toast.success("SEFAZ Online! Comunicação perfeita.", { id: idToast });
         console.log("XML Retorno:", response.status_retorno);
@@ -258,166 +262,198 @@ const FiscalConfigForm = () => {
           </p>
         </div>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-primary" />
-                  Certificado Digital
-                </CardTitle>
-                <CardDescription>
-                  Informe o caminho do certificado digital (A1) armazenado no servidor do Worker e sua senha.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="tipo_certificado"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tipo de Certificado</FormLabel>
-                        <Select onValueChange={(val) => { field.onChange(val); form.setValue("certificado", ""); form.setValue("senha_certificado", ""); }} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione o tipo" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="ARQUIVO">Arquivo Físico (.pfx)</SelectItem>
-                            <SelectItem value="REPOSITORIO">Repositório do Windows</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
+        <Tabs defaultValue="dados" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-6">
+            <TabsTrigger value="dados">Dados Principais</TabsTrigger>
+            <TabsTrigger value="modelos">Modelos e Sequenciais</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="dados" className="space-y-6">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <ShieldCheck className="w-5 h-5 text-primary" />
+                      Certificado Digital
+                    </CardTitle>
+                    <CardDescription>
+                      Informe o caminho do certificado digital (A1) e o ambiente de emissão.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="tipo_certificado"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Tipo de Certificado</FormLabel>
+                            <Select onValueChange={(val) => { field.onChange(val); form.setValue("certificado", ""); form.setValue("senha_certificado", ""); }} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione o tipo" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="ARQUIVO">Arquivo Físico (.pfx)</SelectItem>
+                                <SelectItem value="REPOSITORIO">Repositório do Windows</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="ambiente_nfe"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Ambiente SEFAZ</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione o ambiente" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="1">1 - Produção</SelectItem>
+                                <SelectItem value="2">2 - Homologação</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <FormField
+                          control={form.control}
+                          name="certificado"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                {tipoCertificadoAtual === 'ARQUIVO' ? "Caminho do Certificado (.pfx)" : "Número de Série do Certificado"}
+                              </FormLabel>
+                              <FormControl>
+                                <Input placeholder={tipoCertificadoAtual === 'ARQUIVO' ? "Ex: C:\\Certificados\\empresa.pfx" : "Ex: 4A8B9C1029..."} {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={buscarCertificados}
+                        disabled={searchingCerts}
+                      >
+                        <Search className="w-4 h-4 mr-2" />
+                        Buscar no {tipoCertificadoAtual === 'ARQUIVO' ? 'Servidor' : 'Windows'}
+                      </Button>
+                    </div>
+
+                    {tipoCertificadoAtual === 'ARQUIVO' && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="senha_certificado"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Senha do Certificado</FormLabel>
+                              <FormControl>
+                                <Input type="password" placeholder="****" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
                     )}
-                  />
+                  </CardContent>
+                </Card>
 
-                    <FormField
-                      control={form.control}
-                      name="ambiente_nfe"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Ambiente SEFAZ</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecione o ambiente" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="1">1 - Produção</SelectItem>
-                              <SelectItem value="2">2 - Homologação</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                </div>
-
-                <div className="flex items-end gap-2">
-                  <div className="flex-1">
-                    <FormField
-                      control={form.control}
-                      name="certificado"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            {tipoCertificadoAtual === 'ARQUIVO' ? "Caminho do Certificado (.pfx)" : "Número de Série do Certificado"}
-                          </FormLabel>
-                          <FormControl>
-                            <Input placeholder={tipoCertificadoAtual === 'ARQUIVO' ? "Ex: C:\\Certificados\\empresa.pfx" : "Ex: 4A8B9C1029..."} {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                <div className="flex justify-between items-center bg-card p-4 rounded-lg border shadow-sm">
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" onClick={testarSefaz} disabled={testing}>
+                      <Activity className="w-4 h-4 mr-2 text-blue-500" />
+                      Testar Conexão SEFAZ
+                    </Button>
+                    <Button type="button" variant="ghost" onClick={() => setLogOpen(true)} className="gap-2">
+                      <Terminal className="w-4 h-4" />
+                      Ver Log
+                    </Button>
                   </div>
-                  <Button 
-                    type="button" 
-                    variant="secondary" 
-                    onClick={buscarCertificados}
-                    disabled={searchingCerts}
-                  >
-                    <Search className="w-4 h-4 mr-2" />
-                    Buscar no {tipoCertificadoAtual === 'ARQUIVO' ? 'Servidor' : 'Windows'}
+                  
+                  <Button type="submit" disabled={loading} className="px-8">
+                    <Save className="w-4 h-4 mr-2" />
+                    Salvar Configurações
                   </Button>
                 </div>
+              </form>
+            </Form>
+          </TabsContent>
 
-                {tipoCertificadoAtual === 'ARQUIVO' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="senha_certificado"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Senha do Certificado</FormLabel>
-                          <FormControl>
-                            <Input type="password" placeholder="****" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                )}
+          <TabsContent value="modelos" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Modelos e Sequenciais</CardTitle>
+                <CardDescription>
+                  Configure as séries e números sequenciais para cada modelo de nota fiscal (NFe e NFCe).
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <FiscalConfigItemGrid XEmpresaId={Number(XEmpresaId)} />
               </CardContent>
             </Card>
+          </TabsContent>
+        </Tabs>
 
-            <div className="flex justify-between items-center">
-              <Button type="button" variant="outline" onClick={testarSefaz} disabled={testing}>
-                <Activity className="w-4 h-4 mr-2 text-blue-500" />
-                Testar Conexão SEFAZ
-              </Button>
-              
-              <Button type="submit" disabled={loading}>
-                <Save className="w-4 h-4 mr-2" />
-                Salvar Configurações
-              </Button>
-            </div>
-          </form>
-        </Form>
+        <Dialog open={modalCertOpen} onOpenChange={setModalCertOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {tipoCertificadoAtual === 'REPOSITORIO' ? "Certificados no Windows" : "Arquivos no Servidor (C:/Certificados)"}
+              </DialogTitle>
+            </DialogHeader>
+            <ScrollArea className="max-h-[400px] mt-4">
+              {certificadosServidor.length === 0 ? (
+                <p className="text-sm text-muted-foreground p-4 text-center">Nenhum certificado encontrado.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {certificadosServidor.map((cert, index) => {
+                    const isWindows = tipoCertificadoAtual === 'REPOSITORIO';
+                    const label = isWindows ? cert.Subject : cert.split('/').pop()?.split('\\').pop() || cert;
+                    const value = isWindows ? cert.SerialNumber : cert;
+                    return (
+                      <Button
+                        key={index}
+                        variant="outline"
+                        className="justify-start h-auto py-3 px-4 text-left whitespace-normal flex flex-col items-start gap-1 overflow-hidden"
+                        onClick={() => selecionarCertificado(value)}
+                      >
+                        <span className="font-medium text-sm leading-tight truncate w-full">{label}</span>
+                        {isWindows && <span className="text-xs text-muted-foreground font-mono">Série: {value}</span>}
+                        {!isWindows && <span className="text-[10px] text-muted-foreground font-mono truncate w-full">{cert}</span>}
+                      </Button>
+                    );
+                  })}
+                </div>
+              )}
+            </ScrollArea>
+          </DialogContent>
+        </Dialog>
+
+        <MonitorFiscalLogDialog
+          isOpen={logOpen}
+          onClose={() => setLogOpen(false)}
+          empresaId={XEmpresaId}
+        />
       </div>
-
-      <Dialog open={modalCertOpen} onOpenChange={setModalCertOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {tipoCertificadoAtual === 'REPOSITORIO' ? "Certificados no Windows" : "Arquivos no Servidor (C:/Certificados)"}
-            </DialogTitle>
-          </DialogHeader>
-          <ScrollArea className="max-h-[400px] mt-4">
-            {certificadosServidor.length === 0 ? (
-              <p className="text-sm text-muted-foreground p-4 text-center">Nenhum certificado encontrado.</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {certificadosServidor.map((cert, index) => {
-                  const isWindows = tipoCertificadoAtual === 'REPOSITORIO';
-                  
-                  // Se for arquivo, o label é o nome do arquivo. O valor é o caminho completo.
-                  const label = isWindows ? cert.Subject : cert.split('/').pop()?.split('\\').pop() || cert;
-                  const value = isWindows ? cert.SerialNumber : cert;
-                  
-                  return (
-                    <Button 
-                      key={index} 
-                      variant="outline" 
-                      className="justify-start h-auto py-3 px-4 text-left whitespace-normal flex flex-col items-start gap-1 overflow-hidden"
-                      onClick={() => selecionarCertificado(value)}
-                    >
-                      <span className="font-medium text-sm leading-tight truncate w-full">{label}</span>
-                      {isWindows && <span className="text-xs text-muted-foreground font-mono">Série: {value}</span>}
-                      {!isWindows && <span className="text-[10px] text-muted-foreground font-mono truncate w-full">{cert}</span>}
-                    </Button>
-                  );
-                })}
-              </div>
-            )}
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

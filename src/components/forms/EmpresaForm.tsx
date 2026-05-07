@@ -269,33 +269,51 @@ const EmpresaForm: React.FC = () => {
   };
 
   const handleSalvar = async () => {
-    if (!XEdit.razao_social.trim()) {
+    console.log("[EmpresaForm] 🚀 Botão Salvar clicado!");
+    
+    if (!XEdit.razao_social || !XEdit.razao_social.trim()) {
+      console.warn("[EmpresaForm] ⚠️ Validação falhou: Razão Social vazia.");
       toast.error("Razão Social é obrigatória.");
       return;
     }
 
     const payload: any = { ...XEdit };
+    // Prioriza o ID do XEdit para garantir que estamos salvando o registro correto que está na tela
+    const empresaIdToSave = XFormMode === "insert" ? null : XEdit.empresa_id;
+    
     delete payload.empresa_id;
     delete payload.dt_cadastro;
+    delete payload.dt_alteracao; // Deletamos para não mandar o valor antigo
     payload.dt_alteracao = new Date().toISOString();
+
+    console.log(`[EmpresaForm] 💾 Tentando salvar Empresa ID: ${empresaIdToSave}`, payload);
 
     try {
       if (XFormMode === "insert") {
-        const { error } = await db.from("empresa").insert([payload]);
-        if (error) throw error;
+        const { error, data } = await db.from("empresa").insert([payload]).select();
+        if (error) {
+          console.error("[EmpresaForm] Erro no INSERT:", error);
+          throw error;
+        }
         toast.success("Empresa incluída com sucesso.");
-      } else if (XFormMode === "edit" && XCurrent) {
-        const { error } = await db.from("empresa").update(payload).eq("empresa_id", XCurrent.empresa_id);
-        if (error) throw error;
+      } else if (XFormMode === "edit" && empresaIdToSave) {
+        const { error } = await db.from("empresa").update(payload).eq("empresa_id", empresaIdToSave);
+        if (error) {
+          console.error("[EmpresaForm] Erro no UPDATE:", error);
+          throw error;
+        }
         toast.success("Empresa alterada com sucesso.");
       }
 
-      // Save horarios
-      for (const h of XHorarios) {
-        const { id: hid, ...hrest } = h;
-        if (hid) {
-          const { error: hErr } = await db.from("empresa_hs_lojavirtual").update(hrest).eq("id", hid);
-          if (hErr) console.error("Erro ao salvar horário:", hErr);
+      // Save horarios if exists
+      if (empresaIdToSave && XHorarios.length > 0) {
+        console.log("[EmpresaForm] Salvando horários...");
+        for (const h of XHorarios) {
+          const { id: hid, ...hrest } = h;
+          if (hid) {
+            const { error: hErr } = await db.from("empresa_hs_lojavirtual").update(hrest).eq("id", hid);
+            if (hErr) console.error("[EmpresaForm] Erro ao salvar horário ID:", hid, hErr);
+          }
         }
       }
 
@@ -316,13 +334,37 @@ const EmpresaForm: React.FC = () => {
         cor_input_borda: "--input-border-color",
         cor_input_label: "--label-color",
       };
-      for (const [k, v] of Object.entries(map)) { const hex = (XEdit as any)[k]; if (hex) { const hsl = hexToHsl(hex); if (hsl) root.style.setProperty(v, hsl); } }
-      if (XEdit.cor_primaria) { const hsl = hexToHsl(XEdit.cor_primaria); if (hsl) { root.style.setProperty("--grid-header", hsl); root.style.setProperty("--grid-selected", hsl); } }
+      
+      for (const [k, v] of Object.entries(map)) { 
+        const hex = (XEdit as any)[k]; 
+        if (hex) { 
+          const hsl = hexToHsl(hex); 
+          if (hsl) root.style.setProperty(v, hsl); 
+        } 
+      }
+      
+      if (XEdit.cor_primaria) { 
+        const hsl = hexToHsl(XEdit.cor_primaria); 
+        if (hsl) { 
+          root.style.setProperty("--grid-header", hsl); 
+          root.style.setProperty("--grid-selected", hsl); 
+        } 
+      }
 
       setXFormMode("view");
       await loadData();
+      
+      // Se era um update, tenta manter o foco na mesma empresa
+      if (empresaIdToSave) {
+        const newData = (await db.from("empresa").select("*").eq("excluido", false).order("empresa_id")).data;
+        if (newData) {
+          const newIdx = newData.findIndex((e: any) => e.empresa_id === empresaIdToSave);
+          if (newIdx >= 0) setXCurrentIdx(newIdx);
+        }
+      }
     } catch (e: any) {
-      toast.error("Erro ao salvar: " + e.message);
+      console.error("[EmpresaForm] Exceção no handleSalvar:", e);
+      toast.error("Erro ao salvar: " + (e.message || "Erro desconhecido no banco de dados."));
     }
   };
 

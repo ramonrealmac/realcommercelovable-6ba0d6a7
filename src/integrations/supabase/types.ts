@@ -4017,6 +4017,8 @@ export type Database = {
           tp_comissao: string | null
           usr_id: number | null
           vendedor: string | null
+          nfe_config_item: number | null
+          nfce_config_item: number | null
         }
         Insert: {
           caixa?: string | null
@@ -4038,6 +4040,8 @@ export type Database = {
           tp_comissao?: string | null
           usr_id?: number | null
           vendedor?: string | null
+          nfe_config_item?: number | null
+          nfce_config_item?: number | null
         }
         Update: {
           caixa?: string | null
@@ -4059,6 +4063,8 @@ export type Database = {
           tp_comissao?: string | null
           usr_id?: number | null
           vendedor?: string | null
+          nfe_config_item?: number | null
+          nfce_config_item?: number | null
         }
         Relationships: []
       }

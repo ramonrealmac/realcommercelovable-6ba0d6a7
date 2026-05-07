@@ -14,21 +14,76 @@ export const provedorService = {
     }
 
     try {
+      // 1. Busca a configuração fiscal da empresa automaticamente se não foi passada
+      let finalConfig = configPayload;
+      if (!finalConfig && empresaId) {
+        console.log(`[ProvedorService] 🔍 Buscando config fiscal para empresa ${empresaId}...`);
+        const { data: config } = await supabase
+          .from("fiscal_config")
+          .select("*")
+          .eq("empresa_id", empresaId)
+          .maybeSingle();
+        
+        if (config) {
+          console.log(`[ProvedorService] ✅ Config fiscal encontrada. Buscando endereço da empresa...`);
+          // Busca a UF da empresa via cidade para ser preciso
+          let empresaUF = "";
+          const { data: empData, error: empError } = await supabase
+            .from("empresa")
+            .select("endereco_cidade_id")
+            .eq("empresa_id", empresaId)
+            .maybeSingle();
+          
+          if (empError) console.error(`[ProvedorService] ❌ Erro ao buscar empresa:`, empError);
+          console.log(`[ProvedorService] 🏢 Dados da empresa:`, empData);
+
+          if (empData?.endereco_cidade_id) {
+            const { data: cityData, error: cityError } = await supabase
+              .from("cidade")
+              .select("estado_id, cd_ibge")
+              .eq("cidade_id", empData.endereco_cidade_id)
+              .maybeSingle();
+            
+            if (cityError) console.error(`[ProvedorService] ❌ Erro ao buscar cidade:`, cityError);
+            console.log(`[ProvedorService] 📍 Cidade encontrada:`, cityData);
+            
+            // Prioriza o código numérico (ex: 21 para MA) pois é mais aceito em comandos diretos
+            if (cityData?.cd_ibge && cityData.cd_ibge.length >= 2) {
+              empresaUF = cityData.cd_ibge.substring(0, 2);
+            } else if (cityData?.estado_id) {
+              empresaUF = cityData.estado_id;
+            }
+          } else {
+            console.warn(`[ProvedorService] ⚠️ Empresa ${empresaId} está sem endereco_cidade_id no cadastro!`);
+          }
+
+          finalConfig = {
+            tipo_certificado: config.tipo_certificado,
+            certificadoPath: config.certificado,
+            certificadoSenha: config.senha_certificado ? atob(config.senha_certificado) : "",
+            ambiente: Number(config.ambiente_nfe || 2),
+            uf: empresaUF, 
+            modelo: 55
+          };
+          console.log(`[ProvedorService] 📦 Payload de Config finalizado:`, finalConfig);
+        }
+      }
+
       // Obtém o usuário logado para auditoria
       const { data: { user } } = await supabase.auth.getUser();
 
-      // 1. Insere o comando na fila
+      // 2. Insere o comando na fila com o payload completo
       const { data, error } = await supabase
         .from("fiscal_evento")
         .insert({
           empresa_id: empresaId,
           user_id: user?.id,
-          ambiente: ambiente ? Number(ambiente) : null,
-          comando: comando.split('(')[0], // Extrai o nome do comando (ex: NFE.StatusServico)
+          ambiente: finalConfig?.ambiente || (ambiente ? Number(ambiente) : null),
+          comando: comando.split('(')[0],
           payload: { 
-            comando_full: comando, // Para referência
-            dados: comando.includes('("') ? comando.match(/\("(.+)"\)/)?.[1] : "", // Tenta extrair o conteúdo do INI se houver
-            config: configPayload || {}
+            comando_full: comando,
+            dados: comando.includes('("') ? comando.match(/\("(.+)"\)/)?.[1] : "",
+            config: finalConfig || {}
           },
           status: "PENDENTE",
           tipo: "NFE"
@@ -122,7 +177,8 @@ export const provedorService = {
    * Busca documentos fiscais eletrônicos emitidos contra o CNPJ
    */
   async distribuicaoDFe(cUF: string, cnpj: string, nNSU: string = "0", empresaId?: string): Promise<string> {
-    return this.enviarComando(`NFE.DistribuicaoDFe(${cUF}, "${cnpj}", "${nNSU}")`, empresaId);
+    // Usa NFE.DistribuicaoDFePorUltNSU que reflete exatamente a função da DLL chamada
+    return this.enviarComando(`NFE.DistribuicaoDFePorUltNSU(${cUF}, "${cnpj}", "${nNSU}")`, empresaId);
   },
 
   /**

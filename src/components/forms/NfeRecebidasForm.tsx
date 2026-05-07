@@ -137,15 +137,33 @@ const NfeRecebidasForm: React.FC = () => {
       const m = Number(maxNsu || 0);
       
       // 1. Atualiza o sequencial oficial do sistema para a próxima sincronização
+      const records = [];
       if (u > 0) {
-        const { error: seqError } = await db.from("sys_sequencial").upsert({
-          empresa_id: XEmpresaId,
-          tabela: "dfe_nsu",
-          nm_campo1: "nsu",
-          ult_seq: u
-        }, { onConflict: "empresa_id,tabela" });
-        
-        if (seqError) console.error("Erro ao atualizar sys_sequencial:", seqError);
+        records.push({ empresa_id: XEmpresaId, tabela: "fiscal_evento", nm_campo1: "ultNSU", nm_campo2: "", ult_seq: u });
+      }
+      if (m > 0) {
+        records.push({ empresa_id: XEmpresaId, tabela: "fiscal_evento", nm_campo1: "maxNSU", nm_campo2: "", ult_seq: m });
+      }
+
+      for (const record of records) {
+        const { data: existing } = await db.from("sys_sequencial")
+          .select("ult_seq")
+          .eq("empresa_id", record.empresa_id)
+          .eq("tabela", record.tabela)
+          .eq("nm_campo1", record.nm_campo1)
+          .eq("nm_campo2", record.nm_campo2)
+          .maybeSingle();
+
+        if (existing) {
+          await db.from("sys_sequencial")
+            .update({ ult_seq: record.ult_seq })
+            .eq("empresa_id", record.empresa_id)
+            .eq("tabela", record.tabela)
+            .eq("nm_campo1", record.nm_campo1)
+            .eq("nm_campo2", record.nm_campo2);
+        } else {
+          await db.from("sys_sequencial").insert(record);
+        }
       }
 
       // 2. Mantém compatibilidade com a tabela de log antiga se necessário, 
@@ -215,10 +233,6 @@ const NfeRecebidasForm: React.FC = () => {
             setXCNPJ(cleanCnpj);
           }
 
-          if (data?.max_nsu_busca) {
-            setXMaxLoops(Number(data.max_nsu_busca));
-          }
-
           // Busca a UF da cidade pelo Código IBGE (2 primeiros dígitos)
           setXUF(""); // Reset UF
           if (data?.endereco_cidade_id) {
@@ -236,6 +250,17 @@ const NfeRecebidasForm: React.FC = () => {
           } else {
             toast.error("Empresa sem cidade vinculada no cadastro. Não será possível sincronizar NF-e.");
           }
+
+          // Busca configuração fiscal da empresa
+          const { data: fiscalData } = await db.from("fiscal_config")
+            .select("dfe_maxnsu_busca")
+            .eq("empresa_id", XEmpresaId)
+            .maybeSingle();
+          
+          if (fiscalData?.dfe_maxnsu_busca) {
+            setXMaxLoops(Number(fiscalData.dfe_maxnsu_busca));
+            console.log(`[Config] max_nsu_busca configurado para ${fiscalData.dfe_maxnsu_busca} loops.`);
+          }
         });
       
       loadData();
@@ -252,32 +277,28 @@ const NfeRecebidasForm: React.FC = () => {
     let loopCount = 0;
 
     try {
-      // 1. Define NSU inicial baseado na tabela de sequenciais sys_sequencial
+      // 1. Busca o Último NSU sincronizado no banco
       if (!forceStart) {
         const currentId = Number(XEmpresaId || 0);
+        console.log(`[Sinc] Buscando último NSU salvo para empresa ${currentId}...`);
         
-        const { data: seqData } = await db.from("sys_sequencial")
+        const { data: seqData, error: seqErr } = await db
+          .from("sys_sequencial")
           .select("ult_seq")
           .eq("empresa_id", currentId)
-          .eq("tabela", "dfe_nsu")
+          .eq("tabela", "fiscal_evento")
+          .eq("nm_campo1", "ultNSU")
+          .eq("nm_campo2", "")
           .maybeSingle();
-        
-        if (seqData) {
-          currentNSU = String(seqData.ult_seq || "0");
-          console.log(`[Sinc] Iniciando do NSU (sys_sequencial): ${currentNSU}`);
-        } else {
-          // Fallback: se não tiver no sequencial, tenta buscar a última nota recebida
-          const { data: lastNfe } = await db.from("fiscal_nfe_recebida")
-            .select("nsu")
-            .eq("empresa_id", currentId)
-            .order("nsu", { ascending: false })
-            .limit(1);
           
-          if (lastNfe && lastNfe.length > 0) {
-            currentNSU = String(lastNfe[0].nsu || "0");
-            console.log(`[Sinc] Iniciando do NSU (fiscal_nfe_recebida): ${currentNSU}`);
-          }
+        if (!seqErr && seqData && seqData.ult_seq) {
+          currentNSU = String(seqData.ult_seq);
+          console.log(`[Sinc] Retomando sincronização a partir do NSU: ${currentNSU}`);
+        } else {
+          console.log(`[Sinc] Nenhum NSU anterior encontrado. Iniciando do zero.`);
         }
+      } else {
+         console.log(`[Sinc] Sincronização manual forçada do zero.`);
       }
 
       // 2. Loop de Sincronização (Lotes de 50)
@@ -290,7 +311,7 @@ const NfeRecebidasForm: React.FC = () => {
           return;
         }
         const sendUF = XUF;
-        const comando = `NFE.DistribuicaoDFe(${sendUF}, "${XCNPJ}", "${currentNSU}")`;
+        const comando = `NFE.DistribuicaoDFePorUltNSU(${sendUF}, "${XCNPJ}", "${currentNSU}")`;
         let resp = "";
         
         try {
@@ -424,7 +445,7 @@ const NfeRecebidasForm: React.FC = () => {
     setXLoading(true);
     try {
       const sendUF = XUF || "35";
-      const comando = `NFE.DistribuicaoDFe(${sendUF}, "${XCNPJ}", "0")`;
+      const comando = `NFE.DistribuicaoDFePorUltNSU(${sendUF}, "${XCNPJ}", "0")`;
       const resp = await provedorService.enviarComando(comando, XEmpresaId);
       
       if (resp.includes("ERRO:")) {

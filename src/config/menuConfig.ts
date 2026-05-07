@@ -83,6 +83,7 @@ export const MENU_CONFIG: MenuItem[] = [
           /*  { id: "clientes", title: "Cadastro Resumido", icon: UserPlus },*/
           { id: "cadastro-completo", title: "Clientes", icon: Contact },
           { id: "fornecedores-transportadores", title: "Fornecedores/Transportadores", icon: Truck },
+          { id: "funcionarios", title: "Funcionários", icon: Contact },
           { id: "grupo-cadastros", title: "Grupos de Parceiros", icon: UsersRound },
         ],
       },

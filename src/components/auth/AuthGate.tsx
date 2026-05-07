@@ -296,11 +296,15 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
   // Logged in but loading empresas
   if (XLoadingEmpresas) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Carregando empresas...
+      <div className="flex min-h-screen items-center justify-center bg-background px-4 flex-col gap-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="text-center">
+          <p className="text-sm font-bold">Carregando empresas...</p>
+          <p className="text-[10px] text-muted-foreground mt-1">Verificando conexão com o banco de dados Supabase</p>
         </div>
+        <Button variant="ghost" size="sm" onClick={() => window.location.reload()} className="mt-4">
+          Recarregar Página
+        </Button>
       </div>
     );
   }

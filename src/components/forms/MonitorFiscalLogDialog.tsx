@@ -7,7 +7,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
-import { Clock, Terminal, ChevronRight, CheckCircle2, XCircle, Timer } from "lucide-react";
+import { Clock, Terminal, ChevronRight, CheckCircle2, XCircle, Timer, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const db = supabase as any;
 
@@ -161,15 +162,16 @@ const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen,
   const loadLogs = async () => {
     if (!isOpen) return;
     setXLoading(true);
+    setXData([]); // Limpa a lista anterior para não misturar dados de empresas diferentes
     try {
-      console.log(`[Log] Tentando carregar logs para Empresa ID: ${empresaId} (Tipo: ${typeof empresaId})`);
+      console.log(`[MonitorLog] 📂 Carregando logs EXCLUSIVOS da Empresa ID: ${empresaId}`);
       
       const { data, error } = await db
         .from("fiscal_evento")
         .select("*")
         .eq("empresa_id", empresaId)
         .order("created_at", { ascending: false })
-        .limit(100);
+        .limit(1000);
 
       if (error) {
         console.error("❌ Erro na query de logs:", error);
@@ -203,11 +205,23 @@ const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen,
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="max-w-5xl h-[80vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Terminal className="w-5 h-5 text-primary" />
-              Log de DFE
+            <DialogTitle className="flex items-center justify-between w-full pr-8">
+              <div className="flex items-center gap-2">
+                <Terminal className="w-5 h-5 text-primary" />
+                Log de DFE
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2 h-8"
+                onClick={loadLogs}
+                disabled={XLoading}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${XLoading ? "animate-spin" : ""}`} />
+                Atualizar
+              </Button>
             </DialogTitle>
-            <p className="text-[10px] text-muted-foreground italic">* Use a linha de filtros abaixo dos títulos para pesquisar</p>
+            <p className="text-[10px] text-muted-foreground italic">* Exibindo os últimos 1000 registros. Use os filtros para pesquisar.</p>
           </DialogHeader>
 
           <div className="flex-1 overflow-hidden">
@@ -258,7 +272,7 @@ const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen,
 
               <div className="flex flex-col">
                 <span className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Comando</span>
-                <pre className="bg-secondary/50 p-3 rounded-md text-xs font-mono border border-border whitespace-pre-wrap break-all">
+                <pre className="bg-secondary/50 p-4 rounded-md text-[13px] font-mono border border-border whitespace-pre-wrap break-all shadow-inner">
                   {XSelected.comando}
                 </pre>
               </div>
@@ -266,7 +280,7 @@ const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen,
               {XSelected.payload && (
                 <div className="flex flex-col">
                   <span className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Parâmetros (Payload)</span>
-                  <pre className="bg-secondary/20 p-3 rounded-md text-[10px] font-mono border border-border whitespace-pre-wrap break-all">
+                  <pre className="bg-secondary/20 p-4 rounded-md text-[11px] font-mono border border-border whitespace-pre-wrap break-all shadow-inner">
                     {JSON.stringify(XSelected.payload, null, 2)}
                   </pre>
                 </div>
@@ -275,12 +289,38 @@ const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen,
               <div className="flex flex-col">
                 <span className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Resposta do Worker</span>
                 {XSelected.status === "ERRO" ? (
-                   <pre className="bg-red-50 text-red-700 p-3 rounded-md text-xs font-mono border border-red-200 whitespace-pre-wrap break-all">
-                     {XSelected.mensagem_erro}
-                   </pre>
+                   <div className="space-y-2">
+                     <pre className="bg-red-50 text-red-700 p-5 rounded-md text-[13px] font-mono border border-red-200 whitespace-pre-wrap break-all shadow-inner">
+                       {XSelected.mensagem_erro}
+                     </pre>
+                     {XSelected.resposta && (
+                       <div className="mt-2">
+                         <span className="text-[9px] font-bold text-red-400 uppercase">Dados recuperados da resposta:</span>
+                         <pre className="bg-slate-50 text-slate-600 p-4 rounded-md text-[11px] font-mono border border-slate-200 whitespace-pre-wrap break-all shadow-inner max-h-[300px] overflow-y-auto">
+                           {(() => {
+                             try {
+                               const res = JSON.parse(XSelected.resposta);
+                               return JSON.stringify(res, null, 2);
+                             } catch(e) {
+                               return XSelected.resposta;
+                             }
+                           })()}
+                         </pre>
+                       </div>
+                     )}
+                   </div>
                 ) : (
-                  <pre className="bg-green-50 text-green-700 p-3 rounded-md text-xs font-mono border border-green-200 whitespace-pre-wrap break-all">
-                    {XSelected.resposta ? JSON.stringify(JSON.parse(XSelected.resposta), null, 2) : "Sem resposta ainda..."}
+                  <pre className="bg-green-50 text-green-700 p-5 rounded-md text-[13px] font-mono border border-green-200 whitespace-pre-wrap break-all shadow-inner min-h-[150px]">
+                    {XSelected.resposta ? (
+                      (() => {
+                        try {
+                          const res = JSON.parse(XSelected.resposta);
+                          return JSON.stringify(res, null, 2);
+                        } catch(e) {
+                          return XSelected.resposta;
+                        }
+                      })()
+                    ) : "Sem resposta ainda..."}
                   </pre>
                 )}
               </div>
