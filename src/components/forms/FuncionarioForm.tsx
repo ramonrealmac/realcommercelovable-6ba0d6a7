@@ -89,12 +89,12 @@ const FuncionarioForm: React.FC = () => {
   }, []);
 
   const loadLookups = useCallback(async () => {
+    console.log("[FuncionarioForm] Carregando Lookups para Empresa:", XEmpresaId);
     const [r1, r2] = await Promise.all([
       db.from("empresa_usuario").select("user_id").eq("empresa_id", XEmpresaId),
-      db.from("fiscal_config_item").select("fiscal_config_item_id, nome").eq("empresa_id", XEmpresaId).eq("excluido", false).order("nome"),
+      db.from("fiscal_config_item").select("fiscal_config_item_id, nome, modelo").eq("empresa_id", XEmpresaId).order("nome"),
     ]);
-    // Note: To get user names we might need another join or profile table, 
-    // but for now let's just use the user_id if we don't have a profiles table.
+    console.log("[FuncionarioForm] Resultado fiscal_config_item:", r2.data);
     setXUsuarios(r1.data || []);
     setXFiscalConfigs(r2.data || []);
   }, [XEmpresaId]);
@@ -114,6 +114,19 @@ const FuncionarioForm: React.FC = () => {
     loadData();
     loadLookups();
   }, [XEmpresaId]);
+
+  // Filtered Fiscal Configs
+  const XFiscalNFe = useMemo(() => {
+    const filtered = XFiscalConfigs.filter(f => String(f.modelo) === "55");
+    console.log("[FuncionarioForm] XFiscalNFe filtrado:", filtered);
+    return filtered;
+  }, [XFiscalConfigs]);
+
+  const XFiscalNFCe = useMemo(() => {
+    const filtered = XFiscalConfigs.filter(f => String(f.modelo) === "65");
+    console.log("[FuncionarioForm] XFiscalNFCe filtrado:", filtered);
+    return filtered;
+  }, [XFiscalConfigs]);
 
   // Populate form when record or mode changes
   useEffect(() => {
@@ -399,8 +412,8 @@ const FuncionarioForm: React.FC = () => {
                 <div className="p-4 border border-dashed rounded-lg bg-muted/20">
                   <h3 className="text-sm font-semibold mb-3">Configurações de Emissão</h3>
                   <div className="space-y-4">
-                    {renderLookup("Configuração NF-e (Modelo 55)", "nfe_config_item", XFiscalConfigs, "fiscal_config_item_id", "nome")}
-                    {renderLookup("Configuração NFC-e (Modelo 65)", "nfce_config_item", XFiscalConfigs, "fiscal_config_item_id", "nome")}
+                    {renderLookup("Configuração NF-e (Modelo 55)", "nfe_config_item", XFiscalNFe, "fiscal_config_item_id", "nome")}
+                    {renderLookup("Configuração NFC-e (Modelo 65)", "nfce_config_item", XFiscalNFCe, "fiscal_config_item_id", "nome")}
                   </div>
                 </div>
               </div>
