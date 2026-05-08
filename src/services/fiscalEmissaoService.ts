@@ -25,12 +25,30 @@ export const fiscalEmissaoService = {
       // 1. Obter dados do movimento
       const { data: movimento, error: movErr } = await db
         .from("movimento")
-        .select("*, movimento_item(*, produto(*)), movimento_pagamento(*)")
+        .select("*, movimento_item(*), movimento_pagamento(*)")
         .eq("movimento_id", movimentoId)
         .single();
 
       if (movErr || !movimento) {
         throw new Error("Movimento não localizado: " + movErr?.message);
+      }
+
+      // 1.1 Obter dados dos produtos manualmente (devido à falta de relacionamento no cache do schema)
+      if (movimento.movimento_item && movimento.movimento_item.length > 0) {
+        const productIds = movimento.movimento_item.map((i: any) => i.produto_id).filter(Boolean);
+        if (productIds.length > 0) {
+          const { data: produtos } = await db
+            .from("produto")
+            .select("*")
+            .in("produto_id", productIds);
+          
+          if (produtos) {
+            movimento.movimento_item = movimento.movimento_item.map((item: any) => ({
+              ...item,
+              produto: produtos.find((p: any) => p.produto_id === item.produto_id)
+            }));
+          }
+        }
       }
 
       // 2. Obter dados da empresa e parceiro
@@ -81,11 +99,11 @@ export const fiscalEmissaoService = {
         tp_nf: 1, // Saída
         tp_emis: 1, // Normal
         fin_nfe: 1, // Normal
-        nat_op: regra.descricao,
+        nat_op: regra.descricao?.substring(0, 60),
         dt_emissao: new Date().toISOString(),
         dt_saida: new Date().toISOString(),
-        st_nf: "0", // Pendente
-        origem_inclusao: "EMISSAO_PROPRIA",
+        st_nf: "A", // Aberta/Pendente
+        origem_inclusao: "M", // Manual/Interna
         vl_produtos: movimento.vl_total_itens || 0,
         vl_desconto: movimento.vl_desconto || 0,
         vl_frete: movimento.vl_frete || 0,
@@ -217,7 +235,7 @@ export const fiscalEmissaoService = {
       for (const p of movimento.movimento_pagamento) {
         const nfePag = {
           nfe_cabecalho_id: cabId,
-          t_pag: p.tipo_pagamento_id || "01", // Mapear conforme SEFAZ se necessário
+          t_pag: p.tp_pagamento || "01", // Mapear conforme SEFAZ se necessário
           v_pag: p.vl_pagamento,
           tp_integra: p.tp_integra || 2, // 2 = Não Integrado
           c_aut: p.nr_autorizacao,

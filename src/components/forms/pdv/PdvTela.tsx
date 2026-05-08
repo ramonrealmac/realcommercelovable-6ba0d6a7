@@ -564,6 +564,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
             vl_movimento: c.qt_item * c.vl_unitario,
           }));
       setXImpressaoDados({
+        movimento_id: movimentoId,
         nr_movimento: nrMov,
         cliente_nome: XPedidoSel ? XPedidoSel.cliente_nome : (XCliente?.nome_fantasia || XCliente?.razao_social || "(Consumidor)"),
         caixa_nome: caixa.nome,
@@ -911,6 +912,8 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       <OpcoesPagamentoDialog
         open={XOpenOpcoes}
         dados={XImpressaoDados}
+        empresaId={XEmpresaId}
+        funcionarioId={caixa.funcionario_id}
         onClose={concluirVenda}
         onConcluir={concluirVenda}
       />
