@@ -7,6 +7,8 @@ export interface IPdvCaixa {
   caixa_inf_vend?: string | null;
   caixa_cnc_venda?: string | null;
   caixa_edit_venda?: string | null;
+  nfe_nome?: string;
+  nfce_nome?: string;
 }
 
 export interface IPdvVendedor {

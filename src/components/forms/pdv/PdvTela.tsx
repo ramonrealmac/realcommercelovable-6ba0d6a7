@@ -606,6 +606,12 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
           <span className="text-muted-foreground">Caixa: <strong className="text-blue-600 dark:text-blue-400">{caixa.nome}</strong></span>
           <span className="text-muted-foreground">Data: <strong className="text-foreground">{new Date(dtMovimento + "T00:00:00").toLocaleDateString("pt-BR")}</strong></span>
           <span className="text-muted-foreground">Abertura #<strong className="text-foreground">{abertura.caixa_abertura_id}</strong></span>
+          {caixa.nfe_nome && (
+            <span className="text-muted-foreground whitespace-nowrap">NF-e: <strong className="text-amber-600 dark:text-amber-400">{caixa.nfe_nome}</strong></span>
+          )}
+          {caixa.nfce_nome && (
+            <span className="text-muted-foreground whitespace-nowrap">NFC-e: <strong className="text-amber-600 dark:text-amber-400">{caixa.nfce_nome}</strong></span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setXOpenFuncoes(true)}

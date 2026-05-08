@@ -34,14 +34,44 @@ const SelecionarCaixaDialog: React.FC<IProps> = ({ onEntrar, onCancelar }) => {
 
   const carregarCaixas = useCallback(async () => {
     setXLoadingCaixas(true);
-    const { data, error } = await db.from("funcionario")
-      .select("funcionario_id, nome, tamanho_fonte_pedidos, tamanho_fonte_produtos, tempo_refresh_pdv, caixa_inf_vend, caixa_cnc_venda, caixa_edit_venda")
+    const { data: funcs, error: funcError } = await db.from("funcionario")
+      .select(`
+        funcionario_id, nome, tamanho_fonte_pedidos, tamanho_fonte_produtos, tempo_refresh_pdv, 
+        caixa_inf_vend, caixa_cnc_venda, caixa_edit_venda,
+        nfe_config_item, nfce_config_item
+      `)
       .eq("empresa_id", XEmpresaId)
       .eq("caixa", "S")
       .order("nome");
+    
+    if (funcError) { 
+      setXLoadingCaixas(false);
+      toast.error("Falha ao carregar caixas: " + funcError.message); 
+      return; 
+    }
+
+    const configIds = Array.from(new Set(
+      (funcs || []).flatMap((f: any) => [f.nfe_config_item, f.nfce_config_item]).filter(Boolean)
+    ));
+
+    let configMap: Record<number, string> = {};
+    if (configIds.length > 0) {
+      const { data: configs } = await db.from("fiscal_config_item")
+        .select("fiscal_config_item_id, nome")
+        .in("fiscal_config_item_id", configIds);
+      
+      (configs || []).forEach((c: any) => {
+        configMap[c.fiscal_config_item_id] = c.nome;
+      });
+    }
+
+    const lista = (funcs || []).map((f: any) => ({
+      ...f,
+      nfe_nome: configMap[f.nfe_config_item] || "",
+      nfce_nome: configMap[f.nfce_config_item] || ""
+    })) as IPdvCaixa[];
+
     setXLoadingCaixas(false);
-    if (error) { toast.error("Falha ao carregar caixas: " + error.message); return; }
-    const lista = (data || []) as IPdvCaixa[];
     setXCaixas(lista);
     if (lista.length === 1) setXCaixaSel(lista[0].funcionario_id);
   }, [XEmpresaId]);

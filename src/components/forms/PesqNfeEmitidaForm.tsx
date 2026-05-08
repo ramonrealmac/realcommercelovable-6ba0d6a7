@@ -25,7 +25,7 @@ import { Badge } from "@/components/ui/badge";
 
 const db = supabase as any;
 
-const NfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialFilterId }) => {
+const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialFilterId }) => {
     const { XEmpresaId } = useAppContext();
     const [XData, setXData] = useState<any[]>([]);
     const [XLoading, setXLoading] = useState(false);

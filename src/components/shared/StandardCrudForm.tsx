@@ -34,10 +34,11 @@ interface StandardCrudFormProps<T extends Record<string, any>> {
   XExportTitle?: string;
   XAfterInsertTab?: string;
   XRefreshRef?: React.MutableRefObject<(() => Promise<void>) | null>;
+  XInitialId?: any;
 }
 
 function StandardCrudForm<T extends Record<string, any>>({
-  config, XGridCols, renderCadastro, XExtraTabs = [], XExportTitle, XAfterInsertTab, XRefreshRef,
+  config, XGridCols, renderCadastro, XExtraTabs = [], XExportTitle, XAfterInsertTab, XRefreshRef, XInitialId,
 }: StandardCrudFormProps<T>) {
   const { closeTab, XTabs, XActiveTabId } = useAppContext();
   const [XInnerTab, setXInnerTab] = useState<string>("cadastro");
@@ -58,6 +59,16 @@ function StandardCrudForm<T extends Record<string, any>>({
   }, [XRefreshRef, ctrl.loadData]);
 
   const XFilteredData = useGridFilter(ctrl.XData, XSearchFilters);
+
+  useEffect(() => {
+    if (XInitialId && ctrl.XData.length > 0) {
+      const idx = ctrl.XData.findIndex(r => r[config.XPrimaryKey] === XInitialId);
+      if (idx >= 0) {
+        ctrl.setXCurrentIdx(idx);
+        setXInnerTab("cadastro");
+      }
+    }
+  }, [XInitialId, ctrl.XData, config.XPrimaryKey]);
 
   const handleSelectFromSearch = (row: any) => {
     const idx = ctrl.XData.findIndex(r => r[config.XPrimaryKey] === row[config.XPrimaryKey]);

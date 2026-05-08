@@ -90,13 +90,47 @@ const FuncionarioForm: React.FC = () => {
 
   const loadLookups = useCallback(async () => {
     console.log("[FuncionarioForm] Carregando Lookups para Empresa:", XEmpresaId);
-    const [r1, r2] = await Promise.all([
-      db.from("empresa_usuario").select("user_id").eq("empresa_id", XEmpresaId),
-      db.from("fiscal_config_item").select("fiscal_config_item_id, nome, modelo").eq("empresa_id", XEmpresaId).order("nome"),
-    ]);
-    console.log("[FuncionarioForm] Resultado fiscal_config_item:", r2.data);
-    setXUsuarios(r1.data || []);
-    setXFiscalConfigs(r2.data || []);
+    
+    // Busca usuários vinculados à empresa
+    const { data: users, error: userError } = await db
+      .from("empresa_usuario")
+      .select("empresa_usuario_id, user_id")
+      .eq("empresa_id", XEmpresaId)
+      .eq("fl_excluido", false);
+      
+    if (userError) {
+      console.error("[FuncionarioForm] Erro ao carregar usuários:", userError);
+    }
+
+    // Busca os nomes nos perfis para esses usuários
+    let usersWithProfiles = [];
+    if (users && users.length > 0) {
+      const { data: profiles, error: profileError } = await db
+        .from("profiles")
+        .select("id, nm_usuario, ds_login")
+        .in("id", users.map((u: any) => u.user_id));
+        
+      if (profileError) {
+        console.error("[FuncionarioForm] Erro ao carregar perfis:", profileError);
+      }
+
+      usersWithProfiles = users.map((u: any) => {
+        const profile = profiles?.find((p: any) => p.id === u.user_id);
+        return {
+          empresa_usuario_id: u.empresa_usuario_id,
+          label: profile ? (profile.nm_usuario || profile.ds_login || u.user_id) : u.user_id
+        };
+      });
+    }
+
+    const { data: configs } = await db
+      .from("fiscal_config_item")
+      .select("fiscal_config_item_id, nome, modelo")
+      .eq("empresa_id", XEmpresaId)
+      .order("nome");
+
+    setXUsuarios(usersWithProfiles);
+    setXFiscalConfigs(configs || []);
   }, [XEmpresaId]);
 
   const loadData = useCallback(async () => {
@@ -377,7 +411,7 @@ const FuncionarioForm: React.FC = () => {
 
             {XCadastroInnerTab === "geral" && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-left-1 duration-200">
-                {renderLookup("Usuário Vinculado", "usr_id", XUsuarios, "user_id", "user_id")}
+                {renderLookup("Usuário Vinculado", "usr_id", XUsuarios, "empresa_usuario_id", "label")}
                 <div className="grid grid-cols-2 gap-3 md:col-span-2">
                   {renderSelect("Gerente", "gerente", [{ v: "S", l: "Sim" }, { v: "N", l: "Não" }])}
                   {renderSelect("Vendedor", "vendedor", [{ v: "S", l: "Sim" }, { v: "N", l: "Não" }])}
