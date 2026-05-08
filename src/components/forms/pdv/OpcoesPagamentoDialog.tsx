@@ -81,20 +81,48 @@ const imprimir = (d: IImpressaoDados | null, modo: "bobina" | "a4") => {
   w.document.close();
 };
 
-const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, onClose, onConcluir }) => {
+const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funcionarioId, onClose, onConcluir }) => {
+  const { openTab } = useAppContext();
+  const [XSalvando, setXSalvando] = React.useState(false);
+
+  const handleGerarFiscal = async (tipo: "NFE" | "NFCE") => {
+    if (!dados?.movimento_id) return;
+    
+    setXSalvando(true);
+    const res = await fiscalEmissaoService.gerarDocumentoFiscalFromMovimento(
+      dados.movimento_id,
+      tipo,
+      empresaId,
+      funcionarioId
+    );
+    setXSalvando(false);
+
+    if (res.success && res.nfe_cabecalho_id) {
+      toast.success(`${tipo} gerada com sucesso! Abrindo formulário...`);
+      openTab({
+        title: "NFe/NFCe",
+        component: "nfe-emitidas",
+        params: { nfe_cabecalho_id: res.nfe_cabecalho_id }
+      });
+      onConcluir(); // Fecha o diálogo e limpa o PDV
+    } else {
+      toast.error(`Erro ao gerar ${tipo}: ` + res.message);
+    }
+  };
+
   const cards = [
     { key: "bobina", label: "Bobina", desc: "Impressão térmica 80mm", icon: <Printer size={28} />, color: "text-blue-600",
       action: () => imprimir(dados, "bobina"), enabled: true },
     { key: "a4", label: "A4", desc: "Folha grande", icon: <FileText size={28} />, color: "text-indigo-600",
       action: () => imprimir(dados, "a4"), enabled: true },
-    { key: "nfe", label: "NFe", desc: "Em desenvolvimento", icon: <FileCode2 size={28} />, color: "text-amber-600",
-      action: () => toast.info("NFe será implementada em seguida."), enabled: false },
-    { key: "nfce", label: "NFCe", desc: "Em desenvolvimento", icon: <ScanLine size={28} />, color: "text-emerald-600",
-      action: () => toast.info("NFCe será implementada em seguida."), enabled: false },
+    { key: "nfe", label: "NFe", desc: "Nota Fiscal Eletrônica", icon: <FileCode2 size={28} />, color: "text-amber-600",
+      action: () => handleGerarFiscal("NFE"), enabled: true },
+    { key: "nfce", label: "NFCe", desc: "Nota de Consumidor", icon: <ScanLine size={28} />, color: "text-emerald-600",
+      action: () => handleGerarFiscal("NFCE"), enabled: true },
   ];
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(o) => !o && !XSalvando && onClose()}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Documento da Venda</DialogTitle>
@@ -104,20 +132,25 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, onClose, onConcl
         </div>
         <div className="grid grid-cols-2 gap-3 py-2">
           {cards.map(c => (
-            <button key={c.key} onClick={c.action} disabled={!c.enabled}
-              className={`border border-border rounded p-4 text-left flex items-center gap-3 transition
-                ${c.enabled ? "hover:bg-accent hover:border-primary cursor-pointer" : "opacity-50 cursor-not-allowed"}`}>
+            <button key={c.key} onClick={c.action} disabled={!c.enabled || XSalvando}
+              className={`border border-border rounded p-4 text-left flex items-center gap-3 transition relative
+                ${c.enabled && !XSalvando ? "hover:bg-accent hover:border-primary cursor-pointer" : "opacity-50 cursor-not-allowed"}`}>
               <div className={c.color}>{c.icon}</div>
               <div>
                 <div className="font-semibold text-sm">{c.label}</div>
                 <div className="text-xs text-muted-foreground">{c.desc}</div>
               </div>
+              {XSalvando && (c.key === "nfe" || c.key === "nfce") && (
+                <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                </div>
+              )}
             </button>
           ))}
         </div>
         <div className="flex justify-end gap-2 pt-3 border-t border-border">
-          <button onClick={onConcluir}
-            className="text-sm px-4 py-1.5 rounded bg-emerald-600 text-white font-semibold hover:bg-emerald-700">
+          <button onClick={onConcluir} disabled={XSalvando}
+            className="text-sm px-4 py-1.5 rounded bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50">
             ✓ Concluir
           </button>
         </div>
