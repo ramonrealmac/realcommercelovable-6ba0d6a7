@@ -110,6 +110,9 @@ const AppContent = () => {
         return <NotaFiscalEntradaForm />;
       case "nfe-recebidas":
         return <NfeRecebidasForm />;
+      case "nfe-emitidas":
+      case "nfe-nfce":
+        return <NfeEmtidaForm />;
       case "consulta-titulos-receber":
         return <ConsultaTitulosReceberForm />;
       case "baixa-por-cliente":
