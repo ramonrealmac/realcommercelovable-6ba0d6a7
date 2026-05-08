@@ -140,7 +140,7 @@ const AppContent = () => {
         return <ProvedorTestForm />;
       case "rpb-relatorios":
         return <RpbManager />;
-      
+
       // PDV cases
       case "pdv":
         return <PdvTela />;
