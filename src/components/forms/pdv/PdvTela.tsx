@@ -184,7 +184,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   const subtotal = XCart.reduce((a, c) => a + c.qt_item * c.vl_unitario, 0);
   const baseSubtotal = XPedidoSel ? XPedidoSel.vl_movimento : subtotal;
   const vlDescAplicado = XPedidoSel ? 0 : XVlDesc;
-  const totalReceber = Math.max(0, baseSubtotal - vlDescAplicado);
+  const totalReceber = Number(Math.max(0, baseSubtotal - vlDescAplicado).toFixed(2));
   const podeReceber = (XPedidoSel != null) || (XCart.length > 0);
 
   // ===== Finalizar venda =====
@@ -426,24 +426,50 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
 
   /** Confirmação do pagamento: grava caixa_movimento + itens + status R, então abre Documento da Venda. */
   const confirmarPagamento = async (linhas: IPdvPagamentoLinha[]) => {
+    const tId = toast.loading("Processando recebimento...");
+    console.log("[PdvTela] confirmarPagamento iniciado com linhas:", linhas);
     try {
       let movimentoId: number;
       let nrMov: number;
       let total: number;
 
       if (XPedidoSel) {
+        console.log("[PdvTela] Finalizando pedido existente:", XPedidoSel.movimento_id);
         movimentoId = XPedidoSel.movimento_id;
         nrMov = XPedidoSel.nr_movimento || movimentoId;
         total = XPedidoSel.vl_movimento;
+        console.log("[PdvTela] Deletando pagamentos antigos de movimento:", movimentoId);
+        const { error: eDel } = await db.from("movimento_pagamento").delete().eq("movimento_id", movimentoId);
+        if (eDel) console.warn("[PdvTela] Aviso: Erro ao deletar pagamentos antigos:", eDel.message);
       } else {
+        console.log("[PdvTela] Criando nova venda direta...");
         const novo = await criarMovimentoVendaDireta();
+        if (!novo) throw new Error("Falha ao criar cabeçalho do movimento.");
         movimentoId = novo.movimento_id;
         nrMov = novo.nr;
         total = novo.total;
+        console.log("[PdvTela] Venda direta criada. ID:", movimentoId, "NR:", nrMov, "Total:", total);
       }
 
-      const totalRecebidoSomado = linhas.reduce((acc, l) => acc + Number(l.vl_recebido || 0), 0);
+      console.log("[PdvTela] Inserindo novos pagamentos de movimento...");
+      const pagtos = linhas.map(l => ({
+        empresa_id: XEmpresaId,
+        movimento_id: movimentoId,
+        condicao_id: l.condicao_id,
+        tp_pagamento: l.condicao_descricao,
+        vl_pagamento: l.vl_recebido,
+        nr_autorizacao: l.numero_autoriza || "",
+        bandeira_id: l.bandeira_id,
+        operadora_id: l.operadora_id,
+        n_parcelas: l.qt_parcela,
+        dt_pagamento: new Date().toISOString()
+      }));
+      const { error: ePag } = await db.from("movimento_pagamento").insert(pagtos);
+      if (ePag) throw new Error("Falha ao gravar pagamentos: " + ePag.message);
+
+      const totalRecebidoSomado = Number(linhas.reduce((acc, l) => acc + Number(l.vl_recebido || 0), 0).toFixed(2));
       const valorTroco = Math.max(0, totalRecebidoSomado - total);
+      console.log("[PdvTela] Total:", total, "Recebido:", totalRecebidoSomado, "Troco:", valorTroco);
       
       let linhasAjustadas = [...linhas];
       if (valorTroco > 0) {
@@ -506,8 +532,9 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         meio_pagamento_id: (l as any).meio_pagamento_id ?? null,
         excluido: false,
       }));
+      console.log("[PdvTela] Gravando", itensCx.length, "itens no caixa_movimento_item...");
       const { error: e2 } = await db.from("caixa_movimento_item").insert(itensCx);
-      if (e2) throw new Error("Falha ao gravar formas de pagamento: " + e2.message);
+      if (e2) throw new Error("Falha ao gravar formas de pagamento no caixa: " + e2.message);
 
       // ===== Atualiza vl_fechamento da caixa_abertura com os meios que somam ao caixa =====
       try {
@@ -547,6 +574,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         .eq("movimento_id", movimentoId);
       if (e3) throw new Error("Falha ao baixar pedido: " + e3.message);
 
+
       // Monta dados de impressão para o próximo dialog
       const itensImp = XPedidoSel
         ? XPedidoSelItens.map((it: any) => ({
@@ -573,11 +601,12 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         total,
       });
 
-      toast.success(`Pedido ${nrMov} recebido com sucesso.`);
+      toast.success(`Pedido ${nrMov} recebido com sucesso.`, { id: tId });
       setXOpenPagto(false);
       setXOpenOpcoes(true);
     } catch (err: any) {
-      toast.error(err.message || "Erro ao finalizar.");
+      console.error("[PdvTela] Erro fatal em confirmarPagamento:", err);
+      toast.error(err.message || "Erro ao finalizar.", { id: tId });
     }
   };
 

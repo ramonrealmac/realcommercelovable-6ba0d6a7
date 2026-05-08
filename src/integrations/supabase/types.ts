@@ -3317,7 +3317,7 @@ export type Database = {
           vl_ipi: number
           vl_is: number
           vl_pis: number
-          vl_produtos: number
+          vl_produto: number
           vl_seguro: number
           vl_total_nf: number
           x_motivo: string | null
@@ -3360,7 +3360,7 @@ export type Database = {
           vl_ipi?: number
           vl_is?: number
           vl_pis?: number
-          vl_produtos?: number
+          vl_produto?: number
           vl_seguro?: number
           vl_total_nf?: number
           x_motivo?: string | null
@@ -3403,7 +3403,7 @@ export type Database = {
           vl_ipi?: number
           vl_is?: number
           vl_pis?: number
-          vl_produtos?: number
+          vl_produto?: number
           vl_seguro?: number
           vl_total_nf?: number
           x_motivo?: string | null

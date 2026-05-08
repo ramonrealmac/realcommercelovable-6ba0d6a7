@@ -62,7 +62,7 @@ export function parseNfeXml(xmlString: string): INfeDadosXml | null {
 
     // Totais
     const total  = infNFe.querySelector("total ICMSTot");
-    const vl_produtos = num(total, "vProd");
+    const vl_produto = num(total, "vProd");
     const vl_desconto = num(total, "vDesc");
     const vl_frete    = num(total, "vFrete");
     const vl_seguro   = num(total, "vSeg");
@@ -135,7 +135,7 @@ export function parseNfeXml(xmlString: string): INfeDadosXml | null {
       dt_saida:   dt_saida   ? dt_saida.substring(0, 10)   : "",
       chave_nfe,
       nr_protocolo: nrProtocolo,
-      vl_produtos,
+      vl_produto,
       vl_desconto,
       vl_frete,
       vl_seguro,

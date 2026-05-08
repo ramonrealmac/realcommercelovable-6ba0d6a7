@@ -33,7 +33,7 @@ const XDefault: Partial<INfeCabecalho> = {
   origem_inclusao: "M", st_nf: "A",
   tp_nf: 0, fin_nfe: 1, tp_emis: 1, modelo: "55", nat_op: "Entrada de Mercadoria",
   nr_nota: "", serie: "1", chave_nfe: "", nr_protocolo: "",
-  vl_produtos: 0, vl_desconto: 0, vl_frete: 0, vl_seguro: 0,
+  vl_produto: 0, vl_desconto: 0, vl_frete: 0, vl_seguro: 0,
   vl_despesa: 0, vl_ipi: 0, vl_icms_st: 0,
   vl_pis: 0, vl_cofins: 0, vl_ibs: 0, vl_cbs: 0, vl_is: 0,
   vl_total_nf: 0,
@@ -241,7 +241,7 @@ const NotaFiscalEntradaForm: React.FC = () => {
       dt_saida:    dados.dt_saida,
       chave_nfe:   dados.chave_nfe,
       nr_protocolo:dados.nr_protocolo,
-      vl_produtos: dados.vl_produtos,
+      vl_produto: dados.vl_produto,
       vl_desconto: dados.vl_desconto,
       vl_frete:    dados.vl_frete,
       vl_seguro:   dados.vl_seguro,
@@ -570,7 +570,7 @@ const NotaFiscalEntradaForm: React.FC = () => {
                 <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Totais da Nota</p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
                   {[
-                    { label: "Produtos",  key: "vl_produtos"  },
+                    { label: "Produtos",  key: "vl_produto"  },
                     { label: "Desconto",  key: "vl_desconto"  },
                     { label: "Frete",     key: "vl_frete"     },
                     { label: "Seguro",    key: "vl_seguro"    },

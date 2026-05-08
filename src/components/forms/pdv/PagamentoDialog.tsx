@@ -84,8 +84,15 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
   const condicaoRef = useRef<HTMLSelectElement>(null);
   const finalizarRef = useRef<HTMLButtonElement>(null);
 
-  const totalPago = useMemo(() => XLinhas.reduce((a, l) => a + Number(l.vl_recebido || 0), 0), [XLinhas]);
-  const valorAPagar = Math.max(0, totalPedido - totalPago);
+  const totalPago = useMemo(() => Number(XLinhas.reduce((a, l) => a + Number(l.vl_recebido || 0), 0).toFixed(2)), [XLinhas]);
+  const valorAPagar = Number(Math.max(0, totalPedido - totalPago).toFixed(2));
+  
+  useEffect(() => {
+    if (open) {
+      console.log("[PagamentoDialog] totalPedido:", totalPedido, "totalPago:", totalPago, "valorAPagar:", valorAPagar);
+    }
+  }, [open, totalPedido, totalPago, valorAPagar]);
+
   const troco = totalPago > totalPedido ? totalPago - totalPedido : 0;
   const vlPagarNum = useMemo(() => parseNum(XVlPagar), [XVlPagar]);
   const vlParcela = XQtParcela > 0 ? +(vlPagarNum / XQtParcela).toFixed(2) : vlPagarNum;
@@ -314,13 +321,30 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
   };
 
   const finalizar = async () => {
-    if (XLinhas.length === 0) { toast.error("Inclua ao menos um pagamento."); return; }
-    if (totalPago + 0.0001 < totalPedido) { toast.error("Valor pago é menor que o total do pedido."); return; }
-    if (!confirm("Confirma o recebimento e a baixa do pedido?")) return;
+    console.log("[PagamentoDialog] finalizar clicado. totalPago:", totalPago, "totalPedido:", totalPedido);
+    if (XLinhas.length === 0) { 
+      console.warn("[PagamentoDialog] Nenhuma linha de pagamento.");
+      toast.error("Inclua ao menos um pagamento."); 
+      return; 
+    }
+    if (totalPago + 0.0001 < totalPedido) { 
+      console.warn("[PagamentoDialog] Valor insuficiente:", totalPago, "<", totalPedido);
+      toast.error("Valor pago é menor que o total do pedido."); 
+      return; 
+    }
+    
+    // Removido confirm temporariamente para debugar se ele está bloqueando
+    console.log("[PagamentoDialog] Iniciando gravação. XSalvando=true");
     setXSalvando(true);
     try {
+      console.log("[PagamentoDialog] Chamando onConfirmar com", XLinhas.length, "linhas...");
       await onConfirmar(XLinhas);
+      console.log("[PagamentoDialog] onConfirmar retornou com sucesso.");
+    } catch (err: any) {
+      console.error("[PagamentoDialog] Erro capturado no catch de finalizar:", err);
+      toast.error("Erro inesperado: " + (err.message || err));
     } finally {
+      console.log("[PagamentoDialog] Finalizando gravação. XSalvando=false");
       setXSalvando(false);
     }
   };

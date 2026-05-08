@@ -242,7 +242,7 @@ export async function emitirNfe(params: EmissaoParams): Promise<EmissaoResult> {
       st_nf: 'A', // A = Aguardando transmissão
       dt_emissao: new Date().toISOString().split('T')[0],
       dt_saida: new Date().toISOString().split('T')[0],
-      vl_produtos: arred(vl_total_produtos),
+      vl_produto: arred(vl_total_produtos),
       vl_desconto: arred(vl_total_desconto),
       vl_frete,
       vl_seguro,

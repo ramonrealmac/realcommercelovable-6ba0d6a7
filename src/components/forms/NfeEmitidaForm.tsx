@@ -32,13 +32,13 @@ const XDefault: Partial<INfeCabecalho> = {
   tp_nf: 1, // 1 = saída
   fin_nfe: 1,
   tp_emis: 1,
-  modelo: "55",
+  modelo: 55,
   nat_op: "Venda de Mercadoria",
-  nr_nota: "",
-  serie: "1",
+  nr_nota: 0,
+  serie: 1,
   chave_nfe: "",
   nr_protocolo: "",
-  vl_produtos: 0, vl_desconto: 0, vl_frete: 0, vl_seguro: 0, vl_despesa: 0,
+  vl_produto: 0, vl_desconto: 0, vl_frete: 0, vl_seguro: 0, vl_despesa: 0,
   vl_ipi: 0, vl_icms_st: 0, vl_pis: 0, vl_cofins: 0,
   vl_ibs: 0, vl_cbs: 0, vl_is: 0, vl_total_nf: 0,
   obs_nf: "",
@@ -114,7 +114,7 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
         },
         XOnBeforeSave: (rec) => {
           if (!rec.cadastro_id) throw new Error("Selecione o Destinatário.");
-          if (!rec.nr_nota?.toString().trim()) throw new Error("Informe o número da Nota Fiscal.");
+          if (!rec.nr_nota) throw new Error("Informe o número da Nota Fiscal.");
           if (!rec.dt_emissao) throw new Error("Informe a Data de Emissão.");
           if (!rec.nat_op?.toString().trim()) throw new Error("Informe a Natureza da Operação.");
           return { ...rec, tp_nf: 1, empresa_id: rec.empresa_id || XEmpresaId };
@@ -197,18 +197,18 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
               </div>
               <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Modelo</label>
-                <select disabled={ro} value={record.modelo ?? "55"} onChange={e => setField("modelo" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
-                  <option value="55">55</option>
-                  <option value="65">65</option>
+                <select disabled={ro} value={record.modelo ?? 55} onChange={e => setField("modelo" as any, Number(e.target.value) as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
+                  <option value={55}>55</option>
+                  <option value={65}>65</option>
                 </select>
               </div>
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Nº Nota <span className="text-destructive">*</span></label>
-                <input readOnly={ro} value={record.nr_nota ?? ""} onChange={e => setField("nr_nota" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
+                <input readOnly={ro} type="number" value={record.nr_nota || ""} onChange={e => setField("nr_nota" as any, Number(e.target.value) as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
               <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Série</label>
-                <input readOnly={ro} value={record.serie ?? ""} onChange={e => setField("serie" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm text-center" />
+                <input readOnly={ro} type="number" value={record.serie || ""} onChange={e => setField("serie" as any, Number(e.target.value) as any)} className="w-full border border-border rounded px-2 py-1 text-sm text-center" />
               </div>
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Dt. Emissão <span className="text-destructive">*</span></label>
@@ -307,7 +307,7 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
               <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Totais da Nota</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
                 {[
-                  { label: "Produtos", key: "vl_produtos" },
+                  { label: "Produtos", key: "vl_produto" },
                   { label: "Desconto", key: "vl_desconto" },
                   { label: "Frete",    key: "vl_frete"    },
                   { label: "Seguro",   key: "vl_seguro"   },
