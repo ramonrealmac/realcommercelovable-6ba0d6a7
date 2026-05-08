@@ -2598,6 +2598,7 @@ export type Database = {
           contingencia_mdf: string | null
           contingencia_nfce: string | null
           contingencia_nfe: string | null
+          dfe_maxnsu_busca: number
           dt_alteracao: string | null
           dt_cadastro: string | null
           empresa_id: number
@@ -2634,6 +2635,7 @@ export type Database = {
           contingencia_mdf?: string | null
           contingencia_nfce?: string | null
           contingencia_nfe?: string | null
+          dfe_maxnsu_busca?: number
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id: number
@@ -2670,6 +2672,7 @@ export type Database = {
           contingencia_mdf?: string | null
           contingencia_nfce?: string | null
           contingencia_nfe?: string | null
+          dfe_maxnsu_busca?: number
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
@@ -2700,8 +2703,42 @@ export type Database = {
         }
         Relationships: []
       }
+      fiscal_config_item: {
+        Row: {
+          csc: string | null
+          empresa_id: number
+          fiscal_config_item_id: number
+          id_csc: string | null
+          modelo: string
+          nome: string | null
+          sequencia: number
+          serie: string
+        }
+        Insert: {
+          csc?: string | null
+          empresa_id: number
+          fiscal_config_item_id?: number
+          id_csc?: string | null
+          modelo?: string
+          nome?: string | null
+          sequencia?: number
+          serie?: string
+        }
+        Update: {
+          csc?: string | null
+          empresa_id?: number
+          fiscal_config_item_id?: number
+          id_csc?: string | null
+          modelo?: string
+          nome?: string | null
+          sequencia?: number
+          serie?: string
+        }
+        Relationships: []
+      }
       fiscal_evento: {
         Row: {
+          ambiente: number | null
           comando: string
           created_at: string
           empresa_id: number
@@ -2712,9 +2749,11 @@ export type Database = {
           status: string
           tipo: string
           updated_at: string
+          user_id: string | null
           xml_retorno: string | null
         }
         Insert: {
+          ambiente?: number | null
           comando: string
           created_at?: string
           empresa_id: number
@@ -2725,9 +2764,11 @@ export type Database = {
           status?: string
           tipo: string
           updated_at?: string
+          user_id?: string | null
           xml_retorno?: string | null
         }
         Update: {
+          ambiente?: number | null
           comando?: string
           created_at?: string
           empresa_id?: number
@@ -2738,6 +2779,7 @@ export type Database = {
           status?: string
           tipo?: string
           updated_at?: string
+          user_id?: string | null
           xml_retorno?: string | null
         }
         Relationships: []
@@ -3252,6 +3294,7 @@ export type Database = {
           excluido: boolean
           fin_nfe: number
           modelo: string
+          movimento_id: number | null
           nat_op: string
           nfe_cabecalho_id: number
           nr_nota: string
@@ -3294,6 +3337,7 @@ export type Database = {
           excluido?: boolean
           fin_nfe?: number
           modelo?: string
+          movimento_id?: number | null
           nat_op?: string
           nfe_cabecalho_id?: never
           nr_nota?: string
@@ -3336,6 +3380,7 @@ export type Database = {
           excluido?: boolean
           fin_nfe?: number
           modelo?: string
+          movimento_id?: number | null
           nat_op?: string
           nfe_cabecalho_id?: never
           nr_nota?: string
@@ -4008,6 +4053,8 @@ export type Database = {
           funcionario_id: number
           gerente: string | null
           motorista: string | null
+          nfce_config_item: number | null
+          nfe_config_item: number | null
           nome: string | null
           pc_comissao_av: number | null
           pc_comissao_prz: number | null
@@ -4017,8 +4064,6 @@ export type Database = {
           tp_comissao: string | null
           usr_id: number | null
           vendedor: string | null
-          nfe_config_item: number | null
-          nfce_config_item: number | null
         }
         Insert: {
           caixa?: string | null
@@ -4031,6 +4076,8 @@ export type Database = {
           funcionario_id?: number
           gerente?: string | null
           motorista?: string | null
+          nfce_config_item?: number | null
+          nfe_config_item?: number | null
           nome?: string | null
           pc_comissao_av?: number | null
           pc_comissao_prz?: number | null
@@ -4040,8 +4087,6 @@ export type Database = {
           tp_comissao?: string | null
           usr_id?: number | null
           vendedor?: string | null
-          nfe_config_item?: number | null
-          nfce_config_item?: number | null
         }
         Update: {
           caixa?: string | null
@@ -4054,6 +4099,8 @@ export type Database = {
           funcionario_id?: number
           gerente?: string | null
           motorista?: string | null
+          nfce_config_item?: number | null
+          nfe_config_item?: number | null
           nome?: string | null
           pc_comissao_av?: number | null
           pc_comissao_prz?: number | null
@@ -4063,8 +4110,6 @@ export type Database = {
           tp_comissao?: string | null
           usr_id?: number | null
           vendedor?: string | null
-          nfe_config_item?: number | null
-          nfce_config_item?: number | null
         }
         Relationships: []
       }
@@ -6164,49 +6209,25 @@ export type Database = {
           },
         ]
       }
-      sequenciais: {
-        Row: {
-          empresa_id: number
-          modelo: string
-          sequencia: number
-          sequencia_id: number
-          serie: string
-        }
-        Insert: {
-          empresa_id: number
-          modelo?: string
-          sequencia?: number
-          sequencia_id?: number
-          serie?: string
-        }
-        Update: {
-          empresa_id?: number
-          modelo?: string
-          sequencia?: number
-          sequencia_id?: number
-          serie?: string
-        }
-        Relationships: []
-      }
       sys_sequencial: {
         Row: {
           empresa_id: number
-          nm_campo1: string | null
-          nm_campo3: string | null
+          nm_campo1: string
+          nm_campo2: string
           tabela: string | null
           ult_seq: number | null
         }
         Insert: {
           empresa_id: number
-          nm_campo1?: string | null
-          nm_campo3?: string | null
+          nm_campo1?: string
+          nm_campo2?: string
           tabela?: string | null
           ult_seq?: number | null
         }
         Update: {
           empresa_id?: number
-          nm_campo1?: string | null
-          nm_campo3?: string | null
+          nm_campo1?: string
+          nm_campo2?: string
           tabela?: string | null
           ult_seq?: number | null
         }
