@@ -27,6 +27,7 @@ import FiscalRegraForm from "@/components/forms/FiscalRegraForm";
 import PedidoForm from "@/components/forms/PedidoForm";
 import NotaFiscalEntradaForm from "@/components/forms/NotaFiscalEntradaForm";
 import NfeRecebidasForm from "@/components/forms/NfeRecebidasForm";
+import NfeEmtidaForm from "@/components/forms/NfeEmtidaForm";
 import ConsultaTitulosReceberForm from "@/components/forms/ConsultaTitulosReceberForm";
 import BaixaPorClienteForm from "@/components/forms/BaixaPorClienteForm";
 import FiscalConfigForm from "@/components/forms/FiscalConfigForm";
