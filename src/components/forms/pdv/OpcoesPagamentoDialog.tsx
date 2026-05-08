@@ -1,7 +1,9 @@
 import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Printer, FileText, FileCode2, ScanLine } from "lucide-react";
+import { Printer, FileText, FileCode2, ScanLine, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
+import { useAppContext } from "@/contexts/AppContext";
 
 export interface IImpressaoItem {
   nm_produto: string;
@@ -12,6 +14,7 @@ export interface IImpressaoItem {
 }
 
 export interface IImpressaoDados {
+  movimento_id: number;
   nr_movimento: number | string;
   cliente_nome: string;
   caixa_nome: string;
@@ -23,6 +26,8 @@ export interface IImpressaoDados {
 interface IProps {
   open: boolean;
   dados: IImpressaoDados | null;
+  empresaId: number;
+  funcionarioId: number;
   onClose: () => void;
   onConcluir: () => void;
 }
