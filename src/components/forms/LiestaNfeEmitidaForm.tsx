@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
 import { useAppContext } from "@/contexts/AppContext";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import { 
