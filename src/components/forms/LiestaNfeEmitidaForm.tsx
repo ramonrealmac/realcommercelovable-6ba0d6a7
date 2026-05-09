@@ -133,9 +133,15 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
   }, [XEmpresaId, initialFilterId]);
 
   const handleTransmitir = async (row: any) => {
-    toast.info("A transmissão será realizada pelo Fiscal Worker...");
-    // Apenas um exemplo, aqui você poderia disparar um evento ou atualizar um status para o worker pegar
-    // const { error } = await db.from("fiscal_nfe_cabecalho").update({ st_nf: "0" }).eq("nfe_cabecalho_id", row.nfe_cabecalho_id);
+    if (!XEmpresaId) return;
+    toast.info("Enfileirando transmissão para o Fiscal Worker...");
+    const res = await fiscalEmissaoService.retransmitirDocumento(row.nfe_cabecalho_id, XEmpresaId);
+    if (res.success) {
+      toast.success(`Evento #${res.fiscal_evento_id} criado. Aguardando worker...`);
+      loadData();
+    } else {
+      toast.error("Falha ao enfileirar: " + (res.message || "erro desconhecido"));
+    }
   };
 
   const handleImprimir = (row: any) => {
