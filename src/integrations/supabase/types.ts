@@ -6649,6 +6649,7 @@ export type Database = {
         Args: { _empresa_id: number; _user_id: string }
         Returns: boolean
       }
+      fu_is_admin_any: { Args: { _user_id: string }; Returns: boolean }
       fu_list_pedidos_public: {
         Args: { _cpf: string }
         Returns: {
