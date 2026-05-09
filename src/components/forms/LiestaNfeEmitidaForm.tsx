@@ -147,6 +147,7 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
   };
 
   return (
+    <>
     <div className="flex flex-col h-full space-y-4 animate-in fade-in duration-500">
       <div className="flex items-center justify-between bg-card p-3 rounded-xl border border-border shadow-sm">
         <div className="flex items-center gap-3">
