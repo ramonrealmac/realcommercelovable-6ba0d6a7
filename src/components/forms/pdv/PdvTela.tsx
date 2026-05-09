@@ -629,6 +629,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     setXPedidoSel(null);
     setXCart([]);
     setXCliente(null);
+    carregarClientePadrao();
     setXVendedor(null);
     setXVlDesc(0);
     setXPcDesc(0);
