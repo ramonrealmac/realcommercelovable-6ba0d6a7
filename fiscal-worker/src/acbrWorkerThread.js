@@ -165,7 +165,7 @@ const configurarHandle = (lib, handle, configPayload) => {
         lib.ConfigGravarValor(handle, "DFe", "SSLLib", "4");         // 4=libWinCrypt (SChaneel/WinCrypt)
         lib.ConfigGravarValor(handle, "DFe", "SSLCryptLib", "3");   // 3=cryWinCrypt
         lib.ConfigGravarValor(handle, "DFe", "SSLHttpLib", "2");    // 2=httpWinHttp
-        lib.ConfigGravarValor(handle, "DFe", "SSLXmlSignLib", "2"); // 2=xsWinCrypt
+        lib.ConfigGravarValor(handle, "DFe", "SSLXmlSignLib", "5"); // 5=xsWinCrypt (enum TSSLXmlSignLib: 0=Nenhum,1=LibXml2,2=MsXml,3=MsXmlCapicom,4=XmlSec,5=WinCrypt)
         
         if (configPayload.certificadoPath) { 
             lib.ConfigGravarValor(handle, "DFe", "NumeroSerie", configPayload.certificadoPath);
@@ -177,7 +177,7 @@ const configurarHandle = (lib, handle, configPayload) => {
         lib.ConfigGravarValor(handle, "DFe", "SSLLib", "1");        // 1=libOpenSSL
         lib.ConfigGravarValor(handle, "DFe", "SSLCryptLib", "1");   // 1=cryOpenSSL
         lib.ConfigGravarValor(handle, "DFe", "SSLHttpLib", "3");    // 3=httpOpenSSL
-        lib.ConfigGravarValor(handle, "DFe", "SSLXmlSignLib", "4"); // 4=xsLibXml2
+        lib.ConfigGravarValor(handle, "DFe", "SSLXmlSignLib", "1"); // 1=xsLibXml2 (usa libxml2.dll que já está no diretório da DLL)
         
         if (configPayload.certificadoPath) {
             lib.ConfigGravarValor(handle, "DFe", "ArquivoPFX", configPayload.certificadoPath);
