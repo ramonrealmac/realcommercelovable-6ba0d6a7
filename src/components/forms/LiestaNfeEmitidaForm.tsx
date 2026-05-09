@@ -245,6 +245,13 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
         />
       </div>
     </div>
+    <MonitorFiscalLogDialog
+      isOpen={XLogDialogOpen}
+      onClose={() => setXLogDialogOpen(false)}
+      empresaId={XEmpresaId}
+      nfeCabecalhoId={XLogNfeId}
+    />
+    </>
   );
 };
 
