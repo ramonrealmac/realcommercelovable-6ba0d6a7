@@ -39,6 +39,8 @@ export interface INfeCabecalho {
   vl_seguro: number;
   vl_despesa: number;
   vl_ipi: number;
+  vl_icms: number;
+  vl_bc: number;
   vl_icms_st: number;
   vl_pis: number;
   vl_cofins: number;

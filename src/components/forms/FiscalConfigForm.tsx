@@ -5,6 +5,7 @@ import { Save, Search, Activity, ShieldCheck, Terminal } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppContext } from "@/contexts/AppContext";
 import MonitorFiscalLogDialog from "./MonitorFiscalLogDialog";
+import ClienteSearchDialog, { IClienteRow } from "./pedido/ClienteSearchDialog";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,8 @@ interface FiscalConfigFormValues {
   senha_certificado: string;
   ambiente_nfe: string;
   uf: string;
+  cliente_padrao_id: number | null;
+  cliente_padrao_nome: string;
 }
 
 const FiscalConfigForm = () => {
@@ -33,6 +36,7 @@ const FiscalConfigForm = () => {
   const [certificadosServidor, setCertificadosServidor] = useState<any[]>([]);
   const [modalCertOpen, setModalCertOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [clienteSearchOpen, setClienteSearchOpen] = useState(false);
 
   const form = useForm<FiscalConfigFormValues>({
     defaultValues: {
@@ -40,7 +44,9 @@ const FiscalConfigForm = () => {
       certificado: "",
       senha_certificado: "",
       ambiente_nfe: "2",
-      uf: "SP"
+      uf: "SP",
+      cliente_padrao_id: null,
+      cliente_padrao_nome: "Não definido (Consumidor)"
     }
   });
 
@@ -54,7 +60,7 @@ const FiscalConfigForm = () => {
       try {
         const { data, error } = await supabase
           .from("fiscal_config")
-          .select("tipo_certificado, certificado, senha_certificado, ambiente_nfe")
+          .select("tipo_certificado, certificado, senha_certificado, ambiente_nfe, cliente_padrao_id")
           .eq("empresa_id", XEmpresaId)
           .maybeSingle();
 
@@ -66,8 +72,23 @@ const FiscalConfigForm = () => {
             certificado: data.certificado || "",
             senha_certificado: data.senha_certificado ? atob(data.senha_certificado) : "",
             ambiente_nfe: data.ambiente_nfe || "2",
-            uf: "SP"
+            uf: "SP",
+            cliente_padrao_id: data.cliente_padrao_id || null,
+            cliente_padrao_nome: "Carregando..."
           });
+
+          if (data.cliente_padrao_id) {
+            const { data: cliente } = await supabase
+              .from("cadastro")
+              .select("razao_social, nome_fantasia")
+              .eq("cadastro_id", data.cliente_padrao_id)
+              .maybeSingle();
+            if (cliente) {
+              form.setValue("cliente_padrao_nome", (cliente as any).nome_fantasia || (cliente as any).razao_social);
+            }
+          } else {
+            form.setValue("cliente_padrao_nome", "Não definido (Consumidor)");
+          }
         } else {
           // Se não houver configuração para esta empresa, reseta para os padrões
           form.reset({
@@ -106,7 +127,8 @@ const FiscalConfigForm = () => {
             tipo_certificado: values.tipo_certificado,
             certificado: values.certificado,
             senha_certificado: values.senha_certificado ? btoa(values.senha_certificado) : null,
-            ambiente_nfe: values.ambiente_nfe
+            ambiente_nfe: values.ambiente_nfe,
+            cliente_padrao_id: values.cliente_padrao_id
           })
           .eq("empresa_id", XEmpresaId);
         if (error) throw error;
@@ -118,7 +140,8 @@ const FiscalConfigForm = () => {
             tipo_certificado: values.tipo_certificado,
             certificado: values.certificado,
             senha_certificado: values.senha_certificado ? btoa(values.senha_certificado) : null,
-            ambiente_nfe: values.ambiente_nfe
+            ambiente_nfe: values.ambiente_nfe,
+            cliente_padrao_id: values.cliente_padrao_id
           });
         if (error) throw error;
       }
@@ -377,6 +400,31 @@ const FiscalConfigForm = () => {
                   </CardContent>
                 </Card>
 
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-sm">Configurações de PDV</CardTitle>
+                    <CardDescription>Defina o cliente padrão para vendas rápidas no PDV.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <Label>Cliente Padrão do PDV</Label>
+                        <Input readOnly value={form.watch("cliente_padrao_nome")} className="bg-muted/50" />
+                      </div>
+                      <Button type="button" variant="outline" onClick={() => setClienteSearchOpen(true)}>
+                        <Search className="w-4 h-4 mr-2" />
+                        Selecionar
+                      </Button>
+                      {form.watch("cliente_padrao_id") && (
+                        <Button type="button" variant="ghost" className="text-destructive" onClick={() => {
+                          form.setValue("cliente_padrao_id", null);
+                          form.setValue("cliente_padrao_nome", "Não definido (Consumidor)");
+                        }}>Limpar</Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
                 <div className="flex justify-between items-center bg-card p-4 rounded-lg border shadow-sm">
                   <div className="flex gap-2">
                     <Button type="button" variant="outline" onClick={testarSefaz} disabled={testing}>
@@ -396,6 +444,17 @@ const FiscalConfigForm = () => {
                 </div>
               </form>
             </Form>
+
+            <ClienteSearchDialog 
+              open={clienteSearchOpen}
+              onClose={() => setClienteSearchOpen(false)}
+              empresaId={XEmpresaId || 0}
+              onSelect={(c) => {
+                form.setValue("cliente_padrao_id", c.cadastro_id);
+                form.setValue("cliente_padrao_nome", c.nome_fantasia || c.razao_social);
+                setClienteSearchOpen(false);
+              }}
+            />
           </TabsContent>
 
           <TabsContent value="modelos" className="space-y-4">

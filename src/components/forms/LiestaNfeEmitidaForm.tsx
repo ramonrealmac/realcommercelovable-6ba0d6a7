@@ -35,42 +35,53 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
   const [XClienteCache, setXClienteCache] = useState<Record<number, string>>({});
 
   const XGridCols: IGridColumn[] = [
-    { key: "nr_nota", label: "Número", width: "100px" },
-    { key: "modelo", label: "Modelo", width: "70px", align: "center" },
-    { key: "serie", label: "Série", width: "60px", align: "center" },
-    { key: "cfop", label: "CFOP", width: "80px", align: "center" },
+    { key: "nfe_cabecalho_id", label: "ID", width: "60px", align: "right" },
+    { key: "tp_nf", label: "Tipo", width: "80px", render: r => r.tp_nf === 0 ? <span className="text-blue-600 font-bold">ENTRADA</span> : <span className="text-emerald-600 font-bold">SAÍDA</span> },
+    { key: "nr_nota", label: "Número", width: "90px" },
+    { key: "modelo", label: "Modelo", width: "60px", align: "center" },
+    { key: "serie", label: "Série", width: "50px", align: "center" },
+    { key: "dt_emissao", label: "Emissão", width: "100px", render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
+    { key: "dt_saida", label: "Saída", width: "100px", render: r => r.dt_saida ? new Date(r.dt_saida).toLocaleDateString("pt-BR") : "" },
+    { key: "cfop", label: "CFOP", width: "70px", align: "center" },
     { 
       key: "cadastro_id", 
       label: "Destinatário", 
       width: "2fr", 
       render: r => XClienteCache[r.cadastro_id] || (r.cadastro_id ? `#${r.cadastro_id}` : "") 
     },
-    { key: "vl_total_nf", label: "Valor", width: "120px", align: "right", render: r => Number(r.vl_total_nf || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) },
-    { 
-      key: "st_nf", 
-      label: "Status", 
-      width: "150px", 
-      render: r => {
-        const statusMap: any = {
-          "A": { label: "Pendente", color: "bg-gray-100 text-gray-600", icon: Clock },
-          "E": { label: "Transmitida", color: "bg-green-100 text-green-700", icon: CheckCircle2 },
-          "C": { label: "Cancelada", color: "bg-red-100 text-red-700", icon: XCircle },
-          "0": { label: "Pendente", color: "bg-gray-100 text-gray-600", icon: Clock },
-          "1": { label: "Transmitida", color: "bg-green-100 text-green-700", icon: CheckCircle2 },
-          "2": { label: "Cancelada", color: "bg-red-100 text-red-700", icon: XCircle },
-          "3": { label: "Erro SEFAZ", color: "bg-amber-100 text-amber-700", icon: AlertCircle },
-        };
-        const s = statusMap[r.st_nf] || { label: r.st_nf, color: "bg-gray-100 text-gray-600", icon: Clock };
-        const Icon = s.icon;
-        return (
-          <Badge className={`${s.color} border-none flex items-center gap-1 font-bold uppercase text-[10px]`}>
-            <Icon size={12} />
-            {s.label}
-          </Badge>
-        );
-      }
-    },
-  ];
+      { 
+        key: "vl_total_nf", 
+        label: "Valor Total", 
+        width: "110px", 
+        align: "right", 
+        render: r => Number(r.vl_total_nf || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) 
+      },
+      { 
+        key: "st_nf", 
+        label: "Status", 
+        width: "140px", 
+        render: r => {
+          const statusMap: any = {
+            "A": { label: "Pendente", color: "bg-gray-100 text-gray-600", icon: Clock },
+            "E": { label: "Transmitida", color: "bg-green-100 text-green-700", icon: CheckCircle2 },
+            "C": { label: "Cancelada", color: "bg-red-100 text-red-700", icon: XCircle },
+            "0": { label: "Pendente", color: "bg-gray-100 text-gray-600", icon: Clock },
+            "1": { label: "Transmitida", color: "bg-green-100 text-green-700", icon: CheckCircle2 },
+            "2": { label: "Cancelada", color: "bg-red-100 text-red-700", icon: XCircle },
+            "3": { label: "Erro SEFAZ", color: "bg-amber-100 text-amber-700", icon: AlertCircle },
+          };
+          const s = statusMap[r.st_nf] || { label: r.st_nf, color: "bg-gray-100 text-gray-600", icon: Clock };
+          const Icon = s.icon;
+          return (
+            <div className={`px-2 py-1 rounded-full ${s.color} border-none flex items-center gap-1 font-bold uppercase text-[9px] w-fit`}>
+              <Icon size={10} />
+              {s.label}
+            </div>
+          );
+        }
+      },
+      { key: "chave_nfe", label: "Chave de Acesso", width: "300px", render: r => <span className="font-mono text-[10px] text-muted-foreground">{r.chave_nfe}</span> },
+    ];
 
   const loadData = async () => {
     if (!XEmpresaId) return;

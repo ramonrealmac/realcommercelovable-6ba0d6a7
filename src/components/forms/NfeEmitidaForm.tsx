@@ -16,14 +16,16 @@ const db = supabase as any;
 interface IClienteInfo { id: number; cnpj: string; razao: string; }
 
 const XGridCols: IGridColumn[] = [
-  { key: "nfe_cabecalho_id", label: "Nº",      width: "70px",  align: "right" },
-  { key: "nr_nota",          label: "Nota",    width: "100px" },
-  { key: "serie",            label: "Série",   width: "60px",  align: "center" },
-  { key: "modelo",           label: "Mod.",    width: "60px",  align: "center" },
-  { key: "dt_emissao",       label: "Emissão", width: "110px", render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
+  { key: "nfe_cabecalho_id", label: "ID",      width: "60px",  align: "right" },
+  { key: "tp_nf",            label: "Tipo",    width: "70px",  render: r => r.tp_nf === 0 ? "Entrada" : "Saída" },
+  { key: "nr_nota",          label: "Nota",    width: "90px" },
+  { key: "serie",            label: "Série",   width: "50px",  align: "center" },
+  { key: "modelo",           label: "Mod.",    width: "50px",  align: "center" },
+  { key: "dt_emissao",       label: "Emissão", width: "100px", render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
   { key: "_dest",            label: "Destinatário", width: "2fr", getValue: (r: any) => r._dest_razao || "", render: (r: any) => r._dest_razao || (r.cadastro_id ? `#${r.cadastro_id}` : "") },
-  { key: "st_nf",            label: "Status",  width: "110px", render: r => NFE_ST_LABELS[r.st_nf as TNfeSt] || r.st_nf },
-  { key: "vl_total_nf",      label: "Total",   width: "120px", align: "right", render: r => Number(r.vl_total_nf || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) },
+  { key: "st_nf",            label: "Status",  width: "100px", render: r => NFE_ST_LABELS[r.st_nf as TNfeSt] || r.st_nf },
+  { key: "vl_total_nf",      label: "Total",   width: "110px", align: "right", render: r => Number(r.vl_total_nf || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) },
+  { key: "chave_nfe",        label: "Chave de Acesso", width: "300px", render: r => <span className="font-mono text-[10px]">{r.chave_nfe}</span> },
 ];
 
 const XDefault: Partial<INfeCabecalho> = {
@@ -107,17 +109,13 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
         XSelectCols: "*",
         XOrderBy: "nfe_cabecalho_id",
         XSoftDelete: false,
-        XApplyFilter: (q) => q.eq("tp_nf", 1),
+        XApplyFilter: (q) => q, // Remove filter to show both Entry/Exit or allow user to filter
         XOnAfterLoad: (rows: any[]) => {
           const ids = [...new Set(rows.map(r => r.cadastro_id).filter(Boolean))] as number[];
           if (ids.length) ensureClienteInfo(ids);
         },
-        XOnBeforeSave: (rec) => {
-          if (!rec.cadastro_id) throw new Error("Selecione o Destinatário.");
-          if (!rec.nr_nota) throw new Error("Informe o número da Nota Fiscal.");
-          if (!rec.dt_emissao) throw new Error("Informe a Data de Emissão.");
-          if (!rec.nat_op?.toString().trim()) throw new Error("Informe a Natureza da Operação.");
-          return { ...rec, tp_nf: 1, empresa_id: rec.empresa_id || XEmpresaId };
+          if (rec.tp_nf === undefined || rec.tp_nf === null) rec.tp_nf = 1;
+          return { ...rec, empresa_id: rec.empresa_id || XEmpresaId };
         },
       }}
       XGridCols={gridCols}
@@ -192,8 +190,19 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
             {/* Linha 1 */}
             <div className="grid grid-cols-12 gap-3 items-end">
               <div className="col-span-1">
-                <label className="text-xs text-muted-foreground">Cód.</label>
+                <label className="text-xs text-muted-foreground">ID</label>
                 <input readOnly value={record.nfe_cabecalho_id ?? (mode === "insert" ? "(Novo)" : "")} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right" />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground">Tipo de Nota</label>
+                <select disabled={ro} value={record.tp_nf ?? 1} onChange={e => setField("tp_nf" as any, Number(e.target.value) as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
+                  <option value={1}>1 - Saída</option>
+                  <option value={0}>0 - Entrada</option>
+                </select>
+              </div>
+              <div className="col-span-1">
+                <label className="text-xs text-muted-foreground">Origem</label>
+                <input readOnly value={record.origem_inclusao === "X" ? "XML" : "Manual"} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-center" />
               </div>
               <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Modelo</label>
@@ -202,7 +211,7 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                   <option value={65}>65</option>
                 </select>
               </div>
-              <div className="col-span-2">
+              <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Nº Nota <span className="text-destructive">*</span></label>
                 <input readOnly={ro} type="number" value={record.nr_nota || ""} onChange={e => setField("nr_nota" as any, Number(e.target.value) as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
@@ -214,11 +223,11 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                 <label className="text-xs text-muted-foreground">Dt. Emissão <span className="text-destructive">*</span></label>
                 <input type="date" readOnly={ro} value={(record.dt_emissao || "").toString().substring(0, 10)} onChange={e => setField("dt_emissao" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Dt. Saída</label>
                 <input type="date" readOnly={ro} value={(record.dt_saida || "").toString().substring(0, 10)} onChange={e => setField("dt_saida" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
-              <div className="col-span-3">
+              <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Status</label>
                 <input readOnly value={NFE_ST_LABELS[stAtual] || stAtual} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary" />
               </div>
@@ -304,19 +313,26 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
 
             {/* Totais */}
             <div className="border border-border rounded p-3 bg-card">
-              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Totais da Nota</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide font-bold">Totais da Nota Fiscal</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-3">
                 {[
                   { label: "Produtos", key: "vl_produto" },
                   { label: "Desconto", key: "vl_desconto" },
                   { label: "Frete",    key: "vl_frete"    },
                   { label: "Seguro",   key: "vl_seguro"   },
                   { label: "Despesa",  key: "vl_despesa"  },
-                  { label: "IPI",      key: "vl_ipi"      },
+                  { label: "Base Cálc.", key: "vl_bc"     },
+                  { label: "ICMS",     key: "vl_icms"     },
                   { label: "ICMS-ST",  key: "vl_icms_st"  },
+                  { label: "IPI",      key: "vl_ipi"      },
+                  { label: "PIS",      key: "vl_pis"      },
+                  { label: "COFINS",   key: "vl_cofins"   },
+                  { label: "IBS",      key: "vl_ibs"      },
+                  { label: "CBS",      key: "vl_cbs"      },
+                  { label: "IS",       key: "vl_is"       },
                 ].map(f => (
-                  <div key={f.key} className="flex flex-col">
-                    <label className="text-xs text-muted-foreground">{f.label}</label>
+                  <div key={f.key} className="flex flex-col gap-1">
+                    <label className="text-[10px] text-muted-foreground uppercase font-semibold">{f.label}</label>
                     <input
                       type="text"
                       readOnly={ro}
@@ -326,16 +342,16 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                         const val = e.target.value.replace(/\./g, "").replace(",", ".");
                         setField(f.key as any, val as any);
                       }}
-                      className={`w-full border border-border rounded px-2 py-1 text-sm text-right ${ro ? "bg-secondary" : "bg-card"}`}
+                      className={`w-full border border-border rounded px-2 py-1.5 text-xs text-right font-mono ${ro ? "bg-secondary/50" : "bg-card"}`}
                     />
                   </div>
                 ))}
                 <div className="col-span-2 lg:col-span-1 flex flex-col justify-end">
-                  <label className="text-xs font-bold text-primary">TOTAL NOTA</label>
+                  <label className="text-xs font-black text-primary uppercase">TOTAL NOTA</label>
                   <input
                     readOnly
                     value={fmt2(Number(record.vl_total_nf || 0))}
-                    className="w-full border border-primary/30 rounded px-2 py-1 text-sm font-bold text-right bg-primary/5 text-primary"
+                    className="w-full border-2 border-primary/40 rounded px-2 py-1.5 text-sm font-black text-right bg-primary/10 text-primary font-mono shadow-sm"
                   />
                 </div>
               </div>

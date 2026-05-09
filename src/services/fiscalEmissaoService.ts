@@ -1,11 +1,26 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { gerarIniNfe } from "./gerarIniNfe";
 
 const db = supabase as any;
+
+function mapearSefazPagamento(tp: string): string {
+  const mapa: Record<string, string> = {
+    "DI": "01", "DH": "01", "DINHEIRO": "01", "01": "01",
+    "CH": "02", "CHEQUE": "02", "02": "02",
+    "CC": "03", "CARTAO_CREDITO": "03", "03": "03",
+    "CD": "04", "CARTAO_DEBITO": "04", "04": "04",
+    "PX": "17", "PIX": "17", "17": "17",
+    "BL": "15", "BOLETO": "15", "15": "15",
+    "OUTRO": "99", "99": "99"
+  };
+  return mapa[tp?.toUpperCase()] || "01";
+}
 
 export interface FiscalEmissaoResult {
   success: boolean;
   nfe_cabecalho_id?: number;
+  fiscal_evento_id?: number;
   message?: string;
 }
 
@@ -140,8 +155,9 @@ export const fiscalEmissaoService = {
       let totalIcms = 0, totalIpi = 0, totalPis = 0, totalCofins = 0;
       let totalIbs = 0, totalCbs = 0, totalIs = 0;
 
-      console.log("[fiscalEmissaoService] Iniciando loop de itens. Qtd:", (movimento.movimento_item || []).length);
-      const itensM = movimento.movimento_item || [];
+      console.log("[fiscalEmissaoService] Iniciando loop de itens.");
+      const itensM = (movimento.movimento_item || []).filter((it: any) => !it.excluido);
+      console.log("[fiscalEmissaoService] Qtd itens ativos:", itensM.length);
 
       for (let i = 0; i < itensM.length; i++) {
         const mItem = itensM[i];
@@ -256,20 +272,115 @@ export const fiscalEmissaoService = {
         .eq("nfe_cabecalho_id", cabId);
 
       // 8. Inserir Pagamentos
-      for (const p of (movimento.movimento_pagamento || [])) {
-        const nfePag = {
-          nfe_cabecalho_id: cabId,
-          t_pag: p.tp_pagamento || "01", 
-          v_pag: p.vl_pagamento || 0,
-          tp_integra: p.tp_integra || 2, 
-          c_aut: p.nr_autorizacao || p.numero_autorizacao,
-          cnpj_credenciadora: p.cnpj_credenciadora
-        };
-        await db.from("fiscal_nfe_pagamento").insert(nfePag);
+      console.log(`[FiscalService] Verificando pagamentos para movimento ${movimentoId}. Total Venda: ${totalVenda}`);
+      const { data: pagtosMov, error: errPagtos } = await db
+        .from("movimento_pagamento")
+        .select(`
+          *,
+          condicao_pagamento (
+            condicao_id,
+            meio_pagamento (
+              codigo
+            )
+          )
+        `)
+        .eq("movimento_id", movimentoId)
+        .eq("excluido", false);
+
+      if (errPagtos) {
+        console.error("[FiscalService] Erro ao buscar pagamentos do movimento:", errPagtos);
       }
 
-      console.log(`[FiscalService] Documento ${cabId} gerado com sucesso.`);
-      return { success: true, nfe_cabecalho_id: cabId };
+      let pagamentosGerados = 0;
+
+      if (pagtosMov && pagtosMov.length > 0) {
+        console.log(`[FiscalService] Processando ${pagtosMov.length} pagamentos do movimento.`);
+        for (const p of pagtosMov) {
+          const condRaw = p.condicao_pagamento as any;
+          const condicao = Array.isArray(condRaw) ? condRaw[0] : condRaw;
+          const sefazCode = condicao?.meio_pagamento?.codigo || mapearSefazPagamento(p.tp_pagamento) || "01";
+
+          const nfePag = {
+            nfe_cabecalho_id: cabId,
+            t_pag: sefazCode, 
+            v_pag: Number(p.vl_pagamento || 0),
+            tp_integra: (p.tp_pagamento?.toUpperCase().includes("CARTAO") || p.tp_pagamento?.toUpperCase().includes("PIX")) ? 1 : 2,
+            c_aut: p.nr_autorizacao || "",
+          };
+
+          if (nfePag.v_pag > 0) {
+            console.log(`[FiscalService] Inserindo pagamento #${++pagamentosGerados}:`, nfePag);
+            const { error: pagErr } = await db.from("fiscal_nfe_pagamento").insert(nfePag);
+            if (pagErr) console.error("[FiscalService] Erro ao inserir pagamento:", pagErr);
+          } else {
+            console.warn("[FiscalService] Pulando pagamento com valor zerado:", p.tp_pagamento);
+          }
+        }
+      }
+
+      // Se nenhum pagamento válido foi inserido até agora, usa o fallback para evitar rejeição da SEFAZ
+      if (pagamentosGerados === 0) {
+        console.warn("[FiscalService] Nenhum pagamento válido gerado. Aplicando fallback (Dinheiro)...");
+        const { error: fbkErr } = await db.from("fiscal_nfe_pagamento").insert({
+          nfe_cabecalho_id: cabId,
+          t_pag: "01",
+          v_pag: totalVenda > 0 ? totalVenda : (nfeCabecalho.vl_total_nf || 0),
+          tp_integra: 2
+        });
+        if (fbkErr) console.error("[FiscalService] Erro crítico ao inserir pagamento fallback:", fbkErr);
+        else console.log("[FiscalService] Pagamento fallback inserido com sucesso.");
+      }
+
+      // 9. Gerar INI e Despachar Evento para o Worker
+      console.log(`[FiscalService] Gerando INI para ${tipo}...`);
+      
+      // Busca dados dos itens inseridos para garantir integridade no INI
+      const { data: nfeItens } = await db.from("fiscal_nfe_item").select("*").eq("nfe_cabecalho_id", cabId);
+      const { data: nfePagtos } = await db.from("fiscal_nfe_pagamento").select("*").eq("nfe_cabecalho_id", cabId);
+
+      const iniContent = gerarIniNfe({
+        cabecalho: { ...nfeCabecalho, nfe_cabecalho_id: cabId },
+        itens: nfeItens || [],
+        pagamentos: nfePagtos || [],
+        empresa: empresa,
+        cadastro: parceiro,
+        fiscalConfig: fConfig,
+        configItem: fConfigItem
+      });
+
+      const { data: evento, error: evErr } = await db.from("fiscal_evento").insert({
+        empresa_id: empresaId,
+        tipo: tipo,
+        comando: tipo === "NFE" ? "EMITIR_NFE" : "EMITIR_NFCE",
+        status: "PENDENTE",
+        payload: {
+          dados: iniContent,
+          config: {
+            uf: empresa.endereco_uf || empresa.cidade?.uf || "SP",
+            modelo: nfeCabecalho.modelo,
+            ambiente: Number(fConfig.ambiente_nfe || 2),
+            certificadoPath: fConfig.certificado,
+            certificadoSenha: fConfig.senha_certificado || "",
+            tipo_certificado: fConfig.tipo_certificado || "ARQUIVO",
+            csc: fConfigItem.csc || "",
+            id_csc: fConfigItem.id_csc || ""
+          }
+        },
+        referencia_id: cabId,
+        referencia_tabela: "fiscal_nfe_cabecalho"
+      }).select("id").single();
+
+      if (evErr) {
+        console.error("[FiscalService] Erro ao criar evento fiscal:", evErr);
+        // Não jogamos erro aqui para não travar o processo, mas avisamos no log
+      }
+
+      console.log(`[FiscalService] Documento ${cabId} e Evento ${evento?.id} gerados com sucesso.`);
+      return { 
+        success: true, 
+        nfe_cabecalho_id: cabId,
+        fiscal_evento_id: evento?.id 
+      };
 
     } catch (e: any) {
       console.error("[FiscalService] Erro:", e);

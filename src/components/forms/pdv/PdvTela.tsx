@@ -362,6 +362,27 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     })();
   }, [XEmpresaId]);
 
+  // Carrega cliente padrão das configurações fiscais
+  useEffect(() => {
+    if (!XEmpresaId) return;
+    (async () => {
+      const { data: fConfig } = await db.from("fiscal_config")
+        .select("cliente_padrao_id")
+        .eq("empresa_id", XEmpresaId)
+        .maybeSingle();
+      
+      if (fConfig?.cliente_padrao_id) {
+        const { data: cliente } = await db.from("cadastro")
+          .select("*")
+          .eq("cadastro_id", fConfig.cliente_padrao_id)
+          .maybeSingle();
+        if (cliente) {
+          setXCliente(cliente as IClienteRow);
+        }
+      }
+    })();
+  }, [XEmpresaId]);
+
   /** Cria movimento (st_pedido='F') quando for venda direta. */
   const criarMovimentoVendaDireta = async (): Promise<{ movimento_id: number; nr: number; total: number; }> => {
     const { data: maxMov } = await db.from("movimento")

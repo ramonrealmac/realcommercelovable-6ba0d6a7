@@ -43,11 +43,11 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
   const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
   const [XSalvando, setXSalvando] = useState(false);
 
-  // Discount states
   // Database totals
   const [XDbTotals, setXDbTotals] = useState({ subtotal: 0, desconto: 0, total: 0 });
-  const [XVlDesconto, setXVlDesconto] = useState<number>(0);
-  const [XPcDesconto, setXPcDesconto] = useState<number>(0);
+  // Discount states (input as strings)
+  const [XVlDesconto, setXVlDesconto] = useState<string>("0,00");
+  const [XPcDesconto, setXPcDesconto] = useState<string>("0,00");
 
   // Form fields
   const [XCondicaoId, setXCondicaoId] = useState<number>(0);
@@ -62,8 +62,9 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
   const condicaoRef = useRef<HTMLSelectElement>(null);
   const finalizarRef = useRef<HTMLButtonElement>(null);
 
+  const vlDescNum = useMemo(() => parseNum(XVlDesconto), [XVlDesconto]);
   const subtotalEfetivo = XDbTotals.subtotal > 0 ? XDbTotals.subtotal : subtotalPedido;
-  const totalPedido = useMemo(() => Number((subtotalEfetivo - XVlDesconto).toFixed(2)), [subtotalEfetivo, XVlDesconto]);
+  const totalPedido = useMemo(() => Number((subtotalEfetivo - vlDescNum).toFixed(2)), [subtotalEfetivo, vlDescNum]);
   const totalPago = useMemo(() => Number(XLinhas.reduce((a, l) => a + Number(l.vl_pagamento || 0), 0).toFixed(2)), [XLinhas]);
   const valorRestante = Number(Math.max(0, totalPedido - totalPago).toFixed(2));
   
@@ -86,8 +87,8 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
           const dbSub = dbMov + dbVlDesc;
           
           setXDbTotals({ subtotal: dbSub, desconto: dbVlDesc, total: dbMov });
-          setXVlDesconto(dbVlDesc);
-          setXPcDesconto(dbPcDesc);
+          setXVlDesconto(fmtInput(dbVlDesc));
+          setXPcDesconto(fmtInput(dbPcDesc));
           resetForm(dbMov);
         }
 
@@ -103,27 +104,35 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
     })();
     setXLinhas([]);
     setXSelectedIdx(null);
-    resetForm(totalPedido);
-  }, [open, movimentoId, totalPedido]);
+    // Removemos totalPedido das dependências para evitar re-fetch infinito ao digitar desconto
+  }, [open, movimentoId]);
+
+  // Sincroniza o valor a pagar inicial apenas quando o totalPedido (calculado) mudar significativamente
+  // ou quando o formulário for resetado
+  useEffect(() => {
+    if (open && XLinhas.length === 0) {
+      setXVlPagar(fmtInput(totalPedido));
+    }
+  }, [totalPedido, open, XLinhas.length]);
 
   const resetForm = (vl: number) => {
     setXCondicaoId(0); setXVlPagar(fmtInput(vl)); setXQtParcela(1); setXEditUid(null);
   };
 
   const handleVlDesconto = (val: string) => {
+    setXVlDesconto(val);
     const v = parseNum(val);
-    setXVlDesconto(v);
     const sub = XDbTotals.subtotal || subtotalPedido;
     const pc = sub > 0 ? +(v / sub * 100).toFixed(2) : 0;
-    setXPcDesconto(pc);
+    setXPcDesconto(fmtInput(pc));
   };
 
   const handlePcDesconto = (val: string) => {
+    setXPcDesconto(val);
     const p = parseNum(val);
-    setXPcDesconto(p);
     const sub = XDbTotals.subtotal || subtotalPedido;
     const v = +(sub * p / 100).toFixed(2);
-    setXVlDesconto(v);
+    setXVlDesconto(fmtInput(v));
   };
 
   const confirmarLinha = () => {
@@ -163,7 +172,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
     
     setXSalvando(true);
     try {
-      await onConfirmar(XLinhas, XVlDesconto, XPcDesconto);
+      await onConfirmar(XLinhas, vlDescNum, parseNum(XPcDesconto));
       onClose();
     } catch (err: any) {
       toast.error("Erro: " + err.message);
@@ -224,6 +233,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
                         type="text" 
                         value={XPcDesconto} 
                         onChange={e => handlePcDesconto(e.target.value)}
+                        onBlur={() => setXPcDesconto(fmtInput(XPcDesconto))}
                         className="w-12 text-[10px] text-right border border-rose-300 rounded px-1 bg-white"
                         placeholder="%"
                       />
@@ -235,12 +245,13 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
                   {editableDesc ? (
                     <input 
                       type="text" 
-                      value={fmtInput(XVlDesconto)} 
+                      value={XVlDesconto} 
                       onChange={e => handleVlDesconto(e.target.value)}
+                      onBlur={() => setXVlDesconto(fmtInput(XVlDesconto))}
                       className="w-full font-bold text-lg bg-transparent border-none focus:outline-none"
                     />
                   ) : (
-                    <span className="font-bold text-lg">{fmt(XVlDesconto)}</span>
+                    <span className="font-bold text-lg">{fmt(vlDescNum)}</span>
                   )}
                 </div>
               </div>

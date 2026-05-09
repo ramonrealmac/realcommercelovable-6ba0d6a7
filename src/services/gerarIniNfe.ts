@@ -22,6 +22,8 @@ export function gerarIniNfe(params: GerarIniParams): string {
   const nrNota = String(cabecalho.nr_nota || '1').padStart(9, '0');
   const dtEmissao = formatarData(cabecalho.dt_emissao || new Date());
   const hrEmissao = formatarHora(new Date());
+  const dtSaida = cabecalho.dt_saida ? formatarData(cabecalho.dt_saida) : dtEmissao;
+  const hrSaida = cabecalho.dt_saida ? formatarHora(new Date(cabecalho.dt_saida)) : hrEmissao;
   const ambiente = String(fiscalConfig.ambiente_nfe || 2); // 1=Produção, 2=Homologação
   const cnpjEmitente = limparNumeros(empresa.cnpj || '');
   const cUF = mapearCodigoUF(empresa.cidade?.uf || empresa.cidade?.estado_id || 'SP');
@@ -42,6 +44,8 @@ export function gerarIniNfe(params: GerarIniParams): string {
   linhas.push(`TipoNF=1`); // 1=Saída
   linhas.push(`DataEmissao=${dtEmissao}`);
   linhas.push(`HoraEmissao=${hrEmissao}`);
+  linhas.push(`DataSaidaEntrada=${dtSaida}`);
+  linhas.push(`HoraSaidaEntrada=${hrSaida}`);
   linhas.push(`Finalidade=1`); // 1=Normal
   linhas.push(`TipoEmissao=1`); // 1=Normal
   linhas.push(`IndicadorConsumidorFinal=1`);
@@ -113,10 +117,10 @@ export function gerarIniNfe(params: GerarIniParams): string {
     linhas.push(`CEST=${it.cest || ''}`);
     linhas.push(`CFOP=${it.cfop || '5102'}`);
     linhas.push(`Unidade=${it.unidade || 'UN'}`);
-    linhas.push(`Quantidade=${it.qt_movimento}`);
-    linhas.push(`ValorUnitario=${it.vl_unit}`);
+    linhas.push(`Quantidade=${it.qt_entrada || it.qt_movimento || 0}`);
+    linhas.push(`ValorUnitario=${it.vl_unit || 0}`);
     linhas.push(`ValorDesconto=${it.vl_desconto || 0}`);
-    linhas.push(`ValorTotal=${it.vl_total}`);
+    linhas.push(`ValorTotal=${it.vl_total || 0}`);
     linhas.push(`ValorFrete=0`);
     linhas.push(`ValorSeguro=0`);
     linhas.push(`ValorOutro=0`);
@@ -135,8 +139,8 @@ export function gerarIniNfe(params: GerarIniParams): string {
     } else {
       linhas.push(`CST=${it.cst_icms || '00'}`);
       linhas.push(`ModalidadeBC=${it.mod_bc || 3}`);
-      linhas.push(`ValorBC=${it.vl_total}`);
-      linhas.push(`Aliquota=${it.pc_icms || 0}`);
+      linhas.push(`ValorBC=${it.vl_bc || it.vl_total || 0}`);
+      linhas.push(`Aliquota=${it.pc_icms || it.aliquota || 0}`);
       linhas.push(`ValorICMS=${it.vl_icms || 0}`);
     }
     if (Number(it.vl_icms_st || 0) > 0) {
