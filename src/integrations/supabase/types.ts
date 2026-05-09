@@ -4453,6 +4453,7 @@ export type Database = {
           usuario_id: string | null
           veiculo_id: number | null
           vl_bc_cofins: number | null
+          vl_bc_desconto: number | null
           vl_bc_icms: number | null
           vl_bc_ipi: number | null
           vl_bc_iss: number | null
@@ -4551,6 +4552,7 @@ export type Database = {
           usuario_id?: string | null
           veiculo_id?: number | null
           vl_bc_cofins?: number | null
+          vl_bc_desconto?: number | null
           vl_bc_icms?: number | null
           vl_bc_ipi?: number | null
           vl_bc_iss?: number | null
@@ -4649,6 +4651,7 @@ export type Database = {
           usuario_id?: string | null
           veiculo_id?: number | null
           vl_bc_cofins?: number | null
+          vl_bc_desconto?: number | null
           vl_bc_icms?: number | null
           vl_bc_ipi?: number | null
           vl_bc_iss?: number | null

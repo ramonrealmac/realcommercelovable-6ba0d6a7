@@ -5,6 +5,7 @@ import { useAppContext } from "@/contexts/AppContext";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import GridActionToolbar, { gridActions } from "@/components/grid/GridActionToolbar";
 import type { IMovimento, IMovimentoPagamento } from "./types";
+import PedidoPagamentoDialog from "./PedidoPagamentoDialog";
 
 const db = supabase as any;
 
@@ -40,6 +41,7 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
   const [XEdit, setXEdit] = useState<Partial<IMovimentoPagamento> | null>(null);
   const [XEditingId, setXEditingId] = useState<number | null>(null);
   const [XSelected, setXSelected] = useState<IMovimentoPagamento | null>(null);
+  const [XShowPagamento, setXShowPagamento] = useState(false);
 
   const load = useCallback(async () => {
     if (!pedido?.movimento_id) { setXPagtos([]); return; }
@@ -70,71 +72,38 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
     })();
   }, []);
 
+  const vlDesconto = Number(pedido?.vl_desconto || 0);
   const totalPedido = Number(totalPedidoProp ?? pedido?.vl_movimento ?? 0);
+  const subtotal = totalPedido + vlDesconto;
   const totalPago = XPagtos.reduce((a, p) => a + Number(p.vl_pagamento || 0), 0);
-  const valorAPagar = Math.max(0, totalPedido - totalPago);
 
-  const novo = () => {
-    setXEditingId(null);
-    setXEdit({ vl_pagamento: valorAPagar, n_parcelas: 1, vl_parcelas: valorAPagar, condicao_id: 0, tp_pagamento: "DI", obs_pagamento: "", nr_autorizacao: "" });
-  };
+  const handleConfirmarPagamento = async (linhas: any[], vlDesc: number, pcDesc: number) => {
+    if (!pedido?.movimento_id) return;
 
-  const editar = (p: IMovimentoPagamento | null) => {
-    if (!p) { toast.error("Selecione um pagamento."); return; }
-    setXEdit({ ...p }); setXEditingId(p.movimento_pagamento_id);
-  };
+    // Atualiza o desconto no cabeçalho
+    const { error: errMov } = await db.from("movimento")
+      .update({ vl_desconto: vlDesc, pc_desconto: pcDesc })
+      .eq("movimento_id", pedido.movimento_id);
+    
+    if (errMov) { toast.error("Erro ao atualizar desconto: " + errMov.message); return; }
 
-  const setCondicao = (cid: number) => {
-    const c = XCondicoes.find(x => x.condicao_id === cid);
-    const parc = c?.qtd_parcelas || 1;
-    setXEdit(prev => {
-      const v = parseNum(prev?.vl_pagamento);
-      return { ...prev!, condicao_id: cid, n_parcelas: parc, vl_parcelas: parc > 0 ? +(v / parc).toFixed(2) : v };
-    });
-  };
+    // Insere os novos pagamentos
+    const payload = linhas.map(l => ({
+      movimento_id: pedido.movimento_id,
+      empresa_id: XEmpresaId,
+      condicao_id: l.condicao_id,
+      vl_pagamento: l.vl_pagamento,
+      n_parcelas: l.n_parcelas,
+      vl_parcelas: l.vl_parcelas,
+      tp_pagamento: l.tp_pagamento || "DI"
+    }));
 
-  const setVlPagto = (v: any) => setXEdit(prev => {
-    const p = parseNum(prev?.n_parcelas) || 1;
-    const val = parseNum(v);
-    return { ...prev!, vl_pagamento: v, vl_parcelas: p > 0 ? +(val / p).toFixed(2) : val };
-  });
+    const { error: errPagtos } = await db.from("movimento_pagamento").insert(payload);
+    if (errPagtos) { toast.error("Erro ao gravar pagamentos: " + errPagtos.message); return; }
 
-  const handleBlur = (key: keyof IMovimentoPagamento, val: any, decimals = 2) => {
-    const n = parseNum(val);
-    setXEdit(prev => ({ ...prev!, [key]: n > 0 ? n.toFixed(decimals).replace(".", ",") : "" }));
-  };
-
-  const salvar = async () => {
-    if (!pedido?.movimento_id) { toast.error("Salve o pedido antes."); return; }
-    if (!XEdit?.condicao_id) { toast.error("Selecione a condição."); return; }
-    const valorPagamento = Number(XEdit.vl_pagamento || 0);
-    if (valorPagamento <= 0) { toast.error("Informe um valor de pagamento maior que zero."); return; }
-    const valorAnterior = XEditingId ? Number(XSelected?.vl_pagamento || 0) : 0;
-    const novoTotalPago = totalPago - valorAnterior + valorPagamento;
-    if (novoTotalPago > totalPedido) {
-      toast.error("O valor pago não pode ser maior que o valor do pedido.");
-      return;
-    }
-    const payload = { ...XEdit, empresa_id: XEmpresaId, movimento_id: pedido.movimento_id };
-    if (XEditingId) {
-      const { error } = await db.from("movimento_pagamento").update(payload).eq("movimento_pagamento_id", XEditingId);
-      if (error) { toast.error(error.message); return; }
-    } else {
-      const { error } = await db.from("movimento_pagamento").insert(payload);
-      if (error) { toast.error(error.message); return; }
-    }
-    toast.success("Pagamento salvo.");
-    setXEdit(null); setXEditingId(null);
+    toast.success("Pagamentos e desconto processados.");
     await load();
-  };
-
-  const excluir = async (p: IMovimentoPagamento | null) => {
-    if (!p) { toast.error("Selecione um pagamento."); return; }
-    if (!confirm("Excluir pagamento?")) return;
-    const { error } = await db.from("movimento_pagamento").update({ excluido: true }).eq("movimento_pagamento_id", p.movimento_pagamento_id);
-    if (error) { toast.error(error.message); return; }
-    setXSelected(null);
-    await load();
+    if (onMudarStatus) onMudarStatus("REFRESH"); // Trigger header refresh
   };
 
   const cols: IGridColumn[] = [
@@ -153,13 +122,9 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
   const pagtoToolbar = (
     <GridActionToolbar
       actions={[
-        gridActions.incluir(novo, ro),
-        gridActions.alterar(() => editar(XSelected), ro || !XSelected),
-        null, // separador
-        gridActions.excluir(() => excluir(XSelected), ro || !XSelected),
         gridActions.atualizar(load),
       ]}
-      count={`${XPagtos.length} pagto(s)`}
+      count={`${XPagtos.length} item(s) de pagamento`}
     />
   );
 
@@ -167,59 +132,6 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
 
   return (
     <div className="space-y-3">
-      {XEdit && (
-        <div className="border border-border rounded p-3 space-y-2 bg-card">
-          <div className="grid grid-cols-12 gap-2">
-            <div className="col-span-5"><label className="text-xs text-muted-foreground">Condição</label>
-              <select disabled={ro} value={XEdit.condicao_id ?? 0} onChange={e => setCondicao(Number(e.target.value))} className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
-                <option value={0}>--</option>
-                {XCondicoes.map(c => <option key={c.condicao_id} value={c.condicao_id}>{c.descricao}</option>)}
-              </select>
-            </div>
-            <div className="col-span-3">
-              <label className="text-xs text-muted-foreground">Valor</label>
-              <input
-                type="text"
-                disabled={ro}
-                value={fmtInput(XEdit.vl_pagamento)}
-                onChange={e => setVlPagto(e.target.value)}
-                onBlur={e => handleBlur("vl_pagamento", e.target.value, 2)}
-                onFocus={e => e.target.select()}
-                className={`w-full border border-border rounded px-2 py-1 text-sm text-right ${NO_SPIN}`}
-              />
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs text-muted-foreground">Parcelas</label>
-              <input
-                type="text"
-                disabled={ro}
-                value={fmtInput(XEdit.n_parcelas)}
-                onChange={e => {
-                  const p = parseNum(e.target.value) || 1;
-                  setXEdit(prev => {
-                    const v = parseNum(prev?.vl_pagamento);
-                    return { ...prev!, n_parcelas: e.target.value as any, vl_parcelas: p > 0 ? +(v / p).toFixed(2) : v };
-                  });
-                }}
-                onBlur={e => handleBlur("n_parcelas", e.target.value, 0)}
-                onFocus={e => e.target.select()}
-                className={`w-full border border-border rounded px-2 py-1 text-sm text-right ${NO_SPIN}`}
-              />
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs text-muted-foreground">Vlr. Parcela</label>
-              <div className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right text-foreground select-text">
-                {fmt(XEdit.vl_parcelas || 0)}
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={salvar} disabled={ro} className="text-sm px-3 py-1 rounded bg-primary text-primary-foreground disabled:opacity-50">Salvar</button>
-            <button onClick={() => { setXEdit(null); setXEditingId(null); }} className="text-sm px-3 py-1 rounded border border-border">Cancelar</button>
-          </div>
-        </div>
-      )}
-
       <DataGrid
         columns={cols}
         data={XPagtos}
@@ -228,39 +140,49 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
         toolbarLeft={pagtoToolbar}
         showRecordCount={false}
         onRowClick={(r) => setXSelected(r)}
-        onRowDoubleClick={(r) => editar(r)}
         selectedIdx={XSelected ? XPagtos.findIndex(p => p.movimento_pagamento_id === XSelected.movimento_pagamento_id) : null}
       />
 
-      {/* Rodapé: ações à esquerda, totais empilhados à direita */}
+      {XShowPagamento && (
+        <PedidoPagamentoDialog
+          open={XShowPagamento}
+          movimentoId={pedido.movimento_id}
+          subtotalPedido={subtotal}
+          tpDesconto={pedido.tp_desconto || "N"}
+          onClose={() => setXShowPagamento(false)}
+          onConfirmar={handleConfirmarPagamento}
+        />
+      )}
+
       <div className="flex items-start justify-between gap-4 pt-2 border-t border-border">
         <div className="flex flex-col gap-2">
+          {stAtual === "O" && (
+            <button onClick={() => setXShowPagamento(true)} className="text-sm px-6 py-2 rounded bg-emerald-600 text-white font-bold shadow-md hover:bg-emerald-700 transition-all">💰 PAGAMENTO / CAIXA</button>
+          )}
           {stAtual === "O" && onMudarStatus && (
-            <button onClick={() => { if (confirm("Confirma o envio deste pedido para o Caixa?")) onMudarStatus("P"); }} className="text-sm px-4 py-1.5 rounded bg-primary text-primary-foreground">→ Caixa (Pedido)</button>
+            <button onClick={() => { if (confirm("Confirma o envio deste pedido para o Caixa?")) onMudarStatus("P"); }} className="text-xs px-4 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors">→ Enviar p/ Caixa</button>
           )}
           {(stAtual === "O" || stAtual === "P") && onMudarStatus && (
             <button
               onClick={() => { if (confirm("Cancelar este pedido?")) onMudarStatus("C"); }}
-              className="text-sm px-4 py-1.5 rounded border border-destructive text-destructive"
+              className="text-xs px-4 py-1 rounded border border-destructive/30 text-destructive/70 hover:bg-destructive/5 transition-colors"
             >Cancelar Pedido</button>
           )}
         </div>
 
         <div className="flex flex-col gap-2 items-end min-w-[240px]">
-          <div className="w-full border border-border rounded px-3 py-2 bg-muted/40 flex justify-between items-center">
-            <span className="text-xs text-muted-foreground">Total Pedido</span>
-            <span className="font-semibold text-sm">{fmt(totalPedido)}</span>
+          <div className="w-full border border-border rounded px-3 py-2 bg-muted/40 flex justify-between items-center shadow-sm">
+            <span className="text-[10px] font-bold uppercase text-muted-foreground">Subtotal</span>
+            <span className="font-semibold text-sm">{fmt(subtotal)}</span>
           </div>
-          <div className="w-full border border-blue-300 rounded px-3 py-2 bg-blue-50 dark:bg-blue-950/30 flex justify-between items-center">
-            <span className="text-xs text-blue-900 dark:text-blue-200">Valor Pago</span>
-            <span className="font-semibold text-sm text-blue-900 dark:text-blue-200">{fmt(totalPago)}</span>
+          <div className="w-full border border-rose-200 rounded px-3 py-2 bg-rose-50 dark:bg-rose-950/20 flex justify-between items-center shadow-sm">
+            <span className="text-[10px] font-bold uppercase text-rose-800 dark:text-rose-200">Desconto</span>
+            <span className="font-semibold text-sm text-rose-700 dark:text-rose-300">{fmt(vlDesconto)}</span>
           </div>
-          {valorAPagar > 0 && (
-            <div className="w-full border border-red-300 rounded px-3 py-2 bg-red-50 dark:bg-red-950/30 flex justify-between items-center">
-              <span className="text-xs text-red-900 dark:text-red-200">Valor a Pagar</span>
-              <span className="font-bold text-base text-red-700 dark:text-red-300">{fmt(valorAPagar)}</span>
-            </div>
-          )}
+          <div className="w-full border border-emerald-300 rounded px-3 py-2 bg-emerald-50 dark:bg-emerald-950/30 flex justify-between items-center shadow-md">
+            <span className="text-[10px] font-bold uppercase text-emerald-900 dark:text-emerald-200">Total</span>
+            <span className="font-bold text-base text-emerald-700 dark:text-emerald-300">{fmt(totalPedido)}</span>
+          </div>
         </div>
       </div>
     </div>

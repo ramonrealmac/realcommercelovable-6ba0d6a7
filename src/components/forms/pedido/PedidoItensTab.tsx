@@ -24,15 +24,22 @@ const fmt = (v: number, dec = 2) =>
 
 const NO_SPIN = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
-const fmtInput = (v: any) => {
-  if (v === 0 || v === "0" || v === "" || v === undefined || v === null) return "";
-  return String(v).replace(".", ",");
+const fmtInput = (v: any, dec = 2) => {
+  if (v === 0 || v === "0") return Number(0).toLocaleString("pt-BR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  if (v === "" || v === undefined || v === null) return "";
+  if (typeof v === "number") return v.toLocaleString("pt-BR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  return String(v);
 };
 
 const parseNum = (v: any) => {
   if (!v) return 0;
   if (typeof v === "number") return v;
-  const n = parseFloat(String(v).replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
+  let s = String(v).replace(/\s/g, "");
+  // Se tem vírgula, assumimos formato brasileiro (ponto=milhar, vírgula=decimal)
+  if (s.includes(",")) {
+    s = s.replace(/\./g, "").replace(",", ".");
+  }
+  const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
 };
 
@@ -165,7 +172,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
 
   const handleBlur = (key: keyof IMovimentoItem, val: any, decimals = 2) => {
     const n = parseNum(val);
-    setF(key, n > 0 ? n.toFixed(decimals).replace(".", ",") : "");
+    setF(key, n);
   };
 
   const aplicarProduto = useCallback((p: IProdutoRow, deposito_id?: number) => {
@@ -213,10 +220,11 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
   };
 
   const onPcDesc = (pc: number) => setXEdit(prev => recalc({ ...prev!, pc_desconto: pc }));
-  const onVlDesc = (vl: number) => {
+  const onVlDesc = (vl: any) => {
     setXEdit(prev => {
-      const sub = (Number(prev?.qt_movimento) || 0) * (Number(prev?.vl_und_produto) || 0);
-      const pc = sub > 0 ? +(vl / sub * 100).toFixed(2) : 0;
+      const vNum = parseNum(vl);
+      const sub = (parseNum(prev?.qt_movimento) || 0) * (parseNum(prev?.vl_und_produto) || 0);
+      const pc = sub > 0 ? +(vNum / sub * 100).toFixed(2) : 0;
       return recalc({ ...prev!, pc_desconto: pc });
     });
   };
@@ -224,7 +232,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
   const salvarItem = async () => {
     if (!pedido?.movimento_id) { toast.error("Salve o pedido antes."); return; }
     if (!XEdit?.produto_id) { toast.error("Selecione o produto."); return; }
-    const qt = Number(XEdit.qt_movimento) || 0;
+    const qt = parseNum(XEdit.qt_movimento);
     if (qt <= 0) { toast.error("Qtd. inválida."); return; }
     if (!XEdit.deposito_id) { toast.error("Selecione o depósito."); return; }
 
@@ -237,8 +245,13 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
       }
     }
 
+    const {
+      vl_produto, vl_movimento, vl_desconto, pc_desconto,
+      ...basePayload
+    } = XEdit;
+    
     const payload = {
-      ...XEdit,
+      ...basePayload,
       empresa_id: XEmpresaId,
       movimento_id: pedido.movimento_id,
       tp_movimento: pedido.tp_movimento || "PD",
@@ -250,7 +263,6 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
       const { error } = await db.from("movimento_item").insert(payload);
       if (error) { toast.error(error.message); return; }
     }
-    await db.rpc("fu_recalcular_pedido", { _movimento_id: pedido.movimento_id });
     toast.success("Item salvo.");
     const wasInsert = !XEditingId;
     setXEdit(null); setXEditingId(null); setXEditEstoque(null);
@@ -266,7 +278,6 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
     if (!confirm("Excluir item?")) return;
     const { error } = await db.from("movimento_item").update({ excluido: true }).eq("movimento_item_id", it.movimento_item_id);
     if (error) { toast.error(error.message); return; }
-    await db.rpc("fu_recalcular_pedido", { _movimento_id: pedido!.movimento_id });
     await loadItens();
   };
 
@@ -390,7 +401,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
               <input
                 type="text"
                 disabled={ro}
-                value={fmtInput(XEdit.qt_movimento)}
+                value={fmtInput(XEdit.qt_movimento, 4)}
                 onChange={e => setF("qt_movimento", e.target.value)}
                 onBlur={e => handleBlur("qt_movimento", e.target.value, 4)}
                 onFocus={e => e.target.select()}
@@ -410,7 +421,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
               <label className="text-xs text-muted-foreground">Desc.(%)</label>
               <input
                 type="text"
-                disabled={ro || pedido.tp_desconto === "N"}
+                disabled={ro || pedido?.tp_desconto !== "I"}
                 value={fmtInput(XEdit.pc_desconto)}
                 onChange={e => onPcDesc(e.target.value as any)}
                 onBlur={e => handleBlur("pc_desconto", e.target.value, 2)}
@@ -422,7 +433,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
               <label className="text-xs text-muted-foreground">Desc.(R$)</label>
               <input
                 type="text"
-                disabled={ro || pedido.tp_desconto === "N"}
+                disabled={ro || pedido?.tp_desconto !== "I"}
                 value={fmtInput(XEdit.vl_desconto)}
                 onChange={e => onVlDesc(e.target.value as any)}
                 onBlur={e => handleBlur("vl_desconto", e.target.value, 2)}

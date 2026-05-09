@@ -214,10 +214,37 @@ const PedidoForm: React.FC = () => {
           if (mode === "edit" && rec.st_pedido && rec.st_pedido !== "O") {
             throw new Error("Pedido não está em modo Orçamento; não pode ser alterado.");
           }
-          return { ...rec, empresa_id: rec.empresa_id || XEmpresaId };
+          const parseIfString = (v: any) => {
+            if (typeof v === "number") return v;
+            if (!v) return 0;
+            let s = String(v).replace(/\s/g, "");
+            if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+            const n = parseFloat(s);
+            return isNaN(n) ? 0 : n;
+          };
+          const cleanRec = { ...rec };
+          if (cleanRec.pc_desconto !== undefined) cleanRec.pc_desconto = parseIfString(cleanRec.pc_desconto);
+          if (cleanRec.vl_desconto !== undefined) cleanRec.vl_desconto = parseIfString(cleanRec.vl_desconto);
+          if (cleanRec.vl_desc_rs !== undefined) cleanRec.vl_desc_rs = parseIfString(cleanRec.vl_desc_rs);
+          
+          if (cleanRec.tp_desconto === 'P') {
+            const subtotal = XPedidoTotalCtx.itens.reduce((acc, i) => acc + Number(i.vl_produto || 0), 0);
+            if (subtotal > 0) {
+              if (cleanRec.vl_desconto > 0 && (!cleanRec.pc_desconto || cleanRec.pc_desconto === 0)) {
+                cleanRec.pc_desconto = +(cleanRec.vl_desconto / subtotal * 100).toFixed(2);
+              } else if (cleanRec.pc_desconto > 0 && (!cleanRec.vl_desconto || cleanRec.vl_desconto === 0)) {
+                cleanRec.vl_desconto = +(subtotal * cleanRec.pc_desconto / 100).toFixed(2);
+              }
+            }
+          }
+
+          return { ...cleanRec, empresa_id: cleanRec.empresa_id || XEmpresaId };
         },
-        XOnAfterSave: (_rec, mode) => {
+        XOnAfterSave: async (rec, mode) => {
           if (mode === "insert") setXAutoNovoItem(n => n + 1);
+          if (rec.movimento_id) {
+            await fetchItensCadastro(rec.movimento_id);
+          }
         },
         XSoftDelete: false,
       }}
@@ -319,7 +346,13 @@ const PedidoForm: React.FC = () => {
                 podeEditar={ped?.st_pedido === "O"}
                 totalPedido={XPedidoTotalCtx.movimentoId === ped?.movimento_id ? XPedidoTotalCtx.total : Number(ped?.vl_movimento || 0)}
                 refreshToken={XPagamentoRefreshToken}
-                onMudarStatus={(novo) => mudarStatus(ped.movimento_id, novo)}
+                onMudarStatus={(novo) => {
+                  if (novo === "REFRESH") {
+                    if (XCrudRefreshRef.current) XCrudRefreshRef.current();
+                  } else {
+                    mudarStatus(ped.movimento_id, novo);
+                  }
+                }}
               />
             );
           },
@@ -331,22 +364,22 @@ const PedidoForm: React.FC = () => {
         const fmt = (v: number) => Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const fmtQ = (v: number) => Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 
-        const fmtInput = (v: any) => {
-          if (v === 0 || v === "0" || v === "" || v === undefined || v === null) return "";
-          return String(v).replace(".", ",");
+        const fmtInput = (v: any, dec = 2) => {
+          if (v === 0 || v === "0") return Number(0).toLocaleString("pt-BR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+          if (v === "" || v === undefined || v === null) return "";
+          if (typeof v === "number") return v.toLocaleString("pt-BR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+          return String(v);
         };
 
         const parseNum = (v: any) => {
           if (!v) return 0;
           if (typeof v === "number") return v;
-          const n = parseFloat(String(v).replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
+          let s = String(v).replace(/\s/g, "");
+          if (s.includes(",")) {
+            s = s.replace(/\./g, "").replace(",", ".");
+          }
+          const n = parseFloat(s);
           return isNaN(n) ? 0 : n;
-        };
-
-        const handleBlur = (key: string, val: any, decimals = 2) => {
-          if (!val) return;
-          const n = parseNum(val);
-          setField(key as any, n.toFixed(decimals).replace(".", ","));
         };
 
         // Itens em cache (sincronizados com a aba Itens)
@@ -371,6 +404,23 @@ const PedidoForm: React.FC = () => {
           vl_outro: acc.vl_outro + Number(i.vl_outro || 0),
           vl_movimento: acc.vl_movimento + Number(i.vl_movimento || 0),
         }), { vl_produto: 0, vl_desconto: 0, vl_frete: 0, vl_despesa: 0, vl_seguro: 0, vl_outro: 0, vl_movimento: 0 });
+
+        const handleBlur = (key: string, val: any, decimals = 2) => {
+          const n = parseNum(val);
+          if (key === 'pc_desconto') {
+            const sub = T.vl_produto;
+            const calcVl = +(sub * n / 100).toFixed(2);
+            setField("pc_desconto", n as any);
+            setField("vl_desconto", calcVl as any);
+          } else if (key === 'vl_desconto') {
+            const sub = T.vl_produto;
+            const calcPc = sub > 0 ? +(n / sub * 100).toFixed(2) : 0;
+            setField("vl_desconto", n as any);
+            setField("pc_desconto", calcPc as any);
+          } else {
+            setField(key as any, n as any);
+          }
+        };
 
         const visualCols = [
           { key: "cd_produto", label: "Código", width: "90px", align: "right" as const, render: (r: any) => r.cd_produto || (r.produto_id ?? "") },
@@ -480,32 +530,7 @@ const PedidoForm: React.FC = () => {
                   {Object.entries(TP_DESCONTO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
               </div>
-              {record.tp_desconto === "P" && (
-                <>
-                  <div className="col-span-2">
-                    <label className="text-xs text-muted-foreground">Desc. Pedido (%)</label>
-                    <input
-                      type="text"
-                      disabled={ro}
-                      value={fmtInput(record.pc_desconto)}
-                      onChange={e => setField("pc_desconto", e.target.value as any)}
-                      onBlur={e => handleBlur("pc_desconto", e.target.value, 2)}
-                      className="w-full border border-border rounded px-2 py-1 text-sm text-right"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-xs text-muted-foreground">Desc. Pedido (R$)</label>
-                    <input
-                      type="text"
-                      disabled={ro}
-                      value={fmtInput(record.vl_desc_rs)}
-                      onChange={e => setField("vl_desc_rs", e.target.value as any)}
-                      onBlur={e => handleBlur("vl_desc_rs", e.target.value, 2)}
-                      className="w-full border border-border rounded px-2 py-1 text-sm text-right"
-                    />
-                  </div>
-                </>
-              )}
+              <div className="col-span-9" /> {/* Espaçador para manter alinhamento */}
               {currentRecord?.movimento_id && (
                 <div className="col-span-12 sm:col-span-auto ml-auto flex gap-2 justify-end">
                   {stAtual === "O" && (
