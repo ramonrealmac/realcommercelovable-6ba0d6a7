@@ -208,6 +208,7 @@ export const fiscalEmissaoService = {
           origem: prod?.origem || 0,
           cst_icms: rIcms?.cst_csosn || "000",
           pc_icms: rIcms?.aliquota || 0,
+          vl_bc: mItem.vl_produto,
           vl_icms: vIcms,
           vl_icms_st: 0,
           cst_pis: rPis?.cst_pis_cofins || "01",
@@ -243,6 +244,7 @@ export const fiscalEmissaoService = {
       // 7. Atualizar totais no cabeçalho
       await db.from("fiscal_nfe_cabecalho")
         .update({
+          vl_bc: (movimento as any).vl_produto || (movimento as any).vl_produtos || 0,
           vl_icms: totalIcms,
           vl_pis: totalPis,
           vl_cofins: totalCofins,

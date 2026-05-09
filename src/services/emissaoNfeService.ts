@@ -132,6 +132,7 @@ export async function emitirNfe(params: EmissaoParams): Promise<EmissaoResult> {
     let vl_total_ibs = 0;
     let vl_total_cbs = 0;
     let vl_total_desconto = 0;
+    let totalIcms = 0;
 
     for (let i = 0; i < (itens || []).length; i++) {
       const item = itens[i];
@@ -164,6 +165,7 @@ export async function emitirNfe(params: EmissaoParams): Promise<EmissaoResult> {
       const vlIbs = vlLiq * trib.pc_ibs / 100;
       const vlCbs = vlLiq * trib.pc_cbs / 100;
 
+      totalIcms += vlIcms;
       vl_total_produtos += vlBruto;
       vl_total_desconto += vlDescItem;
       vl_total_ipi += vlIpi;
@@ -186,6 +188,7 @@ export async function emitirNfe(params: EmissaoParams): Promise<EmissaoResult> {
         qt_movimento: qtd,
         vl_unit: vlUnit,
         vl_desconto: vlDescItem,
+        vl_bc: vlLiq,
         vl_total: vlLiq,
         // ICMS
         cst_icms: trib.cst_icms,
@@ -249,6 +252,8 @@ export async function emitirNfe(params: EmissaoParams): Promise<EmissaoResult> {
       vl_despesa,
       vl_ipi: arred(vl_total_ipi),
       vl_icms_st: arred(vl_total_icms_st),
+      vl_bc: arred(vl_total_produtos),
+      vl_icms: arred(totalIcms), // Need to define totalIcms
       vl_pis: arred(vl_total_pis),
       vl_cofins: arred(vl_total_cofins),
       vl_ibs: arred(vl_total_ibs),
