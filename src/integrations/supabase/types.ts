@@ -2744,6 +2744,7 @@ export type Database = {
           empresa_id: number
           id: number
           mensagem_erro: string | null
+          nfe_cabecalho_id: number | null
           payload: Json | null
           resposta: string | null
           status: string
@@ -2759,6 +2760,7 @@ export type Database = {
           empresa_id: number
           id?: never
           mensagem_erro?: string | null
+          nfe_cabecalho_id?: number | null
           payload?: Json | null
           resposta?: string | null
           status?: string
@@ -2774,6 +2776,7 @@ export type Database = {
           empresa_id?: number
           id?: never
           mensagem_erro?: string | null
+          nfe_cabecalho_id?: number | null
           payload?: Json | null
           resposta?: string | null
           status?: string
@@ -3307,12 +3310,14 @@ export type Database = {
           tp_emis: number
           tp_nf: number
           updated_at: string
+          vl_bc: number
           vl_cbs: number
           vl_cofins: number
           vl_desconto: number
           vl_despesa: number
           vl_frete: number
           vl_ibs: number
+          vl_icms: number
           vl_icms_st: number
           vl_ipi: number
           vl_is: number
@@ -3350,12 +3355,14 @@ export type Database = {
           tp_emis?: number
           tp_nf?: number
           updated_at?: string
+          vl_bc?: number
           vl_cbs?: number
           vl_cofins?: number
           vl_desconto?: number
           vl_despesa?: number
           vl_frete?: number
           vl_ibs?: number
+          vl_icms?: number
           vl_icms_st?: number
           vl_ipi?: number
           vl_is?: number
@@ -3393,12 +3400,14 @@ export type Database = {
           tp_emis?: number
           tp_nf?: number
           updated_at?: string
+          vl_bc?: number
           vl_cbs?: number
           vl_cofins?: number
           vl_desconto?: number
           vl_despesa?: number
           vl_frete?: number
           vl_ibs?: number
+          vl_icms?: number
           vl_icms_st?: number
           vl_ipi?: number
           vl_is?: number
@@ -3423,6 +3432,75 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "deposito"
             referencedColumns: ["deposito_id"]
+          },
+        ]
+      }
+      fiscal_nfe_cce: {
+        Row: {
+          c_stat: number | null
+          created_at: string
+          dt_evento: string
+          empresa_id: number
+          nfe_cabecalho_id: number
+          nfe_cce_id: number
+          nr_protocolo: string | null
+          nr_sequencial: number
+          st_evento: string
+          tp_evento: string
+          updated_at: string
+          x_correcao: string
+          x_motivo: string | null
+          xml_evento: string | null
+          xml_retorno: string | null
+        }
+        Insert: {
+          c_stat?: number | null
+          created_at?: string
+          dt_evento?: string
+          empresa_id: number
+          nfe_cabecalho_id: number
+          nfe_cce_id?: never
+          nr_protocolo?: string | null
+          nr_sequencial?: number
+          st_evento?: string
+          tp_evento?: string
+          updated_at?: string
+          x_correcao: string
+          x_motivo?: string | null
+          xml_evento?: string | null
+          xml_retorno?: string | null
+        }
+        Update: {
+          c_stat?: number | null
+          created_at?: string
+          dt_evento?: string
+          empresa_id?: number
+          nfe_cabecalho_id?: number
+          nfe_cce_id?: never
+          nr_protocolo?: string | null
+          nr_sequencial?: number
+          st_evento?: string
+          tp_evento?: string
+          updated_at?: string
+          x_correcao?: string
+          x_motivo?: string | null
+          xml_evento?: string | null
+          xml_retorno?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_nfe_cce_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresa"
+            referencedColumns: ["empresa_id"]
+          },
+          {
+            foreignKeyName: "fiscal_nfe_cce_nfe_cabecalho_id_fkey"
+            columns: ["nfe_cabecalho_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_nfe_cabecalho"
+            referencedColumns: ["nfe_cabecalho_id"]
           },
         ]
       }
@@ -3464,12 +3542,14 @@ export type Database = {
           qt_entrada: number
           unidade: string
           updated_at: string
+          vl_bc: number
           vl_bc_st: number
           vl_cbs: number
           vl_cofins: number
           vl_desconto: number
           vl_fcp_st: number
           vl_ibs: number
+          vl_icms: number
           vl_icms_st: number
           vl_ipi: number
           vl_is: number
@@ -3514,12 +3594,14 @@ export type Database = {
           qt_entrada?: number
           unidade?: string
           updated_at?: string
+          vl_bc?: number
           vl_bc_st?: number
           vl_cbs?: number
           vl_cofins?: number
           vl_desconto?: number
           vl_fcp_st?: number
           vl_ibs?: number
+          vl_icms?: number
           vl_icms_st?: number
           vl_ipi?: number
           vl_is?: number
@@ -3564,12 +3646,14 @@ export type Database = {
           qt_entrada?: number
           unidade?: string
           updated_at?: string
+          vl_bc?: number
           vl_bc_st?: number
           vl_cbs?: number
           vl_cofins?: number
           vl_desconto?: number
           vl_fcp_st?: number
           vl_ibs?: number
+          vl_icms?: number
           vl_icms_st?: number
           vl_ipi?: number
           vl_is?: number
@@ -6565,6 +6649,7 @@ export type Database = {
         Args: { _empresa_id: number; _user_id: string }
         Returns: boolean
       }
+      fu_is_admin_any: { Args: { _user_id: string }; Returns: boolean }
       fu_list_pedidos_public: {
         Args: { _cpf: string }
         Returns: {

@@ -143,7 +143,7 @@ const AppContent = () => {
 
       // PDV cases
       case "pdv":
-        return <PdvTela />;
+        return <PdvCaixaForm />;
       case "abertura-caixa":
         return <AberturaCaixaForm />;
       case "pdv-caixa":
