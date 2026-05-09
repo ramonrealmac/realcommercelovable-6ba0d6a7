@@ -13,7 +13,8 @@ import {
   Download,
   AlertCircle,
   CheckCircle2,
-  Clock
+  Clock,
+  Terminal
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -21,6 +22,7 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
+import MonitorFiscalLogDialog from "@/components/forms/MonitorFiscalLogDialog";
 const db = supabase as any;
 
 interface IClienteInfo { id: number; razao: string; }
