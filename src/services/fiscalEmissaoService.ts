@@ -349,31 +349,35 @@ export const fiscalEmissaoService = {
         configItem: fConfigItem
       });
 
+      const ambienteNfe = Number(fConfig?.ambiente_nfe || 2);
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+
       const { data: evento, error: evErr } = await db.from("fiscal_evento").insert({
         empresa_id: empresaId,
+        nfe_cabecalho_id: cabId,
         tipo: tipo,
         comando: tipo === "NFE" ? "EMITIR_NFE" : "EMITIR_NFCE",
         status: "PENDENTE",
+        ambiente: ambienteNfe,
+        user_id: authUser?.id || null,
         payload: {
           dados: iniContent,
           config: {
             uf: empresa.endereco_uf || empresa.cidade?.uf || "SP",
             modelo: nfeCabecalho.modelo,
-            ambiente: Number(fConfig.ambiente_nfe || 2),
+            ambiente: ambienteNfe,
             certificadoPath: fConfig.certificado,
             certificadoSenha: fConfig.senha_certificado || "",
             tipo_certificado: fConfig.tipo_certificado || "ARQUIVO",
             csc: fConfigItem.csc || "",
             id_csc: fConfigItem.id_csc || ""
           }
-        },
-        referencia_id: cabId,
-        referencia_tabela: "fiscal_nfe_cabecalho"
+        }
       }).select("id").single();
 
       if (evErr) {
         console.error("[FiscalService] Erro ao criar evento fiscal:", evErr);
-        // Não jogamos erro aqui para não travar o processo, mas avisamos no log
+        toast.error("Documento gerado, mas falhou ao criar evento de transmissão: " + evErr.message);
       }
 
       console.log(`[FiscalService] Documento ${cabId} e Evento ${evento?.id} gerados com sucesso.`);
