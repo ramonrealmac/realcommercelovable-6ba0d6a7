@@ -177,7 +177,7 @@ const configurarHandle = (lib, handle, configPayload) => {
         lib.ConfigGravarValor(handle, "DFe", "SSLLib", "1");        // 1=libOpenSSL
         lib.ConfigGravarValor(handle, "DFe", "SSLCryptLib", "1");   // 1=cryOpenSSL
         lib.ConfigGravarValor(handle, "DFe", "SSLHttpLib", "3");    // 3=httpOpenSSL
-        lib.ConfigGravarValor(handle, "DFe", "SSLXmlSignLib", "4"); // 4=xsLibXml2
+        lib.ConfigGravarValor(handle, "DFe", "SSLXmlSignLib", "1"); // 1=xsLibXml2 (usa libxml2.dll que já está no diretório da DLL)
         
         if (configPayload.certificadoPath) {
             lib.ConfigGravarValor(handle, "DFe", "ArquivoPFX", configPayload.certificadoPath);
