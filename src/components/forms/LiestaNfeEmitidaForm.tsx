@@ -107,6 +107,30 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
 
       if (error) throw error;
       const rows = data || [];
+
+      // Enriquecer com status do último fiscal_evento (para refletir erro de transmissão)
+      const nfeIds = rows.map((r: any) => r.nfe_cabecalho_id).filter(Boolean);
+      if (nfeIds.length > 0) {
+        const { data: eventos } = await db.from("fiscal_evento")
+          .select("nfe_cabecalho_id,status,mensagem_erro,created_at")
+          .in("nfe_cabecalho_id", nfeIds)
+          .order("created_at", { ascending: false });
+        if (eventos) {
+          const latestByNfe: Record<number, any> = {};
+          for (const ev of eventos) {
+            if (!latestByNfe[ev.nfe_cabecalho_id]) latestByNfe[ev.nfe_cabecalho_id] = ev;
+          }
+          rows.forEach((r: any) => {
+            const ev = latestByNfe[r.nfe_cabecalho_id];
+            if (!ev) return;
+            if (ev.status === "ERRO" && (r.st_nf === "A" || r.st_nf === "0")) {
+              r.st_nf = "3";
+              r._erro_msg = ev.mensagem_erro;
+            }
+          });
+        }
+      }
+
       setXData(rows);
 
       // Carregar nomes dos destinatários
