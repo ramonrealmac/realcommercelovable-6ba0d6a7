@@ -163,29 +163,22 @@ const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen,
   const loadLogs = async () => {
     if (!isOpen) return;
     setXLoading(true);
-    setXData([]); // Limpa a lista anterior para não misturar dados de empresas diferentes
+    setXData([]);
     try {
-      console.log(`[MonitorLog] 📂 Carregando logs EXCLUSIVOS da Empresa ID: ${empresaId}`);
-      
-      const { data, error } = await db
+      let query = db
         .from("fiscal_evento")
         .select("*")
-        .eq("empresa_id", empresaId)
+        .eq("empresa_id", empresaId);
+
+      if (nfeCabecalhoId) {
+        query = query.eq("nfe_cabecalho_id", nfeCabecalhoId);
+      }
+
+      const { data, error } = await query
         .order("created_at", { ascending: false })
         .limit(1000);
 
-      if (error) {
-        console.error("❌ Erro na query de logs:", error);
-        throw error;
-      }
-
-      if (!data || data.length === 0) {
-        console.warn("[Log] Nenhum dado encontrado para esta empresa. Verificando o que existe no banco...");
-        const { data: globalData } = await db.from("fiscal_evento").select("empresa_id").limit(5);
-        console.log("[Log] Exemplo de IDs de empresas que possuem logs no banco:", globalData?.map(d => d.empresa_id));
-      }
-
-      console.log(`[Log] ${data?.length || 0} registros carregados.`);
+      if (error) throw error;
       setXData(data || []);
     } catch (e: any) {
       console.error("Erro ao carregar logs:", e);
@@ -197,9 +190,9 @@ const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen,
   useEffect(() => {
     if (isOpen) {
       loadLogs();
-      setXFilters({}); 
+      setXFilters({});
     }
-  }, [isOpen, empresaId]);
+  }, [isOpen, empresaId, nfeCabecalhoId]);
 
   return (
     <>
