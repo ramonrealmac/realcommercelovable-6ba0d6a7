@@ -114,6 +114,7 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
           const ids = [...new Set(rows.map(r => r.cadastro_id).filter(Boolean))] as number[];
           if (ids.length) ensureClienteInfo(ids);
         },
+        XOnBeforeSave: (rec: any) => {
           if (rec.tp_nf === undefined || rec.tp_nf === null) rec.tp_nf = 1;
           return { ...rec, empresa_id: rec.empresa_id || XEmpresaId };
         },

@@ -2595,6 +2595,7 @@ export type Database = {
           ambiente_nfce: string | null
           ambiente_nfe: string | null
           certificado: string | null
+          cliente_padrao_id: number | null
           contingencia_mdf: string | null
           contingencia_nfce: string | null
           contingencia_nfe: string | null
@@ -2632,6 +2633,7 @@ export type Database = {
           ambiente_nfce?: string | null
           ambiente_nfe?: string | null
           certificado?: string | null
+          cliente_padrao_id?: number | null
           contingencia_mdf?: string | null
           contingencia_nfce?: string | null
           contingencia_nfe?: string | null
@@ -2669,6 +2671,7 @@ export type Database = {
           ambiente_nfce?: string | null
           ambiente_nfe?: string | null
           certificado?: string | null
+          cliente_padrao_id?: number | null
           contingencia_mdf?: string | null
           contingencia_nfce?: string | null
           contingencia_nfe?: string | null
@@ -4390,6 +4393,7 @@ export type Database = {
           condicao_id: number | null
           condicao_unica: string | null
           deposito_id: number | null
+          dt_alteracao: string | null
           dt_cancelamento: string | null
           dt_emissao: string | null
           dt_entrega: string | null
@@ -4489,6 +4493,7 @@ export type Database = {
           condicao_id?: number | null
           condicao_unica?: string | null
           deposito_id?: number | null
+          dt_alteracao?: string | null
           dt_cancelamento?: string | null
           dt_emissao?: string | null
           dt_entrega?: string | null
@@ -4588,6 +4593,7 @@ export type Database = {
           condicao_id?: number | null
           condicao_unica?: string | null
           deposito_id?: number | null
+          dt_alteracao?: string | null
           dt_cancelamento?: string | null
           dt_emissao?: string | null
           dt_entrega?: string | null
@@ -4736,6 +4742,7 @@ export type Database = {
           vl_bc_iss: number | null
           vl_bc_pis: number | null
           vl_cofins: number | null
+          vl_comissao: number | null
           vl_custo: number | null
           vl_desc_rs: number | null
           vl_desconto: number | null
@@ -4798,6 +4805,7 @@ export type Database = {
           vl_bc_iss?: number | null
           vl_bc_pis?: number | null
           vl_cofins?: number | null
+          vl_comissao?: number | null
           vl_custo?: number | null
           vl_desc_rs?: number | null
           vl_desconto?: number | null
@@ -4860,6 +4868,7 @@ export type Database = {
           vl_bc_iss?: number | null
           vl_bc_pis?: number | null
           vl_cofins?: number | null
+          vl_comissao?: number | null
           vl_custo?: number | null
           vl_desc_rs?: number | null
           vl_desconto?: number | null
