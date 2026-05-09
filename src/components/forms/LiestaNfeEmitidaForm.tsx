@@ -35,6 +35,8 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
   const [XDtIni, setXDtIni] = useState(new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().substring(0, 10));
   const [XDtFim, setXDtFim] = useState(new Date().toISOString().substring(0, 10));
   const [XClienteCache, setXClienteCache] = useState<Record<number, string>>({});
+  const [XLogDialogOpen, setXLogDialogOpen] = useState(false);
+  const [XLogNfeId, setXLogNfeId] = useState<number | undefined>(undefined);
 
   const XGridCols: IGridColumn[] = [
     { key: "nfe_cabecalho_id", label: "ID", width: "60px", align: "right" },
