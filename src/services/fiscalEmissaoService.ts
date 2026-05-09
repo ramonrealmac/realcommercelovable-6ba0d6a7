@@ -272,6 +272,7 @@ export const fiscalEmissaoService = {
         .eq("nfe_cabecalho_id", cabId);
 
       // 8. Inserir Pagamentos
+      const totalVenda = Number(nfeCabecalho.vl_total_nf || 0);
       console.log(`[FiscalService] Verificando pagamentos para movimento ${movimentoId}. Total Venda: ${totalVenda}`);
       const { data: pagtosMov, error: errPagtos } = await db
         .from("movimento_pagamento")
