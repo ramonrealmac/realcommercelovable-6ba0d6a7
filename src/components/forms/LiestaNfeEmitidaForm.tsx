@@ -196,10 +196,13 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
                       <DropdownMenuItem onClick={() => handleDownloadXml(r)}>
                         <Download className="w-4 h-4 mr-2 text-blue-400" /> Baixar XML
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => openTab("nfe-form", { nfe_cabecalho_id: r.nfe_cabecalho_id })}>
-                        <Eye className="w-4 h-4 mr-2 text-primary" /> Visualizar Dados
+                      <DropdownMenuItem onClick={() => openTab({ title: `NF-e #${r.nr_nota || r.nfe_cabecalho_id}`, component: "nfe-form", params: { nfe_cabecalho_id: r.nfe_cabecalho_id } })}>
+                        <Eye className="w-4 h-4 mr-2 text-primary" /> Visualizar Documento
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => openTab("cce", { nfe_cabecalho_id: r.nfe_cabecalho_id })}>
+                      <DropdownMenuItem onClick={() => { setXLogNfeId(r.nfe_cabecalho_id); setXLogDialogOpen(true); }}>
+                        <Terminal className="w-4 h-4 mr-2 text-indigo-500" /> Log
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openTab({ title: `CCe NF-e ${r.nr_nota || r.nfe_cabecalho_id}`, component: "cce", params: { nfe_cabecalho_id: r.nfe_cabecalho_id } })}>
                         <FileText className="w-4 h-4 mr-2 text-amber-500" /> Carta de Correção
                       </DropdownMenuItem>
                       <DropdownMenuItem className="text-destructive">
