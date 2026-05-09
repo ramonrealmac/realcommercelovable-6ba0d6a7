@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
 import { useAppContext } from "@/contexts/AppContext";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import { 
@@ -106,6 +107,30 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
 
       if (error) throw error;
       const rows = data || [];
+
+      // Enriquecer com status do último fiscal_evento (para refletir erro de transmissão)
+      const nfeIds = rows.map((r: any) => r.nfe_cabecalho_id).filter(Boolean);
+      if (nfeIds.length > 0) {
+        const { data: eventos } = await db.from("fiscal_evento")
+          .select("nfe_cabecalho_id,status,mensagem_erro,created_at")
+          .in("nfe_cabecalho_id", nfeIds)
+          .order("created_at", { ascending: false });
+        if (eventos) {
+          const latestByNfe: Record<number, any> = {};
+          for (const ev of eventos) {
+            if (!latestByNfe[ev.nfe_cabecalho_id]) latestByNfe[ev.nfe_cabecalho_id] = ev;
+          }
+          rows.forEach((r: any) => {
+            const ev = latestByNfe[r.nfe_cabecalho_id];
+            if (!ev) return;
+            if (ev.status === "ERRO" && (r.st_nf === "A" || r.st_nf === "0")) {
+              r.st_nf = "3";
+              r._erro_msg = ev.mensagem_erro;
+            }
+          });
+        }
+      }
+
       setXData(rows);
 
       // Carregar nomes dos destinatários
@@ -132,9 +157,15 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
   }, [XEmpresaId, initialFilterId]);
 
   const handleTransmitir = async (row: any) => {
-    toast.info("A transmissão será realizada pelo Fiscal Worker...");
-    // Apenas um exemplo, aqui você poderia disparar um evento ou atualizar um status para o worker pegar
-    // const { error } = await db.from("fiscal_nfe_cabecalho").update({ st_nf: "0" }).eq("nfe_cabecalho_id", row.nfe_cabecalho_id);
+    if (!XEmpresaId) return;
+    toast.info("Enfileirando transmissão para o Fiscal Worker...");
+    const res = await fiscalEmissaoService.retransmitirDocumento(row.nfe_cabecalho_id, XEmpresaId);
+    if (res.success) {
+      toast.success(`Evento #${res.fiscal_evento_id} criado. Aguardando worker...`);
+      loadData();
+    } else {
+      toast.error("Falha ao enfileirar: " + (res.message || "erro desconhecido"));
+    }
   };
 
   const handleImprimir = (row: any) => {

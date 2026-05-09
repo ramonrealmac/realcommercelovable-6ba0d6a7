@@ -391,5 +391,92 @@ export const fiscalEmissaoService = {
       console.error("[FiscalService] Erro:", e);
       return { success: false, message: e.message };
     }
+  },
+
+  /**
+   * Re-enfileira a transmissão de uma NF-e/NFC-e existente, criando um novo
+   * fiscal_evento com status PENDENTE para que o fiscal-worker reprocesse.
+   */
+  retransmitirDocumento: async (
+    nfeCabecalhoId: number,
+    empresaId: number
+  ): Promise<FiscalEmissaoResult> => {
+    try {
+      const { data: cab, error: cabErr } = await db
+        .from("fiscal_nfe_cabecalho")
+        .select("*")
+        .eq("nfe_cabecalho_id", nfeCabecalhoId)
+        .single();
+      if (cabErr || !cab) throw new Error("NF-e não localizada: " + cabErr?.message);
+
+      const tipo: "NFE" | "NFCE" = Number(cab.modelo) === 65 ? "NFCE" : "NFE";
+
+      const { data: empresa } = await db.from("empresa").select("*").eq("empresa_id", empresaId).single();
+      const { data: parceiro } = cab.cadastro_id
+        ? await db.from("cadastro").select("*").eq("cadastro_id", cab.cadastro_id).single()
+        : { data: null };
+
+      const { data: fConfig } = await db.from("fiscal_config").select("*").eq("empresa_id", empresaId).single();
+
+      const { data: fConfigItens } = await db
+        .from("fiscal_config_item")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .eq("modelo", cab.modelo)
+        .eq("serie", cab.serie);
+      const fConfigItem = fConfigItens?.[0];
+      if (!fConfigItem) throw new Error(`Configuração fiscal (modelo ${cab.modelo}/série ${cab.serie}) não localizada.`);
+
+      const { data: nfeItens } = await db.from("fiscal_nfe_item").select("*").eq("nfe_cabecalho_id", nfeCabecalhoId);
+      const { data: nfePagtos } = await db.from("fiscal_nfe_pagamento").select("*").eq("nfe_cabecalho_id", nfeCabecalhoId);
+
+      const iniContent = gerarIniNfe({
+        cabecalho: cab,
+        itens: nfeItens || [],
+        pagamentos: nfePagtos || [],
+        empresa: empresa,
+        cadastro: parceiro,
+        fiscalConfig: fConfig,
+        configItem: fConfigItem
+      });
+
+      const ambienteNfe = Number(fConfig?.ambiente_nfe || 2);
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+
+      const { data: evento, error: evErr } = await db.from("fiscal_evento").insert({
+        empresa_id: empresaId,
+        nfe_cabecalho_id: nfeCabecalhoId,
+        tipo: tipo,
+        comando: tipo === "NFE" ? "EMITIR_NFE" : "EMITIR_NFCE",
+        status: "PENDENTE",
+        ambiente: ambienteNfe,
+        user_id: authUser?.id || null,
+        payload: {
+          dados: iniContent,
+          config: {
+            uf: empresa.endereco_uf || empresa.cidade?.uf || "SP",
+            modelo: cab.modelo,
+            ambiente: ambienteNfe,
+            certificadoPath: fConfig.certificado,
+            certificadoSenha: fConfig.senha_certificado || "",
+            tipo_certificado: fConfig.tipo_certificado || "ARQUIVO",
+            csc: fConfigItem.csc || "",
+            id_csc: fConfigItem.id_csc || ""
+          }
+        }
+      }).select("id").single();
+
+      if (evErr) throw new Error("Falha ao criar evento de transmissão: " + evErr.message);
+
+      // Reseta status da NF-e para pendente, para refletir nova tentativa
+      await db.from("fiscal_nfe_cabecalho")
+        .update({ st_nf: "A" })
+        .eq("nfe_cabecalho_id", nfeCabecalhoId);
+
+      return { success: true, nfe_cabecalho_id: nfeCabecalhoId, fiscal_evento_id: evento?.id };
+    } catch (e: any) {
+      console.error("[FiscalService] retransmitirDocumento erro:", e);
+      return { success: false, message: e.message };
+    }
   }
 };
