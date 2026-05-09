@@ -13,7 +13,8 @@ import {
   Download,
   AlertCircle,
   CheckCircle2,
-  Clock
+  Clock,
+  Terminal
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -21,6 +22,7 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
+import MonitorFiscalLogDialog from "@/components/forms/MonitorFiscalLogDialog";
 const db = supabase as any;
 
 interface IClienteInfo { id: number; razao: string; }
@@ -33,6 +35,8 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
   const [XDtIni, setXDtIni] = useState(new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().substring(0, 10));
   const [XDtFim, setXDtFim] = useState(new Date().toISOString().substring(0, 10));
   const [XClienteCache, setXClienteCache] = useState<Record<number, string>>({});
+  const [XLogDialogOpen, setXLogDialogOpen] = useState(false);
+  const [XLogNfeId, setXLogNfeId] = useState<number | undefined>(undefined);
 
   const XGridCols: IGridColumn[] = [
     { key: "nfe_cabecalho_id", label: "ID", width: "60px", align: "right" },
@@ -143,6 +147,7 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
   };
 
   return (
+    <>
     <div className="flex flex-col h-full space-y-4 animate-in fade-in duration-500">
       <div className="flex items-center justify-between bg-card p-3 rounded-xl border border-border shadow-sm">
         <div className="flex items-center gap-3">
@@ -192,10 +197,13 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
                       <DropdownMenuItem onClick={() => handleDownloadXml(r)}>
                         <Download className="w-4 h-4 mr-2 text-blue-400" /> Baixar XML
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => openTab("nfe-form", { nfe_cabecalho_id: r.nfe_cabecalho_id })}>
-                        <Eye className="w-4 h-4 mr-2 text-primary" /> Visualizar Dados
+                      <DropdownMenuItem onClick={() => openTab({ title: `NF-e #${r.nr_nota || r.nfe_cabecalho_id}`, component: "nfe-form", params: { nfe_cabecalho_id: r.nfe_cabecalho_id } })}>
+                        <Eye className="w-4 h-4 mr-2 text-primary" /> Visualizar Documento
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => openTab("cce", { nfe_cabecalho_id: r.nfe_cabecalho_id })}>
+                      <DropdownMenuItem onClick={() => { setXLogNfeId(r.nfe_cabecalho_id); setXLogDialogOpen(true); }}>
+                        <Terminal className="w-4 h-4 mr-2 text-indigo-500" /> Log
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openTab({ title: `CCe NF-e ${r.nr_nota || r.nfe_cabecalho_id}`, component: "cce", params: { nfe_cabecalho_id: r.nfe_cabecalho_id } })}>
                         <FileText className="w-4 h-4 mr-2 text-amber-500" /> Carta de Correção
                       </DropdownMenuItem>
                       <DropdownMenuItem className="text-destructive">
@@ -237,6 +245,13 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
         />
       </div>
     </div>
+    <MonitorFiscalLogDialog
+      isOpen={XLogDialogOpen}
+      onClose={() => setXLogDialogOpen(false)}
+      empresaId={XEmpresaId}
+      nfeCabecalhoId={XLogNfeId}
+    />
+    </>
   );
 };
 
