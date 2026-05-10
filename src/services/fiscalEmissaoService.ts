@@ -365,6 +365,7 @@ export const fiscalEmissaoService = {
         fiscalConfig: fConfig,
         configItem: fConfigItem
       });
+      validarIniAcbr(iniContent);
 
       const ambienteNfe = Number(fConfig?.ambiente_nfe || 2);
       const { data: { user: authUser } } = await supabase.auth.getUser();
