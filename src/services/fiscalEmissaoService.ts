@@ -552,7 +552,7 @@ export const fiscalEmissaoService = {
       for (let i = 0; i < 16; i++) {
         await new Promise(r => setTimeout(r, 500));
         const { data: ev } = await db.from("fiscal_evento").select("status,resposta").eq("id", evento.id).maybeSingle();
-        if (ev?.status === "CONCLUIDO" || ev?.status === "ERRO") {
+        if (ev?.status === "EMITIDO" || ev?.status === "CONCLUIDO" || ev?.status === "ERRO") {
           try {
             const r = typeof ev.resposta === "string" ? JSON.parse(ev.resposta) : ev.resposta;
             return { success: !!r?.sucesso, impressoras: r?.impressoras || [], message: r?.erro };
