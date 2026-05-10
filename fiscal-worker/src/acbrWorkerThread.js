@@ -111,21 +111,20 @@ const lerRetornoACBr = (lib, handle) => {
  * Retorna: { chave_nfe, nr_protocolo, c_stat, x_motivo }
  */
 const parsearRetornoNfe = (retorno) => {
-    if (!retorno) return { chave_nfe: null, nr_protocolo: null, c_stat: null, x_motivo: null };
+    if (!retorno) return { chave_nfe: null, nr_protocolo: null, c_stat: null, x_motivo: null, recibo_sefaz: null };
     
     const extrair = (chave) => {
-        const regex = new RegExp(`${chave}[=:]\\s*([^\\r\\n]+)`, 'i');
+        const regex = new RegExp(`${chave}[=:]\\s*"?([^\\r\\n",}]+)"?`, 'i');
         const m = retorno.match(regex);
         return m ? m[1].trim() : null;
     };
 
-    // Tenta formato INI (cStat=100, xMotivo=..., chNFe=..., nProt=...)
     let c_stat    = extrair('cStat') || extrair('CStat');
     let x_motivo  = extrair('xMotivo') || extrair('XMotivo');
     let chave_nfe = extrair('chNFe') || extrair('ChNFe') || extrair('ChaveNFe');
     let nr_prot   = extrair('nProt') || extrair('NProt') || extrair('Protocolo');
+    let recibo    = extrair('nRec') || extrair('NRec') || extrair('Recibo');
 
-    // Tenta extrair do XML embutido no retorno
     if (!chave_nfe) {
         const mChave = retorno.match(/chNFe="([^"]{44})"/i) || retorno.match(/<chNFe>([^<]{44})<\/chNFe>/i);
         if (mChave) chave_nfe = mChave[1];
@@ -142,8 +141,12 @@ const parsearRetornoNfe = (retorno) => {
         const mMot = retorno.match(/xMotivo="([^"]+)"/i) || retorno.match(/<xMotivo>([^<]+)<\/xMotivo>/i);
         if (mMot) x_motivo = mMot[1];
     }
+    if (!recibo) {
+        const mRec = retorno.match(/nRec="([^"]+)"/i) || retorno.match(/<nRec>([^<]+)<\/nRec>/i);
+        if (mRec) recibo = mRec[1];
+    }
 
-    return { chave_nfe, nr_protocolo: nr_prot, c_stat, x_motivo };
+    return { chave_nfe, nr_protocolo: nr_prot, c_stat, x_motivo, recibo_sefaz: recibo };
 };
 
 /**
