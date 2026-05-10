@@ -390,7 +390,7 @@ export const fiscalEmissaoService = {
         payload: {
           dados: iniContent,
           config: {
-            uf: empresa.endereco_uf || empresa.cidade?.uf || "SP",
+            uf: empresa.endereco_uf || empresa.cidade?.estado_id || empresa.cidade?.uf || "SP",
             modelo: nfeCabecalho.modelo,
             ambiente: ambienteNfe,
             certificadoPath: fConfig.certificado,
@@ -487,7 +487,7 @@ export const fiscalEmissaoService = {
         payload: {
           dados: iniContent,
           config: {
-            uf: empresa.endereco_uf || empresa.cidade?.uf || "SP",
+            uf: empresa.endereco_uf || empresa.cidade?.estado_id || empresa.cidade?.uf || "SP",
             modelo: cab.modelo,
             ambiente: ambienteNfe,
             certificadoPath: fConfig.certificado,
