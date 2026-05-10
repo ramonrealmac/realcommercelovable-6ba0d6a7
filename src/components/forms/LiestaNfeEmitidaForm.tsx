@@ -271,6 +271,7 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
           showFilters
           filterValues={XSearchFilters}
           onFilterChange={(k, v) => setXSearchFilters(prev => ({ ...prev, [k]: v }))}
+          onRowDoubleClick={(row) => { setXLogNfeId(row.nfe_cabecalho_id); setXLogDialogOpen(true); }}
           toolbarLeft={
             <div className="flex items-center gap-2 bg-secondary/30 p-1 rounded-lg border border-border mr-4">
                <div className="flex flex-col px-2">
