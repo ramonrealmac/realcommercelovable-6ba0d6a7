@@ -142,13 +142,20 @@ const processarEvento = async (evento) => {
             }
         }
 
+        const isEmissao = ['EMITIR_NFE', 'EMITIR_NFCE'].includes(evento.comando);
+        if (isEmissao) {
+            payload = await montarPayloadEmissaoNfe(evento, payload);
+            logger.info(`Payload de emissão regenerado pelo worker: ${payload.dados.substring(0, 40).replace(/\r?\n/g, ' ')}...`);
+        }
+
         // 2.b Buscar config de impressão (tp_imp_*, nm_impressora_*) baseado no documento referenciado
-        if (['EMITIR_NFE', 'EMITIR_NFCE'].includes(evento.comando) && evento.referencia_id && !payload.print_config) {
+        if (isEmissao && (evento.nfe_cabecalho_id || evento.referencia_id) && !payload.print_config) {
             try {
+                const nfeId = evento.nfe_cabecalho_id || evento.referencia_id;
                 const { data: nfe } = await supabase
                     .from('fiscal_nfe_cabecalho')
                     .select('modelo, serie, empresa_id')
-                    .eq('nfe_cabecalho_id', evento.referencia_id)
+                    .eq('nfe_cabecalho_id', nfeId)
                     .maybeSingle();
                 if (nfe) {
                     const { data: ci } = await supabase
@@ -188,8 +195,8 @@ const processarEvento = async (evento) => {
             .eq('id', evento.id);
 
         // 5. Pós-processamento: atualizar fiscal_nfe_cabecalho se foi emissão de nota
-        const isEmissao = ['EMITIR_NFE', 'EMITIR_NFCE'].includes(evento.comando);
-        if (isEmissao && evento.referencia_id && evento.referencia_tabela === 'fiscal_nfe_cabecalho') {
+        const nfeCabecalhoId = evento.nfe_cabecalho_id || evento.referencia_id;
+        if (isEmissao && nfeCabecalhoId) {
             const stNf = resultado.sucesso ? 'A' : 'E'; // A=Autorizada, E=Erro
             const updateNfe = {
                 c_stat:       resultado.c_stat || null,
@@ -204,12 +211,12 @@ const processarEvento = async (evento) => {
             const { error: errNfe } = await supabase
                 .from('fiscal_nfe_cabecalho')
                 .update(updateNfe)
-                .eq('nfe_cabecalho_id', evento.referencia_id);
+                .eq('nfe_cabecalho_id', nfeCabecalhoId);
             
             if (errNfe) {
-                logger.error(`Erro ao atualizar fiscal_nfe_cabecalho #${evento.referencia_id}: ${errNfe.message}`);
+                logger.error(`Erro ao atualizar fiscal_nfe_cabecalho #${nfeCabecalhoId}: ${errNfe.message}`);
             } else {
-                logger.info(`NF-e #${evento.referencia_id} atualizada: cStat=${resultado.c_stat} | Chave=${resultado.chave_nfe || 'N/A'}`);
+                logger.info(`NF-e #${nfeCabecalhoId} atualizada: cStat=${resultado.c_stat} | Chave=${resultado.chave_nfe || 'N/A'}`);
             }
         }
 
