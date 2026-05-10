@@ -10,6 +10,12 @@ interface FiscalConfigItemGridProps {
   XEmpresaId: number;
 }
 
+const TIPOS_IMP = [
+  { value: "PDF", label: "PDF na tela" },
+  { value: "IMPRESSORA", label: "Imprimir direto" },
+  { value: "NAO_IMPRIME", label: "Não imprime" },
+];
+
 const XModelColumns: IGridColumn[] = [
   { key: "nome", label: "Nome", width: "1fr" },
   { key: "modelo", label: "Modelo", width: "90px", align: "center" },
@@ -17,6 +23,10 @@ const XModelColumns: IGridColumn[] = [
   { key: "sequencia", label: "Próx. Nº", width: "100px", align: "right" },
   { key: "id_csc", label: "ID CSC", width: "90px" },
   { key: "csc", label: "CSC (Token)", width: "180px" },
+  { key: "tp_imp_nfe", label: "Imp. NFe", width: "110px", render: r => TIPOS_IMP.find(t => t.value === r.tp_imp_nfe)?.label || r.tp_imp_nfe || "-" },
+  { key: "nm_impressora_nfe", label: "Impressora NFe", width: "150px" },
+  { key: "tp_imp_nfce", label: "Imp. NFCe", width: "110px", render: r => TIPOS_IMP.find(t => t.value === r.tp_imp_nfce)?.label || r.tp_imp_nfce || "-" },
+  { key: "nm_impressora_nfce", label: "Impressora NFCe", width: "150px" },
 ];
 
 const FiscalConfigItemGrid: React.FC<FiscalConfigItemGridProps> = ({ XEmpresaId }) => {
@@ -25,6 +35,7 @@ const FiscalConfigItemGrid: React.FC<FiscalConfigItemGridProps> = ({ XEmpresaId 
   const [XFilterValues, setXFilterValues] = useState<Record<string, string>>({});
   const [XEditMode, setXEditMode] = useState<"none" | "insert" | "edit">("none");
   const [XShowFilters, setXShowFilters] = useState(true);
+  const [XImpressoras, setXImpressoras] = useState<string[]>([]);
 
   // Estados do formulário de edição inline
   const [XEditNome, setXEditNome] = useState("");
@@ -33,6 +44,10 @@ const FiscalConfigItemGrid: React.FC<FiscalConfigItemGridProps> = ({ XEmpresaId 
   const [XEditSequencia, setXEditSequencia] = useState("1");
   const [XEditCsc, setXEditCsc] = useState("");
   const [XEditIdCsc, setXEditIdCsc] = useState("");
+  const [XEditTpImpNfe, setXEditTpImpNfe] = useState("PDF");
+  const [XEditTpImpNfce, setXEditTpImpNfce] = useState("PDF");
+  const [XEditImpNfe, setXEditImpNfe] = useState("");
+  const [XEditImpNfce, setXEditImpNfce] = useState("");
 
   const loadData = useCallback(async () => {
     if (!XEmpresaId) return;
