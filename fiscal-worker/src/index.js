@@ -27,6 +27,7 @@ const logger = winston.createLogger({
 });
 
 logger.info("Iniciando Fiscal Worker...");
+logger.info("Fiscal Worker versão 2026-05-10.2: grava retorno/XML antes de qualquer impressão.");
 
 const attachCidade = async (registro) => {
     if (!registro?.endereco_cidade_id) return registro;
@@ -249,6 +250,32 @@ const processarEvento = async (evento) => {
         if (errEv) logger.error(`Erro ao atualizar fiscal_evento #${evento.id}: ${errEv.message}`);
 
         logger.info(`Evento #${evento.id} processado. Sucesso: ${resultado.sucesso}`);
+
+        // 6. Impressão pós-processamento: nunca deve impedir atualização da nota/evento.
+        if (isEmissao && resultado.sucesso && payload.print_config) {
+            try {
+                const xmlParaImpressao = resultado.xml_nfe || '';
+                if (!xmlParaImpressao) {
+                    logger.warn(`Evento #${evento.id}: XML da NF não disponível para impressão automática.`);
+                } else {
+                    const cmdImpressao = String(payload.config?.modelo) === '65' ? 'IMPRIMIR_NFCE' : 'IMPRIMIR_NFE';
+                    const impressao = await executarComandoFiscal(cmdImpressao, {
+                        config: payload.config,
+                        print_config: payload.print_config,
+                        dados: xmlParaImpressao,
+                        chave: resultado.chave_nfe,
+                    });
+                    logger.info(`Evento #${evento.id}: impressão fiscal ${impressao.sucesso ? 'OK' : 'falhou'}${impressao.erro ? ` - ${impressao.erro}` : ''}`);
+                    const respostaComImpressao = { ...resultado, impressao, pdf_path: impressao.pdf_path || resultado.pdf_path || null };
+                    await supabase
+                        .from('fiscal_evento')
+                        .update({ resposta: JSON.stringify(respostaComImpressao), updated_at: new Date().toISOString() })
+                        .eq('id', evento.id);
+                }
+            } catch (e) {
+                logger.warn(`Evento #${evento.id}: falha não bloqueante na impressão: ${e.message}`);
+            }
+        }
         
     } catch (error) {
         logger.error(`Falha crítica ao processar evento #${evento.id}: ${error.message}`);
