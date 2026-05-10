@@ -874,7 +874,49 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
                       )}
                     </div>
                   </div>
-                  {renderLookup("Cidade", "endereco_cidade_id", XCidades, "cidade_id", "descricao")}
+                  {/* Cidade — campo com pesquisa */}
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">Cidade</label>
+                    <div className="flex gap-1">
+                      <input
+                        type="text"
+                        value={XIsEditing ? (XF.endereco_cidade_id || "") : (XCurrentRecord?.endereco_cidade_id ?? "")}
+                        readOnly
+                        className={`w-20 border border-border rounded px-2 py-1.5 text-sm ${XFieldBgRead} text-right`}
+                      />
+                      <input
+                        type="text"
+                        value={(() => {
+                          const id = XIsEditing ? parseInt(XF.endereco_cidade_id) : XCurrentRecord?.endereco_cidade_id;
+                          if (!id) return "";
+                          const c = XCidades.find((x: any) => x.cidade_id === id);
+                          return c ? `${c.descricao}${c.uf ? " - " + c.uf : ""}` : "";
+                        })()}
+                        readOnly
+                        className={`flex-1 border border-border rounded px-3 py-1.5 text-sm ${XFieldBgRead}`}
+                      />
+                      {XIsEditing && (
+                        <button
+                          type="button"
+                          onClick={() => setXCidadeDlgOpen(true)}
+                          className={`flex items-center justify-center w-9 h-[34px] border border-border rounded ${XFieldBgEdit} hover:bg-accent`}
+                          title="Pesquisar Cidade"
+                        >
+                          <Search className="h-4 w-4" />
+                        </button>
+                      )}
+                      {XIsEditing && XF.endereco_cidade_id && (
+                        <button
+                          type="button"
+                          onClick={() => set("endereco_cidade_id", "")}
+                          className={`flex items-center justify-center w-9 h-[34px] border border-border rounded ${XFieldBgEdit} hover:bg-accent`}
+                          title="Limpar"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   {renderField("Logradouro", "endereco_logradouro", { className: "md:col-span-2" })}
