@@ -4,6 +4,18 @@ import { gerarIniNfe } from "./gerarIniNfe";
 
 const db = supabase as any;
 
+/**
+ * Anexa o objeto cidade no registro com base em endereco_cidade_id.
+ * Necessário porque não existe FK declarada entre empresa/cadastro e cidade,
+ * o que faria o embed do PostgREST falhar e devolver null.
+ */
+async function attachCidade<T extends { endereco_cidade_id?: number | null } | null>(rec: T): Promise<T> {
+  if (!rec || !rec.endereco_cidade_id) return rec;
+  const { data: cidade } = await db.from("cidade").select("*").eq("cidade_id", rec.endereco_cidade_id).maybeSingle();
+  (rec as any).cidade = cidade || null;
+  return rec;
+}
+
 function mapearSefazPagamento(tp: string): string {
   const mapa: Record<string, string> = {
     "DI": "01", "DH": "01", "DINHEIRO": "01", "01": "01",
