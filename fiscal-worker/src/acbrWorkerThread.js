@@ -150,8 +150,39 @@ const parsearRetornoNfe = (retorno) => {
 };
 
 /**
- * Configura o Handle recém criado com os dados dinâmicos do Emitente
+ * Tenta imprimir DANFE/DANFCE baseado em print_config { tp_imp, nm_impressora }.
+ * Retorna o caminho do PDF gerado (quando aplicável) ou null.
  */
+const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave) => {
+    if (!printConfig) return null;
+    const tp = (printConfig.tp_imp || 'PDF').toUpperCase();
+    if (tp === 'NAO_IMPRIME' || tp === 'NAO IMPRIME' || tp === 'NONE') return null;
+    
+    try {
+        if (tp === 'IMPRESSORA' && printConfig.nm_impressora) {
+            lib.ConfigGravarValor(handle, "DANFe", "Impressora", printConfig.nm_impressora);
+        }
+        const pdfDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos/PDF");
+        if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
+        lib.ConfigGravarValor(handle, "DANFe", "PathPDF", pdfDir);
+        
+        if (tp === 'PDF' && lib.ImprimirDANFEPDF) {
+            const ret = lib.ImprimirDANFEPDF(handle);
+            console.log(`[FiscalLib] ImprimirDANFEPDF (${modeloLabel}) ret=${ret}`);
+            if (ret === 0 && chave) {
+                const pdf = path.join(pdfDir, `${chave}-procNFe.pdf`);
+                return fs.existsSync(pdf) ? pdf : pdfDir;
+            }
+        } else if (tp === 'IMPRESSORA' && lib.ImprimirDANFE) {
+            const ret = lib.ImprimirDANFE(handle, "", printConfig.nm_impressora || "", 1, "", false, "", false);
+            console.log(`[FiscalLib] ImprimirDANFE (${modeloLabel}) impressora=${printConfig.nm_impressora} ret=${ret}`);
+        }
+    } catch (e) {
+        console.warn(`[FiscalLib] Falha ao imprimir DANFE/DANFCE: ${e.message}`);
+    }
+    return null;
+};
+
 const configurarHandle = (lib, handle, configPayload) => {
     // Configuração dos Schemas XSD (Obrigatório para NFe/MDFe)
     const schemasPath = path.resolve(process.cwd(), "AcbrDLL/dep/Schemas/NFe");
