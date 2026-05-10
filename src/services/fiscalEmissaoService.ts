@@ -428,10 +428,15 @@ export const fiscalEmissaoService = {
 
       const tipo: "NFE" | "NFCE" = Number(cab.modelo) === 65 ? "NFCE" : "NFE";
 
-      const { data: empresa } = await db.from("empresa").select("*, cidade:endereco_cidade_id(*)").eq("empresa_id", empresaId).single();
-      const { data: parceiro } = cab.cadastro_id
-        ? await db.from("cadastro").select("*, cidade:endereco_cidade_id(*)").eq("cadastro_id", cab.cadastro_id).single()
-        : { data: null };
+      const { data: empresaRaw, error: empErr } = await db.from("empresa").select("*").eq("empresa_id", empresaId).single();
+      if (empErr || !empresaRaw) throw new Error("Empresa não localizada: " + (empErr?.message || empresaId));
+      const empresa = await attachCidade(empresaRaw);
+
+      let parceiro: any = null;
+      if (cab.cadastro_id) {
+        const { data: parceiroRaw } = await db.from("cadastro").select("*").eq("cadastro_id", cab.cadastro_id).maybeSingle();
+        parceiro = await attachCidade(parceiroRaw);
+      }
 
       const { data: fConfig } = await db.from("fiscal_config").select("*").eq("empresa_id", empresaId).single();
 
