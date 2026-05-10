@@ -517,11 +517,12 @@ export const fiscalEmissaoService = {
         .eq("id", eventoId)
         .maybeSingle();
       if (!ev) continue;
-      if (ev.status === "CONCLUIDO" || ev.status === "ERRO") {
+      if (ev.status === "EMITIDO" || ev.status === "CONCLUIDO" || ev.status === "ERRO") {
         let resposta: any = null;
         try { resposta = typeof ev.resposta === "string" ? JSON.parse(ev.resposta) : ev.resposta; } catch { /* ignore */ }
+        const ok = (ev.status === "EMITIDO" || ev.status === "CONCLUIDO") && !!resposta?.sucesso;
         return {
-          success: ev.status === "CONCLUIDO" && !!resposta?.sucesso,
+          success: ok,
           status: ev.status,
           resposta,
           mensagem: ev.mensagem_erro || resposta?.x_motivo || resposta?.erro || null,
@@ -551,7 +552,7 @@ export const fiscalEmissaoService = {
       for (let i = 0; i < 16; i++) {
         await new Promise(r => setTimeout(r, 500));
         const { data: ev } = await db.from("fiscal_evento").select("status,resposta").eq("id", evento.id).maybeSingle();
-        if (ev?.status === "CONCLUIDO" || ev?.status === "ERRO") {
+        if (ev?.status === "EMITIDO" || ev?.status === "CONCLUIDO" || ev?.status === "ERRO") {
           try {
             const r = typeof ev.resposta === "string" ? JSON.parse(ev.resposta) : ev.resposta;
             return { success: !!r?.sucesso, impressoras: r?.impressoras || [], message: r?.erro };

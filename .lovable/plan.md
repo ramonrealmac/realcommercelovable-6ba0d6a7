@@ -1,52 +1,48 @@
-## Diagnóstico
+Plano para parar o ciclo de erros no emissor fiscal multithread:
 
-O ACBrLib rejeita o INI atual porque ele está em um formato "amigável" (estilo ACBrMonitor antigo) que a DLL não interpreta. Como nenhuma chave é reconhecida, a NFe é montada vazia e a validação reclama de:
+1. Padronizar o status fiscal autorizado
+- Ajustar o worker para gravar `fiscal_evento.status = 'EMITIDO'` quando a SEFAZ retornar autorização (`cStat=100`), mantendo `ERRO` para rejeições/falhas.
+- Manter compatibilidade no frontend/polling aceitando `EMITIDO` e `CONCLUIDO` como finalizados positivos, para não quebrar eventos antigos.
 
-- `B12/cMunFG` (Código Município FG) inválido → falta `cMunFG` em `[Identificacao]`.
-- `C03/xNome`, `C10/cMun`, `C11/xMun` vazios → seção `[Emitente]` usa `RazaoSocial`/`CodigoMunicipio`/`Municipio` em vez de `xNome`/`cMun`/`xMun`.
-- `E03/CPF` inválido → CPF `11111111111` reprovado no DV (padrão de homologação correto: `11144477735`).
-- `E10/cMun`, `E11/xMun` vazios → mesma causa em `[Destinatario]`.
-- `total não esperado, esperado det` → `[Item001]` não é reconhecido como produto, então não há `det` no XML.
+2. Corrigir a gravação do cabeçalho da NFC-e
+- No worker, atualizar `fiscal_nfe_cabecalho` logo após o retorno da DLL com:
+  - `chave_nfe`
+  - `nr_protocolo`
+  - `recibo_sefaz`
+  - `c_stat`
+  - `x_motivo`
+  - `xml_nf`
+  - `st_nf = 'E'` quando autorizado e `st_nf = 'R'` quando rejeitado
+- Usar `.select()` após o `.update()` para capturar erro real de RLS/schema e logar quando nenhuma linha for atualizada.
+- Tratar `recibo_sefaz` como string vazia quando a SEFAZ retornar `NRec=''`, pois em NFC-e síncrona autorizada o recibo pode vir vazio.
 
-Comparativo confirmado em `ExemploAcbrMT/exemplos-mt-acbr-lib/arqs/nfe.ini` (formato aceito pela ACBrLib).
+3. Preservar corretamente a versão MultiThread da ACBrLib
+- Manter o modelo atual com um `handle` isolado por chamada (`NFE_Inicializar(handle, threadIni, ...)`) e INI temporário por thread.
+- Não voltar para chamadas globais/single-thread.
+- Revisar a ordem de pós-processamento para que a impressão/PDF aconteça somente depois do retorno autorizado e sem impedir a gravação dos dados fiscais caso a impressão falhe.
 
-## O que será feito
+4. Corrigir o fluxo PDV sem abrir gerenciador fiscal
+- Garantir que o PDV apenas crie o documento, enfileire o evento e aguarde o worker.
+- Se autorizado, mostrar sucesso com a chave e concluir a venda.
+- Se rejeitado/erro, mostrar a mensagem real da SEFAZ.
+- A impressão automática seguirá `tp_imp_nfce/tp_imp_nfe` e `nm_impressora_nfce/nm_impressora_nfe` no worker.
 
-Reescrita completa de `src/services/gerarIniNfe.ts` para emitir o INI no padrão ACBrLib (mesmas tags do leiaute SEFAZ), mantendo a leitura dos dados já corrigida (empresa via `empresa`, destinatário via `cadastro` por `cadastro_id`, cidade via `cidade.cidade_id`).
+5. Corrigir a grade/gerenciador para refletir o status real
+- Atualizar o mapa de status da grade para exibir `E` como Emitida/Autorizada, `R` como Rejeitada, `A` como Pendente/Aberta e `C` como Cancelada.
+- Ajustar o refresh em tempo real para reagir ao status `EMITIDO` também.
 
-### Mapeamento de seções/chaves
+6. Recuperar eventos já autorizados que não atualizaram cabeçalho
+- Criar uma migração segura de correção pontual para preencher `fiscal_nfe_cabecalho` a partir de `fiscal_evento.resposta` nos eventos já autorizados, incluindo os IDs 25 e 27.
+- Isso corrige os registros históricos onde o evento mostra `cStat=100`, mas o cabeçalho ficou sem chave/protocolo/cStat.
 
-| Atual (errado) | Novo (ACBrLib) |
-|---|---|
-| `[NFe] Versao=4.00` | `[infNFe] versao=4.00` |
-| `[Identificacao]` com `Modelo`, `Serie`, `NumDocumento`, `TipoNF`, `DataEmissao`+`HoraEmissao`, `Finalidade`, `TipoEmissao`, `IndicadorConsumidorFinal`, `IndicadorPresenca`, `Ambiente`, `NaturezaOperacao`, `FormatoImpressaoDANFE` | `[Identificacao]` com `cUF`, `cNF` (8 dígitos aleatórios), `natOp`, `mod`, `serie`, `nNF`, `dhEmi=dd/mm/aaaa hh:nn:ss`, `dhSaiEnt`, `tpNF`, `idDest=1`, `tpAmb`, `tpImp` (4 NFCe / 1 NFe), `tpEmis=1`, `finNFe`, `indFinal=1`, `indPres=1`, `procEmi=0`, `verProc` |
-| `[Emitente] CNPJ/RazaoSocial/NomeFantasia/InscricaoEstadual/CRT/Logradouro/Numero/Bairro/CEP/UF/CodigoMunicipio/Municipio/Telefone` | `[Emitente] CRT/CNPJCPF/xNome/xFant/IE/IM/xLgr/nro/xBairro/cMun/xMun/cUF/UF/CEP/cPais=1058/xPais=BRASIL/Fone/cMunFG` |
-| `[Destinatario] CPF/CNPJ/RazaoSocial/InscricaoEstadual/IndicadorIEDest/Logradouro/...` | `[Destinatario] CNPJCPF/xNome/indIEDest/IE/Email/xLgr/nro/xBairro/cMun/xMun/UF/CEP/cPais=1058/xPais=BRASIL/Fone` (omitir bloco se NFCe sem identificação) |
-| `[Item001]` com `CodigoProduto/CodigoBarras/Descricao/NCM/CEST/CFOP/Unidade/Quantidade/ValorUnitario/...` | `[Produto001]` com `cProd/cEAN/cEANTrib/xProd/NCM/CEST/CFOP/uCom/qCom/vUnCom/vProd/uTrib/qTrib/vUnTrib/vFrete/vSeg/vDesc/vOutro/indTot=1` |
-| `[ImpostoIcms001] Origem/CSOSN/CST/ModalidadeBC/...` | `[ICMS001] orig/CSOSN` (Simples) ou `CST/modBC/vBC/pICMS/vICMS` (Normal); ST com `modBCST/pMVAST/vBCST/pICMSST/vICMSST` |
-| `[ImpostoIpi001]` | `[IPI001] CST/cEnq/vBC/pIPI/vIPI` |
-| `[ImpostoPis001]` | `[PIS001] CST/vBC/pPIS/vPIS` |
-| `[ImpostoCofins001]` | `[COFINS001] CST/vBC/pCOFINS/vCOFINS` |
-| `[Total] ValorTotalProdutos/ValorDesconto/...` | `[Total] vBC/vICMS/vICMSDeson=0/vBCST=0/vST=0/vProd/vFrete/vSeg/vDesc/vII=0/vIPI/vPIS/vCOFINS/vOutro/vNF/vFCP=0/vFCPST=0/vFCPSTRet=0/vIPIDevol=0` |
-| `[Pagamento] FormaPagamento001/ValorPagamento001` | `[pag001] tPag/vPag/indPag=0` |
-| `[InformacoesAdicionais] InformacoesComplementares` | `[DadosAdicionais] infCpl/infAdFisco` |
-| `[NFCe] IdCSC/CSC` | mantido como `[NFCe] IdCSC/CSC` (formato lib) |
+Arquivos previstos:
+- `fiscal-worker/src/index.js`
+- `src/services/fiscalEmissaoService.ts`
+- `src/components/forms/pdv/OpcoesPagamentoDialog.tsx` se necessário
+- `src/components/forms/LiestaNfeEmitidaForm.tsx`
+- Nova migration Supabase para backfill dos documentos já autorizados
 
-### Outras correções
-
-1. **`cMunFG`** obrigatório em `[Identificacao]` — preencher com o `cd_ibge` da cidade do emitente.
-2. **`cNF`** — gerar 8 dígitos aleatórios numéricos em cada emissão.
-3. **CPF/CNPJ do destinatário** — validar DV antes de incluir; se vier inválido (ex.: `11111111111`), tratar como consumidor não identificado (NFCe) ou abortar (NFe), em vez de mandar para a SEFAZ.
-4. **Datas** — usar `dhEmi=dd/mm/aaaa hh:nn:ss` (uma única chave) em vez de `DataEmissao` + `HoraEmissao` separados.
-5. **`cUF` do emitente** — derivar dos 2 primeiros dígitos do `cd_ibge` da cidade da empresa (conforme o usuário indicou), eliminando o mapa fixo UF→cUF.
-6. Demais campos do destinatário/itens permanecem sendo lidos exclusivamente do `cadastro` (via `cadastro_id`) e da `empresa`, conforme regra já estabelecida.
-
-### Arquivos afetados
-
-- `src/services/gerarIniNfe.ts` — reescrita completa do gerador.
-- Nenhuma alteração em `fiscalEmissaoService.ts` (a junção com `cidade` já está OK).
-- Nenhuma alteração no worker.
-
-### Validação
-
-Após a reescrita, o INI gerado deve bater seção-a-seção com o exemplo `ExemploAcbrMT/exemplos-mt-acbr-lib/arqs/nfe.ini`. Em homologação, usar CPF `11144477735` para "CONSUMIDOR FINAL" — assim o E03/CPF deixa de ser rejeitado.
+Observação técnica dos logs da nota 27:
+- O evento `#137` está autorizado (`cStat=100`, chave `21260536809394000170650010000000161557786686`, protocolo `321260000045319`).
+- O cabeçalho `fiscal_nfe_cabecalho_id=27` continua sem chave/protocolo/cStat.
+- O problema atual não é a autorização na DLL; é a persistência pós-retorno e a inconsistência de status (`CONCLUIDO` no evento vs campos fiscais não gravados no cabeçalho).

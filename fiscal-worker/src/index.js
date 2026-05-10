@@ -190,45 +190,51 @@ const processarEvento = async (evento) => {
         // 3. Chama a biblioteca nativa passando o JSON payload atualizado
         const resultado = await executarComandoFiscal(evento.comando, payload);
 
-        // 4. Salva o resultado (JSON) como string/jsonb no banco
-        await supabase
+        // 4. PRIMEIRO: atualizar fiscal_nfe_cabecalho se foi emissão (antes do evento, para garantir consistência)
+        const nfeCabecalhoId = evento.nfe_cabecalho_id || evento.referencia_id;
+        if (isEmissao && nfeCabecalhoId) {
+            const cStatInt = resultado.c_stat != null && !isNaN(parseInt(resultado.c_stat))
+                ? parseInt(resultado.c_stat) : null;
+            const updateNfe = {
+                c_stat:       cStatInt,
+                x_motivo:     (resultado.x_motivo || resultado.erro || '').toString().substring(0, 255),
+                chave_nfe:    resultado.chave_nfe || '',
+                nr_protocolo: resultado.nr_protocolo || '',
+                recibo_sefaz: resultado.recibo_sefaz || '',
+                st_nf:        resultado.sucesso ? 'E' : 'R', // E=Emitida/Autorizada, R=Rejeitada
+                updated_at:   new Date().toISOString(),
+            };
+            if (resultado.xml_retorno) updateNfe.xml_nf = resultado.xml_retorno;
+
+            const { data: updRows, error: errNfe } = await supabase
+                .from('fiscal_nfe_cabecalho')
+                .update(updateNfe)
+                .eq('nfe_cabecalho_id', nfeCabecalhoId)
+                .select('nfe_cabecalho_id, chave_nfe, c_stat, st_nf');
+
+            if (errNfe) {
+                logger.error(`Erro ao atualizar fiscal_nfe_cabecalho #${nfeCabecalhoId}: ${errNfe.message}`);
+            } else if (!updRows || updRows.length === 0) {
+                logger.error(`UPDATE fiscal_nfe_cabecalho #${nfeCabecalhoId} retornou 0 linhas. Verifique RLS/ID.`);
+            } else {
+                logger.info(`NF-e #${nfeCabecalhoId} atualizada: cStat=${resultado.c_stat} | Chave=${resultado.chave_nfe || 'N/A'} | st_nf=${updRows[0].st_nf}`);
+            }
+        }
+
+        // 5. Salva o resultado (JSON) e marca status final do evento.
+        // EMITIDO = autorizado pela SEFAZ; ERRO = rejeitado/falha; CONCLUIDO mantido apenas legado.
+        const statusFinal = resultado.sucesso ? 'EMITIDO' : 'ERRO';
+        const { error: errEv } = await supabase
             .from('fiscal_evento')
-            .update({ 
-                status: resultado.sucesso ? 'CONCLUIDO' : 'ERRO', 
-                ambiente: payload.config?.ambiente, 
+            .update({
+                status: statusFinal,
+                ambiente: payload.config?.ambiente,
                 resposta: JSON.stringify(resultado),
                 mensagem_erro: resultado.sucesso ? null : (resultado.erro || "Falha na execução do comando"),
                 updated_at: new Date().toISOString()
             })
             .eq('id', evento.id);
-
-        // 5. Pós-processamento: atualizar fiscal_nfe_cabecalho se foi emissão de nota
-        const nfeCabecalhoId = evento.nfe_cabecalho_id || evento.referencia_id;
-        if (isEmissao && nfeCabecalhoId) {
-            // c_stat é INTEGER no banco — converter ou null
-            const cStatInt = resultado.c_stat != null && !isNaN(parseInt(resultado.c_stat))
-                ? parseInt(resultado.c_stat) : null;
-            const updateNfe = {
-                c_stat:       cStatInt,
-                x_motivo:     resultado.x_motivo || (resultado.erro || null),
-                chave_nfe:    resultado.chave_nfe || '',
-                nr_protocolo: resultado.nr_protocolo || '',
-                recibo_sefaz: resultado.recibo_sefaz || '',
-                st_nf:        resultado.sucesso ? 'A' : 'R', // A=Autorizada, R=Rejeitada
-            };
-            if (resultado.xml_retorno) updateNfe.xml_nf = resultado.xml_retorno;
-            
-            const { error: errNfe } = await supabase
-                .from('fiscal_nfe_cabecalho')
-                .update(updateNfe)
-                .eq('nfe_cabecalho_id', nfeCabecalhoId);
-            
-            if (errNfe) {
-                logger.error(`Erro ao atualizar fiscal_nfe_cabecalho #${nfeCabecalhoId}: ${errNfe.message}`);
-            } else {
-                logger.info(`NF-e #${nfeCabecalhoId} atualizada: cStat=${resultado.c_stat} | Chave=${resultado.chave_nfe || 'N/A'}`);
-            }
-        }
+        if (errEv) logger.error(`Erro ao atualizar fiscal_evento #${evento.id}: ${errEv.message}`);
 
         logger.info(`Evento #${evento.id} processado. Sucesso: ${resultado.sucesso}`);
         
