@@ -271,6 +271,53 @@ const FiscalConfigItemGrid: React.FC<FiscalConfigItemGridProps> = ({ XEmpresaId 
               </button>
             </div>
           </div>
+
+          {/* Linha 2: Configuração de impressão */}
+          <div className="md:col-span-7 mt-1 grid grid-cols-1 md:grid-cols-5 gap-3 pt-3 border-t border-border/50">
+            <div className="md:col-span-5 text-[10px] font-bold uppercase text-muted-foreground">
+              Configuração de impressão
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Imp. NFe (mod 55)</label>
+              <select value={XEditTpImpNfe} onChange={e => setXEditTpImpNfe(e.target.value)}
+                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus:ring-2 focus:ring-ring">
+                {TIPOS_IMP.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 md:col-span-2">
+              <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Impressora NFe</label>
+              <input type="text" list="lst-impressoras" value={XEditImpNfe}
+                onChange={e => setXEditImpNfe(e.target.value)}
+                disabled={XEditTpImpNfe !== "IMPRESSORA"}
+                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                placeholder="Nome da impressora..." />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Imp. NFCe (mod 65)</label>
+              <select value={XEditTpImpNfce} onChange={e => setXEditTpImpNfce(e.target.value)}
+                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus:ring-2 focus:ring-ring">
+                {TIPOS_IMP.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Impressora NFCe</label>
+              <div className="flex gap-2">
+                <input type="text" list="lst-impressoras" value={XEditImpNfce}
+                  onChange={e => setXEditImpNfce(e.target.value)}
+                  disabled={XEditTpImpNfce !== "IMPRESSORA"}
+                  className="flex-1 h-9 rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                  placeholder="Nome da impressora..." />
+                <button type="button" onClick={handleListarImpressoras}
+                  className="h-9 px-3 rounded-md bg-secondary text-secondary-foreground text-xs font-bold hover:opacity-90"
+                  title="Detectar impressoras instaladas">
+                  ↻
+                </button>
+              </div>
+              <datalist id="lst-impressoras">
+                {XImpressoras.map(p => <option key={p} value={p} />)}
+              </datalist>
+            </div>
+          </div>
         </div>
       )}
 
@@ -292,6 +339,10 @@ const FiscalConfigItemGrid: React.FC<FiscalConfigItemGridProps> = ({ XEmpresaId 
                 setXEditSequencia(item.sequencia.toString());
                 setXEditCsc(item.csc || "");
                 setXEditIdCsc(item.id_csc || "");
+                setXEditTpImpNfe(item.tp_imp_nfe || "PDF");
+                setXEditTpImpNfce(item.tp_imp_nfce || "PDF");
+                setXEditImpNfe(item.nm_impressora_nfe || "");
+                setXEditImpNfce(item.nm_impressora_nfce || "");
             }
           }}
           showFilters={XShowFilters}
