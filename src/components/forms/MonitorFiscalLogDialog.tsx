@@ -50,12 +50,14 @@ const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen,
         const colors: any = {
           "PENDENTE": "bg-gray-100 text-gray-600",
           "PROCESSANDO": "bg-blue-100 text-blue-600 animate-pulse",
+          "EMITIDO": "bg-green-100 text-green-700",
           "CONCLUIDO": "bg-green-100 text-green-700",
           "ERRO": "bg-red-100 text-red-700"
         };
         const icons: any = {
           "PENDENTE": <Clock className="w-3 h-3 mr-1" />,
           "PROCESSANDO": <Timer className="w-3 h-3 mr-1" />,
+          "EMITIDO": <CheckCircle2 className="w-3 h-3 mr-1" />,
           "CONCLUIDO": <CheckCircle2 className="w-3 h-3 mr-1" />,
           "ERRO": <XCircle className="w-3 h-3 mr-1" />
         };
