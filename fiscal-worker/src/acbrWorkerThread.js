@@ -314,14 +314,22 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 const parsed = parsearRetornoNfe(ultimoRetorno || xmlRetorno);
                 const sucesso = parsed.c_stat === '100';
                 
+                // Após sucesso, tentar imprimir DANFE conforme tp_imp_nfe configurado
+                let pdf_path = null;
+                if (sucesso) {
+                    pdf_path = tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, 'NFE', parsed.chave_nfe);
+                }
+                
                 return { 
                     sucesso,
                     chave_nfe: parsed.chave_nfe,
                     nr_protocolo: parsed.nr_protocolo,
                     c_stat: parsed.c_stat,
                     x_motivo: parsed.x_motivo,
+                    recibo_sefaz: parsed.recibo_sefaz,
                     xml_retorno: xmlRetorno,
                     retorno_completo: ultimoRetorno || xmlRetorno,
+                    pdf_path,
                     erro: sucesso ? null : (parsed.x_motivo || ultimoRetorno)
                 };
             });
@@ -353,14 +361,22 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 const parsed = parsearRetornoNfe(ultimoRetorno || xmlRetorno);
                 const sucesso = parsed.c_stat === '100';
                 
+                // Após sucesso, tentar imprimir DANFCE conforme tp_imp_nfce configurado
+                let pdf_path = null;
+                if (sucesso) {
+                    pdf_path = tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, 'NFCE', parsed.chave_nfe);
+                }
+                
                 return { 
                     sucesso,
                     chave_nfe: parsed.chave_nfe,
                     nr_protocolo: parsed.nr_protocolo,
                     c_stat: parsed.c_stat,
                     x_motivo: parsed.x_motivo,
+                    recibo_sefaz: parsed.recibo_sefaz,
                     xml_retorno: xmlRetorno,
                     retorno_completo: ultimoRetorno || xmlRetorno,
+                    pdf_path,
                     erro: sucesso ? null : (parsed.x_motivo || ultimoRetorno)
                 };
             });
