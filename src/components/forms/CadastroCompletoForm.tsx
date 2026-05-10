@@ -137,6 +137,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
   const [XBuscandoCnpj, setXBuscandoCnpj] = useState(false);
   const [XBuscandoCep, setXBuscandoCep] = useState(false);
   const [XBuscandoGeo, setXBuscandoGeo] = useState(false);
+  const [XCidadeDlgOpen, setXCidadeDlgOpen] = useState(false);
 
 
   // Lookups
