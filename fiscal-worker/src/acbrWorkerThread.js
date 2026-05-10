@@ -345,6 +345,25 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 const parsed = parsearRetornoNfe(ultimoRetorno || xmlRetorno);
                 const sucesso = parsed.c_stat === '100';
                 
+                // Após sucesso, recuperar o XML assinado da NFe (procNFe completo) via ObterXml(0)
+                let xml_nfe = '';
+                if (sucesso) {
+                    try {
+                        const bufXml = Buffer.alloc(TAMANHO_BUFFER);
+                        const bufXmlTam = Buffer.alloc(4);
+                        bufXmlTam.writeInt32LE(TAMANHO_BUFFER, 0);
+                        const retXml = libNFe.ObterXml(handle, 0, bufXml, bufXmlTam);
+                        if (retXml === 0) {
+                            const tamXml = bufXmlTam.readInt32LE(0);
+                            if (tamXml > 0 && tamXml <= TAMANHO_BUFFER) {
+                                xml_nfe = bufXml.toString('utf8', 0, tamXml).replace(/\0/g, '');
+                            }
+                        } else {
+                            console.warn(`[FiscalLib] ObterXml NFe ret=${retXml} | ${lerRetornoACBr(libNFe, handle)}`);
+                        }
+                    } catch (e) { console.warn('[FiscalLib] Falha ObterXml NFe:', e.message); }
+                }
+
                 // Após sucesso, tentar imprimir DANFE conforme tp_imp_nfe configurado
                 let pdf_path = null;
                 if (sucesso) {
@@ -358,6 +377,7 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                     c_stat: parsed.c_stat,
                     x_motivo: parsed.x_motivo,
                     recibo_sefaz: parsed.recibo_sefaz,
+                    xml_nfe,
                     xml_retorno: xmlRetorno,
                     retorno_completo: ultimoRetorno || xmlRetorno,
                     pdf_path,
@@ -392,6 +412,25 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 const parsed = parsearRetornoNfe(ultimoRetorno || xmlRetorno);
                 const sucesso = parsed.c_stat === '100';
                 
+                // Após sucesso, recuperar o XML assinado da NFCe (procNFe completo) via ObterXml(0)
+                let xml_nfe = '';
+                if (sucesso) {
+                    try {
+                        const bufXml = Buffer.alloc(TAMANHO_BUFFER);
+                        const bufXmlTam = Buffer.alloc(4);
+                        bufXmlTam.writeInt32LE(TAMANHO_BUFFER, 0);
+                        const retXml = libNFe.ObterXml(handle, 0, bufXml, bufXmlTam);
+                        if (retXml === 0) {
+                            const tamXml = bufXmlTam.readInt32LE(0);
+                            if (tamXml > 0 && tamXml <= TAMANHO_BUFFER) {
+                                xml_nfe = bufXml.toString('utf8', 0, tamXml).replace(/\0/g, '');
+                            }
+                        } else {
+                            console.warn(`[FiscalLib] ObterXml NFCe ret=${retXml} | ${lerRetornoACBr(libNFe, handle)}`);
+                        }
+                    } catch (e) { console.warn('[FiscalLib] Falha ObterXml NFCe:', e.message); }
+                }
+
                 // Após sucesso, tentar imprimir DANFCE conforme tp_imp_nfce configurado
                 let pdf_path = null;
                 if (sucesso) {
@@ -405,6 +444,7 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                     c_stat: parsed.c_stat,
                     x_motivo: parsed.x_motivo,
                     recibo_sefaz: parsed.recibo_sefaz,
+                    xml_nfe,
                     xml_retorno: xmlRetorno,
                     retorno_completo: ultimoRetorno || xmlRetorno,
                     pdf_path,

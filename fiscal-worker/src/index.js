@@ -214,7 +214,9 @@ const processarEvento = async (evento) => {
                 st_nf:        resultado.sucesso ? 'E' : 'R', // E=Emitida/Autorizada, R=Rejeitada
                 updated_at:   new Date().toISOString(),
             };
-            if (resultado.xml_retorno) updateNfe.xml_nf = resultado.xml_retorno;
+            // Prioriza o XML assinado da NF (procNFe completo); fallback para xml_retorno (envelope da SEFAZ)
+            const xmlParaSalvar = resultado.xml_nfe || resultado.xml_retorno;
+            if (xmlParaSalvar) updateNfe.xml_nf = xmlParaSalvar;
 
             const { data: updRows, error: errNfe } = await supabase
                 .from('fiscal_nfe_cabecalho')
