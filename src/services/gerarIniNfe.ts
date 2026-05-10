@@ -63,24 +63,25 @@ export function gerarIniNfe(params: GerarIniParams): string {
   linhas.push(`CNPJ=${cnpjEmitente}`);
   linhas.push(`RazaoSocial=${empresa.razao_social || ''}`);
   linhas.push(`NomeFantasia=${empresa.nome_fantasia || ''}`);
-  linhas.push(`InscricaoEstadual=${limparNumeros(empresa.inscricao_estadual || '')}`);
+  linhas.push(`InscricaoEstadual=${limparNumeros(empresa.ie || empresa.inscricao_estadual || '')}`);
   if (empresa.inscricao_municipal) linhas.push(`InscricaoMunicipal=${limparNumeros(empresa.inscricao_municipal)}`);
   linhas.push(`CRT=${mapearCRT(empresa.regime_trib || 'S')}`);
   linhas.push(`Logradouro=${empresa.endereco_logradouro || ''}`);
   linhas.push(`Numero=${empresa.endereco_numero || 'SN'}`);
   linhas.push(`Bairro=${empresa.endereco_bairro || ''}`);
   linhas.push(`CEP=${limparNumeros(empresa.endereco_cep || '')}`);
-  linhas.push(`UF=${empresa.cidade?.uf || empresa.cidade?.estado_id || 'SP'}`);
-  linhas.push(`CodigoMunicipio=${empresa.cidade?.codigo_ibge || ''}`);
+  linhas.push(`UF=${ufEmitente}`);
+  linhas.push(`CodigoMunicipio=${empresa.cidade?.cd_ibge || empresa.cidade?.codigo_ibge || ''}`);
   linhas.push(`Municipio=${empresa.cidade?.descricao || ''}`);
   linhas.push(`Telefone=${limparNumeros(empresa.fone_geral || '')}`);
   linhas.push(``);
 
   // ──────────────────────────────────────────────────────────────
-  // SEÇÃO: Destinatário
+  // SEÇÃO: Destinatário (SEMPRE da tabela CADASTRO via cadastro_id)
+  // Se algum campo não existir no cadastro, deixar vazio.
   // ──────────────────────────────────────────────────────────────
   linhas.push(`[Destinatario]`);
-  if (cadastro && cadastro.cnpj) {
+  if (cadastro && (cadastro.cnpj || cadastro.razao_social)) {
     const docDest = limparNumeros(cadastro.cnpj || '');
     if (docDest.length === 14) linhas.push(`CNPJ=${docDest}`);
     else if (docDest.length === 11) linhas.push(`CPF=${docDest}`);
@@ -91,12 +92,13 @@ export function gerarIniNfe(params: GerarIniParams): string {
     linhas.push(`Numero=${cadastro.endereco_numero || 'SN'}`);
     linhas.push(`Bairro=${cadastro.endereco_bairro || ''}`);
     linhas.push(`CEP=${limparNumeros(cadastro.endereco_cep || '')}`);
-    linhas.push(`UF=${cadastro.cidade?.uf || cadastro.cidade?.estado_id || ''}`);
-    linhas.push(`CodigoMunicipio=${cadastro.cidade?.codigo_ibge || ''}`);
+    linhas.push(`UF=${cadastro.cidade?.estado_id || cadastro.cidade?.uf || ''}`);
+    linhas.push(`CodigoMunicipio=${cadastro.cidade?.cd_ibge || cadastro.cidade?.codigo_ibge || ''}`);
     linhas.push(`Municipio=${cadastro.cidade?.descricao || ''}`);
     linhas.push(`Email=${cadastro.email || ''}`);
+    linhas.push(`Telefone=${limparNumeros(cadastro.fone_geral || '')}`);
   } else {
-    // Consumidor sem identificação (NFCe)
+    // Sem cadastro vinculado — consumidor não identificado (NFCe)
     linhas.push(`NaoIdentificado=1`);
     linhas.push(`IndicadorIEDest=9`);
   }
