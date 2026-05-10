@@ -205,9 +205,11 @@ const processarEvento = async (evento) => {
         // 5. Pós-processamento: atualizar fiscal_nfe_cabecalho se foi emissão de nota
         const nfeCabecalhoId = evento.nfe_cabecalho_id || evento.referencia_id;
         if (isEmissao && nfeCabecalhoId) {
-            const stNf = resultado.sucesso ? 'A' : 'E'; // A=Autorizada, E=Erro
+            // c_stat é INTEGER no banco — converter ou null
+            const cStatInt = resultado.c_stat != null && !isNaN(parseInt(resultado.c_stat))
+                ? parseInt(resultado.c_stat) : null;
             const updateNfe = {
-                c_stat:       resultado.c_stat || null,
+                c_stat:       cStatInt,
                 x_motivo:     resultado.x_motivo || (resultado.erro || null),
                 chave_nfe:    resultado.chave_nfe || '',
                 nr_protocolo: resultado.nr_protocolo || '',
