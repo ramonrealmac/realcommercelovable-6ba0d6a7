@@ -1,5 +1,6 @@
 import { supabase } from './db.js';
 import { executarComandoFiscal } from './fiscalLib.js';
+import { gerarIniNfe } from './gerarIniNfe.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import winston from 'winston';
@@ -26,6 +27,79 @@ const logger = winston.createLogger({
 });
 
 logger.info("Iniciando Fiscal Worker...");
+
+const attachCidade = async (registro) => {
+    if (!registro?.endereco_cidade_id) return registro;
+    const { data: cidade } = await supabase
+        .from('cidade')
+        .select('*')
+        .eq('cidade_id', registro.endereco_cidade_id)
+        .maybeSingle();
+    return { ...registro, cidade: cidade || null };
+};
+
+const decodeSenhaCertificado = (senha) => {
+    if (!senha) return '';
+    try {
+        const decoded = Buffer.from(senha, 'base64').toString('utf8');
+        const normalizada = Buffer.from(decoded, 'utf8').toString('base64').replace(/=+$/, '');
+        return normalizada === String(senha).replace(/=+$/, '') ? decoded : senha;
+    }
+    catch { return senha; }
+};
+
+const montarPayloadEmissaoNfe = async (evento, payloadAtual) => {
+    const nfeId = evento.nfe_cabecalho_id || evento.referencia_id;
+    if (!nfeId) return payloadAtual;
+
+    const { data: cab, error: cabErr } = await supabase
+        .from('fiscal_nfe_cabecalho')
+        .select('*')
+        .eq('nfe_cabecalho_id', nfeId)
+        .maybeSingle();
+    if (cabErr || !cab) throw new Error(`NF-e/NFC-e #${nfeId} não localizada para emissão.`);
+
+    const [{ data: empresaRaw }, { data: cadastroRaw }, { data: fiscalConfig }, { data: itens }, { data: pagamentos }, { data: configItens }] = await Promise.all([
+        supabase.from('empresa').select('*').eq('empresa_id', cab.empresa_id).maybeSingle(),
+        cab.cadastro_id ? supabase.from('cadastro').select('*').eq('cadastro_id', cab.cadastro_id).maybeSingle() : Promise.resolve({ data: null }),
+        supabase.from('fiscal_config').select('*').eq('empresa_id', cab.empresa_id).maybeSingle(),
+        supabase.from('fiscal_nfe_item').select('*').eq('nfe_cabecalho_id', nfeId).order('nr_item', { ascending: true }),
+        supabase.from('fiscal_nfe_pagamento').select('*').eq('nfe_cabecalho_id', nfeId),
+        supabase.from('fiscal_config_item').select('*').eq('empresa_id', cab.empresa_id),
+    ]);
+
+    if (!empresaRaw) throw new Error(`Empresa #${cab.empresa_id} não localizada para emissão.`);
+    if (!fiscalConfig) throw new Error(`Configuração fiscal da empresa #${cab.empresa_id} não localizada.`);
+
+    const configItem = (configItens || []).find(ci => String(ci.modelo) === String(cab.modelo) && Number(ci.serie) === Number(cab.serie))
+        || (configItens || []).find(ci => String(ci.modelo) === String(cab.modelo));
+    if (!configItem) throw new Error(`Item de configuração fiscal modelo ${cab.modelo}/série ${cab.serie} não localizado.`);
+
+    const empresa = await attachCidade(empresaRaw);
+    const cadastro = await attachCidade(cadastroRaw);
+    const iniContent = gerarIniNfe({ cabecalho: cab, itens: itens || [], pagamentos: pagamentos || [], empresa, cadastro, fiscalConfig, configItem });
+    const isNfce = String(cab.modelo) === '65' || evento.comando === 'EMITIR_NFCE';
+
+    return {
+        ...payloadAtual,
+        dados: iniContent,
+        config: {
+            ...(payloadAtual.config || {}),
+            uf: empresa.cidade?.estado_id || payloadAtual.config?.uf || 'SP',
+            modelo: Number(cab.modelo),
+            ambiente: Number(fiscalConfig.ambiente_nfe || payloadAtual.config?.ambiente || 2),
+            certificadoPath: fiscalConfig.certificado,
+            certificadoSenha: decodeSenhaCertificado(fiscalConfig.senha_certificado),
+            tipo_certificado: fiscalConfig.tipo_certificado || payloadAtual.config?.tipo_certificado || 'ARQUIVO',
+            csc: configItem.csc || payloadAtual.config?.csc || '',
+            id_csc: configItem.id_csc || payloadAtual.config?.id_csc || '',
+        },
+        print_config: payloadAtual.print_config || {
+            tp_imp: isNfce ? (configItem.tp_imp_nfce || 'PDF') : (configItem.tp_imp_nfe || 'PDF'),
+            nm_impressora: isNfce ? (configItem.nm_impressora_nfce || '') : (configItem.nm_impressora_nfe || ''),
+        },
+    };
+};
 
 /**
  * Processa um evento que chegou na fila.
@@ -72,13 +146,24 @@ const processarEvento = async (evento) => {
             }
         }
 
+        const isEmissao = ['EMITIR_NFE', 'EMITIR_NFCE'].includes(evento.comando);
+        if (isEmissao) {
+            payload = await montarPayloadEmissaoNfe(evento, payload);
+            logger.info(`Payload de emissão regenerado pelo worker: ${payload.dados.substring(0, 40).replace(/\r?\n/g, ' ')}...`);
+            await supabase
+                .from('fiscal_evento')
+                .update({ payload, ambiente: payload.config?.ambiente || evento.ambiente })
+                .eq('id', evento.id);
+        }
+
         // 2.b Buscar config de impressão (tp_imp_*, nm_impressora_*) baseado no documento referenciado
-        if (['EMITIR_NFE', 'EMITIR_NFCE'].includes(evento.comando) && evento.referencia_id && !payload.print_config) {
+        if (isEmissao && (evento.nfe_cabecalho_id || evento.referencia_id) && !payload.print_config) {
             try {
+                const nfeId = evento.nfe_cabecalho_id || evento.referencia_id;
                 const { data: nfe } = await supabase
                     .from('fiscal_nfe_cabecalho')
                     .select('modelo, serie, empresa_id')
-                    .eq('nfe_cabecalho_id', evento.referencia_id)
+                    .eq('nfe_cabecalho_id', nfeId)
                     .maybeSingle();
                 if (nfe) {
                     const { data: ci } = await supabase
@@ -118,8 +203,8 @@ const processarEvento = async (evento) => {
             .eq('id', evento.id);
 
         // 5. Pós-processamento: atualizar fiscal_nfe_cabecalho se foi emissão de nota
-        const isEmissao = ['EMITIR_NFE', 'EMITIR_NFCE'].includes(evento.comando);
-        if (isEmissao && evento.referencia_id && evento.referencia_tabela === 'fiscal_nfe_cabecalho') {
+        const nfeCabecalhoId = evento.nfe_cabecalho_id || evento.referencia_id;
+        if (isEmissao && nfeCabecalhoId) {
             const stNf = resultado.sucesso ? 'A' : 'E'; // A=Autorizada, E=Erro
             const updateNfe = {
                 c_stat:       resultado.c_stat || null,
@@ -134,12 +219,12 @@ const processarEvento = async (evento) => {
             const { error: errNfe } = await supabase
                 .from('fiscal_nfe_cabecalho')
                 .update(updateNfe)
-                .eq('nfe_cabecalho_id', evento.referencia_id);
+                .eq('nfe_cabecalho_id', nfeCabecalhoId);
             
             if (errNfe) {
-                logger.error(`Erro ao atualizar fiscal_nfe_cabecalho #${evento.referencia_id}: ${errNfe.message}`);
+                logger.error(`Erro ao atualizar fiscal_nfe_cabecalho #${nfeCabecalhoId}: ${errNfe.message}`);
             } else {
-                logger.info(`NF-e #${evento.referencia_id} atualizada: cStat=${resultado.c_stat} | Chave=${resultado.chave_nfe || 'N/A'}`);
+                logger.info(`NF-e #${nfeCabecalhoId} atualizada: cStat=${resultado.c_stat} | Chave=${resultado.chave_nfe || 'N/A'}`);
             }
         }
 
