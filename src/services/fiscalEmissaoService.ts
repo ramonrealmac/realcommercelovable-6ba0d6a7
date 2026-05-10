@@ -4,6 +4,18 @@ import { gerarIniNfe } from "./gerarIniNfe";
 
 const db = supabase as any;
 
+/**
+ * Anexa o objeto cidade no registro com base em endereco_cidade_id.
+ * Necessário porque não existe FK declarada entre empresa/cadastro e cidade,
+ * o que faria o embed do PostgREST falhar e devolver null.
+ */
+async function attachCidade<T extends { endereco_cidade_id?: number | null } | null>(rec: T): Promise<T> {
+  if (!rec || !rec.endereco_cidade_id) return rec;
+  const { data: cidade } = await db.from("cidade").select("*").eq("cidade_id", rec.endereco_cidade_id).maybeSingle();
+  (rec as any).cidade = cidade || null;
+  return rec;
+}
+
 function mapearSefazPagamento(tp: string): string {
   const mapa: Record<string, string> = {
     "DI": "01", "DH": "01", "DINHEIRO": "01", "01": "01",
@@ -67,10 +79,15 @@ export const fiscalEmissaoService = {
       }
 
       // 2. Obter dados da empresa (emitente) e do cadastro (destinatário)
-      const { data: empresa } = await db.from("empresa").select("*, cidade:endereco_cidade_id(*)").eq("empresa_id", empresaId).single();
-      const { data: parceiro } = movimento.cadastro_id 
-        ? await db.from("cadastro").select("*, cidade:endereco_cidade_id(*)").eq("cadastro_id", movimento.cadastro_id).single()
-        : { data: null };
+      const { data: empresaRaw, error: empErr } = await db.from("empresa").select("*").eq("empresa_id", empresaId).single();
+      if (empErr || !empresaRaw) throw new Error("Empresa não localizada: " + (empErr?.message || empresaId));
+      const empresa = await attachCidade(empresaRaw);
+
+      let parceiro: any = null;
+      if (movimento.cadastro_id) {
+        const { data: parceiroRaw } = await db.from("cadastro").select("*").eq("cadastro_id", movimento.cadastro_id).maybeSingle();
+        parceiro = await attachCidade(parceiroRaw);
+      }
 
       // 3. Obter configurações fiscais
       const { data: fConfig } = await db.from("fiscal_config").select("*").eq("empresa_id", empresaId).single();
@@ -411,10 +428,15 @@ export const fiscalEmissaoService = {
 
       const tipo: "NFE" | "NFCE" = Number(cab.modelo) === 65 ? "NFCE" : "NFE";
 
-      const { data: empresa } = await db.from("empresa").select("*, cidade:endereco_cidade_id(*)").eq("empresa_id", empresaId).single();
-      const { data: parceiro } = cab.cadastro_id
-        ? await db.from("cadastro").select("*, cidade:endereco_cidade_id(*)").eq("cadastro_id", cab.cadastro_id).single()
-        : { data: null };
+      const { data: empresaRaw, error: empErr } = await db.from("empresa").select("*").eq("empresa_id", empresaId).single();
+      if (empErr || !empresaRaw) throw new Error("Empresa não localizada: " + (empErr?.message || empresaId));
+      const empresa = await attachCidade(empresaRaw);
+
+      let parceiro: any = null;
+      if (cab.cadastro_id) {
+        const { data: parceiroRaw } = await db.from("cadastro").select("*").eq("cadastro_id", cab.cadastro_id).maybeSingle();
+        parceiro = await attachCidade(parceiroRaw);
+      }
 
       const { data: fConfig } = await db.from("fiscal_config").select("*").eq("empresa_id", empresaId).single();
 
