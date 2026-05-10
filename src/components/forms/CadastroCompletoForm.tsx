@@ -1047,6 +1047,18 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
           />
         )}
       </div>
+
+      <CidadeSearchDialog
+        open={XCidadeDlgOpen}
+        onClose={() => setXCidadeDlgOpen(false)}
+        onSelect={(c) => {
+          set("endereco_cidade_id", String(c.cidade_id));
+          // garante que a cidade esteja na lista para exibir o nome
+          setXCidades(prev => prev.find((x: any) => x.cidade_id === c.cidade_id)
+            ? prev
+            : [...prev, { cidade_id: c.cidade_id, descricao: c.descricao, uf: c.estado_id }]);
+        }}
+      />
     </div>
   );
 };
