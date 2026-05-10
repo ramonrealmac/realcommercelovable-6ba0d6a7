@@ -23,6 +23,7 @@ export interface ICrudConfig<T extends Record<string, any>> {
   XApplyFilter?: (query: any) => any; // custom filter (e.g. matriz, st_privado)
   XSoftDelete?: boolean;             // default true (uses excluido = true)
   XNmForm?: string;                  // Nome do formulário para busca de relatórios vinculados
+  XCanEdit?: (rec: T) => boolean;     // Função para validar se o registro atual pode ser editado
 }
 
 export function useCrudController<T extends Record<string, any>>(config: ICrudConfig<T>) {

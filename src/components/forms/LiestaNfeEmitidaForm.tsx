@@ -11,11 +11,12 @@ import {
   Printer, 
   RefreshCw, 
   Eye, 
-  Download,
-  AlertCircle,
-  CheckCircle2,
+  Terminal,
+  ShieldAlert,
+  Mail,
   Clock,
-  Terminal
+  CheckCircle2,
+  AlertCircle
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -23,6 +24,15 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import MonitorFiscalLogDialog from "@/components/forms/MonitorFiscalLogDialog";
 const db = supabase as any;
 
@@ -36,8 +46,11 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
   const [XDtIni, setXDtIni] = useState(new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().substring(0, 10));
   const [XDtFim, setXDtFim] = useState(new Date().toISOString().substring(0, 10));
   const [XClienteCache, setXClienteCache] = useState<Record<number, string>>({});
-  const [XLogDialogOpen, setXLogDialogOpen] = useState(false);
   const [XLogNfeId, setXLogNfeId] = useState<number | undefined>(undefined);
+  const [XEmailDialogOpen, setXEmailDialogOpen] = useState(false);
+  const [XEmailTarget, setXEmailTarget] = useState<any>(null);
+  const [XEmailDestino, setXEmailDestino] = useState("");
+  const [XEmailEnviando, setXEmailEnviando] = useState(false);
 
   const XGridCols: IGridColumn[] = [
     { key: "nfe_cabecalho_id", label: "ID", width: "60px", align: "right" },
@@ -71,6 +84,7 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
             "E": { label: "Autorizada", color: "bg-green-100 text-green-700", icon: CheckCircle2 },
             "R": { label: "Rejeitada", color: "bg-amber-100 text-amber-700", icon: AlertCircle },
             "C": { label: "Cancelada", color: "bg-red-100 text-red-700", icon: XCircle },
+            "D": { label: "Denegada", color: "bg-purple-100 text-purple-700", icon: ShieldAlert },
             "0": { label: "Pendente", color: "bg-gray-100 text-gray-600", icon: Clock },
             "1": { label: "Autorizada", color: "bg-green-100 text-green-700", icon: CheckCircle2 },
             "2": { label: "Cancelada", color: "bg-red-100 text-red-700", icon: XCircle },
@@ -170,6 +184,15 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
 
   const handleTransmitir = async (row: any) => {
     if (!XEmpresaId) return;
+
+    // Bloqueia reenvio se já estiver em status conclusivo (Autorizada, Cancelada ou Denegada)
+    // No banco: E=Emitida, C=Cancelada, D=Denegada. Alguns legados podem usar 1 ou 2.
+    const statusConclusivos = ["E", "C", "D", "1", "2"];
+    if (statusConclusivos.includes(String(row.st_nf))) {
+      toast.error(`Esta nota está em status "${row.st_nf}" e não pode ser retransmitida.`);
+      return;
+    }
+
     toast.info("Enfileirando transmissão para o Fiscal Worker...");
     const res = await fiscalEmissaoService.retransmitirDocumento(row.nfe_cabecalho_id, XEmpresaId);
     if (res.success) {
@@ -180,13 +203,78 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
     }
   };
 
-  const handleImprimir = (row: any) => {
-    toast.info("Imprimindo DANFE...");
+  const handleImprimir = async (row: any) => {
+    if (!["E", "1"].includes(String(row.st_nf))) {
+      toast.error("Somente notas autorizadas podem ser impressas.");
+      return;
+    }
+    const tid = toast.loading(`Gerando DANFE da nota ${row.nr_nota}...`);
+    try {
+      const res = await fiscalEmissaoService.imprimirDocumento(row.nfe_cabecalho_id, XEmpresaId);
+      if (res.success && res.pdf_base64) {
+        const binaryString = atob(res.pdf_base64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+        const blob = new Blob([bytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        window.open(url, "_blank");
+        toast.success("DANFE gerado com sucesso.", { id: tid });
+      } else {
+        toast.error(res.message || "Erro ao gerar PDF do DANFE.", { id: tid });
+      }
+    } catch (e: any) {
+      toast.error("Erro: " + e.message, { id: tid });
+    }
   };
 
   const handleDownloadXml = (row: any) => {
-    toast.info("Baixando XML da nota " + row.nr_nota + "...");
-    // Aqui seria a lógica de download do storage ou API
+    if (!row.xml_nf) {
+      toast.error("XML da nota não localizado.");
+      return;
+    }
+    const blob = new Blob([row.xml_nf], { type: "text/xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `NFe_${row.chave_nfe || row.nr_nota || row.nfe_cabecalho_id}.xml`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("Download iniciado.");
+  };
+
+  const handleOpenEmailDialog = async (row: any) => {
+    setXEmailTarget(row);
+    setXEmailDestino("");
+    setXEmailDialogOpen(true);
+    
+    if (row.cadastro_id) {
+      const { data } = await db.from("cadastro").select("email").eq("cadastro_id", row.cadastro_id).single();
+      if (data?.email) setXEmailDestino(data.email);
+    }
+  };
+
+  const handleEnviarEmail = async () => {
+    if (!XEmailDestino) {
+      toast.error("Informe o e-mail do destinatário.");
+      return;
+    }
+    setXEmailEnviando(true);
+    const tid = toast.loading("Enviando e-mail...");
+    try {
+      const res = await fiscalEmissaoService.enviarEmail(XEmailTarget.nfe_cabecalho_id, XEmpresaId, XEmailDestino);
+      if (res.success) {
+        toast.success("E-mail enviado para a fila com sucesso.", { id: tid });
+        setXEmailDialogOpen(false);
+      } else {
+        toast.error(res.message || "Falha ao enviar e-mail.", { id: tid });
+      }
+    } catch (e: any) {
+      toast.error(e.message, { id: tid });
+    } finally {
+      setXEmailEnviando(false);
+    }
   };
 
   return (
@@ -231,14 +319,29 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onClick={() => handleTransmitir(r)}>
+                      <DropdownMenuItem 
+                        onClick={() => handleTransmitir(r)}
+                        disabled={["E", "C", "D", "1", "2"].includes(String(r.st_nf))}
+                      >
                         <Send className="w-4 h-4 mr-2 text-blue-500" /> Transmitir SEFAZ
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleImprimir(r)}>
+                      <DropdownMenuItem 
+                        onClick={() => handleImprimir(r)}
+                        disabled={!["E", "1"].includes(String(r.st_nf))}
+                      >
                         <Printer className="w-4 h-4 mr-2 text-gray-500" /> Imprimir DANFE
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleDownloadXml(r)}>
+                      <DropdownMenuItem 
+                        onClick={() => handleDownloadXml(r)}
+                        disabled={!r.xml_nf}
+                      >
                         <Download className="w-4 h-4 mr-2 text-blue-400" /> Baixar XML
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => handleOpenEmailDialog(r)}
+                        disabled={!["E", "1"].includes(String(r.st_nf))}
+                      >
+                        <Mail className="w-4 h-4 mr-2 text-indigo-400" /> Enviar por E-mail
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => openTab({ title: `NF-e #${r.nr_nota || r.nfe_cabecalho_id}`, component: "nfe-form", params: { nfe_cabecalho_id: r.nfe_cabecalho_id } })}>
                         <Eye className="w-4 h-4 mr-2 text-primary" /> Visualizar Documento
@@ -289,12 +392,53 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
         />
       </div>
     </div>
-    <MonitorFiscalLogDialog
-      isOpen={XLogDialogOpen}
-      onClose={() => setXLogDialogOpen(false)}
-      empresaId={XEmpresaId}
-      nfeCabecalhoId={XLogNfeId}
-    />
+      <MonitorFiscalLogDialog 
+        open={XLogDialogOpen} 
+        onOpenChange={setXLogDialogOpen}
+        nfeCabecalhoId={XLogNfeId}
+      />
+
+      <Dialog open={XEmailDialogOpen} onOpenChange={setXEmailDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="w-5 h-5 text-primary" />
+              Enviar Documento por E-mail
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">E-mail do Destinatário</Label>
+              <Input 
+                id="email" 
+                placeholder="exemplo@email.com" 
+                value={XEmailDestino}
+                onChange={e => setXEmailDestino(e.target.value)}
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground bg-muted p-2 rounded border border-border">
+              A nota fiscal (XML) e o DANFE (PDF) serão anexados automaticamente. 
+              As faturas vinculadas também serão incluídas se disponíveis.
+            </p>
+          </div>
+          <DialogFooter>
+            <button 
+              onClick={() => setXEmailDialogOpen(false)}
+              className="px-4 py-2 text-xs font-bold bg-secondary rounded hover:bg-secondary/80"
+            >
+              CANCELAR
+            </button>
+            <button 
+              onClick={handleEnviarEmail}
+              disabled={XEmailEnviando}
+              className="px-4 py-2 text-xs font-bold bg-primary text-primary-foreground rounded hover:opacity-90 flex items-center gap-2"
+            >
+              {XEmailEnviando && <RefreshCw className="w-3 h-3 animate-spin" />}
+              ENVIAR AGORA
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

@@ -111,6 +111,25 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
 
     if (ret.success) {
       toast.success(`${tipo} autorizada! Chave: ${ret.resposta?.chave_nfe || "—"}`);
+      
+      // Abre o PDF se retornado pelo worker
+      const pdfBase64 = ret.resposta?.pdf_base64 || ret.resposta?.impressao?.pdf_base64;
+      if (pdfBase64) {
+        try {
+          const byteCharacters = atob(pdfBase64);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const file = new Blob([byteArray], { type: 'application/pdf' });
+          const fileURL = URL.createObjectURL(file);
+          window.open(fileURL, '_blank');
+        } catch (err) {
+          console.error("Erro ao abrir PDF:", err);
+        }
+      }
+      
       onConcluir();
     } else {
       toast.error(`Falha na ${tipo}: ${ret.mensagem || "verifique o log fiscal"}`);

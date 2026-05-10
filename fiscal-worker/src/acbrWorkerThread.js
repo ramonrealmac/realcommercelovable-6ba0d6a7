@@ -56,11 +56,33 @@ const loadLibrary = (path, prefix) => {
             // Funções de impressão (apenas NFe/NFCe)
             if (prefix === 'NFE') {
                 try {
+                    // Tenta nomes variados conforme a versão da DLL (NFE_ImprimirDANFEPDF ou NFE_ImprimirPDF)
                     funcoes.ImprimirDANFEPDF = lib.func('int __cdecl NFE_ImprimirDANFEPDF(void* handle)');
-                } catch (e) { console.warn('[FiscalLib] ImprimirDANFEPDF indisponível:', e.message); }
+                } catch (e) { 
+                    try {
+                        funcoes.ImprimirDANFEPDF = lib.func('int __cdecl NFE_ImprimirPDF(void* handle)');
+                    } catch (e2) {
+                        console.warn('[FiscalLib] ImprimirDANFEPDF/ImprimirPDF indisponível:', e2.message); 
+                    }
+                }
                 try {
                     funcoes.ImprimirDANFE = lib.func('int __cdecl NFE_ImprimirDANFE(void* handle, const char* eArquivoXml, const char* eImpressora, int nCopias, const char* eProtocolo, bool bMostrarPreview, const char* eMarcaDagua, bool bViaConsumidor)');
-                } catch (e) { console.warn('[FiscalLib] ImprimirDANFE indisponível:', e.message); }
+                } catch (e) { 
+                    try {
+                        // Algumas versões usam apenas NFE_Imprimir
+                        funcoes.ImprimirDANFE = lib.func('int __cdecl NFE_Imprimir(void* handle, const char* eImpressora, int nCopias, const char* eProtocolo, bool bMostrarPreview, const char* eMarcaDagua, bool bViaConsumidor)');
+                    } catch (e2) {
+                        console.warn('[FiscalLib] ImprimirDANFE/Imprimir indisponível:', e2.message); 
+                    }
+                }
+                try {
+                    funcoes.SalvarPDF = lib.func('int __cdecl NFE_SalvarPDF(void* handle, _Out_ char* sResposta, _Out_ int* esTamanho)');
+                } catch (e) { /* opcional */ }
+                try {
+                    funcoes.EnviarEmail = lib.func('int __cdecl NFE_EnviarEmail(void* handle, const char* ePara, const char* eChaveNFe, bool aEnviaPDF, const char* eAssunto, const char* eCc, const char* eAnexos, const char* eMensagem)');
+                } catch (e) {
+                    console.warn('[FiscalLib] EnviarEmail indisponível:', e.message);
+                }
             }
 
             // Funções específicas da NFe
@@ -165,6 +187,7 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave) => {
         const pdfDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos/PDF");
         if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
         lib.ConfigGravarValor(handle, "DANFe", "PathPDF", pdfDir);
+        lib.ConfigGravarValor(handle, "NFe", "PathPDF", pdfDir); // Duplicado em NFe por segurança
         lib.ConfigGravarValor(handle, "DANFe", "MostraPreview", "0");
         lib.ConfigGravarValor(handle, "DANFe", "MostraStatus", "0");
         
@@ -172,10 +195,35 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave) => {
             const ret = lib.ImprimirDANFEPDF(handle);
             console.log(`[FiscalLib] ImprimirDANFEPDF (${modeloLabel}) ret=${ret}`);
             if (ret !== 0) return { sucesso: false, erro: lerRetornoACBr(lib, handle) || `ImprimirDANFEPDF retornou ${ret}`, pdf_path: null };
-            const pdf = chave ? path.join(pdfDir, `${chave}-procNFe.pdf`) : null;
-            return { sucesso: true, pdf_path: pdf && fs.existsSync(pdf) ? pdf : pdfDir };
+            
+            // Tenta localizar o arquivo gerado
+            const pdfFile = chave ? path.join(pdfDir, `${chave}-procNFe.pdf`) : null;
+            const pdfFileAlt = chave ? path.join(pdfDir, `${chave}.pdf`) : null;
+            const finalPdf = (pdfFile && fs.existsSync(pdfFile)) ? pdfFile : (pdfFileAlt && fs.existsSync(pdfFileAlt) ? pdfFileAlt : null);
+            
+            let pdf_base64 = null;
+            if (finalPdf) {
+                try {
+                    pdf_base64 = fs.readFileSync(finalPdf).toString('base64');
+                } catch (e) {
+                    console.warn(`[FiscalLib] Falha ao ler PDF para base64: ${e.message}`);
+                }
+            }
+
+            return { 
+                sucesso: true, 
+                pdf_path: finalPdf || pdfDir,
+                pdf_base64
+            };
         } else if (tp === 'IMPRESSORA' && lib.ImprimirDANFE) {
-            const ret = lib.ImprimirDANFE(handle, "", printConfig.nm_impressora || "", 1, "", false, "", false);
+            // Nota: Se for NFE_Imprimir (sem eArquivoXml), os argumentos deslocam. 
+            let ret;
+            try {
+                ret = lib.ImprimirDANFE(handle, "", printConfig.nm_impressora || "", 1, "", false, "", false);
+            } catch (e) {
+                // Tenta sem o argumento do XML se falhar na assinatura
+                ret = lib.ImprimirDANFE(handle, printConfig.nm_impressora || "", 1, "", false, "", false);
+            }
             console.log(`[FiscalLib] ImprimirDANFE (${modeloLabel}) impressora=${printConfig.nm_impressora} ret=${ret}`);
             if (ret !== 0) return { sucesso: false, erro: lerRetornoACBr(lib, handle) || `ImprimirDANFE retornou ${ret}`, pdf_path: null };
             return { sucesso: true, pdf_path: null };
@@ -245,17 +293,22 @@ const configurarHandle = (lib, handle, configPayload) => {
         lib.ConfigGravarValor(handle, "DFe", "Ambiente", ambACBr);
         console.log(`[FiscalLib] Ambiente configurado: ${ambACBr === '0' ? 'PRODUÇÃO' : 'HOMOLOGAÇÃO'}`);
     }
-    // REMOVIDO: ModeloDF não deve ser escrito via configPayload.modelo (seria 55/65 = código do modelo NF-e)
-    // O DLL espera ordinal TACBrMod: 0=NFe, 1=NFCe — e o padrão 0 do INI já é correto
+
+    // Define ModeloDF (0=NFe, 1=NFCe)
+    if (configPayload.modelo) {
+        const modDF = String(configPayload.modelo) === '65' ? '1' : '0';
+        lib.ConfigGravarValor(handle, "NFe", "ModeloDF", modDF);
+    }
+
     if (configPayload.cnpj) lib.ConfigGravarValor(handle, "Emitente", "CNPJ", configPayload.cnpj);
     
     // Versão do schema de Distribuição DFe (não sobrescreve SSL definido acima)
     lib.ConfigGravarValor(handle, "DFe", "VersaoDistribuicaoDFe", "1.01");
     
-    // Desativar logs de envio para evitar Access Violation por permissão de pasta
+    // Ativar logs e salvamento de arquivos
     lib.ConfigGravarValor(handle, "Principal", "LogNivel", "0");
-    lib.ConfigGravarValor(handle, "NFe", "SalvarGer", "0");
-    lib.ConfigGravarValor(handle, "NFe", "SalvarArq", "0");
+    lib.ConfigGravarValor(handle, "NFe", "SalvarGer", "1");
+    lib.ConfigGravarValor(handle, "NFe", "SalvarArq", "1");
 };
 
 /**
@@ -634,6 +687,35 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 return { sucesso: true, retorno_completo: resp };
             });
         }
+
+        case 'ENVIAR_EMAIL_NFE':
+            return executarNaDLL(libNFe, config, async (handle) => {
+                const { para, assunto, mensagem, anexos, config_email, xml } = jsonPayload;
+                
+                // 1. Carrega o XML da nota
+                if (xml) libNFe.CarregarXML(handle, xml);
+                
+                // 2. Configura SMTP
+                if (config_email) {
+                    libNFe.ConfigGravarValor(handle, "Email", "Servidor", config_email.host || "");
+                    libNFe.ConfigGravarValor(handle, "Email", "Porta", String(config_email.port || "587"));
+                    libNFe.ConfigGravarValor(handle, "Email", "Usuario", config_email.user || "");
+                    libNFe.ConfigGravarValor(handle, "Email", "Senha", config_email.pass || "");
+                    libNFe.ConfigGravarValor(handle, "Email", "SSL", config_email.ssl ? "1" : "0");
+                    libNFe.ConfigGravarValor(handle, "Email", "TLS", config_email.tls ? "1" : "0");
+                    libNFe.ConfigGravarValor(handle, "Email", "Nome", config_email.nome_remetente || "");
+                }
+
+                // 3. Enviar
+                // ePara, eChaveNFe (vazio pois já carregou XML), aEnviaPDF (true), eAssunto, eCc, eAnexos, eMensagem
+                const listaAnexos = Array.isArray(anexos) ? anexos.join(';') : (anexos || "");
+                const ret = libNFe.EnviarEmail(handle, para, "", true, assunto || "", "", listaAnexos, mensagem || "");
+                
+                if (ret !== 0) {
+                    return { sucesso: false, erro: lerRetornoACBr(libNFe, handle) || `Erro ${ret} ao enviar e-mail.` };
+                }
+                return { sucesso: true };
+            });
 
         case 'LISTAR_CERTIFICADOS':
             return new Promise((resolve) => {

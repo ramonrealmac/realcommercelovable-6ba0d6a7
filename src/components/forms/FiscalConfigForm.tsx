@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { Save, Search, Activity, ShieldCheck, Terminal } from "lucide-react";
+import { Save, Search, Activity, ShieldCheck, Terminal, Mail } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppContext } from "@/contexts/AppContext";
 import MonitorFiscalLogDialog from "./MonitorFiscalLogDialog";
@@ -16,6 +16,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import FiscalConfigItemGrid from "./FiscalConfigItemGrid";
 
 interface FiscalConfigFormValues {
@@ -26,6 +28,14 @@ interface FiscalConfigFormValues {
   uf: string;
   cliente_padrao_id: number | null;
   cliente_padrao_nome: string;
+  email_smtp_host: string;
+  email_smtp_port: number;
+  email_smtp_user: string;
+  email_smtp_pass: string;
+  email_smtp_ssl: boolean;
+  email_smtp_tls: boolean;
+  email_assunto_nfe: string;
+  email_corpo_nfe: string;
 }
 
 const FiscalConfigForm = () => {
@@ -46,7 +56,15 @@ const FiscalConfigForm = () => {
       ambiente_nfe: "2",
       uf: "SP",
       cliente_padrao_id: null,
-      cliente_padrao_nome: "Não definido (Consumidor)"
+      cliente_padrao_nome: "Não definido (Consumidor)",
+      email_smtp_host: "",
+      email_smtp_port: 587,
+      email_smtp_user: "",
+      email_smtp_pass: "",
+      email_smtp_ssl: false,
+      email_smtp_tls: true,
+      email_assunto_nfe: "NF-e emitida: [CHAVE]",
+      email_corpo_nfe: "Olá, segue em anexo a NF-e e o DANFE referente à sua compra."
     }
   });
 
@@ -60,7 +78,11 @@ const FiscalConfigForm = () => {
       try {
         const { data, error } = await supabase
           .from("fiscal_config")
-          .select("tipo_certificado, certificado, senha_certificado, ambiente_nfe, cliente_padrao_id")
+          .select(`
+            tipo_certificado, certificado, senha_certificado, ambiente_nfe, cliente_padrao_id,
+            email_smtp_host, email_smtp_port, email_smtp_user, email_smtp_pass, 
+            email_smtp_ssl, email_smtp_tls, email_assunto_nfe, email_corpo_nfe
+          `)
           .eq("empresa_id", XEmpresaId)
           .maybeSingle();
 
@@ -74,7 +96,15 @@ const FiscalConfigForm = () => {
             ambiente_nfe: data.ambiente_nfe || "2",
             uf: "SP",
             cliente_padrao_id: data.cliente_padrao_id || null,
-            cliente_padrao_nome: "Carregando..."
+            cliente_padrao_nome: "Carregando...",
+            email_smtp_host: data.email_smtp_host || "",
+            email_smtp_port: data.email_smtp_port || 587,
+            email_smtp_user: data.email_smtp_user || "",
+            email_smtp_pass: data.email_smtp_pass || "",
+            email_smtp_ssl: !!data.email_smtp_ssl,
+            email_smtp_tls: !!data.email_smtp_tls,
+            email_assunto_nfe: data.email_assunto_nfe || "NF-e emitida: [CHAVE]",
+            email_corpo_nfe: data.email_corpo_nfe || "Olá, segue em anexo a NF-e e o DANFE referente à sua compra."
           });
 
           if (data.cliente_padrao_id) {
@@ -96,7 +126,17 @@ const FiscalConfigForm = () => {
             certificado: "",
             senha_certificado: "",
             ambiente_nfe: "2",
-            uf: "SP"
+            uf: "SP",
+            cliente_padrao_id: null,
+            cliente_padrao_nome: "Não definido (Consumidor)",
+            email_smtp_host: "",
+            email_smtp_port: 587,
+            email_smtp_user: "",
+            email_smtp_pass: "",
+            email_smtp_ssl: false,
+            email_smtp_tls: true,
+            email_assunto_nfe: "NF-e emitida: [CHAVE]",
+            email_corpo_nfe: "Olá, segue em anexo a NF-e e o DANFE referente à sua compra."
           });
         }
       } catch (err: any) {
@@ -120,16 +160,26 @@ const FiscalConfigForm = () => {
         .eq("empresa_id", XEmpresaId)
         .maybeSingle();
 
+      const payload = {
+        tipo_certificado: values.tipo_certificado,
+        certificado: values.certificado,
+        senha_certificado: values.senha_certificado ? btoa(values.senha_certificado) : null,
+        ambiente_nfe: values.ambiente_nfe,
+        cliente_padrao_id: values.cliente_padrao_id,
+        email_smtp_host: values.email_smtp_host,
+        email_smtp_port: values.email_smtp_port,
+        email_smtp_user: values.email_smtp_user,
+        email_smtp_pass: values.email_smtp_pass,
+        email_smtp_ssl: values.email_smtp_ssl,
+        email_smtp_tls: values.email_smtp_tls,
+        email_assunto_nfe: values.email_assunto_nfe,
+        email_corpo_nfe: values.email_corpo_nfe
+      };
+
       if (existing) {
         const { error } = await supabase
           .from("fiscal_config")
-          .update({
-            tipo_certificado: values.tipo_certificado,
-            certificado: values.certificado,
-            senha_certificado: values.senha_certificado ? btoa(values.senha_certificado) : null,
-            ambiente_nfe: values.ambiente_nfe,
-            cliente_padrao_id: values.cliente_padrao_id
-          })
+          .update(payload)
           .eq("empresa_id", XEmpresaId);
         if (error) throw error;
       } else {
@@ -137,11 +187,7 @@ const FiscalConfigForm = () => {
           .from("fiscal_config")
           .insert({
             empresa_id: XEmpresaId,
-            tipo_certificado: values.tipo_certificado,
-            certificado: values.certificado,
-            senha_certificado: values.senha_certificado ? btoa(values.senha_certificado) : null,
-            ambiente_nfe: values.ambiente_nfe,
-            cliente_padrao_id: values.cliente_padrao_id
+            ...payload
           });
         if (error) throw error;
       }
@@ -286,8 +332,9 @@ const FiscalConfigForm = () => {
         </div>
 
         <Tabs defaultValue="dados" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-6">
+          <TabsList className="grid w-full grid-cols-3 mb-6">
             <TabsTrigger value="dados">Dados Principais</TabsTrigger>
+            <TabsTrigger value="email">Envio de E-mail</TabsTrigger>
             <TabsTrigger value="modelos">Modelos e Sequenciais</TabsTrigger>
           </TabsList>
 
@@ -455,6 +502,149 @@ const FiscalConfigForm = () => {
                 setClienteSearchOpen(false);
               }}
             />
+          </TabsContent>
+
+          <TabsContent value="email" className="space-y-6">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Mail className="w-5 h-5 text-primary" />
+                      Servidor de E-mail (SMTP)
+                    </CardTitle>
+                    <CardDescription>
+                      Configure os dados do servidor para envio automático de DANFE e XML para os clientes.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="email_smtp_host"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Servidor SMTP</FormLabel>
+                            <FormControl>
+                              <Input placeholder="ex: smtp.gmail.com" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="email_smtp_port"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Porta</FormLabel>
+                            <FormControl>
+                              <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="email_smtp_user"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Usuário / E-mail</FormLabel>
+                            <FormControl>
+                              <Input placeholder="seu-email@dominio.com" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="email_smtp_pass"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Senha</FormLabel>
+                            <FormControl>
+                              <Input type="password" placeholder="****" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-8 py-2">
+                      <FormField
+                        control={form.control}
+                        name="email_smtp_ssl"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm gap-4">
+                            <div className="space-y-0.5">
+                              <FormLabel>Usar SSL</FormLabel>
+                            </div>
+                            <FormControl>
+                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="email_smtp_tls"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm gap-4">
+                            <div className="space-y-0.5">
+                              <FormLabel>Usar TLS</FormLabel>
+                            </div>
+                            <FormControl>
+                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="email_assunto_nfe"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Assunto Padrão (NF-e)</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ex: Nota Fiscal Eletrônica [CHAVE]" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="email_corpo_nfe"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Mensagem Padrão (Corpo do E-mail)</FormLabel>
+                          <FormControl>
+                            <Textarea rows={4} placeholder="Olá, segue sua nota..." {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+                </Card>
+
+                <div className="flex justify-end bg-card p-4 rounded-lg border shadow-sm">
+                  <Button type="submit" disabled={loading} className="px-8">
+                    <Save className="w-4 h-4 mr-2" />
+                    Salvar Configurações de E-mail
+                  </Button>
+                </div>
+              </form>
+            </Form>
           </TabsContent>
 
           <TabsContent value="modelos" className="space-y-4">

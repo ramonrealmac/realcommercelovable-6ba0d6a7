@@ -97,6 +97,7 @@ function StandardCrudForm<T extends Record<string, any>>({
         XIsLast={ctrl.XCurrentIdx >= ctrl.XData.length - 1}
         onIncluir={() => { ctrl.handleIncluir(); setXInnerTab("cadastro"); }}
         onEditar={() => { ctrl.handleEditar(); setXInnerTab("cadastro"); }}
+        XCanEdit={ctrl.XCurrentRecord && config.XCanEdit ? config.XCanEdit(ctrl.XCurrentRecord) : true}
         onSalvar={ctrl.handleSalvar}
         onCancelar={ctrl.handleCancelar}
         onExcluir={ctrl.handleExcluir}

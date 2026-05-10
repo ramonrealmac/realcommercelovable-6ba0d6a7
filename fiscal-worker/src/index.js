@@ -129,6 +129,8 @@ const processarEvento = async (evento) => {
 
         if (updateError) throw updateError;
 
+        const nfeCabecalhoId = evento.nfe_cabecalho_id || evento.referencia_id;
+
         // 2. Busca configuração fiscal se não vier completa no payload
         let payload = evento.payload || {};
         if (!payload.config || !payload.config.certificadoPath) {
@@ -168,13 +170,12 @@ const processarEvento = async (evento) => {
         }
 
         // 2.b Buscar config de impressão (tp_imp_*, nm_impressora_*) baseado no documento referenciado
-        if (isEmissao && (evento.nfe_cabecalho_id || evento.referencia_id) && !payload.print_config) {
+        if (isEmissao && nfeCabecalhoId && !payload.print_config) {
             try {
-                const nfeId = evento.nfe_cabecalho_id || evento.referencia_id;
                 const { data: nfe } = await supabase
                     .from('fiscal_nfe_cabecalho')
                     .select('modelo, serie, empresa_id')
-                    .eq('nfe_cabecalho_id', nfeId)
+                    .eq('nfe_cabecalho_id', nfeCabecalhoId)
                     .maybeSingle();
                 if (nfe) {
                     const { data: ci } = await supabase
@@ -202,18 +203,16 @@ const processarEvento = async (evento) => {
         const resultado = await executarComandoFiscal(evento.comando, payload);
 
         // 4. PRIMEIRO: atualizar fiscal_nfe_cabecalho se foi emissão (antes do evento, para garantir consistência)
-        const nfeCabecalhoId = evento.nfe_cabecalho_id || evento.referencia_id;
         if (isEmissao && nfeCabecalhoId) {
-            const cStatInt = resultado.c_stat != null && !isNaN(parseInt(resultado.c_stat))
-                ? parseInt(resultado.c_stat) : null;
+            const isDenegada = ['110', '301', '302', '303'].includes(String(resultado.c_stat));
             const updateNfe = {
-                c_stat:       cStatInt,
-                x_motivo:     (resultado.x_motivo || resultado.erro || '').toString().substring(0, 255),
-                chave_nfe:    resultado.chave_nfe || '',
-                nr_protocolo: resultado.nr_protocolo || '',
-                recibo_sefaz: resultado.recibo_sefaz || '',
-                st_nf:        resultado.sucesso ? 'E' : 'R', // E=Emitida/Autorizada, R=Rejeitada
-                updated_at:   new Date().toISOString(),
+                c_stat: resultado.c_stat ? parseInt(String(resultado.c_stat)) : null,
+                x_motivo: resultado.x_motivo || (resultado.sucesso ? 'Autorizado' : 'Rejeitado'),
+                chave_nfe: resultado.chave_nfe,
+                nr_protocolo: resultado.nr_protocolo,
+                recibo_sefaz: resultado.recibo_sefaz,
+                st_nf: resultado.sucesso ? 'E' : (isDenegada ? 'D' : 'R'), // E=Emitido, D=Denegado, R=Rejeitado
+                updated_at: new Date().toISOString()
             };
             // Prioriza o XML assinado da NF (procNFe completo); fallback para xml_retorno (envelope da SEFAZ)
             const xmlParaSalvar = resultado.xml_nfe || resultado.xml_retorno;
@@ -243,6 +242,7 @@ const processarEvento = async (evento) => {
                 status: statusFinal,
                 ambiente: payload.config?.ambiente,
                 resposta: JSON.stringify(resultado),
+                xml_retorno: resultado.xml_retorno || resultado.xml_nfe || null,
                 mensagem_erro: resultado.sucesso ? null : (resultado.erro || "Falha na execução do comando"),
                 updated_at: new Date().toISOString()
             })

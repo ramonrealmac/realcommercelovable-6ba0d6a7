@@ -108,6 +108,7 @@ const NfeEmtidaForm: React.FC = () => {
         XOrderBy: "nfe_cabecalho_id",
         XSoftDelete: false,
         XApplyFilter: (q) => q.eq("tp_nf", 1),
+        XCanEdit: (rec: any) => !["E", "C", "D", "1", "2"].includes(String(rec.st_nf)),
         XOnAfterLoad: (rows: any[]) => {
           const ids = [...new Set(rows.map(r => r.cadastro_id).filter(Boolean))] as number[];
           if (ids.length) ensureClienteInfo(ids);
@@ -130,8 +131,9 @@ const NfeEmtidaForm: React.FC = () => {
           render: ({ record, currentRecord }) => {
             const id = (currentRecord || record)?.nfe_cabecalho_id || null;
             const st = (currentRecord || record)?.st_nf || "A";
+            const podeEditar = !["E", "C", "D", "1", "2"].includes(String(st));
             return (
-              <NfeItensTab nfeCabecalhoId={id} empresaId={XEmpresaId} podeEditar={st === "A"} />
+              <NfeItensTab nfeCabecalhoId={id} empresaId={XEmpresaId} podeEditar={podeEditar} />
             );
           },
         },
@@ -140,7 +142,8 @@ const NfeEmtidaForm: React.FC = () => {
           render: ({ record, currentRecord }) => {
             const id = (currentRecord || record)?.nfe_cabecalho_id || null;
             const st = (currentRecord || record)?.st_nf || "A";
-            return <NfePagamentoTab nfeCabecalhoId={id} podeEditar={st === "A"} />;
+            const podeEditar = !["E", "C", "D", "1", "2"].includes(String(st));
+            return <NfePagamentoTab nfeCabecalhoId={id} podeEditar={podeEditar} />;
           },
         },
         {

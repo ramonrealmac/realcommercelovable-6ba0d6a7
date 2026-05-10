@@ -574,5 +574,133 @@ export const fiscalEmissaoService = {
     } catch (e: any) {
       return { success: false, message: e.message };
     }
+  },
+
+  /**
+   * Enfileira comando de impressão de DANFE/DANFCE para uma nota já emitida.
+   */
+  async imprimirDocumento(nfeCabecalhoId: number, empresaId: number): Promise<{ success: boolean; pdf_base64?: string; message?: string }> {
+    try {
+      const { data: cab, error: cabErr } = await db.from("fiscal_nfe_cabecalho")
+        .select("xml_nf, modelo, chave_nfe")
+        .eq("nfe_cabecalho_id", nfeCabecalhoId).single();
+      
+      if (cabErr || !cab || !cab.xml_nf) {
+        return { success: false, message: "XML da nota não localizado para impressão." };
+      }
+
+      const { data: fConfig } = await db.from("fiscal_config").select("*").eq("empresa_id", empresaId).single();
+      if (!fConfig) return { success: false, message: "Configuração fiscal não encontrada." };
+
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const tipo: "NFE" | "NFCE" = Number(cab.modelo) === 65 ? "NFCE" : "NFE";
+
+      const { data: evento, error: evErr } = await db.from("fiscal_evento").insert({
+        empresa_id: empresaId,
+        nfe_cabecalho_id: nfeCabecalhoId,
+        tipo: tipo,
+        comando: tipo === "NFE" ? "IMPRIMIR_NFE" : "IMPRIMIR_NFCE",
+        status: "PENDENTE",
+        user_id: authUser?.id || null,
+        payload: {
+          dados: cab.xml_nf,
+          chave: cab.chave_nfe,
+          print_config: {
+            tp_imp: "PDF", // Força PDF para retorno no browser
+            nm_impressora: ""
+          },
+          config: {
+            uf: fConfig.uf || "SP",
+            modelo: cab.modelo,
+            ambiente: fConfig.ambiente_nfe,
+            certificadoPath: fConfig.certificado,
+            certificadoSenha: fConfig.senha_certificado || "",
+            tipo_certificado: fConfig.tipo_certificado || "ARQUIVO"
+          }
+        }
+      }).select("id").single();
+
+      if (evErr) return { success: false, message: evErr.message };
+
+      const res = await this.aguardarEvento(evento.id, 15000);
+      if (res.success && res.resposta?.pdf_base64) {
+        return { success: true, pdf_base64: res.resposta.pdf_base64 };
+      }
+      return { success: false, message: res.mensagem || "Falha ao gerar PDF do DANFE." };
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
+  /**
+   * Envia a nota por e-mail (XML + DANFE + Opcionais).
+   */
+  async enviarEmail(nfeCabecalhoId: number, empresaId: number, para?: string, assunto?: string, mensagem?: string): Promise<{ success: boolean; message?: string }> {
+    try {
+      const { data: cab, error: cabErr } = await db.from("fiscal_nfe_cabecalho")
+        .select("xml_nf, chave_nfe, cadastro_id, modelo, nr_nota")
+        .eq("nfe_cabecalho_id", nfeCabecalhoId).single();
+      
+      if (cabErr || !cab || !cab.xml_nf) return { success: false, message: "XML não localizado." };
+
+      const { data: fConfig } = await db.from("fiscal_config").select("*").eq("empresa_id", empresaId).single();
+      if (!fConfig) return { success: false, message: "Configuração fiscal não encontrada." };
+
+      let emailDestino = para;
+      if (!emailDestino && cab.cadastro_id) {
+        const { data: cad } = await db.from("cadastro").select("email").eq("cadastro_id", cab.cadastro_id).single();
+        emailDestino = cad?.email;
+      }
+
+      if (!emailDestino) return { success: false, message: "Destinatário não informado e não localizado no cadastro." };
+
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const tipo: "NFE" | "NFCE" = Number(cab.modelo) === 65 ? "NFCE" : "NFE";
+
+      // Prepara o assunto e mensagem se não fornecidos
+      const finalAssunto = (assunto || fConfig.email_assunto_nfe || "Nota Fiscal Eletrônica [CHAVE]")
+        .replace("[CHAVE]", cab.chave_nfe || "")
+        .replace("[NOTA]", cab.nr_nota || "");
+      
+      const finalMensagem = mensagem || fConfig.email_corpo_nfe || "Segue em anexo a sua nota fiscal eletrônica.";
+
+      const { data: evento, error: evErr } = await db.from("fiscal_evento").insert({
+        empresa_id: empresaId,
+        nfe_cabecalho_id: nfeCabecalhoId,
+        tipo: tipo,
+        comando: "ENVIAR_EMAIL_NFE",
+        status: "PENDENTE",
+        user_id: authUser?.id || null,
+        payload: {
+          para: emailDestino,
+          assunto: finalAssunto,
+          mensagem: finalMensagem,
+          xml: cab.xml_nf,
+          config_email: {
+            host: fConfig.email_smtp_host,
+            port: fConfig.email_smtp_port,
+            user: fConfig.email_smtp_user,
+            pass: fConfig.email_smtp_pass,
+            ssl: fConfig.email_smtp_ssl,
+            tls: fConfig.email_smtp_tls
+          },
+          config: {
+            uf: fConfig.uf,
+            modelo: cab.modelo,
+            ambiente: fConfig.ambiente_nfe,
+            certificadoPath: fConfig.certificado,
+            certificadoSenha: fConfig.senha_certificado,
+            tipo_certificado: fConfig.tipo_certificado
+          }
+        }
+      }).select("id").single();
+
+      if (evErr) return { success: false, message: evErr.message };
+
+      const res = await this.aguardarEvento(evento.id, 20000);
+      return { success: res.success, message: res.mensagem };
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
   }
 };
