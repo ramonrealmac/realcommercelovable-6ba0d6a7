@@ -126,6 +126,7 @@ const processarEvento = async (evento) => {
                 x_motivo:     resultado.x_motivo || (resultado.erro || null),
                 chave_nfe:    resultado.chave_nfe || '',
                 nr_protocolo: resultado.nr_protocolo || '',
+                recibo_sefaz: resultado.recibo_sefaz || '',
                 st_nf:        resultado.sucesso ? 'A' : 'R', // A=Autorizada, R=Rejeitada
             };
             if (resultado.xml_retorno) updateNfe.xml_nf = resultado.xml_retorno;
