@@ -264,6 +264,14 @@ function limparNumeros(s) {
   return String(s || '').replace(/\D/g, '');
 }
 
+function normalizarCidadeFiscal(cidade, registro = {}, fallback = {}) {
+  return {
+    cd_ibge: String(cidade?.cd_ibge || cidade?.codigo_ibge || registro?.codigo_municipio || registro?.endereco_codigo_municipio || fallback.cd_ibge || ''),
+    descricao: cidade?.descricao || cidade?.nm_cidade || registro?.municipio || registro?.endereco_municipio || fallback.descricao || '',
+    estado_id: cidade?.estado_id || cidade?.uf || registro?.endereco_uf || registro?.uf || fallback.estado_id || '',
+  };
+}
+
 function formatarDhEmi(d) {
   const dt = typeof d === 'string' ? new Date(d) : d;
   const dia = String(dt.getDate()).padStart(2, '0');
