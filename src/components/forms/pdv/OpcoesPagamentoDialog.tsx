@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Printer, FileText, FileCode2, ScanLine, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
-import { useAppContext } from "@/contexts/AppContext";
+
 
 export interface IImpressaoItem {
   nm_produto: string;
