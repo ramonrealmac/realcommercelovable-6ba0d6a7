@@ -66,10 +66,10 @@ export const fiscalEmissaoService = {
         }
       }
 
-      // 2. Obter dados da empresa e parceiro
-      const { data: empresa } = await db.from("empresa").select("*").eq("empresa_id", empresaId).single();
+      // 2. Obter dados da empresa (emitente) e do cadastro (destinatário)
+      const { data: empresa } = await db.from("empresa").select("*, cidade:endereco_cidade_id(*)").eq("empresa_id", empresaId).single();
       const { data: parceiro } = movimento.cadastro_id 
-        ? await db.from("cadastro").select("*").eq("cadastro_id", movimento.cadastro_id).single()
+        ? await db.from("cadastro").select("*, cidade:endereco_cidade_id(*)").eq("cadastro_id", movimento.cadastro_id).single()
         : { data: null };
 
       // 3. Obter configurações fiscais
