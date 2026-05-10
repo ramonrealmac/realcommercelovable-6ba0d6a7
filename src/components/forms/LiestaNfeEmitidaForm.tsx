@@ -156,6 +156,17 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
     loadData();
   }, [XEmpresaId, initialFilterId]);
 
+  // Realtime: refresh ao mudar status de NFes ou ao concluir um evento fiscal
+  useEffect(() => {
+    if (!XEmpresaId) return;
+    const ch = (supabase as any)
+      .channel(`nfe-grid-${XEmpresaId}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fiscal_nfe_cabecalho', filter: `empresa_id=eq.${XEmpresaId}` }, () => loadData())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fiscal_evento', filter: `empresa_id=eq.${XEmpresaId}` }, () => loadData())
+      .subscribe();
+    return () => { try { (supabase as any).removeChannel(ch); } catch {} };
+  }, [XEmpresaId]);
+
   const handleTransmitir = async (row: any) => {
     if (!XEmpresaId) return;
     toast.info("Enfileirando transmissão para o Fiscal Worker...");
