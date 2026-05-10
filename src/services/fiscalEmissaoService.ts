@@ -500,5 +500,38 @@ export const fiscalEmissaoService = {
       console.error("[FiscalService] retransmitirDocumento erro:", e);
       return { success: false, message: e.message };
     }
+  },
+
+  /**
+   * Enfileira um comando LISTAR_IMPRESSORAS no worker e aguarda resposta (polling até 8s).
+   */
+  async listarImpressoras(empresaId: number): Promise<{ success: boolean; impressoras?: string[]; message?: string }> {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const { data: evento, error: evErr } = await db.from("fiscal_evento").insert({
+        empresa_id: empresaId,
+        comando: "LISTAR_IMPRESSORAS",
+        status: "PENDENTE",
+        tipo: "UTIL",
+        user_id: authUser?.id || null,
+        payload: {}
+      }).select("id").single();
+      if (evErr) return { success: false, message: evErr.message };
+
+      // Poll for response
+      for (let i = 0; i < 16; i++) {
+        await new Promise(r => setTimeout(r, 500));
+        const { data: ev } = await db.from("fiscal_evento").select("status,resposta").eq("id", evento.id).maybeSingle();
+        if (ev?.status === "CONCLUIDO" || ev?.status === "ERRO") {
+          try {
+            const r = typeof ev.resposta === "string" ? JSON.parse(ev.resposta) : ev.resposta;
+            return { success: !!r?.sucesso, impressoras: r?.impressoras || [], message: r?.erro };
+          } catch { return { success: false, message: "Resposta inválida do worker" }; }
+        }
+      }
+      return { success: false, message: "Timeout aguardando worker" };
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
   }
 };
