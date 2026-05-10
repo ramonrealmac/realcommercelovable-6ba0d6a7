@@ -38,7 +38,7 @@ const XDefault: Partial<INfeCabecalho> = {
   serie: "1",
   chave_nfe: "",
   nr_protocolo: "",
-  vl_produtos: 0, vl_desconto: 0, vl_frete: 0, vl_seguro: 0, vl_despesa: 0,
+  vl_produto: 0, vl_desconto: 0, vl_frete: 0, vl_seguro: 0, vl_despesa: 0,
   vl_ipi: 0, vl_icms_st: 0, vl_pis: 0, vl_cofins: 0,
   vl_ibs: 0, vl_cbs: 0, vl_is: 0, vl_total_nf: 0,
   obs_nf: "",

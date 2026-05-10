@@ -34,10 +34,10 @@ const XDefault: Partial<INfeCabecalho> = {
   tp_nf: 1, // 1 = saída
   fin_nfe: 1,
   tp_emis: 1,
-  modelo: 55,
+  modelo: "55",
   nat_op: "Venda de Mercadoria",
-  nr_nota: 0,
-  serie: 1,
+  nr_nota: "",
+  serie: "1",
   chave_nfe: "",
   nr_protocolo: "",
   vl_produto: 0, vl_desconto: 0, vl_frete: 0, vl_seguro: 0, vl_despesa: 0,
