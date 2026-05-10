@@ -20,15 +20,15 @@ export interface IExtraTab {
 }
 
 interface StandardCrudFormProps<T extends Record<string, any>> {
-  config: ICrudConfig<T>;
+  config: ICrudConfig<any>;
   XGridCols: IGridColumn[];
   renderCadastro: (ctx: {
-    record: Partial<T>;
-    setField: <K extends keyof T>(k: K, v: T[K]) => void;
-    setRecord: (r: Partial<T>) => void;
+    record: any;
+    setField: (k: string, v: any) => void;
+    setRecord: (r: any) => void;
     mode: TFormMode;
     isEditing: boolean;
-    currentRecord: T | null;
+    currentRecord: any | null;
   }) => React.ReactNode;
   XExtraTabs?: IExtraTab[];
   XExportTitle?: string;
@@ -52,7 +52,7 @@ function StandardCrudForm<T extends Record<string, any>>({
     },
   }), [config, XAfterInsertTab]);
 
-  const ctrl = useCrudController<T>(wrappedConfig);
+  const ctrl = useCrudController<any>(wrappedConfig);
 
   useEffect(() => {
     if (XRefreshRef) XRefreshRef.current = ctrl.loadData;
@@ -85,7 +85,7 @@ function StandardCrudForm<T extends Record<string, any>>({
     [XExtraTabs]
   );
 
-  const XActiveRecord: Partial<T> = ctrl.XIsEditing ? ctrl.XEditRecord : (ctrl.XCurrentRecord || {} as Partial<T>);
+  const XActiveRecord: any = ctrl.XIsEditing ? ctrl.XEditRecord : (ctrl.XCurrentRecord || {});
   const XEffectiveCurrentRecord = ctrl.XFormMode === "insert" ? null : ctrl.XCurrentRecord;
 
   return (
