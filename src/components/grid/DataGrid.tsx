@@ -18,6 +18,8 @@ interface ISortItem {
 interface DataGridProps {
   columns: IGridColumn[];
   data: any[];
+  loading?: boolean;
+  isLoading?: boolean;
   onRowClick?: (row: any, idx: number) => void;
   onRowDoubleClick?: (row: any, idx: number) => void;
   selectedIdx?: number | null;
@@ -110,6 +112,8 @@ function downloadFile(content: string, filename: string, mimeType: string) {
 const DataGrid: React.FC<DataGridProps> = ({
   columns,
   data = [],
+  loading = false,
+  isLoading = false,
   onRowClick,
   onRowDoubleClick,
   selectedIdx,
@@ -268,7 +272,12 @@ const DataGrid: React.FC<DataGridProps> = ({
 
         {/* Rows */}
         <div className="overflow-y-auto" style={{ maxHeight }}>
-          {XSortedData.map((row, i) => (
+          {(loading || isLoading) && (
+            <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+              Carregando...
+            </div>
+          )}
+          {!loading && !isLoading && XSortedData.map((row, i) => (
             <div
               key={i}
               className={`text-xs cursor-pointer transition-colors ${
@@ -300,7 +309,7 @@ const DataGrid: React.FC<DataGridProps> = ({
               ))}
             </div>
           ))}
-          {XSortedData.length === 0 && (
+          {!loading && !isLoading && XSortedData.length === 0 && (
             <div className="px-3 py-4 text-center text-xs text-muted-foreground">
               Nenhum registro encontrado.
             </div>
