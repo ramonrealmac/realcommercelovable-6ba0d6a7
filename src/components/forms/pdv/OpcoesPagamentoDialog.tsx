@@ -82,31 +82,38 @@ const imprimir = (d: IImpressaoDados | null, modo: "bobina" | "a4") => {
 };
 
 const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funcionarioId, onClose, onConcluir }) => {
-  const { openTab } = useAppContext();
   const [XSalvando, setXSalvando] = React.useState(false);
+  const [XStatus, setXStatus] = React.useState<string>("");
 
   const handleGerarFiscal = async (tipo: "NFE" | "NFCE") => {
     if (!dados?.movimento_id) return;
-    
+
     setXSalvando(true);
+    setXStatus(`Gerando ${tipo} e enviando ao Fiscal Worker...`);
     const res = await fiscalEmissaoService.gerarDocumentoFiscalFromMovimento(
       dados.movimento_id,
       tipo,
       empresaId,
       funcionarioId
     );
-    setXSalvando(false);
 
-    if (res.success && res.nfe_cabecalho_id) {
-      toast.success(`${tipo} gerada com sucesso! Abrindo formulário...`);
-      openTab({
-        title: "NFe/NFCe",
-        component: "nfe-emitidas",
-        params: { nfe_cabecalho_id: res.nfe_cabecalho_id }
-      });
-      onConcluir(); // Fecha o diálogo e limpa o PDV
-    } else {
+    if (!res.success || !res.fiscal_evento_id) {
+      setXSalvando(false);
+      setXStatus("");
       toast.error(`Erro ao gerar ${tipo}: ` + res.message);
+      return;
+    }
+
+    setXStatus(`Aguardando autorização da SEFAZ...`);
+    const ret = await fiscalEmissaoService.aguardarEvento(res.fiscal_evento_id, 90000);
+    setXSalvando(false);
+    setXStatus("");
+
+    if (ret.success) {
+      toast.success(`${tipo} autorizada! Chave: ${ret.resposta?.chave_nfe || "—"}`);
+      onConcluir();
+    } else {
+      toast.error(`Falha na ${tipo}: ${ret.mensagem || "verifique o log fiscal"}`);
     }
   };
 
