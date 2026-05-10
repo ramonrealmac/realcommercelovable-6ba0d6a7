@@ -271,7 +271,7 @@ const DataGrid: React.FC<DataGridProps> = ({
         </div>
 
         {/* Rows */}
-        <div className="overflow-y-auto" style={{ maxHeight }}>
+        <div className="overflow-y-auto" style={{ maxHeight, scrollbarGutter: "stable" }}>
           {(loading || isLoading) && (
             <div className="px-3 py-4 text-center text-xs text-muted-foreground">
               Carregando...
