@@ -150,6 +150,10 @@ const processarEvento = async (evento) => {
         if (isEmissao) {
             payload = await montarPayloadEmissaoNfe(evento, payload);
             logger.info(`Payload de emissão regenerado pelo worker: ${payload.dados.substring(0, 40).replace(/\r?\n/g, ' ')}...`);
+            await supabase
+                .from('fiscal_evento')
+                .update({ payload, ambiente: payload.config?.ambiente || evento.ambiente })
+                .eq('id', evento.id);
         }
 
         // 2.b Buscar config de impressão (tp_imp_*, nm_impressora_*) baseado no documento referenciado
