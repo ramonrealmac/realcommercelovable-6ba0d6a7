@@ -368,12 +368,9 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                     } catch (e) { console.warn('[FiscalLib] Falha ObterXml NFe:', e.message); }
                 }
 
-                // Após sucesso, tentar imprimir DANFE conforme tp_imp_nfe configurado.
-                // Erro de impressão não pode invalidar autorização/salvamento da nota.
-                let impressao = { sucesso: true, pdf_path: null };
-                if (sucesso) {
-                    impressao = tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, 'NFE', parsed.chave_nfe);
-                }
+                // A impressão é executada fora da emissão, depois que o banco já foi atualizado.
+                // Isso impede travamento/perda do retorno fiscal por falha da impressora/PDF.
+                const impressao = sucesso ? { sucesso: true, adiada: true, pdf_path: null } : { sucesso: false, pdf_path: null };
                 
                 return { 
                     sucesso,
@@ -437,12 +434,9 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                     } catch (e) { console.warn('[FiscalLib] Falha ObterXml NFCe:', e.message); }
                 }
 
-                // Após sucesso, tentar imprimir DANFCE conforme tp_imp_nfce configurado.
-                // Erro de impressão não pode invalidar autorização/salvamento da nota.
-                let impressao = { sucesso: true, pdf_path: null };
-                if (sucesso) {
-                    impressao = tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, 'NFCE', parsed.chave_nfe);
-                }
+                // A impressão é executada fora da emissão, depois que o banco já foi atualizado.
+                // Isso impede travamento/perda do retorno fiscal por falha da impressora/PDF.
+                const impressao = sucesso ? { sucesso: true, adiada: true, pdf_path: null } : { sucesso: false, pdf_path: null };
                 
                 return { 
                     sucesso,
