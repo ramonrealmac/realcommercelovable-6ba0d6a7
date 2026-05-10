@@ -29,6 +29,15 @@ function mapearSefazPagamento(tp: string): string {
   return mapa[tp?.toUpperCase()] || "01";
 }
 
+function validarIniAcbr(ini: string) {
+  const proibidos = ["Modelo=", "Serie=", "NumDocumento=", "RazaoSocial=", "CodigoMunicipio=", "FormaPagamento001=", "[Item001]", "[Pagamento]"];
+  const encontrado = proibidos.find((token) => ini.includes(token));
+  if (encontrado) throw new Error(`INI fiscal em layout legado detectado (${encontrado}). Recarregue a aplicação e tente novamente.`);
+  if (!ini.includes("[infNFe]") || !ini.includes("[Produto001]") || !ini.includes("[pag001]")) {
+    throw new Error("INI fiscal incompleto para ACBrLib.");
+  }
+}
+
 export interface FiscalEmissaoResult {
   success: boolean;
   nfe_cabecalho_id?: number;
