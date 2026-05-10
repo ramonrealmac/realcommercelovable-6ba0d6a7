@@ -1,104 +1,52 @@
-## Objetivo
+## Diagnóstico
 
-Fazer o boneco do `ChatLauncher` (botão flutuante do RealSys) ficar parado a maior parte do tempo e, a cada `empresa.tempo_animacao` segundos (default 5), reproduzir uma curta animação de "piscar + acenar" — uma única vez por ciclo — e voltar ao estado parado.
+O ACBrLib rejeita o INI atual porque ele está em um formato "amigável" (estilo ACBrMonitor antigo) que a DLL não interpreta. Como nenhuma chave é reconhecida, a NFe é montada vazia e a validação reclama de:
 
-A animação será feita via **GIF gerado a partir do PNG existente** (sem precisar de novo asset desenhado), combinada com lógica de timer no React para alternar entre imagem estática (PNG) e GIF (animação).
+- `B12/cMunFG` (Código Município FG) inválido → falta `cMunFG` em `[Identificacao]`.
+- `C03/xNome`, `C10/cMun`, `C11/xMun` vazios → seção `[Emitente]` usa `RazaoSocial`/`CodigoMunicipio`/`Municipio` em vez de `xNome`/`cMun`/`xMun`.
+- `E03/CPF` inválido → CPF `11111111111` reprovado no DV (padrão de homologação correto: `11144477735`).
+- `E10/cMun`, `E11/xMun` vazios → mesma causa em `[Destinatario]`.
+- `total não esperado, esperado det` → `[Item001]` não é reconhecido como produto, então não há `det` no XML.
 
----
+Comparativo confirmado em `ExemploAcbrMT/exemplos-mt-acbr-lib/arqs/nfe.ini` (formato aceito pela ACBrLib).
 
-## Etapas
+## O que será feito
 
-### 1. Banco — adicionar parâmetro por empresa
-Migration: adicionar coluna `tempo_animacao` em `public.empresa`:
-- tipo `integer`
-- default `5`
-- comentário: "Intervalo em segundos entre execuções da animação do bot RealSys (0 = desativado)"
+Reescrita completa de `src/services/gerarIniNfe.ts` para emitir o INI no padrão ACBrLib (mesmas tags do leiaute SEFAZ), mantendo a leitura dos dados já corrigida (empresa via `empresa`, destinatário via `cadastro` por `cadastro_id`, cidade via `cidade.cidade_id`).
 
-### 2. Gerar o GIF animado a partir do PNG
-Usar Python (Pillow) para criar `src/assets/realsys-bot-animado.gif`:
-- Frames base derivados do `realsys-bot.png` (1024x1024 RGBA)
-- Sequência de ~12-16 frames combinando:
-  - **Piscar**: aplicar uma faixa horizontal escura sobre a região dos olhos por 2 frames (efeito de pálpebra fechando)
-  - **Acenar**: rotacionar levemente (±15°) a região do braço/mão (recorte retangular do lado direito da imagem) em 6-8 frames de ida e volta
-- Duração total ~1.2s, sem loop infinito (`loop=1` → reproduz uma única vez)
-- Otimizado (paleta reduzida, transparência preservada)
-- QA: abrir o GIF e validar visualmente cada frame
+### Mapeamento de seções/chaves
 
-Observação técnica: como o PNG é uma ilustração já renderizada, a "animação" será obtida por manipulação de pixels (recorte + rotação + máscara dos olhos). Não terá qualidade de animação desenhada à mão, mas dá o efeito de vida pedido. Se o resultado ficar ruim visualmente, fallback é animar via CSS (rotação/escala do PNG inteiro) sem usar GIF.
+| Atual (errado) | Novo (ACBrLib) |
+|---|---|
+| `[NFe] Versao=4.00` | `[infNFe] versao=4.00` |
+| `[Identificacao]` com `Modelo`, `Serie`, `NumDocumento`, `TipoNF`, `DataEmissao`+`HoraEmissao`, `Finalidade`, `TipoEmissao`, `IndicadorConsumidorFinal`, `IndicadorPresenca`, `Ambiente`, `NaturezaOperacao`, `FormatoImpressaoDANFE` | `[Identificacao]` com `cUF`, `cNF` (8 dígitos aleatórios), `natOp`, `mod`, `serie`, `nNF`, `dhEmi=dd/mm/aaaa hh:nn:ss`, `dhSaiEnt`, `tpNF`, `idDest=1`, `tpAmb`, `tpImp` (4 NFCe / 1 NFe), `tpEmis=1`, `finNFe`, `indFinal=1`, `indPres=1`, `procEmi=0`, `verProc` |
+| `[Emitente] CNPJ/RazaoSocial/NomeFantasia/InscricaoEstadual/CRT/Logradouro/Numero/Bairro/CEP/UF/CodigoMunicipio/Municipio/Telefone` | `[Emitente] CRT/CNPJCPF/xNome/xFant/IE/IM/xLgr/nro/xBairro/cMun/xMun/cUF/UF/CEP/cPais=1058/xPais=BRASIL/Fone/cMunFG` |
+| `[Destinatario] CPF/CNPJ/RazaoSocial/InscricaoEstadual/IndicadorIEDest/Logradouro/...` | `[Destinatario] CNPJCPF/xNome/indIEDest/IE/Email/xLgr/nro/xBairro/cMun/xMun/UF/CEP/cPais=1058/xPais=BRASIL/Fone` (omitir bloco se NFCe sem identificação) |
+| `[Item001]` com `CodigoProduto/CodigoBarras/Descricao/NCM/CEST/CFOP/Unidade/Quantidade/ValorUnitario/...` | `[Produto001]` com `cProd/cEAN/cEANTrib/xProd/NCM/CEST/CFOP/uCom/qCom/vUnCom/vProd/uTrib/qTrib/vUnTrib/vFrete/vSeg/vDesc/vOutro/indTot=1` |
+| `[ImpostoIcms001] Origem/CSOSN/CST/ModalidadeBC/...` | `[ICMS001] orig/CSOSN` (Simples) ou `CST/modBC/vBC/pICMS/vICMS` (Normal); ST com `modBCST/pMVAST/vBCST/pICMSST/vICMSST` |
+| `[ImpostoIpi001]` | `[IPI001] CST/cEnq/vBC/pIPI/vIPI` |
+| `[ImpostoPis001]` | `[PIS001] CST/vBC/pPIS/vPIS` |
+| `[ImpostoCofins001]` | `[COFINS001] CST/vBC/pCOFINS/vCOFINS` |
+| `[Total] ValorTotalProdutos/ValorDesconto/...` | `[Total] vBC/vICMS/vICMSDeson=0/vBCST=0/vST=0/vProd/vFrete/vSeg/vDesc/vII=0/vIPI/vPIS/vCOFINS/vOutro/vNF/vFCP=0/vFCPST=0/vFCPSTRet=0/vIPIDevol=0` |
+| `[Pagamento] FormaPagamento001/ValorPagamento001` | `[pag001] tPag/vPag/indPag=0` |
+| `[InformacoesAdicionais] InformacoesComplementares` | `[DadosAdicionais] infCpl/infAdFisco` |
+| `[NFCe] IdCSC/CSC` | mantido como `[NFCe] IdCSC/CSC` (formato lib) |
 
-### 3. Hook reutilizável `useEmpresaParam`
-Criar `src/hooks/useEmpresaParam.ts` para ler campos da empresa atual (cache simples por `empresa_id`). Usado para `tempo_animacao` agora e reutilizável depois para outros parâmetros visuais.
+### Outras correções
 
-### 4. Componente `RealsysBotAvatar` (isolado e reutilizável)
-Criar `src/components/chat/RealsysBotAvatar.tsx`:
-- Props: `size`, `className`, `intervalSec` (opcional, sobrescreve o da empresa)
-- Estado interno `playing: boolean`
-- `setInterval` baseado em `tempo_animacao` (segundos). Quando dispara:
-  - Troca `<img src>` do PNG estático para o GIF (com cache-buster `?t=${Date.now()}` para forçar replay do GIF)
-  - Após a duração da animação (~1300ms), volta para o PNG
-- Se `tempo_animacao = 0`, não anima
-- Pausa quando `document.hidden` (Page Visibility API) para não consumir CPU em aba inativa
-- Limpa timers no unmount
+1. **`cMunFG`** obrigatório em `[Identificacao]` — preencher com o `cd_ibge` da cidade do emitente.
+2. **`cNF`** — gerar 8 dígitos aleatórios numéricos em cada emissão.
+3. **CPF/CNPJ do destinatário** — validar DV antes de incluir; se vier inválido (ex.: `11111111111`), tratar como consumidor não identificado (NFCe) ou abortar (NFe), em vez de mandar para a SEFAZ.
+4. **Datas** — usar `dhEmi=dd/mm/aaaa hh:nn:ss` (uma única chave) em vez de `DataEmissao` + `HoraEmissao` separados.
+5. **`cUF` do emitente** — derivar dos 2 primeiros dígitos do `cd_ibge` da cidade da empresa (conforme o usuário indicou), eliminando o mapa fixo UF→cUF.
+6. Demais campos do destinatário/itens permanecem sendo lidos exclusivamente do `cadastro` (via `cadastro_id`) e da `empresa`, conforme regra já estabelecida.
 
-### 5. Integrar no `ChatLauncher`
-Substituir o `<img>` direto por `<RealsysBotAvatar />` no `src/components/chat/ChatLauncher.tsx`. Nenhuma outra mudança de comportamento.
+### Arquivos afetados
 
-### 6. Expor o campo no `EmpresaForm` (opcional, mas coerente com o padrão)
-Adicionar input numérico "Tempo de animação do bot (s)" em `src/components/forms/EmpresaForm.tsx`, na seção de parâmetros visuais/personalização, junto com as cores. Default 5, mínimo 0.
+- `src/services/gerarIniNfe.ts` — reescrita completa do gerador.
+- Nenhuma alteração em `fiscalEmissaoService.ts` (a junção com `cidade` já está OK).
+- Nenhuma alteração no worker.
 
----
+### Validação
 
-## Detalhes técnicos
-
-**Migration SQL:**
-```sql
-ALTER TABLE public.empresa
-  ADD COLUMN IF NOT EXISTS tempo_animacao integer NOT NULL DEFAULT 5;
-COMMENT ON COLUMN public.empresa.tempo_animacao IS
-  'Intervalo (s) entre animações do bot RealSys. 0 desativa.';
-```
-
-**Estrutura do componente:**
-```tsx
-// pseudo
-const [playing, setPlaying] = useState(false);
-useEffect(() => {
-  if (!intervalSec) return;
-  const id = setInterval(() => {
-    if (document.hidden) return;
-    setPlaying(true);
-    setTimeout(() => setPlaying(false), 1300);
-  }, intervalSec * 1000);
-  return () => clearInterval(id);
-}, [intervalSec]);
-
-return <img src={playing ? `${gif}?t=${Date.now()}` : png} />;
-```
-
-**Geração do GIF (script Python descartável em /tmp):**
-- Carrega PNG, identifica caixa aproximada dos olhos e do braço por proporção (não por detecção — coordenadas fixas baseadas no layout do bot)
-- Para cada frame, compõe imagem nova com `Image.paste` da região modificada
-- Salva com `save_all=True, append_images=[...], duration=80, loop=1, disposal=2, transparency=0`
-
----
-
-## Arquivos afetados
-
-Criados:
-- `supabase/migrations/<timestamp>_empresa_tempo_animacao.sql`
-- `src/assets/realsys-bot-animado.gif`
-- `src/hooks/useEmpresaParam.ts`
-- `src/components/chat/RealsysBotAvatar.tsx`
-
-Editados:
-- `src/components/chat/ChatLauncher.tsx`
-- `src/components/forms/EmpresaForm.tsx` (adicionar campo no form)
-- `src/integrations/supabase/types.ts` (atualizado automaticamente após migration)
-
----
-
-## Riscos / pontos de atenção
-
-- **Qualidade visual do GIF**: como é gerado por manipulação do PNG, o "aceno" pode ficar artificial. Se ficar ruim, na implementação aplico fallback CSS-only (rotação/scale/keyframes) sem GIF — mesmo comportamento, sem novo asset.
-- **Replay do GIF**: navegadores cacheiam GIFs e não reiniciam ao re-renderizar; o cache-buster na URL resolve.
-- **Performance**: timer único por instância, pausado em aba oculta.
+Após a reescrita, o INI gerado deve bater seção-a-seção com o exemplo `ExemploAcbrMT/exemplos-mt-acbr-lib/arqs/nfe.ini`. Em homologação, usar CPF `11144477735` para "CONSUMIDOR FINAL" — assim o E03/CPF deixa de ser rejeitado.

@@ -1,6 +1,11 @@
 /**
- * Gerador de arquivo INI para o ACBrLib (formato esperado pela DLL).
+ * Gerador de arquivo INI para o ACBrLib (formato oficial do leiaute SEFAZ).
  * Compatível com NFe (modelo 55) e NFCe (modelo 65).
+ *
+ * IMPORTANTE: as chaves seguem EXATAMENTE o padrão da ACBrLib (xNome, cMun,
+ * cMunFG, CNPJCPF, pag001, ICMS001 etc.) — a DLL ignora chaves desconhecidas
+ * e gera o XML com os campos vazios, causando erros de validação na SEFAZ.
+ * Referência: ExemploAcbrMT/exemplos-mt-acbr-lib/arqs/nfe.ini
  */
 
 export interface GerarIniParams {
@@ -16,247 +21,283 @@ export interface GerarIniParams {
 export function gerarIniNfe(params: GerarIniParams): string {
   const { cabecalho, itens, pagamentos, empresa, cadastro, fiscalConfig, configItem } = params;
 
-  const modelo = configItem.modelo || '55';
+  const modelo = String(configItem.modelo || '55');
   const isNFCe = modelo === '65';
-  const serie = String(configItem.serie || '001').padStart(3, '0');
-  const nrNota = String(cabecalho.nr_nota || '1').padStart(9, '0');
-  const dtEmissao = formatarData(cabecalho.dt_emissao || new Date());
-  const hrEmissao = formatarHora(new Date());
-  const dtSaida = cabecalho.dt_saida ? formatarData(cabecalho.dt_saida) : dtEmissao;
-  const hrSaida = cabecalho.dt_saida ? formatarHora(new Date(cabecalho.dt_saida)) : hrEmissao;
+  const serie = String(Number(configItem.serie || 1));
+  const nNF = String(Number(cabecalho.nr_nota || 1));
   const ambiente = String(fiscalConfig.ambiente_nfe || 2); // 1=Produção, 2=Homologação
-  const cnpjEmitente = limparNumeros(empresa.cnpj || '');
-  const ufEmitente = empresa.cidade?.estado_id || empresa.cidade?.uf || '';
-  const cUF = mapearCodigoUF(ufEmitente);
+  const cnpjEmit = limparNumeros(empresa.cnpj || '');
+
+  const cMunEmit = String(empresa.cidade?.cd_ibge || '');
+  const ufEmit = empresa.cidade?.estado_id || '';
+  const cUF = cMunEmit.substring(0, 2) || '35';
+
+  const dhEmi = formatarDhEmi(cabecalho.dt_emissao || new Date());
+  const dhSai = cabecalho.dt_saida ? formatarDhEmi(cabecalho.dt_saida) : '';
+
+  const cNF = String(Math.floor(10000000 + Math.random() * 89999999)); // 8 dígitos
 
   const linhas: string[] = [];
 
-  // ──────────────────────────────────────────────────────────────
-  // SEÇÃO: Identificação
-  // ──────────────────────────────────────────────────────────────
-  linhas.push(`[NFe]`);
-  linhas.push(`Versao=4.00`);
+  // ──────────────────────────────────────────────
+  // [infNFe]
+  // ──────────────────────────────────────────────
+  linhas.push(`[infNFe]`);
+  linhas.push(`versao=4.00`);
   linhas.push(``);
+
+  // ──────────────────────────────────────────────
+  // [Identificacao]
+  // ──────────────────────────────────────────────
   linhas.push(`[Identificacao]`);
   linhas.push(`cUF=${cUF}`);
-  linhas.push(`Modelo=${modelo}`);
-  linhas.push(`Serie=${serie}`);
-  linhas.push(`NumDocumento=${nrNota}`);
-  linhas.push(`TipoNF=1`); // 1=Saída
-  linhas.push(`DataEmissao=${dtEmissao}`);
-  linhas.push(`HoraEmissao=${hrEmissao}`);
-  linhas.push(`DataSaidaEntrada=${dtSaida}`);
-  linhas.push(`HoraSaidaEntrada=${hrSaida}`);
-  linhas.push(`Finalidade=1`); // 1=Normal
-  linhas.push(`TipoEmissao=1`); // 1=Normal
-  linhas.push(`IndicadorConsumidorFinal=1`);
-  linhas.push(`IndicadorPresenca=1`); // 1=Operação presencial
-  linhas.push(`Ambiente=${ambiente}`);
-  linhas.push(`NaturezaOperacao=${cabecalho.nat_op || 'VENDA DE MERCADORIA'}`);
-  linhas.push(`FormatoImpressaoDANFE=${isNFCe ? '4' : '1'}`);
+  linhas.push(`cNF=${cNF}`);
+  linhas.push(`natOp=${cabecalho.nat_op || 'VENDA DE MERCADORIA'}`);
+  linhas.push(`mod=${modelo}`);
+  linhas.push(`serie=${serie}`);
+  linhas.push(`nNF=${nNF}`);
+  linhas.push(`dhEmi=${dhEmi}`);
+  if (!isNFCe && dhSai) linhas.push(`dhSaiEnt=${dhSai}`);
+  linhas.push(`tpNF=1`);                    // 1=Saída
+  linhas.push(`idDest=1`);                  // 1=Operação interna
+  linhas.push(`tpImp=${isNFCe ? '4' : '1'}`); // 4=DANFE NFCe, 1=Retrato
+  linhas.push(`tpEmis=1`);                  // 1=Normal
+  linhas.push(`tpAmb=${ambiente}`);
+  linhas.push(`finNFe=1`);                  // 1=Normal
+  linhas.push(`indFinal=1`);                // 1=Consumidor final
+  linhas.push(`indPres=1`);                 // 1=Operação presencial
+  linhas.push(`procEmi=0`);
+  linhas.push(`verProc=RealCommerce1.0`);
   linhas.push(``);
 
-  // ──────────────────────────────────────────────────────────────
-  // SEÇÃO: Emitente
-  // ──────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────────
+  // [Emitente]
+  // ──────────────────────────────────────────────
   linhas.push(`[Emitente]`);
-  linhas.push(`CNPJ=${cnpjEmitente}`);
-  linhas.push(`RazaoSocial=${empresa.razao_social || ''}`);
-  linhas.push(`NomeFantasia=${empresa.nome_fantasia || ''}`);
-  linhas.push(`InscricaoEstadual=${limparNumeros(empresa.ie || empresa.inscricao_estadual || '')}`);
-  if (empresa.inscricao_municipal) linhas.push(`InscricaoMunicipal=${limparNumeros(empresa.inscricao_municipal)}`);
   linhas.push(`CRT=${mapearCRT(empresa.regime_trib || 'S')}`);
-  linhas.push(`Logradouro=${empresa.endereco_logradouro || ''}`);
-  linhas.push(`Numero=${empresa.endereco_numero || 'SN'}`);
-  linhas.push(`Bairro=${empresa.endereco_bairro || ''}`);
+  linhas.push(`CNPJCPF=${cnpjEmit}`);
+  linhas.push(`xNome=${empresa.razao_social || ''}`);
+  if (empresa.nome_fantasia) linhas.push(`xFant=${empresa.nome_fantasia}`);
+  linhas.push(`IE=${limparNumeros(empresa.ie || empresa.inscricao_estadual || '')}`);
+  if (empresa.inscricao_municipal) linhas.push(`IM=${limparNumeros(empresa.inscricao_municipal)}`);
+  linhas.push(`xLgr=${empresa.endereco_logradouro || ''}`);
+  linhas.push(`nro=${empresa.endereco_numero || 'SN'}`);
+  linhas.push(`xBairro=${empresa.endereco_bairro || ''}`);
+  linhas.push(`cMun=${cMunEmit}`);
+  linhas.push(`xMun=${empresa.cidade?.descricao || ''}`);
+  linhas.push(`UF=${ufEmit}`);
   linhas.push(`CEP=${limparNumeros(empresa.endereco_cep || '')}`);
-  linhas.push(`UF=${ufEmitente}`);
-  linhas.push(`CodigoMunicipio=${empresa.cidade?.cd_ibge || empresa.cidade?.codigo_ibge || ''}`);
-  linhas.push(`Municipio=${empresa.cidade?.descricao || ''}`);
-  linhas.push(`Telefone=${limparNumeros(empresa.fone_geral || '')}`);
+  linhas.push(`cPais=1058`);
+  linhas.push(`xPais=BRASIL`);
+  if (empresa.fone_geral) linhas.push(`Fone=${limparNumeros(empresa.fone_geral)}`);
+  linhas.push(`cMunFG=${cMunEmit}`);
   linhas.push(``);
 
-  // ──────────────────────────────────────────────────────────────
-  // SEÇÃO: Destinatário (SEMPRE da tabela CADASTRO via cadastro_id)
-  // Se algum campo não existir no cadastro, deixar vazio.
-  // ──────────────────────────────────────────────────────────────
-  linhas.push(`[Destinatario]`);
-  if (cadastro && (cadastro.cnpj || cadastro.razao_social)) {
-    const docDest = limparNumeros(cadastro.cnpj || '');
-    if (docDest.length === 14) linhas.push(`CNPJ=${docDest}`);
-    else if (docDest.length === 11) linhas.push(`CPF=${docDest}`);
-    linhas.push(`RazaoSocial=${cadastro.razao_social || ''}`);
-    linhas.push(`InscricaoEstadual=${limparNumeros(cadastro.inscricao_estadual || '')}`);
-    linhas.push(`IndicadorIEDest=${cadastro.tp_contribuinte === 'S' ? '1' : '9'}`);
-    linhas.push(`Logradouro=${cadastro.endereco_logradouro || ''}`);
-    linhas.push(`Numero=${cadastro.endereco_numero || 'SN'}`);
-    linhas.push(`Bairro=${cadastro.endereco_bairro || ''}`);
-    linhas.push(`CEP=${limparNumeros(cadastro.endereco_cep || '')}`);
-    linhas.push(`UF=${cadastro.cidade?.estado_id || cadastro.cidade?.uf || ''}`);
-    linhas.push(`CodigoMunicipio=${cadastro.cidade?.cd_ibge || cadastro.cidade?.codigo_ibge || ''}`);
-    linhas.push(`Municipio=${cadastro.cidade?.descricao || ''}`);
-    linhas.push(`Email=${cadastro.email || ''}`);
-    linhas.push(`Telefone=${limparNumeros(cadastro.fone_geral || '')}`);
-  } else {
-    // Sem cadastro vinculado — consumidor não identificado (NFCe)
-    linhas.push(`NaoIdentificado=1`);
-    linhas.push(`IndicadorIEDest=9`);
+  // ──────────────────────────────────────────────
+  // [Destinatario] — sempre da tabela CADASTRO via cadastro_id
+  // ──────────────────────────────────────────────
+  const docDest = limparNumeros(cadastro?.cnpj || '');
+  const docValido = (docDest.length === 14 && validarCNPJ(docDest)) ||
+                    (docDest.length === 11 && validarCPF(docDest));
+
+  if (cadastro && (docValido || cadastro.razao_social)) {
+    linhas.push(`[Destinatario]`);
+    if (docValido) linhas.push(`CNPJCPF=${docDest}`);
+    linhas.push(`xNome=${cadastro.razao_social || (ambiente === '2' ? 'NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL' : '')}`);
+    const ie = limparNumeros(cadastro.inscricao_estadual || '');
+    const indIE = cadastro.tp_contribuinte === 'S' && ie ? '1' : (ie ? '2' : '9');
+    linhas.push(`indIEDest=${indIE}`);
+    if (ie && indIE === '1') linhas.push(`IE=${ie}`);
+    if (cadastro.email) linhas.push(`Email=${cadastro.email}`);
+    linhas.push(`xLgr=${cadastro.endereco_logradouro || ''}`);
+    linhas.push(`nro=${cadastro.endereco_numero || 'SN'}`);
+    if (cadastro.endereco_bairro) linhas.push(`xBairro=${cadastro.endereco_bairro}`);
+    if (cadastro.cidade?.cd_ibge) linhas.push(`cMun=${cadastro.cidade.cd_ibge}`);
+    if (cadastro.cidade?.descricao) linhas.push(`xMun=${cadastro.cidade.descricao}`);
+    if (cadastro.cidade?.estado_id) linhas.push(`UF=${cadastro.cidade.estado_id}`);
+    if (cadastro.endereco_cep) linhas.push(`CEP=${limparNumeros(cadastro.endereco_cep)}`);
+    linhas.push(`cPais=1058`);
+    linhas.push(`xPais=BRASIL`);
+    if (cadastro.fone_geral) linhas.push(`Fone=${limparNumeros(cadastro.fone_geral)}`);
+    linhas.push(``);
   }
-  linhas.push(``);
+  // NFCe sem destinatário identificado: omitir o bloco inteiro (ACBrLib aceita)
 
-  // ──────────────────────────────────────────────────────────────
-  // SEÇÕES: Itens
-  // ──────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────────
+  // Itens — [Produto NNN] + [ICMS NNN] + [PIS NNN] + [COFINS NNN] (+ [IPI NNN] NFe)
+  // ──────────────────────────────────────────────
   for (let i = 0; i < itens.length; i++) {
     const it = itens[i];
     const nr = String(i + 1).padStart(3, '0');
     const isSimples = (empresa.regime_trib || 'S') === 'S';
+    const qt = Number(it.qt_entrada || it.qt_movimento || 0);
+    const vUnit = Number(it.vl_unit || 0);
+    const vTot = Number(it.vl_total || 0);
 
-    linhas.push(`[Item${nr}]`);
-    linhas.push(`CodigoProduto=${it.produto_id || String(i + 1).padStart(6, '0')}`);
-    linhas.push(`CodigoBarras=${it.gtin || 'SEM GTIN'}`);
-    linhas.push(`Descricao=${it.nm_produto || ''}`);
+    linhas.push(`[Produto${nr}]`);
+    linhas.push(`cProd=${it.produto_id || String(i + 1).padStart(6, '0')}`);
+    linhas.push(`cEAN=${it.gtin || 'SEM GTIN'}`);
+    linhas.push(`cEANTrib=${it.gtin || 'SEM GTIN'}`);
+    linhas.push(`xProd=${it.nm_produto || ''}`);
     linhas.push(`NCM=${it.ncm || ''}`);
-    linhas.push(`CEST=${it.cest || ''}`);
+    if (it.cest) linhas.push(`CEST=${it.cest}`);
     linhas.push(`CFOP=${it.cfop || '5102'}`);
-    linhas.push(`Unidade=${it.unidade || 'UN'}`);
-    linhas.push(`Quantidade=${it.qt_entrada || it.qt_movimento || 0}`);
-    linhas.push(`ValorUnitario=${it.vl_unit || 0}`);
-    linhas.push(`ValorDesconto=${it.vl_desconto || 0}`);
-    linhas.push(`ValorTotal=${it.vl_total || 0}`);
-    linhas.push(`ValorFrete=0`);
-    linhas.push(`ValorSeguro=0`);
-    linhas.push(`ValorOutro=0`);
-    linhas.push(`IndTotal=1`);
+    linhas.push(`uCom=${it.unidade || 'UN'}`);
+    linhas.push(`qCom=${qt.toFixed(4)}`);
+    linhas.push(`vUnCom=${vUnit.toFixed(10)}`);
+    linhas.push(`vProd=${vTot.toFixed(2)}`);
+    linhas.push(`uTrib=${it.unidade || 'UN'}`);
+    linhas.push(`qTrib=${qt.toFixed(4)}`);
+    linhas.push(`vUnTrib=${vUnit.toFixed(10)}`);
+    linhas.push(`vFrete=0.00`);
+    linhas.push(`vSeg=0.00`);
+    linhas.push(`vDesc=${Number(it.vl_desconto || 0).toFixed(2)}`);
+    linhas.push(`vOutro=0.00`);
+    linhas.push(`indTot=1`);
     linhas.push(``);
 
     // ICMS
-    linhas.push(`[ImpostoIcms${nr}]`);
-    linhas.push(`Origem=${it.origem || 0}`);
+    linhas.push(`[ICMS${nr}]`);
     if (isSimples) {
-      linhas.push(`CSOSN=${it.csosn || '400'}`);
+      linhas.push(`CSOSN=${it.csosn || '102'}`);
+      linhas.push(`orig=${it.origem || 0}`);
       if (Number(it.pc_icms) > 0) {
-        linhas.push(`pCredSN=${it.pc_icms}`);
-        linhas.push(`vCredICMSSN=${it.vl_icms || 0}`);
+        linhas.push(`pCredSN=${Number(it.pc_icms).toFixed(4)}`);
+        linhas.push(`vCredICMSSN=${Number(it.vl_icms || 0).toFixed(2)}`);
       }
     } else {
       linhas.push(`CST=${it.cst_icms || '00'}`);
-      linhas.push(`ModalidadeBC=${it.mod_bc || 3}`);
-      linhas.push(`ValorBC=${it.vl_bc || it.vl_total || 0}`);
-      linhas.push(`Aliquota=${it.pc_icms || it.aliquota || 0}`);
-      linhas.push(`ValorICMS=${it.vl_icms || 0}`);
+      linhas.push(`orig=${it.origem || 0}`);
+      linhas.push(`modBC=${it.mod_bc || 3}`);
+      linhas.push(`vBC=${Number(it.vl_bc || vTot).toFixed(2)}`);
+      linhas.push(`pICMS=${Number(it.pc_icms || 0).toFixed(4)}`);
+      linhas.push(`vICMS=${Number(it.vl_icms || 0).toFixed(2)}`);
     }
     if (Number(it.vl_icms_st || 0) > 0) {
-      linhas.push(`ModalidadeBCST=${it.mod_bc_st || 4}`);
-      linhas.push(`pMVAST=${it.mva_st || 0}`);
-      linhas.push(`ValorBCST=${it.vl_bc_st || 0}`);
-      linhas.push(`AliquotaST=${it.pc_icms_st || 0}`);
-      linhas.push(`ValorICMSST=${it.vl_icms_st || 0}`);
+      linhas.push(`modBCST=${it.mod_bc_st || 4}`);
+      linhas.push(`pMVAST=${Number(it.mva_st || 0).toFixed(4)}`);
+      linhas.push(`vBCST=${Number(it.vl_bc_st || 0).toFixed(2)}`);
+      linhas.push(`pICMSST=${Number(it.pc_icms_st || 0).toFixed(4)}`);
+      linhas.push(`vICMSST=${Number(it.vl_icms_st || 0).toFixed(2)}`);
     }
     linhas.push(``);
 
     // IPI (apenas NFe)
-    if (!isNFCe) {
-      linhas.push(`[ImpostoIpi${nr}]`);
+    if (!isNFCe && Number(it.pc_ipi || 0) > 0) {
+      linhas.push(`[IPI${nr}]`);
       linhas.push(`CST=${it.cst_ipi || '99'}`);
       linhas.push(`cEnq=${it.c_enq || '999'}`);
-      if (Number(it.pc_ipi) > 0) {
-        linhas.push(`ValorBC=${it.vl_total}`);
-        linhas.push(`Aliquota=${it.pc_ipi}`);
-        linhas.push(`ValorIPI=${it.vl_ipi || 0}`);
-      }
+      linhas.push(`vBC=${vTot.toFixed(2)}`);
+      linhas.push(`pIPI=${Number(it.pc_ipi).toFixed(4)}`);
+      linhas.push(`vIPI=${Number(it.vl_ipi || 0).toFixed(2)}`);
       linhas.push(``);
     }
 
     // PIS
-    linhas.push(`[ImpostoPis${nr}]`);
+    linhas.push(`[PIS${nr}]`);
     linhas.push(`CST=${it.cst_pis || '07'}`);
     if (Number(it.pc_pis) > 0) {
-      linhas.push(`ValorBC=${it.vl_total}`);
-      linhas.push(`Aliquota=${it.pc_pis}`);
-      linhas.push(`ValorPIS=${it.vl_pis || 0}`);
+      linhas.push(`vBC=${vTot.toFixed(2)}`);
+      linhas.push(`pPIS=${Number(it.pc_pis).toFixed(4)}`);
+      linhas.push(`vPIS=${Number(it.vl_pis || 0).toFixed(2)}`);
     } else {
-      linhas.push(`ValorPIS=0`);
+      linhas.push(`vPIS=0.00`);
     }
     linhas.push(``);
 
     // COFINS
-    linhas.push(`[ImpostoCofins${nr}]`);
+    linhas.push(`[COFINS${nr}]`);
     linhas.push(`CST=${it.cst_cofins || '07'}`);
     if (Number(it.pc_cofins) > 0) {
-      linhas.push(`ValorBC=${it.vl_total}`);
-      linhas.push(`Aliquota=${it.pc_cofins}`);
-      linhas.push(`ValorCOFINS=${it.vl_cofins || 0}`);
+      linhas.push(`vBC=${vTot.toFixed(2)}`);
+      linhas.push(`pCOFINS=${Number(it.pc_cofins).toFixed(4)}`);
+      linhas.push(`vCOFINS=${Number(it.vl_cofins || 0).toFixed(2)}`);
     } else {
-      linhas.push(`ValorCOFINS=0`);
+      linhas.push(`vCOFINS=0.00`);
     }
     linhas.push(``);
   }
 
-  // ──────────────────────────────────────────────────────────────
-  // SEÇÃO: Totais
-  // ──────────────────────────────────────────────────────────────
-  const vlProd = itens.reduce((s, it) => s + Number(it.vl_total || 0), 0);
-  const vlDesc = itens.reduce((s, it) => s + Number(it.vl_desconto || 0), 0);
-  const vlIpi  = itens.reduce((s, it) => s + Number(it.vl_ipi || 0), 0);
-  const vlSt   = itens.reduce((s, it) => s + Number(it.vl_icms_st || 0), 0);
-  const vlPis  = itens.reduce((s, it) => s + Number(it.vl_pis || 0), 0);
-  const vlCof  = itens.reduce((s, it) => s + Number(it.vl_cofins || 0), 0);
-  const vlFrete   = Number(cabecalho.vl_frete || 0);
-  const vlSeguro  = Number(cabecalho.vl_seguro || 0);
-  const vlDespesa = Number(cabecalho.vl_despesa || 0);
-  const vlTotal = arred(vlProd + vlIpi + vlSt + vlFrete + vlSeguro + vlDespesa - vlDesc);
+  // ──────────────────────────────────────────────
+  // [Total]
+  // ──────────────────────────────────────────────
+  const vProd = arred(itens.reduce((s, it) => s + Number(it.vl_total || 0), 0));
+  const vDesc = arred(itens.reduce((s, it) => s + Number(it.vl_desconto || 0), 0));
+  const vIPI  = arred(itens.reduce((s, it) => s + Number(it.vl_ipi || 0), 0));
+  const vST   = arred(itens.reduce((s, it) => s + Number(it.vl_icms_st || 0), 0));
+  const vPIS  = arred(itens.reduce((s, it) => s + Number(it.vl_pis || 0), 0));
+  const vCOF  = arred(itens.reduce((s, it) => s + Number(it.vl_cofins || 0), 0));
+  const vICMS = arred(itens.reduce((s, it) => s + Number(it.vl_icms || 0), 0));
+  const vBCICMS = arred(itens.reduce((s, it) => s + Number(it.vl_bc || 0), 0));
+  const vFrete = Number(cabecalho.vl_frete || 0);
+  const vSeg   = Number(cabecalho.vl_seguro || 0);
+  const vOutro = Number(cabecalho.vl_despesa || 0);
+  const vNF = arred(vProd + vIPI + vST + vFrete + vSeg + vOutro - vDesc);
 
   linhas.push(`[Total]`);
-  linhas.push(`ValorTotalProdutos=${arred(vlProd)}`);
-  linhas.push(`ValorDesconto=${arred(vlDesc)}`);
-  linhas.push(`ValorFrete=${vlFrete}`);
-  linhas.push(`ValorSeguro=${vlSeguro}`);
-  linhas.push(`OutrasDespesas=${vlDespesa}`);
-  linhas.push(`ValorIPI=${arred(vlIpi)}`);
-  linhas.push(`ValorICMSST=${arred(vlSt)}`);
-  linhas.push(`ValorPIS=${arred(vlPis)}`);
-  linhas.push(`ValorCOFINS=${arred(vlCof)}`);
-  linhas.push(`ValorTotalNota=${vlTotal}`);
+  linhas.push(`vBC=${vBCICMS.toFixed(2)}`);
+  linhas.push(`vICMS=${vICMS.toFixed(2)}`);
+  linhas.push(`vICMSDeson=0.00`);
+  linhas.push(`vBCST=0.00`);
+  linhas.push(`vST=${vST.toFixed(2)}`);
+  linhas.push(`vProd=${vProd.toFixed(2)}`);
+  linhas.push(`vFrete=${vFrete.toFixed(2)}`);
+  linhas.push(`vSeg=${vSeg.toFixed(2)}`);
+  linhas.push(`vDesc=${vDesc.toFixed(2)}`);
+  linhas.push(`vII=0.00`);
+  linhas.push(`vIPI=${vIPI.toFixed(2)}`);
+  linhas.push(`vPIS=${vPIS.toFixed(2)}`);
+  linhas.push(`vCOFINS=${vCOF.toFixed(2)}`);
+  linhas.push(`vOutro=${vOutro.toFixed(2)}`);
+  linhas.push(`vNF=${vNF.toFixed(2)}`);
+  linhas.push(`vFCP=0.00`);
+  linhas.push(`vFCPST=0.00`);
+  linhas.push(`vFCPSTRet=0.00`);
+  linhas.push(`vIPIDevol=0.00`);
   linhas.push(``);
 
-  // ──────────────────────────────────────────────────────────────
-  // SEÇÃO: Transportador (NFe)
-  // ──────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────────
+  // [Transportador] — apenas NFe
+  // ──────────────────────────────────────────────
   if (!isNFCe) {
     linhas.push(`[Transportador]`);
-    linhas.push(`ModalidadeFrete=9`); // 9=Sem frete
+    linhas.push(`modFrete=9`);
     linhas.push(``);
   }
 
-  // ──────────────────────────────────────────────────────────────
-  // SEÇÃO: Pagamento
-  // ──────────────────────────────────────────────────────────────
-  linhas.push(`[Pagamento]`);
+  // ──────────────────────────────────────────────
+  // [pagNNN] — pagamentos
+  // ──────────────────────────────────────────────
   if (pagamentos?.length) {
     for (let i = 0; i < pagamentos.length; i++) {
       const p = pagamentos[i];
       const nr = String(i + 1).padStart(3, '0');
-      linhas.push(`FormaPagamento${nr}=${mapearFormaPagamento(p.t_pag || p.tp_pagamento || 'DINHEIRO')}`);
-      linhas.push(`ValorPagamento${nr}=${arred(Number(p.v_pag || p.vl_pagamento || 0))}`);
+      linhas.push(`[pag${nr}]`);
+      linhas.push(`tPag=${mapearFormaPagamento(p.t_pag || p.tp_pagamento || 'DINHEIRO')}`);
+      linhas.push(`vPag=${arred(Number(p.v_pag || p.vl_pagamento || 0)).toFixed(2)}`);
+      linhas.push(`indPag=0`);
+      linhas.push(``);
     }
   } else {
-    // Sem pagamento registrado — usa valor total com dinheiro
-    linhas.push(`FormaPagamento001=01`);
-    linhas.push(`ValorPagamento001=${vlTotal}`);
-  }
-  linhas.push(``);
-
-  // ──────────────────────────────────────────────────────────────
-  // SEÇÃO: Informações Adicionais
-  // ──────────────────────────────────────────────────────────────
-  if (cabecalho.obs_nf) {
-    linhas.push(`[InformacoesAdicionais]`);
-    linhas.push(`InformacoesComplementares=${cabecalho.obs_nf}`);
+    linhas.push(`[pag001]`);
+    linhas.push(`tPag=01`);
+    linhas.push(`vPag=${vNF.toFixed(2)}`);
+    linhas.push(`indPag=0`);
     linhas.push(``);
   }
 
-  // NFCe: CSC
+  // ──────────────────────────────────────────────
+  // [DadosAdicionais]
+  // ──────────────────────────────────────────────
+  if (cabecalho.obs_nf || ambiente === '2') {
+    linhas.push(`[DadosAdicionais]`);
+    if (cabecalho.obs_nf) linhas.push(`infCpl=${cabecalho.obs_nf}`);
+    linhas.push(``);
+  }
+
+  // ──────────────────────────────────────────────
+  // [NFCe] — CSC
+  // ──────────────────────────────────────────────
   if (isNFCe) {
     linhas.push(`[NFCe]`);
     linhas.push(`IdCSC=${configItem.id_csc || ''}`);
@@ -267,24 +308,23 @@ export function gerarIniNfe(params: GerarIniParams): string {
   return linhas.join('\r\n');
 }
 
-// ──────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────
 // HELPERS
-// ──────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────
 
 function limparNumeros(s: string): string {
   return (s || '').replace(/\D/g, '');
 }
 
-function formatarData(d: string | Date): string {
+function formatarDhEmi(d: string | Date): string {
   const dt = typeof d === 'string' ? new Date(d) : d;
-  const dia  = String(dt.getDate()).padStart(2, '0');
-  const mes  = String(dt.getMonth() + 1).padStart(2, '0');
-  const ano  = dt.getFullYear();
-  return `${dia}/${mes}/${ano}`;
-}
-
-function formatarHora(d: Date): string {
-  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+  const dia = String(dt.getDate()).padStart(2, '0');
+  const mes = String(dt.getMonth() + 1).padStart(2, '0');
+  const ano = dt.getFullYear();
+  const hh = String(dt.getHours()).padStart(2, '0');
+  const mm = String(dt.getMinutes()).padStart(2, '0');
+  const ss = String(dt.getSeconds()).padStart(2, '0');
+  return `${dia}/${mes}/${ano} ${hh}:${mm}:${ss}`;
 }
 
 function arred(v: number): number {
@@ -292,7 +332,7 @@ function arred(v: number): number {
 }
 
 function mapearCRT(regime: string): string {
-  // 1=Simples Nacional, 2=Simples Nacional Excesso, 3=Regime Normal
+  // 1=Simples Nacional, 2=Simples Excesso, 3=Regime Normal
   if (regime === 'S') return '1';
   return '3';
 }
@@ -300,22 +340,40 @@ function mapearCRT(regime: string): string {
 function mapearFormaPagamento(tp: string): string {
   const mapa: Record<string, string> = {
     'DINHEIRO': '01', '01': '01',
-    'CHEQUE': '02',   '02': '02',
+    'CHEQUE': '02', '02': '02',
     'CARTAO_CREDITO': '03', '03': '03',
-    'CARTAO_DEBITO': '04',  '04': '04',
-    'PIX': '17',      '17': '17',
-    'BOLETO': '15',   '15': '15',
+    'CARTAO_DEBITO': '04', '04': '04',
+    'PIX': '17', '17': '17',
+    'BOLETO': '15', '15': '15',
     'SEM_PAGAMENTO': '90', '90': '90',
   };
   return mapa[tp?.toUpperCase()] || mapa[tp] || '01';
 }
 
-function mapearCodigoUF(uf: string): string {
-  const mapa: Record<string, string> = {
-    'AC':'12','AL':'27','AP':'16','AM':'13','BA':'29','CE':'23','DF':'53',
-    'ES':'32','GO':'52','MA':'21','MT':'51','MS':'50','MG':'31','PA':'15',
-    'PB':'25','PR':'41','PE':'26','PI':'22','RJ':'33','RN':'24','RS':'43',
-    'RO':'11','RR':'14','SC':'42','SP':'35','SE':'28','TO':'17',
+function validarCPF(cpf: string): boolean {
+  if (!/^\d{11}$/.test(cpf)) return false;
+  if (/^(\d)\1{10}$/.test(cpf)) return false;
+  let s = 0;
+  for (let i = 0; i < 9; i++) s += parseInt(cpf[i]) * (10 - i);
+  let r = (s * 10) % 11; if (r === 10) r = 0;
+  if (r !== parseInt(cpf[9])) return false;
+  s = 0;
+  for (let i = 0; i < 10; i++) s += parseInt(cpf[i]) * (11 - i);
+  r = (s * 10) % 11; if (r === 10) r = 0;
+  return r === parseInt(cpf[10]);
+}
+
+function validarCNPJ(cnpj: string): boolean {
+  if (!/^\d{14}$/.test(cnpj)) return false;
+  if (/^(\d)\1{13}$/.test(cnpj)) return false;
+  const calc = (base: string, pesos: number[]) => {
+    const s = base.split('').reduce((acc, d, i) => acc + parseInt(d) * pesos[i], 0);
+    const r = s % 11;
+    return r < 2 ? 0 : 11 - r;
   };
-  return mapa[(uf || 'SP').toUpperCase()] || '35';
+  const p1 = [5,4,3,2,9,8,7,6,5,4,3,2];
+  const p2 = [6,5,4,3,2,9,8,7,6,5,4,3,2];
+  const d1 = calc(cnpj.substring(0, 12), p1);
+  const d2 = calc(cnpj.substring(0, 12) + d1, p2);
+  return d1 === parseInt(cnpj[12]) && d2 === parseInt(cnpj[13]);
 }
