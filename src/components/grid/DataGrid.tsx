@@ -6,7 +6,7 @@ export interface IGridColumn {
   label: string;
   width?: string;
   align?: "left" | "right" | "center";
-  render?: (row: any) => React.ReactNode;
+  render?: (row: any, idx?: number) => React.ReactNode;
   getValue?: (row: any) => string | number;
 }
 
@@ -299,7 +299,7 @@ const DataGrid: React.FC<DataGridProps> = ({
                 >
                   {(() => {
                     try {
-                      return c.render ? c.render(row) : c.getValue ? c.getValue(row) : (row as any)[c.key];
+                      return c.render ? c.render(row, i) : c.getValue ? c.getValue(row) : (row as any)[c.key];
                     } catch (err) {
                       console.error("Erro ao renderizar célula:", err, c.key, row);
                       return <span className="text-red-500 text-[9px]">Err</span>;

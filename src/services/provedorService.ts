@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 /**
  * Serviço de integração com o Provedor via Worker Nativo (Supabase Realtime)
@@ -7,7 +8,7 @@ export const provedorService = {
   /**
    * Envia um comando para o worker através da tabela fiscal_evento e aguarda a resposta
    */
-  async enviarComando(comando: string, empresaId?: string, ambiente?: string | number, configPayload?: any): Promise<string> {
+  async enviarComando(comando: string, empresaId?: string | number, ambiente?: string | number, configPayload?: any): Promise<string> {
     if (!empresaId) {
       console.error("Tentativa de enviar comando fiscal sem empresaId:", comando);
       throw new Error("ID da empresa não informado para o comando fiscal.");
@@ -148,35 +149,35 @@ export const provedorService = {
   /**
    * Consulta o status do serviço na SEFAZ
    */
-  async consultarStatus(empresaId?: string): Promise<string> {
+  async consultarStatus(empresaId?: string | number): Promise<string> {
     return this.enviarComando("NFE.StatusServico()", empresaId);
   },
 
   /**
    * Ativa o MonitorFiscal
    */
-  async ativar(empresaId?: string): Promise<string> {
+  async ativar(empresaId?: string | number): Promise<string> {
     return this.enviarComando("ACBr.Ativar()", empresaId);
   },
 
   /**
    * Desativa o MonitorFiscal
    */
-  async desativar(empresaId?: string): Promise<string> {
+  async desativar(empresaId?: string | number): Promise<string> {
     return this.enviarComando("ACBr.Desativar()", empresaId);
   },
 
   /**
    * Cria e envia uma NFe a partir de um arquivo INI ou comandos
    */
-  async enviarNFe(dadosIni: string, empresaId?: string): Promise<string> {
+  async enviarNFe(dadosIni: string, empresaId?: string | number): Promise<string> {
     return this.enviarComando(`NFE.CriarEnviarNFe("${dadosIni}", 1, 1, 1)`, empresaId);
   },
 
   /**
    * Busca documentos fiscais eletrônicos emitidos contra o CNPJ
    */
-  async distribuicaoDFe(cUF: string, cnpj: string, nNSU: string = "0", empresaId?: string): Promise<string> {
+  async distribuicaoDFe(cUF: string, cnpj: string, nNSU: string = "0", empresaId?: string | number): Promise<string> {
     // Usa NFE.DistribuicaoDFePorUltNSU que reflete exatamente a função da DLL chamada
     return this.enviarComando(`NFE.DistribuicaoDFePorUltNSU(${cUF}, "${cnpj}", "${nNSU}")`, empresaId);
   },
@@ -184,7 +185,7 @@ export const provedorService = {
   /**
    * Envia evento de manifestação do destinatário (210200, 210210, 210220, 210240)
    */
-  async enviarManifesto(chNFe: string, tipo: string, cnpj: string, justificativa?: string, empresaId?: string): Promise<string> {
+  async enviarManifesto(chNFe: string, tipo: string, cnpj: string, justificativa?: string, empresaId?: string | number): Promise<string> {
     const now = new Date();
     const d = String(now.getDate()).padStart(2, "0");
     const m = String(now.getMonth() + 1).padStart(2, "0");
