@@ -235,10 +235,10 @@ const DataGrid: React.FC<DataGridProps> = ({
 
       {/* Grid */}
       <div className="border border-border rounded overflow-hidden overflow-x-auto" onContextMenu={handleContextMenu}>
-        <div className="min-w-[500px]">
+        <div className="min-w-[500px] overflow-y-auto" style={{ maxHeight }}>
         {/* Filters */}
         {showFilters && filterValues && onFilterChange && (
-          <div className="bg-card border-b border-border" style={{ display: "grid", gridTemplateColumns: gridTemplate }}>
+          <div className="bg-card border-b border-border sticky top-0 z-20" style={{ display: "grid", gridTemplateColumns: gridTemplate }}>
             {XVisibleCols.map(c => (
               <input
                 key={c.key}
@@ -246,7 +246,7 @@ const DataGrid: React.FC<DataGridProps> = ({
                 placeholder={c.label}
                 value={filterValues[c.key] || ""}
                 onChange={e => onFilterChange(c.key, e.target.value)}
-                className="px-2 py-1 text-xs border-r border-border outline-none last:border-r-0 bg-card"
+                className="px-2 py-1 text-xs border-r border-border outline-none last:border-r-0 bg-card min-w-0"
               />
             ))}
           </div>
@@ -254,24 +254,24 @@ const DataGrid: React.FC<DataGridProps> = ({
 
         {/* Header */}
         <div
-          className={headerClassName || "bg-grid-header text-grid-header-foreground text-xs font-semibold"}
+          className={`${headerClassName || "bg-grid-header text-grid-header-foreground text-xs font-semibold"} sticky ${showFilters && filterValues ? 'top-[26px]' : 'top-0'} z-10`}
           style={{ display: "grid", gridTemplateColumns: gridTemplate }}
         >
           {XVisibleCols.map(c => (
             <div
               key={c.key}
-              className={`px-2 py-1.5 border-r last:border-r-0 cursor-pointer select-none flex items-center ${headerClassName ? 'border-current/10' : 'border-primary-foreground/20'}`}
+              className={`px-2 py-1.5 border-r last:border-r-0 cursor-pointer select-none flex items-center min-w-0 truncate ${headerClassName ? 'border-current/10' : 'border-primary-foreground/20'}`}
               style={{ justifyContent: c.align === "right" ? "flex-end" : c.align === "center" ? "center" : "flex-start" }}
               onClick={() => handleSort(c.key)}
             >
-              {c.label}
+              <span className="truncate">{c.label}</span>
               {getSortIcon(c.key)}
             </div>
           ))}
         </div>
 
         {/* Rows */}
-        <div className="overflow-y-auto" style={{ maxHeight, scrollbarGutter: "stable" }}>
+        <div>
           {(loading || isLoading) && (
             <div className="px-3 py-4 text-center text-xs text-muted-foreground">
               Carregando...
@@ -294,7 +294,7 @@ const DataGrid: React.FC<DataGridProps> = ({
               {XVisibleCols.map(c => (
                 <div
                   key={c.key}
-                  className="px-2 py-1.5 border-r border-border last:border-r-0"
+                  className="px-2 py-1.5 border-r border-border last:border-r-0 min-w-0 overflow-hidden"
                   style={{ textAlign: c.align || "left" }}
                 >
                   {(() => {
