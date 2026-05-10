@@ -151,12 +151,12 @@ const parsearRetornoNfe = (retorno) => {
 
 /**
  * Tenta imprimir DANFE/DANFCE baseado em print_config { tp_imp, nm_impressora }.
- * Retorna o caminho do PDF gerado (quando aplicável) ou null.
+ * Retorna um objeto de resultado e nunca propaga erro para o fluxo fiscal.
  */
 const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave) => {
-    if (!printConfig) return null;
+    if (!printConfig) return { sucesso: true, ignorado: true, pdf_path: null };
     const tp = (printConfig.tp_imp || 'PDF').toUpperCase();
-    if (tp === 'NAO_IMPRIME' || tp === 'NAO IMPRIME' || tp === 'NONE') return null;
+    if (tp === 'NAO_IMPRIME' || tp === 'NAO IMPRIME' || tp === 'NONE') return { sucesso: true, ignorado: true, pdf_path: null };
     
     try {
         if (tp === 'IMPRESSORA' && printConfig.nm_impressora) {
@@ -165,22 +165,26 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave) => {
         const pdfDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos/PDF");
         if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
         lib.ConfigGravarValor(handle, "DANFe", "PathPDF", pdfDir);
+        lib.ConfigGravarValor(handle, "DANFe", "MostraPreview", "0");
+        lib.ConfigGravarValor(handle, "DANFe", "MostraStatus", "0");
         
         if (tp === 'PDF' && lib.ImprimirDANFEPDF) {
             const ret = lib.ImprimirDANFEPDF(handle);
             console.log(`[FiscalLib] ImprimirDANFEPDF (${modeloLabel}) ret=${ret}`);
-            if (ret === 0 && chave) {
-                const pdf = path.join(pdfDir, `${chave}-procNFe.pdf`);
-                return fs.existsSync(pdf) ? pdf : pdfDir;
-            }
+            if (ret !== 0) return { sucesso: false, erro: lerRetornoACBr(lib, handle) || `ImprimirDANFEPDF retornou ${ret}`, pdf_path: null };
+            const pdf = chave ? path.join(pdfDir, `${chave}-procNFe.pdf`) : null;
+            return { sucesso: true, pdf_path: pdf && fs.existsSync(pdf) ? pdf : pdfDir };
         } else if (tp === 'IMPRESSORA' && lib.ImprimirDANFE) {
             const ret = lib.ImprimirDANFE(handle, "", printConfig.nm_impressora || "", 1, "", false, "", false);
             console.log(`[FiscalLib] ImprimirDANFE (${modeloLabel}) impressora=${printConfig.nm_impressora} ret=${ret}`);
+            if (ret !== 0) return { sucesso: false, erro: lerRetornoACBr(lib, handle) || `ImprimirDANFE retornou ${ret}`, pdf_path: null };
+            return { sucesso: true, pdf_path: null };
         }
+        return { sucesso: false, erro: `Tipo de impressão ${tp} sem função disponível na ACBrLib.`, pdf_path: null };
     } catch (e) {
         console.warn(`[FiscalLib] Falha ao imprimir DANFE/DANFCE: ${e.message}`);
+        return { sucesso: false, erro: e.message, pdf_path: null };
     }
-    return null;
 };
 
 const configurarHandle = (lib, handle, configPayload) => {
@@ -364,11 +368,9 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                     } catch (e) { console.warn('[FiscalLib] Falha ObterXml NFe:', e.message); }
                 }
 
-                // Após sucesso, tentar imprimir DANFE conforme tp_imp_nfe configurado
-                let pdf_path = null;
-                if (sucesso) {
-                    pdf_path = tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, 'NFE', parsed.chave_nfe);
-                }
+                // A impressão é executada fora da emissão, depois que o banco já foi atualizado.
+                // Isso impede travamento/perda do retorno fiscal por falha da impressora/PDF.
+                const impressao = sucesso ? { sucesso: true, adiada: true, pdf_path: null } : { sucesso: false, pdf_path: null };
                 
                 return { 
                     sucesso,
@@ -380,7 +382,8 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                     xml_nfe,
                     xml_retorno: xmlRetorno,
                     retorno_completo: ultimoRetorno || xmlRetorno,
-                    pdf_path,
+                    pdf_path: impressao.pdf_path,
+                    impressao,
                     erro: sucesso ? null : (parsed.x_motivo || ultimoRetorno)
                 };
             });
@@ -431,11 +434,9 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                     } catch (e) { console.warn('[FiscalLib] Falha ObterXml NFCe:', e.message); }
                 }
 
-                // Após sucesso, tentar imprimir DANFCE conforme tp_imp_nfce configurado
-                let pdf_path = null;
-                if (sucesso) {
-                    pdf_path = tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, 'NFCE', parsed.chave_nfe);
-                }
+                // A impressão é executada fora da emissão, depois que o banco já foi atualizado.
+                // Isso impede travamento/perda do retorno fiscal por falha da impressora/PDF.
+                const impressao = sucesso ? { sucesso: true, adiada: true, pdf_path: null } : { sucesso: false, pdf_path: null };
                 
                 return { 
                     sucesso,
@@ -447,7 +448,8 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                     xml_nfe,
                     xml_retorno: xmlRetorno,
                     retorno_completo: ultimoRetorno || xmlRetorno,
-                    pdf_path,
+                    pdf_path: impressao.pdf_path,
+                    impressao,
                     erro: sucesso ? null : (parsed.x_motivo || ultimoRetorno)
                 };
             });
@@ -466,6 +468,16 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 if (ret !== 0) throw new Error(lerRetornoACBr(libMDFe, handle));
                 
                 return { sucesso: true, xml_retorno: bufferResposta.toString('utf8', 0, bufferTamanho.readInt32LE(0)) };
+            });
+
+        case 'IMPRIMIR_NFE':
+        case 'IMPRIMIR_NFCE':
+            return executarNaDLL(libNFe, config, async (handle) => {
+                libNFe.LimparLista(handle);
+                const ret = libNFe.CarregarXML(handle, dados);
+                if (ret !== 0) return { sucesso: false, erro: '[IMPRIMIR] CarregarXML: ' + lerRetornoACBr(libNFe, handle), pdf_path: null };
+                const modeloLabel = comando === 'IMPRIMIR_NFCE' ? 'NFCE' : 'NFE';
+                return tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, modeloLabel, jsonPayload.chave);
             });
 
         case 'CANCELAR_NFE':
