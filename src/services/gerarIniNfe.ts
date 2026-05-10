@@ -32,8 +32,9 @@ export function gerarIniNfe(params: GerarIniParams): string {
   const ufEmit = empresa.cidade?.estado_id || '';
   const cUF = cMunEmit.substring(0, 2) || '35';
 
-  const dhEmi = formatarDhEmi(cabecalho.dt_emissao || new Date());
-  const dhSai = cabecalho.dt_saida ? formatarDhEmi(cabecalho.dt_saida) : '';
+  // Sempre usar a hora atual — a SEFAZ rejeita NFC-e com data/hora atrasada (cStat 704)
+  const dhEmi = formatarDhEmi(new Date());
+  const dhSai = '';
 
   const cNF = String(Math.floor(10000000 + Math.random() * 89999999)); // 8 dígitos
 
