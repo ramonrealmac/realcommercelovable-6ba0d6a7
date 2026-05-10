@@ -53,6 +53,16 @@ const loadLibrary = (path, prefix) => {
                 StatusServico: lib.func('int __cdecl ' + prefix + '_StatusServico(void* handle, _Out_ char* sResposta, _Out_ int* esTamanho)')
             };
 
+            // Funções de impressão (apenas NFe/NFCe)
+            if (prefix === 'NFE') {
+                try {
+                    funcoes.ImprimirDANFEPDF = lib.func('int __cdecl NFE_ImprimirDANFEPDF(void* handle)');
+                } catch (e) { console.warn('[FiscalLib] ImprimirDANFEPDF indisponível:', e.message); }
+                try {
+                    funcoes.ImprimirDANFE = lib.func('int __cdecl NFE_ImprimirDANFE(void* handle, const char* eArquivoXml, const char* eImpressora, int nCopias, const char* eProtocolo, bool bMostrarPreview, const char* eMarcaDagua, bool bViaConsumidor)');
+                } catch (e) { console.warn('[FiscalLib] ImprimirDANFE indisponível:', e.message); }
+            }
+
             // Funções específicas da NFe
             // IMPORTANTE: A DLL não tem NFE_DistribuicaoDFe genérica!
             // As funções corretas são as três variantes abaixo, com AcUFAutor como INT.
