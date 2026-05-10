@@ -9,6 +9,7 @@ import { validateCPF, validateCNPJ, validateCPFOrCNPJ, formatCPFCNPJ, formatPhon
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Loader2, MapPin } from "lucide-react";
 import VeiculoGrid from "@/components/forms/VeiculoGrid";
+import CidadeSearchDialog from "@/components/shared/CidadeSearchDialog";
 import { baseService } from "@/utils/baseService";
 import { useGridFilter } from "@/hooks/useGridFilter";
 
