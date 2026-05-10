@@ -88,6 +88,10 @@ const FiscalConfigItemGrid: React.FC<FiscalConfigItemGridProps> = ({ XEmpresaId 
     setXEditSequencia("1");
     setXEditCsc("");
     setXEditIdCsc("");
+    setXEditTpImpNfe("PDF");
+    setXEditTpImpNfce("PDF");
+    setXEditImpNfe("");
+    setXEditImpNfce("");
   };
 
   const handleEditar = () => {
@@ -99,6 +103,25 @@ const FiscalConfigItemGrid: React.FC<FiscalConfigItemGridProps> = ({ XEmpresaId 
     setXEditSequencia(XSelectedItem.sequencia.toString());
     setXEditCsc(XSelectedItem.csc || "");
     setXEditIdCsc(XSelectedItem.id_csc || "");
+    setXEditTpImpNfe(XSelectedItem.tp_imp_nfe || "PDF");
+    setXEditTpImpNfce(XSelectedItem.tp_imp_nfce || "PDF");
+    setXEditImpNfe(XSelectedItem.nm_impressora_nfe || "");
+    setXEditImpNfce(XSelectedItem.nm_impressora_nfce || "");
+  };
+
+  const handleListarImpressoras = async () => {
+    try {
+      const { fiscalEmissaoService } = await import("@/services/fiscalEmissaoService");
+      const res = await (fiscalEmissaoService as any).listarImpressoras?.(XEmpresaId);
+      if (res?.success && Array.isArray(res.impressoras) && res.impressoras.length > 0) {
+        setXImpressoras(res.impressoras);
+        toast.success(`${res.impressoras.length} impressora(s) detectada(s).`);
+      } else {
+        toast.info("Nenhuma impressora detectada — informe o nome manualmente.");
+      }
+    } catch (e: any) {
+      toast.error("Falha ao listar impressoras: " + e.message);
+    }
   };
 
   const handleSalvar = async () => {
@@ -113,6 +136,10 @@ const FiscalConfigItemGrid: React.FC<FiscalConfigItemGridProps> = ({ XEmpresaId 
       sequencia: parseInt(XEditSequencia) || 1,
       csc: XEditCsc.trim(),
       id_csc: XEditIdCsc.trim(),
+      tp_imp_nfe: XEditTpImpNfe,
+      tp_imp_nfce: XEditTpImpNfce,
+      nm_impressora_nfe: XEditImpNfe.trim() || null,
+      nm_impressora_nfce: XEditImpNfce.trim() || null,
     };
 
     if (XEditMode === "insert") {
