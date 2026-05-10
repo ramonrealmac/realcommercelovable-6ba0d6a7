@@ -368,10 +368,11 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                     } catch (e) { console.warn('[FiscalLib] Falha ObterXml NFe:', e.message); }
                 }
 
-                // Após sucesso, tentar imprimir DANFE conforme tp_imp_nfe configurado
-                let pdf_path = null;
+                // Após sucesso, tentar imprimir DANFE conforme tp_imp_nfe configurado.
+                // Erro de impressão não pode invalidar autorização/salvamento da nota.
+                let impressao = { sucesso: true, pdf_path: null };
                 if (sucesso) {
-                    pdf_path = tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, 'NFE', parsed.chave_nfe);
+                    impressao = tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, 'NFE', parsed.chave_nfe);
                 }
                 
                 return { 
@@ -384,7 +385,8 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                     xml_nfe,
                     xml_retorno: xmlRetorno,
                     retorno_completo: ultimoRetorno || xmlRetorno,
-                    pdf_path,
+                    pdf_path: impressao.pdf_path,
+                    impressao,
                     erro: sucesso ? null : (parsed.x_motivo || ultimoRetorno)
                 };
             });
@@ -435,10 +437,11 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                     } catch (e) { console.warn('[FiscalLib] Falha ObterXml NFCe:', e.message); }
                 }
 
-                // Após sucesso, tentar imprimir DANFCE conforme tp_imp_nfce configurado
-                let pdf_path = null;
+                // Após sucesso, tentar imprimir DANFCE conforme tp_imp_nfce configurado.
+                // Erro de impressão não pode invalidar autorização/salvamento da nota.
+                let impressao = { sucesso: true, pdf_path: null };
                 if (sucesso) {
-                    pdf_path = tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, 'NFCE', parsed.chave_nfe);
+                    impressao = tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, 'NFCE', parsed.chave_nfe);
                 }
                 
                 return { 
@@ -451,7 +454,8 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                     xml_nfe,
                     xml_retorno: xmlRetorno,
                     retorno_completo: ultimoRetorno || xmlRetorno,
-                    pdf_path,
+                    pdf_path: impressao.pdf_path,
+                    impressao,
                     erro: sucesso ? null : (parsed.x_motivo || ultimoRetorno)
                 };
             });
