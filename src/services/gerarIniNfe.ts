@@ -228,8 +228,10 @@ export function gerarIniNfe(params: GerarIniParams): string {
   const vST   = arred(itens.reduce((s, it) => s + Number(it.vl_icms_st || 0), 0));
   const vPIS  = arred(itens.reduce((s, it) => s + Number(it.vl_pis || 0), 0));
   const vCOF  = arred(itens.reduce((s, it) => s + Number(it.vl_cofins || 0), 0));
-  const vICMS = arred(itens.reduce((s, it) => s + Number(it.vl_icms || 0), 0));
-  const vBCICMS = arred(itens.reduce((s, it) => s + Number(it.vl_bc || 0), 0));
+  const isSimplesNacional = (empresa.regime_trib || 'S') === 'S';
+  // Para Simples Nacional/CSOSN 102 não existe vBC/vICMS no item; o total deve bater com soma dos itens gerados.
+  const vICMS = isSimplesNacional ? 0 : arred(itens.reduce((s, it) => s + Number(it.vl_icms || 0), 0));
+  const vBCICMS = isSimplesNacional ? 0 : arred(itens.reduce((s, it) => s + Number(it.vl_bc || 0), 0));
   const vFrete = Number(cabecalho.vl_frete || 0);
   const vSeg   = Number(cabecalho.vl_seguro || 0);
   const vOutro = Number(cabecalho.vl_despesa || 0);
