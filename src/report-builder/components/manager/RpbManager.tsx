@@ -43,7 +43,7 @@ const GRID_COLS: IGridColumn[] = [
   { key: 'descricao',        label: 'Descrição', width: '2fr' },
 ];
 
-type TView = 'list' | 'dados' | 'query' | 'filtros' | 'designer' | 'execute';
+type TView = 'list' | 'dados' | 'form' | 'query' | 'filtros' | 'designer' | 'execute';
 
 const FILTRO_TIPOS = [
   { v: 'text',         l: 'Texto' },

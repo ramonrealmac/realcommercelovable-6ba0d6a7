@@ -17,7 +17,7 @@ export interface INfeCabecalho {
   cadastro_id: number | null;
   deposito_id: number | null;
   origem_inclusao: TNfeOrigemInclusao;
-  modelo: number;
+  modelo: string;
   tp_nf: number;
   fin_nfe: number;
   nat_op: string;
@@ -26,8 +26,8 @@ export interface INfeCabecalho {
   c_stat: number | null;
   x_motivo: string | null;
   recibo_sefaz: string | null;
-  nr_nota: number;
-  serie: number;
+  nr_nota: string;
+  serie: string;
   dt_emissao: string | null;
   dt_entrada: string | null;
   dt_saida: string | null;
@@ -169,8 +169,8 @@ export interface INfeXmlItem {
 
 export interface INfeDadosXml {
   emitente: INfeXmlEmitente;
-  nr_nota: number;
-  serie: number;
+  nr_nota: string;
+  serie: string;
   dt_emissao: string;
   dt_saida: string;
   chave_nfe: string;

@@ -239,7 +239,7 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
         newBands[bandName] = {
           ...band,
           components: band.components.map(c =>
-            patches[c.id] ? { ...c, ...patches[c.id] } : c
+            (patches[c.id] ? { ...c, ...patches[c.id] } : c) as RpbComponent
           ),
         };
       }

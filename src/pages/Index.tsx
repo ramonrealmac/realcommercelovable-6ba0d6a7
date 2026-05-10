@@ -70,7 +70,7 @@ const AppContent = () => {
   const renderTabContent = (component: string, params?: any) => {
     switch (component) {
       case "cadastro-completo":
-        return <CadastroCompletoForm />;
+        return <CadastroCompletoForm formTitle="Cadastros" />;
       case "fornecedores-transportadores":
         return <FornecedorTransportadorForm />;
       case "funcionarios":
@@ -151,8 +151,9 @@ const AppContent = () => {
       case "fechamento-caixa":
         return <FechamentoCaixaForm />;
       case "suprimento-caixa":
+        return <SuprimentoSangriaForm tipo="SUP" />;
       case "sangria-caixa":
-        return <SuprimentoSangriaForm />;
+        return <SuprimentoSangriaForm tipo="SAN" />;
 
       default:
         if (component.startsWith("rpb-exec-")) {

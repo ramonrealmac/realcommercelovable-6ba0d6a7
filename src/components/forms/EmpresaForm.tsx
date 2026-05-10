@@ -479,7 +479,7 @@ const EmpresaForm: React.FC = () => {
   };
 
   /* ── field helper ── */
-  const XDisplayVal = (key: keyof TEmpresa) =>
+  const XDisplayVal = (key: keyof TEmpresa | string) =>
     XIsEditing ? (XEdit as any)[key] ?? "" : (XCurrent as any)?.[key] ?? "";
 
   const field = (key: keyof TEmpresa, label: string, opts?: { type?: string; readOnly?: boolean; className?: string; required?: boolean }) => {

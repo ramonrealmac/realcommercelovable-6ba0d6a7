@@ -8,6 +8,7 @@ const db = supabase as any;
 export type TFormMode = "view" | "edit" | "insert";
 
 export interface ICrudConfig<T extends Record<string, any>> {
+  [key: string]: any;
   XTableName: string;
   XPrimaryKey: keyof T & string;
   XTitle: string;

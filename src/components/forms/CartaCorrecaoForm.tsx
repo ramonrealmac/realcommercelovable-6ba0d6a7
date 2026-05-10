@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
 import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import type { IGridColumn } from "@/components/grid/DataGrid";
-import { Search, Send, FileText, CheckCircle2, Clock, AlertCircle, Printer } from "lucide-react";
+import { Search, Send, FileText, CheckCircle2, Clock, AlertCircle, Printer, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import NfeSearchDialog, { buscarNfePorNumero, INfeRow } from "./nfe/NfeSearchDialog";
 

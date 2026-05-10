@@ -459,7 +459,7 @@ const FuncionarioForm: React.FC = () => {
               columns={XLocalizarColumns}
               data={XFilteredData}
               onRowClick={handleSelectFromSearch}
-              onFilterChange={setXSearchFilters}
+              onFilterChange={(k, v) => setXSearchFilters(prev => ({ ...prev, [k]: v }))}
               isLoading={XLoading}
             />
           </div>
