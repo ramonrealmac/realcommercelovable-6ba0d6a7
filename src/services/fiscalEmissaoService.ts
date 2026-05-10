@@ -503,6 +503,35 @@ export const fiscalEmissaoService = {
   },
 
   /**
+   * Aguarda um fiscal_evento finalizar (CONCLUIDO/ERRO) consultando por polling.
+   * Retorna a resposta parseada do worker.
+   */
+  async aguardarEvento(eventoId: number, timeoutMs: number = 60000): Promise<{ success: boolean; resposta?: any; status?: string; mensagem?: string }> {
+    const intervalo = 1000;
+    const tentativas = Math.ceil(timeoutMs / intervalo);
+    for (let i = 0; i < tentativas; i++) {
+      await new Promise(r => setTimeout(r, intervalo));
+      const { data: ev } = await db
+        .from("fiscal_evento")
+        .select("status,resposta,mensagem_erro")
+        .eq("id", eventoId)
+        .maybeSingle();
+      if (!ev) continue;
+      if (ev.status === "CONCLUIDO" || ev.status === "ERRO") {
+        let resposta: any = null;
+        try { resposta = typeof ev.resposta === "string" ? JSON.parse(ev.resposta) : ev.resposta; } catch { /* ignore */ }
+        return {
+          success: ev.status === "CONCLUIDO" && !!resposta?.sucesso,
+          status: ev.status,
+          resposta,
+          mensagem: ev.mensagem_erro || resposta?.x_motivo || resposta?.erro || null,
+        };
+      }
+    }
+    return { success: false, status: "TIMEOUT", mensagem: "Tempo esgotado aguardando o Fiscal Worker." };
+  },
+
+  /**
    * Enfileira um comando LISTAR_IMPRESSORAS no worker e aguarda resposta (polling até 8s).
    */
   async listarImpressoras(empresaId: number): Promise<{ success: boolean; impressoras?: string[]; message?: string }> {
