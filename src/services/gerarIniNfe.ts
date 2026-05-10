@@ -262,11 +262,9 @@ export function gerarIniNfe(params: GerarIniParams): string {
   // ──────────────────────────────────────────────
   // [Transportador] — apenas NFe
   // ──────────────────────────────────────────────
-  if (!isNFCe) {
-    linhas.push(`[Transportador]`);
-    linhas.push(`modFrete=9`);
-    linhas.push(``);
-  }
+  linhas.push(`[Transportador]`);
+  linhas.push(`modFrete=9`);
+  linhas.push(``);
 
   // ──────────────────────────────────────────────
   // [pagNNN] — pagamentos
