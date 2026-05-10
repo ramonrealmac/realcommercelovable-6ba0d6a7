@@ -72,6 +72,36 @@ const processarEvento = async (evento) => {
             }
         }
 
+        // 2.b Buscar config de impressão (tp_imp_*, nm_impressora_*) baseado no documento referenciado
+        if (['EMITIR_NFE', 'EMITIR_NFCE'].includes(evento.comando) && evento.referencia_id && !payload.print_config) {
+            try {
+                const { data: nfe } = await supabase
+                    .from('fiscal_nfe_cabecalho')
+                    .select('modelo, serie, empresa_id')
+                    .eq('nfe_cabecalho_id', evento.referencia_id)
+                    .maybeSingle();
+                if (nfe) {
+                    const { data: ci } = await supabase
+                        .from('fiscal_config_item')
+                        .select('tp_imp_nfe, tp_imp_nfce, nm_impressora_nfe, nm_impressora_nfce')
+                        .eq('empresa_id', nfe.empresa_id)
+                        .eq('modelo', String(nfe.modelo))
+                        .eq('serie', String(nfe.serie))
+                        .maybeSingle();
+                    if (ci) {
+                        const isNfce = String(nfe.modelo) === '65' || evento.comando === 'EMITIR_NFCE';
+                        payload.print_config = {
+                            tp_imp: isNfce ? (ci.tp_imp_nfce || 'PDF') : (ci.tp_imp_nfe || 'PDF'),
+                            nm_impressora: isNfce ? (ci.nm_impressora_nfce || '') : (ci.nm_impressora_nfe || '')
+                        };
+                        logger.info(`Config de impressão: tp_imp=${payload.print_config.tp_imp} impressora=${payload.print_config.nm_impressora}`);
+                    }
+                }
+            } catch (e) {
+                logger.warn(`Falha ao buscar config de impressão: ${e.message}`);
+            }
+        }
+
         // 3. Chama a biblioteca nativa passando o JSON payload atualizado
         const resultado = await executarComandoFiscal(evento.comando, payload);
 
@@ -96,6 +126,7 @@ const processarEvento = async (evento) => {
                 x_motivo:     resultado.x_motivo || (resultado.erro || null),
                 chave_nfe:    resultado.chave_nfe || '',
                 nr_protocolo: resultado.nr_protocolo || '',
+                recibo_sefaz: resultado.recibo_sefaz || '',
                 st_nf:        resultado.sucesso ? 'A' : 'R', // A=Autorizada, R=Rejeitada
             };
             if (resultado.xml_retorno) updateNfe.xml_nf = resultado.xml_retorno;

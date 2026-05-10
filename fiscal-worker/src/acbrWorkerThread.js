@@ -53,6 +53,16 @@ const loadLibrary = (path, prefix) => {
                 StatusServico: lib.func('int __cdecl ' + prefix + '_StatusServico(void* handle, _Out_ char* sResposta, _Out_ int* esTamanho)')
             };
 
+            // Funções de impressão (apenas NFe/NFCe)
+            if (prefix === 'NFE') {
+                try {
+                    funcoes.ImprimirDANFEPDF = lib.func('int __cdecl NFE_ImprimirDANFEPDF(void* handle)');
+                } catch (e) { console.warn('[FiscalLib] ImprimirDANFEPDF indisponível:', e.message); }
+                try {
+                    funcoes.ImprimirDANFE = lib.func('int __cdecl NFE_ImprimirDANFE(void* handle, const char* eArquivoXml, const char* eImpressora, int nCopias, const char* eProtocolo, bool bMostrarPreview, const char* eMarcaDagua, bool bViaConsumidor)');
+                } catch (e) { console.warn('[FiscalLib] ImprimirDANFE indisponível:', e.message); }
+            }
+
             // Funções específicas da NFe
             // IMPORTANTE: A DLL não tem NFE_DistribuicaoDFe genérica!
             // As funções corretas são as três variantes abaixo, com AcUFAutor como INT.
@@ -101,21 +111,20 @@ const lerRetornoACBr = (lib, handle) => {
  * Retorna: { chave_nfe, nr_protocolo, c_stat, x_motivo }
  */
 const parsearRetornoNfe = (retorno) => {
-    if (!retorno) return { chave_nfe: null, nr_protocolo: null, c_stat: null, x_motivo: null };
+    if (!retorno) return { chave_nfe: null, nr_protocolo: null, c_stat: null, x_motivo: null, recibo_sefaz: null };
     
     const extrair = (chave) => {
-        const regex = new RegExp(`${chave}[=:]\\s*([^\\r\\n]+)`, 'i');
+        const regex = new RegExp(`${chave}[=:]\\s*"?([^\\r\\n",}]+)"?`, 'i');
         const m = retorno.match(regex);
         return m ? m[1].trim() : null;
     };
 
-    // Tenta formato INI (cStat=100, xMotivo=..., chNFe=..., nProt=...)
     let c_stat    = extrair('cStat') || extrair('CStat');
     let x_motivo  = extrair('xMotivo') || extrair('XMotivo');
     let chave_nfe = extrair('chNFe') || extrair('ChNFe') || extrair('ChaveNFe');
     let nr_prot   = extrair('nProt') || extrair('NProt') || extrair('Protocolo');
+    let recibo    = extrair('nRec') || extrair('NRec') || extrair('Recibo');
 
-    // Tenta extrair do XML embutido no retorno
     if (!chave_nfe) {
         const mChave = retorno.match(/chNFe="([^"]{44})"/i) || retorno.match(/<chNFe>([^<]{44})<\/chNFe>/i);
         if (mChave) chave_nfe = mChave[1];
@@ -132,13 +141,48 @@ const parsearRetornoNfe = (retorno) => {
         const mMot = retorno.match(/xMotivo="([^"]+)"/i) || retorno.match(/<xMotivo>([^<]+)<\/xMotivo>/i);
         if (mMot) x_motivo = mMot[1];
     }
+    if (!recibo) {
+        const mRec = retorno.match(/nRec="([^"]+)"/i) || retorno.match(/<nRec>([^<]+)<\/nRec>/i);
+        if (mRec) recibo = mRec[1];
+    }
 
-    return { chave_nfe, nr_protocolo: nr_prot, c_stat, x_motivo };
+    return { chave_nfe, nr_protocolo: nr_prot, c_stat, x_motivo, recibo_sefaz: recibo };
 };
 
 /**
- * Configura o Handle recém criado com os dados dinâmicos do Emitente
+ * Tenta imprimir DANFE/DANFCE baseado em print_config { tp_imp, nm_impressora }.
+ * Retorna o caminho do PDF gerado (quando aplicável) ou null.
  */
+const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave) => {
+    if (!printConfig) return null;
+    const tp = (printConfig.tp_imp || 'PDF').toUpperCase();
+    if (tp === 'NAO_IMPRIME' || tp === 'NAO IMPRIME' || tp === 'NONE') return null;
+    
+    try {
+        if (tp === 'IMPRESSORA' && printConfig.nm_impressora) {
+            lib.ConfigGravarValor(handle, "DANFe", "Impressora", printConfig.nm_impressora);
+        }
+        const pdfDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos/PDF");
+        if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
+        lib.ConfigGravarValor(handle, "DANFe", "PathPDF", pdfDir);
+        
+        if (tp === 'PDF' && lib.ImprimirDANFEPDF) {
+            const ret = lib.ImprimirDANFEPDF(handle);
+            console.log(`[FiscalLib] ImprimirDANFEPDF (${modeloLabel}) ret=${ret}`);
+            if (ret === 0 && chave) {
+                const pdf = path.join(pdfDir, `${chave}-procNFe.pdf`);
+                return fs.existsSync(pdf) ? pdf : pdfDir;
+            }
+        } else if (tp === 'IMPRESSORA' && lib.ImprimirDANFE) {
+            const ret = lib.ImprimirDANFE(handle, "", printConfig.nm_impressora || "", 1, "", false, "", false);
+            console.log(`[FiscalLib] ImprimirDANFE (${modeloLabel}) impressora=${printConfig.nm_impressora} ret=${ret}`);
+        }
+    } catch (e) {
+        console.warn(`[FiscalLib] Falha ao imprimir DANFE/DANFCE: ${e.message}`);
+    }
+    return null;
+};
+
 const configurarHandle = (lib, handle, configPayload) => {
     // Configuração dos Schemas XSD (Obrigatório para NFe/MDFe)
     const schemasPath = path.resolve(process.cwd(), "AcbrDLL/dep/Schemas/NFe");
@@ -301,14 +345,22 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 const parsed = parsearRetornoNfe(ultimoRetorno || xmlRetorno);
                 const sucesso = parsed.c_stat === '100';
                 
+                // Após sucesso, tentar imprimir DANFE conforme tp_imp_nfe configurado
+                let pdf_path = null;
+                if (sucesso) {
+                    pdf_path = tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, 'NFE', parsed.chave_nfe);
+                }
+                
                 return { 
                     sucesso,
                     chave_nfe: parsed.chave_nfe,
                     nr_protocolo: parsed.nr_protocolo,
                     c_stat: parsed.c_stat,
                     x_motivo: parsed.x_motivo,
+                    recibo_sefaz: parsed.recibo_sefaz,
                     xml_retorno: xmlRetorno,
                     retorno_completo: ultimoRetorno || xmlRetorno,
+                    pdf_path,
                     erro: sucesso ? null : (parsed.x_motivo || ultimoRetorno)
                 };
             });
@@ -340,14 +392,22 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 const parsed = parsearRetornoNfe(ultimoRetorno || xmlRetorno);
                 const sucesso = parsed.c_stat === '100';
                 
+                // Após sucesso, tentar imprimir DANFCE conforme tp_imp_nfce configurado
+                let pdf_path = null;
+                if (sucesso) {
+                    pdf_path = tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, 'NFCE', parsed.chave_nfe);
+                }
+                
                 return { 
                     sucesso,
                     chave_nfe: parsed.chave_nfe,
                     nr_protocolo: parsed.nr_protocolo,
                     c_stat: parsed.c_stat,
                     x_motivo: parsed.x_motivo,
+                    recibo_sefaz: parsed.recibo_sefaz,
                     xml_retorno: xmlRetorno,
                     retorno_completo: ultimoRetorno || xmlRetorno,
+                    pdf_path,
                     erro: sucesso ? null : (parsed.x_motivo || ultimoRetorno)
                 };
             });

@@ -156,6 +156,17 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
     loadData();
   }, [XEmpresaId, initialFilterId]);
 
+  // Realtime: refresh ao mudar status de NFes ou ao concluir um evento fiscal
+  useEffect(() => {
+    if (!XEmpresaId) return;
+    const ch = (supabase as any)
+      .channel(`nfe-grid-${XEmpresaId}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fiscal_nfe_cabecalho', filter: `empresa_id=eq.${XEmpresaId}` }, () => loadData())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fiscal_evento', filter: `empresa_id=eq.${XEmpresaId}` }, () => loadData())
+      .subscribe();
+    return () => { try { (supabase as any).removeChannel(ch); } catch {} };
+  }, [XEmpresaId]);
+
   const handleTransmitir = async (row: any) => {
     if (!XEmpresaId) return;
     toast.info("Enfileirando transmissão para o Fiscal Worker...");
@@ -260,6 +271,7 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
           showFilters
           filterValues={XSearchFilters}
           onFilterChange={(k, v) => setXSearchFilters(prev => ({ ...prev, [k]: v }))}
+          onRowDoubleClick={(row) => { setXLogNfeId(row.nfe_cabecalho_id); setXLogDialogOpen(true); }}
           toolbarLeft={
             <div className="flex items-center gap-2 bg-secondary/30 p-1 rounded-lg border border-border mr-4">
                <div className="flex flex-col px-2">

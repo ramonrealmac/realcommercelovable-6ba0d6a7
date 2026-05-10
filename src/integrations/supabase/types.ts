@@ -2713,9 +2713,13 @@ export type Database = {
           fiscal_config_item_id: number
           id_csc: string | null
           modelo: string
+          nm_impressora_nfce: string | null
+          nm_impressora_nfe: string | null
           nome: string | null
           sequencia: number
           serie: string
+          tp_imp_nfce: string | null
+          tp_imp_nfe: string | null
         }
         Insert: {
           csc?: string | null
@@ -2723,9 +2727,13 @@ export type Database = {
           fiscal_config_item_id?: number
           id_csc?: string | null
           modelo?: string
+          nm_impressora_nfce?: string | null
+          nm_impressora_nfe?: string | null
           nome?: string | null
           sequencia?: number
           serie?: string
+          tp_imp_nfce?: string | null
+          tp_imp_nfe?: string | null
         }
         Update: {
           csc?: string | null
@@ -2733,9 +2741,13 @@ export type Database = {
           fiscal_config_item_id?: number
           id_csc?: string | null
           modelo?: string
+          nm_impressora_nfce?: string | null
+          nm_impressora_nfe?: string | null
           nome?: string | null
           sequencia?: number
           serie?: string
+          tp_imp_nfce?: string | null
+          tp_imp_nfe?: string | null
         }
         Relationships: []
       }

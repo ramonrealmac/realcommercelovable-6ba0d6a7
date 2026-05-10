@@ -50,6 +50,24 @@ export const executarComandoFiscal = async (comando, jsonPayload) => {
         });
     }
 
+    if (comando === 'LISTAR_IMPRESSORAS') {
+        return new Promise((resolve) => {
+            const psCommand = `powershell -Command "Get-Printer | Select-Object Name | ConvertTo-Json"`;
+            exec(psCommand, { maxBuffer: 1024 * 1024 }, (error, stdout) => {
+                if (error) { resolve({ sucesso: false, erro: error.message, impressoras: [] }); return; }
+                try {
+                    const out = stdout.trim();
+                    if (!out) { resolve({ sucesso: true, impressoras: [] }); return; }
+                    const parsed = JSON.parse(out);
+                    const arr = Array.isArray(parsed) ? parsed : [parsed];
+                    resolve({ sucesso: true, impressoras: arr.map(p => p.Name).filter(Boolean) });
+                } catch (e) {
+                    resolve({ sucesso: false, erro: e.message, impressoras: [] });
+                }
+            });
+        });
+    }
+
     // Para todos os outros comandos, instanciar a Worker Thread
     return new Promise((resolve, reject) => {
         console.log(`[Worker Proxy] Despachando comando ${comando} para a Worker Thread...`);
