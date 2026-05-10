@@ -29,6 +29,15 @@ function mapearSefazPagamento(tp: string): string {
   return mapa[tp?.toUpperCase()] || "01";
 }
 
+function validarIniAcbr(ini: string) {
+  const proibidos = ["Modelo=", "Serie=", "NumDocumento=", "RazaoSocial=", "CodigoMunicipio=", "FormaPagamento001=", "[Item001]", "[Pagamento]"];
+  const encontrado = proibidos.find((token) => ini.includes(token));
+  if (encontrado) throw new Error(`INI fiscal em layout legado detectado (${encontrado}). Recarregue a aplicação e tente novamente.`);
+  if (!ini.includes("[infNFe]") || !ini.includes("[Produto001]") || !ini.includes("[pag001]")) {
+    throw new Error("INI fiscal incompleto para ACBrLib.");
+  }
+}
+
 export interface FiscalEmissaoResult {
   success: boolean;
   nfe_cabecalho_id?: number;
@@ -365,6 +374,7 @@ export const fiscalEmissaoService = {
         fiscalConfig: fConfig,
         configItem: fConfigItem
       });
+      validarIniAcbr(iniContent);
 
       const ambienteNfe = Number(fConfig?.ambiente_nfe || 2);
       const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -380,7 +390,7 @@ export const fiscalEmissaoService = {
         payload: {
           dados: iniContent,
           config: {
-            uf: empresa.endereco_uf || empresa.cidade?.uf || "SP",
+            uf: empresa.endereco_uf || empresa.cidade?.estado_id || empresa.cidade?.uf || "SP",
             modelo: nfeCabecalho.modelo,
             ambiente: ambienteNfe,
             certificadoPath: fConfig.certificado,
@@ -461,6 +471,7 @@ export const fiscalEmissaoService = {
         fiscalConfig: fConfig,
         configItem: fConfigItem
       });
+      validarIniAcbr(iniContent);
 
       const ambienteNfe = Number(fConfig?.ambiente_nfe || 2);
       const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -476,7 +487,7 @@ export const fiscalEmissaoService = {
         payload: {
           dados: iniContent,
           config: {
-            uf: empresa.endereco_uf || empresa.cidade?.uf || "SP",
+            uf: empresa.endereco_uf || empresa.cidade?.estado_id || empresa.cidade?.uf || "SP",
             modelo: cab.modelo,
             ambiente: ambienteNfe,
             certificadoPath: fConfig.certificado,

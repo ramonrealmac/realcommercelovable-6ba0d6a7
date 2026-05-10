@@ -48,6 +48,15 @@ const decodeSenhaCertificado = (senha) => {
     catch { return senha; }
 };
 
+const validarIniAcbr = (ini) => {
+    const proibidos = ['Modelo=', 'Serie=', 'NumDocumento=', 'RazaoSocial=', 'CodigoMunicipio=', 'FormaPagamento001=', '[Item001]', '[Pagamento]'];
+    const encontrado = proibidos.find(token => String(ini || '').includes(token));
+    if (encontrado) throw new Error(`INI fiscal em layout legado detectado após regeneração (${encontrado}).`);
+    if (!String(ini || '').includes('[infNFe]') || !String(ini || '').includes('[Produto001]') || !String(ini || '').includes('[pag001]')) {
+        throw new Error('INI fiscal incompleto para ACBrLib após regeneração.');
+    }
+};
+
 const montarPayloadEmissaoNfe = async (evento, payloadAtual) => {
     const nfeId = evento.nfe_cabecalho_id || evento.referencia_id;
     if (!nfeId) return payloadAtual;
@@ -78,6 +87,7 @@ const montarPayloadEmissaoNfe = async (evento, payloadAtual) => {
     const empresa = await attachCidade(empresaRaw);
     const cadastro = await attachCidade(cadastroRaw);
     const iniContent = gerarIniNfe({ cabecalho: cab, itens: itens || [], pagamentos: pagamentos || [], empresa, cadastro, fiscalConfig, configItem });
+    validarIniAcbr(iniContent);
     const isNfce = String(cab.modelo) === '65' || evento.comando === 'EMITIR_NFCE';
 
     return {

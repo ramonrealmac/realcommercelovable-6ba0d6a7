@@ -28,8 +28,12 @@ export function gerarIniNfe(params: GerarIniParams): string {
   const ambiente = String(fiscalConfig.ambiente_nfe || 2); // 1=Produção, 2=Homologação
   const cnpjEmit = limparNumeros(empresa.cnpj || '');
 
-  const cMunEmit = String(empresa.cidade?.cd_ibge || '');
-  const ufEmit = empresa.cidade?.estado_id || '';
+  const cidadeEmit = normalizarCidadeFiscal(empresa.cidade, empresa);
+  const cMunEmit = cidadeEmit.cd_ibge;
+  const ufEmit = cidadeEmit.estado_id;
+  if (!/^\d{7}$/.test(cMunEmit) || !ufEmit) {
+    throw new Error(`Empresa #${empresa?.empresa_id || ''} sem cidade fiscal válida (cMun/UF). Verifique endereco_cidade_id/cd_ibge.`);
+  }
   const cUF = cMunEmit.substring(0, 2) || '35';
 
   // Sempre usar a hora atual — a SEFAZ rejeita NFC-e com data/hora atrasada (cStat 704)
@@ -97,6 +101,7 @@ export function gerarIniNfe(params: GerarIniParams): string {
   // ──────────────────────────────────────────────
   // [Destinatario] — sempre da tabela CADASTRO via cadastro_id
   // ──────────────────────────────────────────────
+  const cidadeDest = normalizarCidadeFiscal(cadastro?.cidade, cadastro, cidadeEmit);
   const docDest = limparNumeros(cadastro?.cnpj || '');
   const docValido = (docDest.length === 14 && validarCNPJ(docDest)) ||
                     (docDest.length === 11 && validarCPF(docDest));
@@ -110,16 +115,19 @@ export function gerarIniNfe(params: GerarIniParams): string {
     linhas.push(`indIEDest=${indIE}`);
     if (ie && indIE === '1') linhas.push(`IE=${ie}`);
     if (cadastro.email) linhas.push(`Email=${cadastro.email}`);
-    linhas.push(`xLgr=${cadastro.endereco_logradouro || ''}`);
-    linhas.push(`nro=${cadastro.endereco_numero || 'SN'}`);
-    if (cadastro.endereco_bairro) linhas.push(`xBairro=${cadastro.endereco_bairro}`);
-    if (cadastro.cidade?.cd_ibge) linhas.push(`cMun=${cadastro.cidade.cd_ibge}`);
-    if (cadastro.cidade?.descricao) linhas.push(`xMun=${cadastro.cidade.descricao}`);
-    if (cadastro.cidade?.estado_id) linhas.push(`UF=${cadastro.cidade.estado_id}`);
-    if (cadastro.endereco_cep) linhas.push(`CEP=${limparNumeros(cadastro.endereco_cep)}`);
-    linhas.push(`cPais=1058`);
-    linhas.push(`xPais=BRASIL`);
-    if (cadastro.fone_geral) linhas.push(`Fone=${limparNumeros(cadastro.fone_geral)}`);
+    const temEnderecoDest = !!(cadastro.endereco_logradouro && cidadeDest.cd_ibge && cidadeDest.descricao && cidadeDest.estado_id);
+    if (temEnderecoDest) {
+      linhas.push(`xLgr=${cadastro.endereco_logradouro}`);
+      linhas.push(`nro=${cadastro.endereco_numero || 'SN'}`);
+      if (cadastro.endereco_bairro) linhas.push(`xBairro=${cadastro.endereco_bairro}`);
+      linhas.push(`cMun=${cidadeDest.cd_ibge}`);
+      linhas.push(`xMun=${cidadeDest.descricao}`);
+      linhas.push(`UF=${cidadeDest.estado_id}`);
+      if (cadastro.endereco_cep) linhas.push(`CEP=${limparNumeros(cadastro.endereco_cep)}`);
+      linhas.push(`cPais=1058`);
+      linhas.push(`xPais=BRASIL`);
+      if (cadastro.fone_geral) linhas.push(`Fone=${limparNumeros(cadastro.fone_geral)}`);
+    }
     linhas.push(``);
   }
   // NFCe sem destinatário identificado: omitir o bloco inteiro (ACBrLib aceita)
@@ -315,6 +323,14 @@ export function gerarIniNfe(params: GerarIniParams): string {
 
 function limparNumeros(s: string): string {
   return (s || '').replace(/\D/g, '');
+}
+
+function normalizarCidadeFiscal(cidade: any, registro: any = {}, fallback: any = {}) {
+  return {
+    cd_ibge: String(cidade?.cd_ibge || cidade?.codigo_ibge || registro?.codigo_municipio || registro?.endereco_codigo_municipio || fallback.cd_ibge || ''),
+    descricao: cidade?.descricao || cidade?.nm_cidade || registro?.municipio || registro?.endereco_municipio || fallback.descricao || '',
+    estado_id: cidade?.estado_id || cidade?.uf || registro?.endereco_uf || registro?.uf || fallback.estado_id || '',
+  };
 }
 
 function formatarDhEmi(d: string | Date): string {
