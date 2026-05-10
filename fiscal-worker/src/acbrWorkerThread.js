@@ -470,6 +470,16 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 return { sucesso: true, xml_retorno: bufferResposta.toString('utf8', 0, bufferTamanho.readInt32LE(0)) };
             });
 
+        case 'IMPRIMIR_NFE':
+        case 'IMPRIMIR_NFCE':
+            return executarNaDLL(libNFe, config, async (handle) => {
+                libNFe.LimparLista(handle);
+                const ret = libNFe.CarregarXML(handle, dados);
+                if (ret !== 0) return { sucesso: false, erro: '[IMPRIMIR] CarregarXML: ' + lerRetornoACBr(libNFe, handle), pdf_path: null };
+                const modeloLabel = comando === 'IMPRIMIR_NFCE' ? 'NFCE' : 'NFE';
+                return tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, modeloLabel, jsonPayload.chave);
+            });
+
         case 'CANCELAR_NFE':
         case 'CANCELAR_NFCE':
             // O payload deve conter: chave, justificativa, cnpj
