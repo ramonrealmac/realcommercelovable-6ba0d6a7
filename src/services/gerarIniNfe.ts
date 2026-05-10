@@ -232,7 +232,7 @@ export function gerarIniNfe(params: GerarIniParams): string {
   // Para Simples Nacional/CSOSN 102 não existe vBC/vICMS no item; o total deve bater com soma dos itens gerados.
   const vICMS = isSimplesNacional ? 0 : arred(itens.reduce((s, it) => s + Number(it.vl_icms || 0), 0));
   const vBCICMS = isSimplesNacional ? 0 : arred(itens.reduce((s, it) => s + Number(it.vl_bc || 0), 0));
-  const vFrete = Number(cabecalho.vl_frete || 0);
+  const vFrete = isNFCe ? 0 : Number(cabecalho.vl_frete || 0);
   const vSeg   = Number(cabecalho.vl_seguro || 0);
   const vOutro = Number(cabecalho.vl_despesa || 0);
   const vNF = arred(vProd + vIPI + vST + vFrete + vSeg + vOutro - vDesc);
@@ -262,11 +262,9 @@ export function gerarIniNfe(params: GerarIniParams): string {
   // ──────────────────────────────────────────────
   // [Transportador] — apenas NFe
   // ──────────────────────────────────────────────
-  if (!isNFCe) {
-    linhas.push(`[Transportador]`);
-    linhas.push(`modFrete=9`);
-    linhas.push(``);
-  }
+  linhas.push(`[Transportador]`);
+  linhas.push(`modFrete=9`);
+  linhas.push(``);
 
   // ──────────────────────────────────────────────
   // [pagNNN] — pagamentos
