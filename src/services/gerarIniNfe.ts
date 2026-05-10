@@ -26,7 +26,8 @@ export function gerarIniNfe(params: GerarIniParams): string {
   const hrSaida = cabecalho.dt_saida ? formatarHora(new Date(cabecalho.dt_saida)) : hrEmissao;
   const ambiente = String(fiscalConfig.ambiente_nfe || 2); // 1=Produção, 2=Homologação
   const cnpjEmitente = limparNumeros(empresa.cnpj || '');
-  const cUF = mapearCodigoUF(empresa.cidade?.uf || empresa.cidade?.estado_id || 'SP');
+  const ufEmitente = empresa.cidade?.estado_id || empresa.cidade?.uf || '';
+  const cUF = mapearCodigoUF(ufEmitente);
 
   const linhas: string[] = [];
 
