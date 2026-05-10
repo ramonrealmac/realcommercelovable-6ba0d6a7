@@ -40,7 +40,11 @@ const attachCidade = async (registro) => {
 
 const decodeSenhaCertificado = (senha) => {
     if (!senha) return '';
-    try { return Buffer.from(senha, 'base64').toString('ascii'); }
+    try {
+        const decoded = Buffer.from(senha, 'base64').toString('utf8');
+        const normalizada = Buffer.from(decoded, 'utf8').toString('base64').replace(/=+$/, '');
+        return normalizada === String(senha).replace(/=+$/, '') ? decoded : senha;
+    }
     catch { return senha; }
 };
 
