@@ -65,7 +65,8 @@ const FiscalConfigForm = () => {
       email_smtp_ssl: false,
       email_smtp_tls: true,
       email_assunto_nfe: "NF-e emitida: [CHAVE]",
-      email_corpo_nfe: "Olá, segue em anexo a NF-e e o DANFE referente à sua compra."
+      email_corpo_nfe: "Olá, segue em anexo a NF-e e o DANFE referente à sua compra.",
+      pasta_arquivos_fiscais: ""
     }
   });
 
