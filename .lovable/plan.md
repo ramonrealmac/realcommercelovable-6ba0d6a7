@@ -1,48 +1,63 @@
-Plano para parar o ciclo de erros no emissor fiscal multithread:
+# PDV Mobile — Layout 2× rolável + Atalhos clicáveis
 
-1. Padronizar o status fiscal autorizado
-- Ajustar o worker para gravar `fiscal_evento.status = 'EMITIDO'` quando a SEFAZ retornar autorização (`cStat=100`), mantendo `ERRO` para rejeições/falhas.
-- Manter compatibilidade no frontend/polling aceitando `EMITIDO` e `CONCLUIDO` como finalizados positivos, para não quebrar eventos antigos.
+## Objetivo
+No mobile (`< 768px`), a tela do PDV/Caixa deve ter **largura igual a 2× a viewport** com **rolagem horizontal**, de modo que:
+- O **primeiro "painel" (100vw)** mostre a Venda Direta (busca de produto + carrinho), ocupando a tela inteira.
+- O **segundo "painel" (100vw)** mostre Pedidos a Receber + Resumo + Finalizar Venda.
+- O usuário arrasta lateralmente para alternar entre as duas áreas.
 
-2. Corrigir a gravação do cabeçalho da NFC-e
-- No worker, atualizar `fiscal_nfe_cabecalho` logo após o retorno da DLL com:
-  - `chave_nfe`
-  - `nr_protocolo`
-  - `recibo_sefaz`
-  - `c_stat`
-  - `x_motivo`
-  - `xml_nf`
-  - `st_nf = 'E'` quando autorizado e `st_nf = 'R'` quando rejeitado
-- Usar `.select()` após o `.update()` para capturar erro real de RLS/schema e logar quando nenhuma linha for atualizada.
-- Tratar `recibo_sefaz` como string vazia quando a SEFAZ retornar `NRec=''`, pois em NFC-e síncrona autorizada o recibo pode vir vazio.
+No desktop (`≥ 768px`), o layout atual de 12 colunas (8/4) é mantido sem alterações.
 
-3. Preservar corretamente a versão MultiThread da ACBrLib
-- Manter o modelo atual com um `handle` isolado por chamada (`NFE_Inicializar(handle, threadIni, ...)`) e INI temporário por thread.
-- Não voltar para chamadas globais/single-thread.
-- Revisar a ordem de pós-processamento para que a impressão/PDF aconteça somente depois do retorno autorizado e sem impedir a gravação dos dados fiscais caso a impressão falhe.
+Adicionalmente, a barra inferior de atalhos (F1, F2, F3, F4, F5, F6, F9, Esc) — hoje renderizada apenas como `<kbd>` informativos — passa a ser **botões clicáveis** que executam a mesma ação do teclado, tornando o PDV utilizável sem teclado físico (ideal para celular/tablet).
 
-4. Corrigir o fluxo PDV sem abrir gerenciador fiscal
-- Garantir que o PDV apenas crie o documento, enfileire o evento e aguarde o worker.
-- Se autorizado, mostrar sucesso com a chave e concluir a venda.
-- Se rejeitado/erro, mostrar a mensagem real da SEFAZ.
-- A impressão automática seguirá `tp_imp_nfce/tp_imp_nfe` e `nm_impressora_nfce/nm_impressora_nfe` no worker.
+## Mudanças (arquivo único: `src/components/forms/pdv/PdvTela.tsx`)
 
-5. Corrigir a grade/gerenciador para refletir o status real
-- Atualizar o mapa de status da grade para exibir `E` como Emitida/Autorizada, `R` como Rejeitada, `A` como Pendente/Aberta e `C` como Cancelada.
-- Ajustar o refresh em tempo real para reagir ao status `EMITIDO` também.
+### 1. Grid principal responsivo (linha 678)
+Substituir o container do grid por uma estrutura híbrida:
 
-6. Recuperar eventos já autorizados que não atualizaram cabeçalho
-- Criar uma migração segura de correção pontual para preencher `fiscal_nfe_cabecalho` a partir de `fiscal_evento.resposta` nos eventos já autorizados, incluindo os IDs 25 e 27.
-- Isso corrige os registros históricos onde o evento mostra `cStat=100`, mas o cabeçalho ficou sem chave/protocolo/cStat.
+- **Desktop (`md:`)**: mantém `grid grid-cols-12 gap-3 p-3` (8/4) como hoje.
+- **Mobile**: usa `flex` com `overflow-x-auto snap-x snap-mandatory`, e cada coluna recebe `w-screen snap-start shrink-0` (em vez de `col-span-*`). Largura total natural = 2× viewport.
 
-Arquivos previstos:
-- `fiscal-worker/src/index.js`
-- `src/services/fiscalEmissaoService.ts`
-- `src/components/forms/pdv/OpcoesPagamentoDialog.tsx` se necessário
-- `src/components/forms/LiestaNfeEmitidaForm.tsx`
-- Nova migration Supabase para backfill dos documentos já autorizados
+Forma proposta (Tailwind):
 
-Observação técnica dos logs da nota 27:
-- O evento `#137` está autorizado (`cStat=100`, chave `21260536809394000170650010000000161557786686`, protocolo `321260000045319`).
-- O cabeçalho `fiscal_nfe_cabecalho_id=27` continua sem chave/protocolo/cStat.
-- O problema atual não é a autorização na DLL; é a persistência pós-retorno e a inconsistência de status (`CONCLUIDO` no evento vs campos fiscais não gravados no cabeçalho).
+```text
+container:  flex overflow-x-auto snap-x snap-mandatory
+            md:grid md:grid-cols-12 md:gap-3 md:overflow-hidden
+            p-3 flex-1
+
+coluna 1:   w-screen shrink-0 snap-start
+            md:w-auto md:shrink md:col-span-8
+            (resto das classes atuais preservadas)
+
+coluna 2:   w-screen shrink-0 snap-start
+            md:w-auto md:shrink md:col-span-4
+            (resto preservado)
+```
+
+Observação técnica: como `w-screen` em mobile inclui o `p-3` do container, ajustar para `w-[calc(100vw-1.5rem)]` ou remover padding lateral em mobile (`px-0 md:p-3`) para que cada painel encaixe perfeitamente na tela. Adicionar `scroll-smooth` para experiência melhor.
+
+### 2. Atalhos como botões clicáveis (linhas 888–905)
+Refatorar a barra de atalhos para que cada item seja um `<button>` em vez de `<span>`. Cada botão dispara a mesma ação que o `useEffect` de `keydown` já executa:
+
+- **F1** → `setXShowAtalhos(p => !p)`
+- **F2** → focar `searchRef`
+- **F3** → `setXOpenCliente(true)` (se `!XPedidoSel`)
+- **F4** → `setXOpenVend(true)` (se `!XPedidoSel && XPodeInfVend`)
+- **F5** → `carregarPedidos()`
+- **F6** → `setXOpenDesc(true)` (se `!XPedidoSel && XCart.length > 0`)
+- **F9** → `finalizarVenda()`
+- **Esc** → `setXPedidoSel(null)`
+
+O badge (`<kbd>`) continua aparecendo dentro do botão à esquerda do label, preservando o visual atual. Em mobile, a barra ganha `overflow-x-auto` para acomodar todos os botões.
+
+Para evitar duplicação entre teclado e clique, extrair as ações em um pequeno objeto/handler reutilizado por ambos os caminhos (opcional; pode-se manter inline se preferir mudança mínima).
+
+### 3. Sem mudanças em
+- Lógica de negócio (criação de movimento, pagamento, fiscal, impressão)
+- Outros formulários do PDV (FuncoesDialog, PagamentoDialog, etc.)
+- Layout desktop (mantido idêntico via breakpoint `md:`)
+
+## Resultado esperado
+
+- **Desktop**: nenhum impacto visual.
+- **Mobile**: ao abrir o PDV, vê-se a Venda Direta ocupando 100% da tela. Deslizando para a direita (ou clicando o atalho), aparece Pedidos a Receber + Resumo + botão Finalizar. Os botões F1…F9 ficam tocáveis para uso sem teclado.
