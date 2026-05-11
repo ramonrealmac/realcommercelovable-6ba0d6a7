@@ -2602,6 +2602,14 @@ export type Database = {
           dfe_maxnsu_busca: number
           dt_alteracao: string | null
           dt_cadastro: string | null
+          email_assunto_nfe: string | null
+          email_corpo_nfe: string | null
+          email_smtp_host: string | null
+          email_smtp_pass: string | null
+          email_smtp_port: number | null
+          email_smtp_ssl: boolean | null
+          email_smtp_tls: boolean | null
+          email_smtp_user: string | null
           empresa_id: number
           excluido: boolean | null
           licenca: string | null
@@ -2640,6 +2648,14 @@ export type Database = {
           dfe_maxnsu_busca?: number
           dt_alteracao?: string | null
           dt_cadastro?: string | null
+          email_assunto_nfe?: string | null
+          email_corpo_nfe?: string | null
+          email_smtp_host?: string | null
+          email_smtp_pass?: string | null
+          email_smtp_port?: number | null
+          email_smtp_ssl?: boolean | null
+          email_smtp_tls?: boolean | null
+          email_smtp_user?: string | null
           empresa_id: number
           excluido?: boolean | null
           licenca?: string | null
@@ -2678,6 +2694,14 @@ export type Database = {
           dfe_maxnsu_busca?: number
           dt_alteracao?: string | null
           dt_cadastro?: string | null
+          email_assunto_nfe?: string | null
+          email_corpo_nfe?: string | null
+          email_smtp_host?: string | null
+          email_smtp_pass?: string | null
+          email_smtp_port?: number | null
+          email_smtp_ssl?: boolean | null
+          email_smtp_tls?: boolean | null
+          email_smtp_user?: string | null
           empresa_id?: number
           excluido?: boolean | null
           licenca?: string | null
@@ -3305,6 +3329,7 @@ export type Database = {
           created_at: string
           deposito_id: number | null
           dt_alteracao: string | null
+          dt_cancelamento: string | null
           dt_emissao: string | null
           dt_entrada: string | null
           dt_saida: string | null
@@ -3312,6 +3337,7 @@ export type Database = {
           excluido: boolean
           fin_nfe: number
           modelo: string
+          motivo_cancelamento: string | null
           movimento_id: number | null
           nat_op: string
           nfe_cabecalho_id: number
@@ -3319,6 +3345,7 @@ export type Database = {
           nr_protocolo: string
           obs_nf: string
           origem_inclusao: string
+          protocolo_cancelamento: string | null
           recibo_sefaz: string | null
           serie: string
           st_nf: string
@@ -3350,6 +3377,7 @@ export type Database = {
           created_at?: string
           deposito_id?: number | null
           dt_alteracao?: string | null
+          dt_cancelamento?: string | null
           dt_emissao?: string | null
           dt_entrada?: string | null
           dt_saida?: string | null
@@ -3357,6 +3385,7 @@ export type Database = {
           excluido?: boolean
           fin_nfe?: number
           modelo?: string
+          motivo_cancelamento?: string | null
           movimento_id?: number | null
           nat_op?: string
           nfe_cabecalho_id?: never
@@ -3364,6 +3393,7 @@ export type Database = {
           nr_protocolo?: string
           obs_nf?: string
           origem_inclusao?: string
+          protocolo_cancelamento?: string | null
           recibo_sefaz?: string | null
           serie?: string
           st_nf?: string
@@ -3395,6 +3425,7 @@ export type Database = {
           created_at?: string
           deposito_id?: number | null
           dt_alteracao?: string | null
+          dt_cancelamento?: string | null
           dt_emissao?: string | null
           dt_entrada?: string | null
           dt_saida?: string | null
@@ -3402,6 +3433,7 @@ export type Database = {
           excluido?: boolean
           fin_nfe?: number
           modelo?: string
+          motivo_cancelamento?: string | null
           movimento_id?: number | null
           nat_op?: string
           nfe_cabecalho_id?: never
@@ -3409,6 +3441,7 @@ export type Database = {
           nr_protocolo?: string
           obs_nf?: string
           origem_inclusao?: string
+          protocolo_cancelamento?: string | null
           recibo_sefaz?: string | null
           serie?: string
           st_nf?: string
