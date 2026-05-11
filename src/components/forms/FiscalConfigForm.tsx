@@ -83,7 +83,8 @@ const FiscalConfigForm = () => {
           .select(`
             tipo_certificado, certificado, senha_certificado, ambiente_nfe, cliente_padrao_id,
             email_smtp_host, email_smtp_port, email_smtp_user, email_smtp_pass, 
-            email_smtp_ssl, email_smtp_tls, email_assunto_nfe, email_corpo_nfe
+            email_smtp_ssl, email_smtp_tls, email_assunto_nfe, email_corpo_nfe,
+            pasta_arquivos_fiscais
           `)
           .eq("empresa_id", XEmpresaId)
           .maybeSingle();
