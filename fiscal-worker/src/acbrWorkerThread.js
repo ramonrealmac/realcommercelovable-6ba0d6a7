@@ -638,7 +638,7 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                             if (retPdf === 0) {
                                 // O PDF do evento costuma ir para o PathPDF definido (AcbrDLL/Arquivos/PDF)
                                 // O nome costuma ser {chave}-procEventoNFe.pdf
-                                const pdfDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos/PDF");
+                                const pdfDir = path.join(resolverBaseArquivos(config), "PDF");
                                 const pdfName = eventFile.replace('.xml', '.pdf');
                                 const pdfPath = path.join(pdfDir, pdfName);
                                 
