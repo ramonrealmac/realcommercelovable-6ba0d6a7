@@ -597,7 +597,7 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 const ret = libNFe.CarregarXML(handle, dados);
                 if (ret !== 0) return { sucesso: false, erro: '[IMPRIMIR] CarregarXML: ' + lerRetornoACBr(libNFe, handle), pdf_path: null };
                 const modeloLabel = comando === 'IMPRIMIR_NFCE' ? 'NFCE' : 'NFE';
-                return tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, modeloLabel, jsonPayload.chave);
+                return tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, modeloLabel, jsonPayload.chave, config);
             });
 
         case 'CANCELAR_NFE':
