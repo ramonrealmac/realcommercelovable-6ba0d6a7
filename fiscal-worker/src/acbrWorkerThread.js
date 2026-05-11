@@ -362,8 +362,8 @@ const configurarHandle = (lib, handle, configPayload) => {
     // Versão do schema de Distribuição DFe (não sobrescreve SSL definido acima)
     lib.ConfigGravarValor(handle, "DFe", "VersaoDistribuicaoDFe", "1.01");
     
-    // Ativar logs e salvamento de arquivos
-    const arquivosDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos");
+    // Ativar logs e salvamento de arquivos (mesma base parametrizada)
+    const arquivosDir = baseArquivos;
     const eventoDir = path.resolve(arquivosDir, "Evento");
     const pdfDir = path.resolve(arquivosDir, "PDF");
     
