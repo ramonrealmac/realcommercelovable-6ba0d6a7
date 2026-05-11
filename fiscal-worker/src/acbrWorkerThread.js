@@ -83,6 +83,11 @@ const loadLibrary = (path, prefix) => {
                 } catch (e) {
                     console.warn('[FiscalLib] EnviarEmail indisponível:', e.message);
                 }
+                try {
+                    funcoes.ImprimirEventoPDF = lib.func('int __cdecl NFE_ImprimirEventoPDF(void* handle, const char* eArquivoXmlEvento, const char* eArquivoXmlNFe)');
+                } catch (e) {
+                    console.warn('[FiscalLib] ImprimirEventoPDF indisponível:', e.message);
+                }
             }
 
             // Funções específicas da NFe
@@ -171,6 +176,11 @@ const parsearRetornoNfe = (retorno) => {
     return { chave_nfe, nr_protocolo: nr_prot, c_stat, x_motivo, recibo_sefaz: recibo };
 };
 
+const waitSync = (ms) => {
+    const start = Date.now();
+    while (Date.now() - start < ms) { }
+};
+
 /**
  * Tenta imprimir DANFE/DANFCE baseado em print_config { tp_imp, nm_impressora }.
  * Retorna um objeto de resultado e nunca propaga erro para o fluxo fiscal.
@@ -186,45 +196,77 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave) => {
         }
         const pdfDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos/PDF");
         if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
+        
+        // Limpa arquivos antigos da mesma chave para evitar pegar o arquivo errado
+        if (chave) {
+            try {
+                const files = fs.readdirSync(pdfDir);
+                for (const f of files) {
+                    if (f.includes(chave) && f.toLowerCase().endsWith('.pdf')) {
+                        fs.unlinkSync(path.join(pdfDir, f));
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        }
+
         lib.ConfigGravarValor(handle, "DANFe", "PathPDF", pdfDir);
-        lib.ConfigGravarValor(handle, "NFe", "PathPDF", pdfDir); // Duplicado em NFe por segurança
+        lib.ConfigGravarValor(handle, "NFe", "PathPDF", pdfDir); 
         lib.ConfigGravarValor(handle, "DANFe", "MostraPreview", "0");
         lib.ConfigGravarValor(handle, "DANFe", "MostraStatus", "0");
         
         if (tp === 'PDF' && lib.ImprimirDANFEPDF) {
             const ret = lib.ImprimirDANFEPDF(handle);
             console.log(`[FiscalLib] ImprimirDANFEPDF (${modeloLabel}) ret=${ret}`);
-            if (ret !== 0) return { sucesso: false, erro: lerRetornoACBr(lib, handle) || `ImprimirDANFEPDF retornou ${ret}`, pdf_path: null };
+            if (ret !== 0) {
+                const errDll = lerRetornoACBr(lib, handle);
+                console.error(`[FiscalLib] Erro na DLL ao gerar PDF: ${errDll}`);
+                return { sucesso: false, erro: errDll || `ImprimirDANFEPDF retornou ${ret}`, pdf_path: null };
+            }
             
-            // Tenta localizar o arquivo gerado
-            const pdfFile = chave ? path.join(pdfDir, `${chave}-procNFe.pdf`) : null;
-            const pdfFileAlt = chave ? path.join(pdfDir, `${chave}.pdf`) : null;
-            const finalPdf = (pdfFile && fs.existsSync(pdfFile)) ? pdfFile : (pdfFileAlt && fs.existsSync(pdfFileAlt) ? pdfFileAlt : null);
-            
-            let pdf_base64 = null;
-            if (finalPdf) {
-                try {
-                    pdf_base64 = fs.readFileSync(finalPdf).toString('base64');
-                } catch (e) {
-                    console.warn(`[FiscalLib] Falha ao ler PDF para base64: ${e.message}`);
+            // Aguarda um curto tempo para o SO liberar o arquivo
+            waitSync(500);
+
+            // Busca pelo arquivo exato informado pelo usuário: {chave}-nfe.pdf
+            let finalPdf = null;
+            if (chave) {
+                const p = path.join(pdfDir, `${chave}-nfe.pdf`);
+                if (fs.existsSync(p)) {
+                    finalPdf = p;
+                } else {
+                    // Fallback para {chave}.pdf se o outro não existir
+                    const pAlt = path.join(pdfDir, `${chave}.pdf`);
+                    if (fs.existsSync(pAlt)) finalPdf = pAlt;
                 }
+            }
+            
+            if (!finalPdf) {
+                const files = fs.readdirSync(pdfDir);
+                console.warn(`[FiscalLib] PDF não localizado em ${pdfDir}. Esperado: ${chave}-nfe.pdf. Arquivos presentes:`, files);
+                return { sucesso: false, erro: `Arquivo PDF (${chave}-nfe.pdf) não foi localizado no diretório de saída.`, pdf_path: pdfDir };
+            }
+
+            let pdf_base64 = null;
+            try {
+                pdf_base64 = fs.readFileSync(finalPdf).toString('base64');
+                console.log(`[FiscalLib] PDF carregado com sucesso: ${finalPdf}`);
+            } catch (e) {
+                console.error(`[FiscalLib] Falha ao ler PDF: ${e.message}`);
+                return { sucesso: false, erro: `Falha ao ler arquivo gerado: ${e.message}`, pdf_path: finalPdf };
             }
 
             return { 
                 sucesso: true, 
-                pdf_path: finalPdf || pdfDir,
+                pdf_path: finalPdf,
                 pdf_base64
             };
         } else if (tp === 'IMPRESSORA' && lib.ImprimirDANFE) {
-            // Nota: Se for NFE_Imprimir (sem eArquivoXml), os argumentos deslocam. 
+            // ... (resto do código de impressora permanece igual)
             let ret;
             try {
                 ret = lib.ImprimirDANFE(handle, "", printConfig.nm_impressora || "", 1, "", false, "", false);
             } catch (e) {
-                // Tenta sem o argumento do XML se falhar na assinatura
                 ret = lib.ImprimirDANFE(handle, printConfig.nm_impressora || "", 1, "", false, "", false);
             }
-            console.log(`[FiscalLib] ImprimirDANFE (${modeloLabel}) impressora=${printConfig.nm_impressora} ret=${ret}`);
             if (ret !== 0) return { sucesso: false, erro: lerRetornoACBr(lib, handle) || `ImprimirDANFE retornou ${ret}`, pdf_path: null };
             return { sucesso: true, pdf_path: null };
         }
@@ -306,6 +348,16 @@ const configurarHandle = (lib, handle, configPayload) => {
     lib.ConfigGravarValor(handle, "DFe", "VersaoDistribuicaoDFe", "1.01");
     
     // Ativar logs e salvamento de arquivos
+    const arquivosDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos");
+    const eventoDir = path.resolve(arquivosDir, "Evento");
+    const pdfDir = path.resolve(arquivosDir, "PDF");
+    
+    if (!fs.existsSync(eventoDir)) fs.mkdirSync(eventoDir, { recursive: true });
+    if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
+
+    lib.ConfigGravarValor(handle, "NFe", "PathEvento", eventoDir);
+    lib.ConfigGravarValor(handle, "DANFe", "PathPDF", pdfDir);
+
     lib.ConfigGravarValor(handle, "Principal", "LogNivel", "0");
     lib.ConfigGravarValor(handle, "NFe", "SalvarGer", "1");
     lib.ConfigGravarValor(handle, "NFe", "SalvarArq", "1");
@@ -535,17 +587,58 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
 
         case 'CANCELAR_NFE':
         case 'CANCELAR_NFCE':
-            // O payload deve conter: chave, justificativa, cnpj
             return executarNaDLL(libNFe, config, async (handle) => {
-                const bufferResposta = Buffer.alloc(9999);
-                const bufferTamanho = Buffer.alloc(4);
-                bufferTamanho.writeInt32LE(9999, 0);
-                
                 const { chave, justificativa, cnpj } = jsonPayload;
+                const nfeId = jsonPayload.nfe_cabecalho_id;
+                
+                console.log(`[FiscalLib] Cancelando ${comando}: ${chave}...`);
+                
+                const bufferResposta = Buffer.alloc(TAMANHO_BUFFER);
+                const bufferTamanho = Buffer.alloc(4);
+                bufferTamanho.writeInt32LE(TAMANHO_BUFFER, 0);
+                
                 const ret = libNFe.Cancelar(handle, chave, justificativa, cnpj, 1, bufferResposta, bufferTamanho);
                 if (ret !== 0) throw new Error(lerRetornoACBr(libNFe, handle));
                 
-                return { sucesso: true, cancelamento_retorno: bufferResposta.toString('utf8', 0, bufferTamanho.readInt32LE(0)) };
+                const resposta = bufferResposta.toString('utf8', 0, bufferTamanho.readInt32LE(0));
+                
+                // Parse do Protocolo de Cancelamento
+                let nProt = "";
+                const mProt = resposta.match(/nProt=(\d+)/i) || resposta.match(/<nProt>(\d+)<\/nProt>/i);
+                if (mProt) nProt = mProt[1];
+                
+                // Tenta gerar o PDF do comprovante de cancelamento
+                let pdfBase64 = null;
+                try {
+                    const eventoDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos/Evento");
+                    if (fs.existsSync(eventoDir)) {
+                        const files = fs.readdirSync(eventoDir);
+                        // Busca flexível: arquivos que contenham a chave e terminem em .xml
+                        const eventFile = files.find(f => f.includes(chave) && f.toLowerCase().endsWith('.xml'));
+                        
+                        if (eventFile && libNFe.ImprimirEventoPDF) {
+                            const eventPath = path.join(eventoDir, eventFile);
+                            console.log(`[FiscalLib] XML de evento localizado: ${eventPath}`);
+                            const retPdf = libNFe.ImprimirEventoPDF(handle, eventPath, "");
+                            if (retPdf === 0) {
+                                // O PDF do evento costuma ir para o PathPDF definido (AcbrDLL/Arquivos/PDF)
+                                // O nome costuma ser {chave}-procEventoNFe.pdf
+                                const pdfDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos/PDF");
+                                const pdfName = eventFile.replace('.xml', '.pdf');
+                                const pdfPath = path.join(pdfDir, pdfName);
+                                
+                                if (fs.existsSync(pdfPath)) {
+                                    pdfBase64 = fs.readFileSync(pdfPath).toString('base64');
+                                    console.log(`[FiscalLib] Comprovante de cancelamento gerado: ${pdfPath}`);
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`[Worker] Falha ao gerar PDF do comprovante: ${e.message}`);
+                }
+                
+                return { sucesso: true, protocol: nProt, pdf_base64: pdfBase64, resposta };
             });
 
         case 'MANIFESTAR_NFE':
@@ -693,7 +786,23 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 const { para, assunto, mensagem, anexos, config_email, xml } = jsonPayload;
                 
                 // 1. Carrega o XML da nota
-                if (xml) libNFe.CarregarXML(handle, xml);
+                libNFe.LimparLista(handle);
+                // Busca o XML tanto em 'xml' quanto em 'dados' para compatibilidade
+                const xmlContent = String(jsonPayload.xml || jsonPayload.dados || "").trim();
+                
+                if (xmlContent) {
+                    console.log(`[FiscalLib] Carregando XML para e-mail (${xmlContent.length} bytes)...`);
+                    console.log(`[FiscalLib] Prefixo do XML: ${xmlContent.substring(0, 80)}`);
+                    const retXml = libNFe.CarregarXML(handle, xmlContent);
+                    if (retXml !== 0) {
+                        const erro = lerRetornoACBr(libNFe, handle);
+                        console.error(`[FiscalLib] Erro ao carregar XML para e-mail: ${erro}`);
+                        throw new Error(`Erro ao carregar XML: ${erro}`);
+                    }
+                } else {
+                    console.error(`[FiscalLib] Erro: XML não fornecido no payload.`);
+                    throw new Error("Conteúdo do XML não fornecido para o envio de e-mail.");
+                }
                 
                 // 2. Configura SMTP
                 if (config_email) {

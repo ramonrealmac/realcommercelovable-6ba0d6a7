@@ -676,6 +676,7 @@ export const fiscalEmissaoService = {
           assunto: finalAssunto,
           mensagem: finalMensagem,
           xml: cab.xml_nf,
+          dados: cab.xml_nf,
           config_email: {
             host: fConfig.email_smtp_host,
             port: fConfig.email_smtp_port,
@@ -698,6 +699,80 @@ export const fiscalEmissaoService = {
       if (evErr) return { success: false, message: evErr.message };
 
       const res = await this.aguardarEvento(evento.id, 20000);
+      return { success: res.success, message: res.mensagem };
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
+  /**
+   * Cancela uma NF-e ou NFC-e.
+   */
+  async cancelarDocumento(nfeCabecalhoId: number, empresaId: number, justificativa: string): Promise<{ success: boolean; message?: string }> {
+    try {
+      console.log(`[FiscalService] Iniciando cancelamento da nota ID: ${nfeCabecalhoId}, Empresa: ${empresaId}`);
+      if (justificativa.length < 15) return { success: false, message: "A justificativa deve ter no mínimo 15 caracteres." };
+
+      // Busca a nota completa para evitar erros de colunas faltantes no select
+      const { data: cab, error: cabErr } = await db.from("fiscal_nfe_cabecalho")
+        .select("*")
+        .eq("nfe_cabecalho_id", nfeCabecalhoId).single();
+      
+      if (cabErr || !cab) {
+        console.error("[FiscalService] Erro ao buscar nota:", cabErr);
+        return { success: false, message: "Nota não localizada para cancelamento." };
+      }
+
+      const { data: fConfig } = await db.from("fiscal_config").select("*").eq("empresa_id", empresaId).single();
+      if (!fConfig) return { success: false, message: "Configuração fiscal não encontrada." };
+
+      // O CNPJ do emitente costuma estar na tabela empresa ou f_config se não estiver na nota
+      const { data: empresa } = await db.from("empresa").select("cnpj").eq("empresa_id", empresaId).single();
+      const cnpjEmitente = cab.cnpj_emitente || empresa?.cnpj || "";
+
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const tipo: "NFE" | "NFCE" = Number(cab.modelo) === 65 ? "NFCE" : "NFE";
+
+      const { data: evento, error: evErr } = await db.from("fiscal_evento").insert({
+        empresa_id: empresaId,
+        nfe_cabecalho_id: nfeCabecalhoId,
+        tipo: tipo,
+        comando: tipo === "NFE" ? "CANCELAR_NFE" : "CANCELAR_NFCE",
+        status: "PENDENTE",
+        user_id: authUser?.id || null,
+        payload: {
+          nfe_cabecalho_id: nfeCabecalhoId,
+          chave: cab.chave_nfe,
+          justificativa: justificativa,
+          cnpj: cnpjEmitente,
+          config: {
+            uf: fConfig.uf,
+            modelo: cab.modelo,
+            ambiente: fConfig.ambiente_nfe,
+            certificadoPath: fConfig.certificado,
+            certificadoSenha: fConfig.senha_certificado,
+            tipo_certificado: fConfig.tipo_certificado
+          }
+        }
+      }).select("id").single();
+
+      if (evErr) return { success: false, message: evErr.message };
+
+      const res = await this.aguardarEvento(evento.id, 25000);
+      
+      if (res.success && res.pdf_base64) {
+        try {
+          const binaryString = atob(res.pdf_base64);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+          const blob = new Blob([bytes], { type: "application/pdf" });
+          const url = URL.createObjectURL(blob);
+          window.open(url, "_blank");
+        } catch (e) {
+          console.error("[FiscalService] Erro ao abrir PDF do comprovante:", e);
+        }
+      }
+
       return { success: res.success, message: res.mensagem };
     } catch (e: any) {
       return { success: false, message: e.message };

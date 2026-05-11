@@ -24,6 +24,7 @@ import BancoForm from "@/components/forms/BancoForm";
 import CondicaoPagamentoForm from "@/components/forms/CondicaoPagamentoForm";
 import PlanoContaForm from "@/components/forms/PlanoContaForm";
 import CfopForm from "@/components/forms/CfopForm";
+import FiscalGrupoProdutoForm from "@/components/forms/FiscalGrupoProdutoForm";
 import FiscalRegraForm from "@/components/forms/FiscalRegraForm";
 import PedidoForm from "@/components/forms/PedidoForm";
 import NotaFiscalEntradaForm from "@/components/forms/NotaFiscalEntradaForm";
@@ -103,6 +104,8 @@ const AppContent = () => {
         return <PlanoContaForm />;
       case "cfop":
         return <CfopForm />;
+      case "fiscal-grupo-produtos":
+        return <FiscalGrupoProdutoForm />;
       case "fiscal-regras":
         return <FiscalRegraForm />;
       case "pedidos":

@@ -593,6 +593,7 @@ const NfeRecebidasForm: React.FC = () => {
           showFilters
           filterValues={XSearchFilters}
           onFilterChange={(k, v) => setXSearchFilters(prev => ({ ...prev, [k]: v }))}
+          onRowDoubleClick={(row) => { setXSelectedNfe(row); setXLogOpen(true); }}
           exportTitle="NF-e Recebidas"
           showRecordCount
           maxHeight="calc(100vh - 300px)"

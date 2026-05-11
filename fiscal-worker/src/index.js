@@ -202,34 +202,37 @@ const processarEvento = async (evento) => {
         // 3. Chama a biblioteca nativa passando o JSON payload atualizado
         const resultado = await executarComandoFiscal(evento.comando, payload);
 
-        // 4. PRIMEIRO: atualizar fiscal_nfe_cabecalho se foi emissão (antes do evento, para garantir consistência)
-        if (isEmissao && nfeCabecalhoId) {
-            const isDenegada = ['110', '301', '302', '303'].includes(String(resultado.c_stat));
-            const updateNfe = {
-                c_stat: resultado.c_stat ? parseInt(String(resultado.c_stat)) : null,
-                x_motivo: resultado.x_motivo || (resultado.sucesso ? 'Autorizado' : 'Rejeitado'),
-                chave_nfe: resultado.chave_nfe,
-                nr_protocolo: resultado.nr_protocolo,
-                recibo_sefaz: resultado.recibo_sefaz,
-                st_nf: resultado.sucesso ? 'E' : (isDenegada ? 'D' : 'R'), // E=Emitido, D=Denegado, R=Rejeitado
-                updated_at: new Date().toISOString()
-            };
-            // Prioriza o XML assinado da NF (procNFe completo); fallback para xml_retorno (envelope da SEFAZ)
-            const xmlParaSalvar = resultado.xml_nfe || resultado.xml_retorno;
-            if (xmlParaSalvar) updateNfe.xml_nf = xmlParaSalvar;
+        // 4. PRIMEIRO: atualizar fiscal_nfe_cabecalho se foi emissão ou cancelamento
+        if (nfeCabecalhoId) {
+            const isEmissao = ['EMITIR_NFE', 'EMITIR_NFCE'].includes(evento.comando);
+            const isCancelamento = ['CANCELAR_NFE', 'CANCELAR_NFCE'].includes(evento.comando);
 
-            const { data: updRows, error: errNfe } = await supabase
-                .from('fiscal_nfe_cabecalho')
-                .update(updateNfe)
-                .eq('nfe_cabecalho_id', nfeCabecalhoId)
-                .select('nfe_cabecalho_id, chave_nfe, c_stat, st_nf');
+            if (isEmissao) {
+                const isDenegada = ['110', '301', '302', '303'].includes(String(resultado.c_stat));
+                const updateNfe = {
+                    c_stat: resultado.c_stat ? parseInt(String(resultado.c_stat)) : null,
+                    x_motivo: resultado.x_motivo || (resultado.sucesso ? 'Autorizado' : 'Rejeitado'),
+                    chave_nfe: resultado.chave_nfe,
+                    nr_protocolo: resultado.nr_protocolo,
+                    recibo_sefaz: resultado.recibo_sefaz,
+                    st_nf: resultado.sucesso ? 'E' : (isDenegada ? 'D' : 'R'), // E=Emitido, D=Denegado, R=Rejeitado
+                    updated_at: new Date().toISOString()
+                };
+                const xmlParaSalvar = resultado.xml_nfe || resultado.xml_retorno;
+                if (xmlParaSalvar) updateNfe.xml_nf = xmlParaSalvar;
 
-            if (errNfe) {
-                logger.error(`Erro ao atualizar fiscal_nfe_cabecalho #${nfeCabecalhoId}: ${errNfe.message}`);
-            } else if (!updRows || updRows.length === 0) {
-                logger.error(`UPDATE fiscal_nfe_cabecalho #${nfeCabecalhoId} retornou 0 linhas. Verifique RLS/ID.`);
-            } else {
-                logger.info(`NF-e #${nfeCabecalhoId} atualizada: cStat=${resultado.c_stat} | Chave=${resultado.chave_nfe || 'N/A'} | st_nf=${updRows[0].st_nf}`);
+                await supabase.from('fiscal_nfe_cabecalho').update(updateNfe).eq('nfe_cabecalho_id', nfeCabecalhoId);
+                logger.info(`NF-e #${nfeCabecalhoId} atualizada (Emissão)`);
+            } else if (isCancelamento && resultado.sucesso) {
+                const updateCancel = {
+                    st_nf: 'C',
+                    protocolo_cancelamento: resultado.protocol || 'CANCELADA',
+                    motivo_cancelamento: payload.justificativa,
+                    dt_cancelamento: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                };
+                await supabase.from('fiscal_nfe_cabecalho').update(updateCancel).eq('nfe_cabecalho_id', nfeCabecalhoId);
+                logger.info(`NF-e #${nfeCabecalhoId} atualizada (Cancelamento)`);
             }
         }
 

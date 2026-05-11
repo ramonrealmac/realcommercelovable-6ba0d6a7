@@ -144,6 +144,7 @@ export const MENU_CONFIG: MenuItem[] = [
         icon: BarChart3,
         children: [
           { id: "cfop", title: "CFOP", icon: Plus },
+          { id: "fiscal-grupo-produtos", title: "Grupos de Tributação", icon: BoxSelect },
           { id: "fiscal-regras", title: "Regras Fiscais", icon: AlignLeft },
         ],
       },

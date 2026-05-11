@@ -1,167 +1,116 @@
 import React, { useState, useEffect } from "react";
+import { useAppContext } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
-import { useAppContext } from "@/contexts/AppContext";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import { 
   FileText, 
+  RefreshCw, 
+  Printer, 
+  Download, 
+  Mail, 
   Send, 
   XCircle, 
-  Printer, 
-  RefreshCw, 
   Eye, 
   Terminal,
-  ShieldAlert,
-  Mail,
-  Clock,
-  CheckCircle2,
-  AlertCircle
+  MoreHorizontal
 } from "lucide-react";
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem, 
-  DropdownMenuTrigger 
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
+import { formatCPFCNPJ } from "@/lib/validators";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import MonitorFiscalLogDialog from "@/components/forms/MonitorFiscalLogDialog";
+
 const db = supabase as any;
 
-interface IClienteInfo { id: number; razao: string; }
+const XGridCols: IGridColumn[] = [
+  { key: "nr_nota", label: "Nota", width: "100px" },
+  { key: "serie", label: "Série", width: "60px", align: "center" },
+  { key: "dt_emissao", label: "Emissão", width: "110px", render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
+  { key: "nm_destinatario", label: "Destinatário", width: "2fr" },
+  { key: "cnpj_destinatario", label: "CNPJ/CPF", width: "150px", render: r => formatCPFCNPJ(r.cnpj_destinatario) },
+  { key: "vl_total_nf", label: "Valor", width: "120px", align: "right", render: r => Number(r.vl_total_nf || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) },
+  { 
+    key: "st_nf", 
+    label: "Status", 
+    width: "140px", 
+    render: r => {
+      const labels: any = {
+        "E": "Autorizada",
+        "C": "Cancelada",
+        "D": "Denegada",
+        "P": "Pendente",
+        "1": "Autorizada",
+        "2": "Denegada"
+      };
+      const label = labels[r.st_nf] || r.st_nf || "Pendente";
+      return (
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+          r.st_nf === "E" || r.st_nf === "1" ? "bg-green-100 text-green-700" :
+          r.st_nf === "C" ? "bg-red-100 text-red-700" :
+          r.st_nf === "D" || r.st_nf === "2" ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600"
+        }`}>
+          {label}
+        </span>
+      );
+    }
+  },
+];
 
-const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialFilterId }) => {
+const LiestaNfeEmitidaForm: React.FC = () => {
   const { XEmpresaId, openTab } = useAppContext();
   const [XData, setXData] = useState<any[]>([]);
   const [XLoading, setXLoading] = useState(false);
-  const [XSearchFilters, setXSearchFilters] = useState<Record<string, string>>({});
   const [XDtIni, setXDtIni] = useState(new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().substring(0, 10));
   const [XDtFim, setXDtFim] = useState(new Date().toISOString().substring(0, 10));
-  const [XClienteCache, setXClienteCache] = useState<Record<number, string>>({});
+  const [XSearchFilters, setXSearchFilters] = useState<Record<string, string>>({});
+  
+  // Log Dialog State
+  const [XLogDialogOpen, setXLogDialogOpen] = useState(false);
   const [XLogNfeId, setXLogNfeId] = useState<number | undefined>(undefined);
+
+  // Email Dialog State
   const [XEmailDialogOpen, setXEmailDialogOpen] = useState(false);
   const [XEmailTarget, setXEmailTarget] = useState<any>(null);
   const [XEmailDestino, setXEmailDestino] = useState("");
   const [XEmailEnviando, setXEmailEnviando] = useState(false);
 
-  const XGridCols: IGridColumn[] = [
-    { key: "nfe_cabecalho_id", label: "ID", width: "60px", align: "right" },
-    { key: "tp_nf", label: "Tipo", width: "80px", render: r => r.tp_nf === 0 ? <span className="text-blue-600 font-bold">ENTRADA</span> : <span className="text-emerald-600 font-bold">SAÍDA</span> },
-    { key: "nr_nota", label: "Número", width: "90px" },
-    { key: "modelo", label: "Modelo", width: "60px", align: "center" },
-    { key: "serie", label: "Série", width: "50px", align: "center" },
-    { key: "dt_emissao", label: "Emissão", width: "100px", render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
-    { key: "dt_saida", label: "Saída", width: "100px", render: r => r.dt_saida ? new Date(r.dt_saida).toLocaleDateString("pt-BR") : "" },
-    { key: "cfop", label: "CFOP", width: "70px", align: "center" },
-    { 
-      key: "cadastro_id", 
-      label: "Destinatário", 
-      width: "2fr", 
-      render: r => XClienteCache[r.cadastro_id] || (r.cadastro_id ? `#${r.cadastro_id}` : "") 
-    },
-      { 
-        key: "vl_total_nf", 
-        label: "Valor Total", 
-        width: "110px", 
-        align: "right", 
-        render: r => Number(r.vl_total_nf || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) 
-      },
-      { 
-        key: "st_nf", 
-        label: "Status", 
-        width: "140px", 
-        render: r => {
-          const statusMap: any = {
-            "A": { label: "Pendente", color: "bg-gray-100 text-gray-600", icon: Clock },
-            "E": { label: "Autorizada", color: "bg-green-100 text-green-700", icon: CheckCircle2 },
-            "R": { label: "Rejeitada", color: "bg-amber-100 text-amber-700", icon: AlertCircle },
-            "C": { label: "Cancelada", color: "bg-red-100 text-red-700", icon: XCircle },
-            "D": { label: "Denegada", color: "bg-purple-100 text-purple-700", icon: ShieldAlert },
-            "0": { label: "Pendente", color: "bg-gray-100 text-gray-600", icon: Clock },
-            "1": { label: "Autorizada", color: "bg-green-100 text-green-700", icon: CheckCircle2 },
-            "2": { label: "Cancelada", color: "bg-red-100 text-red-700", icon: XCircle },
-            "3": { label: "Erro SEFAZ", color: "bg-amber-100 text-amber-700", icon: AlertCircle },
-          };
-          const s = statusMap[r.st_nf] || { label: r.st_nf, color: "bg-gray-100 text-gray-600", icon: Clock };
-          const Icon = s.icon;
-          return (
-            <div className={`px-2 py-1 rounded-full ${s.color} border-none flex items-center gap-1 font-bold uppercase text-[9px] w-fit`}>
-              <Icon size={10} />
-              {s.label}
-            </div>
-          );
-        }
-      },
-      { key: "chave_nfe", label: "Chave de Acesso", width: "300px", render: r => <span className="font-mono text-[10px] text-muted-foreground">{r.chave_nfe}</span> },
-    ];
+  // Cancel Dialog State
+  const [XCancelDialogOpen, setXCancelDialogOpen] = useState(false);
+  const [XCancelTarget, setXCancelTarget] = useState<any>(null);
+  const [XCancelJustificativa, setXCancelJustificativa] = useState("");
+  const [XCancelando, setXCancelando] = useState(false);
 
   const loadData = async () => {
     if (!XEmpresaId) return;
     setXLoading(true);
     try {
-      let query = db.from("fiscal_nfe_cabecalho")
-        .select("*")
-        .eq("empresa_id", XEmpresaId);
-
-      if (initialFilterId) {
-        query = query.eq("nfe_cabecalho_id", initialFilterId);
-      } else {
-        if (XDtIni) query = query.gte("dt_emissao", XDtIni);
-        if (XDtFim) query = query.lte("dt_emissao", XDtFim);
-      }
-
-      const { data, error } = await query.order("nfe_cabecalho_id", { ascending: false });
+      const { data, error } = await db.from("fiscal_nfe_cabecalho")
+        .select("*, cadastro(razao_social, cnpj)")
+        .eq("empresa_id", XEmpresaId)
+        .gte("dt_emissao", XDtIni)
+        .lte("dt_emissao", XDtFim)
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
-      const rows = data || [];
+      
+      const mappedData = (data || []).map((r: any) => ({
+        ...r,
+        nm_destinatario: r.cadastro?.razao_social || "NÃO INFORMADO",
+        cnpj_destinatario: r.cadastro?.cnpj || ""
+      }));
 
-      // Enriquecer com status do último fiscal_evento (para refletir erro de transmissão)
-      const nfeIds = rows.map((r: any) => r.nfe_cabecalho_id).filter(Boolean);
-      if (nfeIds.length > 0) {
-        const { data: eventos } = await db.from("fiscal_evento")
-          .select("nfe_cabecalho_id,status,mensagem_erro,created_at")
-          .in("nfe_cabecalho_id", nfeIds)
-          .order("created_at", { ascending: false });
-        if (eventos) {
-          const latestByNfe: Record<number, any> = {};
-          for (const ev of eventos) {
-            if (!latestByNfe[ev.nfe_cabecalho_id]) latestByNfe[ev.nfe_cabecalho_id] = ev;
-          }
-          rows.forEach((r: any) => {
-            const ev = latestByNfe[r.nfe_cabecalho_id];
-            if (!ev) return;
-            if (ev.status === "ERRO" && (r.st_nf === "A" || r.st_nf === "0")) {
-              r.st_nf = "3";
-              r._erro_msg = ev.mensagem_erro;
-            }
-          });
-        }
-      }
-
-      setXData(rows);
-
-      // Carregar nomes dos destinatários
-      const ids = [...new Set(rows.map(r => r.cadastro_id).filter(Boolean))] as number[];
-      if (ids.length > 0) {
-        const { data: parceiros } = await db.from("cadastro")
-          .select("cadastro_id,razao_social")
-          .in("cadastro_id", ids);
-        if (parceiros) {
-          const cache: Record<number, string> = {};
-          parceiros.forEach((p: any) => cache[p.cadastro_id] = p.razao_social);
-          setXClienteCache(prev => ({ ...prev, ...cache }));
-        }
-      }
+      setXData(mappedData);
     } catch (e: any) {
-      toast.error("Erro ao carregar NFes: " + e.message);
+      toast.error("Erro ao carregar notas: " + e.message);
     } finally {
       setXLoading(false);
     }
@@ -169,37 +118,28 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
 
   useEffect(() => {
     loadData();
-  }, [XEmpresaId, initialFilterId]);
-
-  // Realtime: refresh ao mudar status de NFes ou ao concluir um evento fiscal
-  useEffect(() => {
-    if (!XEmpresaId) return;
-    const ch = (supabase as any)
-      .channel(`nfe-grid-${XEmpresaId}`)
+    // Realtime subscription para atualizar status automaticamente
+    const ch = (supabase as any).channel('nfe_changes')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fiscal_nfe_cabecalho', filter: `empresa_id=eq.${XEmpresaId}` }, () => loadData())
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fiscal_evento', filter: `empresa_id=eq.${XEmpresaId}` }, () => loadData())
       .subscribe();
     return () => { try { (supabase as any).removeChannel(ch); } catch {} };
-  }, [XEmpresaId]);
+  }, [XEmpresaId, XDtIni, XDtFim]);
 
   const handleTransmitir = async (row: any) => {
     if (!XEmpresaId) return;
-
-    // Bloqueia reenvio se já estiver em status conclusivo (Autorizada, Cancelada ou Denegada)
-    // No banco: E=Emitida, C=Cancelada, D=Denegada. Alguns legados podem usar 1 ou 2.
     const statusConclusivos = ["E", "C", "D", "1", "2"];
     if (statusConclusivos.includes(String(row.st_nf))) {
       toast.error(`Esta nota está em status "${row.st_nf}" e não pode ser retransmitida.`);
       return;
     }
-
-    toast.info("Enfileirando transmissão para o Fiscal Worker...");
+    toast.info("Enfileirando transmissão...");
     const res = await fiscalEmissaoService.retransmitirDocumento(row.nfe_cabecalho_id, XEmpresaId);
     if (res.success) {
-      toast.success(`Evento #${res.fiscal_evento_id} criado. Aguardando worker...`);
+      toast.success("Evento de transmissão criado.");
       loadData();
     } else {
-      toast.error("Falha ao enfileirar: " + (res.message || "erro desconhecido"));
+      toast.error("Falha: " + (res.message || "erro desconhecido"));
     }
   };
 
@@ -208,7 +148,7 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
       toast.error("Somente notas autorizadas podem ser impressas.");
       return;
     }
-    const tid = toast.loading(`Gerando DANFE da nota ${row.nr_nota}...`);
+    const tid = toast.loading("Gerando DANFE...");
     try {
       const res = await fiscalEmissaoService.imprimirDocumento(row.nfe_cabecalho_id, XEmpresaId);
       if (res.success && res.pdf_base64) {
@@ -218,9 +158,9 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
         const blob = new Blob([bytes], { type: "application/pdf" });
         const url = URL.createObjectURL(blob);
         window.open(url, "_blank");
-        toast.success("DANFE gerado com sucesso.", { id: tid });
+        toast.success("DANFE gerado.", { id: tid });
       } else {
-        toast.error(res.message || "Erro ao gerar PDF do DANFE.", { id: tid });
+        toast.error(res.message || "Erro ao gerar PDF.", { id: tid });
       }
     } catch (e: any) {
       toast.error("Erro: " + e.message, { id: tid });
@@ -229,26 +169,24 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
 
   const handleDownloadXml = (row: any) => {
     if (!row.xml_nf) {
-      toast.error("XML da nota não localizado.");
+      toast.error("XML não localizado.");
       return;
     }
     const blob = new Blob([row.xml_nf], { type: "text/xml" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `NFe_${row.chave_nfe || row.nr_nota || row.nfe_cabecalho_id}.xml`;
+    a.download = `NFe_${row.chave_nfe || row.nr_nota}.xml`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success("Download iniciado.");
   };
 
   const handleOpenEmailDialog = async (row: any) => {
     setXEmailTarget(row);
     setXEmailDestino("");
     setXEmailDialogOpen(true);
-    
     if (row.cadastro_id) {
       const { data } = await db.from("cadastro").select("email").eq("cadastro_id", row.cadastro_id).single();
       if (data?.email) setXEmailDestino(data.email);
@@ -257,7 +195,7 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
 
   const handleEnviarEmail = async () => {
     if (!XEmailDestino) {
-      toast.error("Informe o e-mail do destinatário.");
+      toast.error("Informe o e-mail.");
       return;
     }
     setXEmailEnviando(true);
@@ -265,15 +203,53 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
     try {
       const res = await fiscalEmissaoService.enviarEmail(XEmailTarget.nfe_cabecalho_id, XEmpresaId, XEmailDestino);
       if (res.success) {
-        toast.success("E-mail enviado para a fila com sucesso.", { id: tid });
+        toast.success("E-mail enfileirado.", { id: tid });
         setXEmailDialogOpen(false);
       } else {
-        toast.error(res.message || "Falha ao enviar e-mail.", { id: tid });
+        toast.error(res.message || "Falha no envio.", { id: tid });
       }
     } catch (e: any) {
       toast.error(e.message, { id: tid });
     } finally {
       setXEmailEnviando(false);
+    }
+  };
+
+  const handleOpenCancelDialog = (row: any) => {
+    if (String(row.st_nf) === "C") {
+      toast.error("Esta nota já está cancelada.");
+      return;
+    }
+    if (!["E", "1"].includes(String(row.st_nf))) {
+      toast.error("Apenas notas autorizadas podem ser canceladas.");
+      return;
+    }
+    setXCancelTarget(row);
+    setXCancelJustificativa("");
+    setXCancelDialogOpen(true);
+  };
+
+  const handleCancelar = async () => {
+    if (XCancelJustificativa.length < 15) {
+      toast.error("A justificativa deve ter no mínimo 15 caracteres.");
+      return;
+    }
+    setXCancelando(true);
+    const tid = toast.loading("Enviando cancelamento para SEFAZ...");
+    console.log("[LiestaNfeEmitidaForm] Cancelando nota:", XCancelTarget);
+    try {
+      const res = await fiscalEmissaoService.cancelarDocumento(XCancelTarget.nfe_cabecalho_id, XEmpresaId, XCancelJustificativa);
+      if (res.success) {
+        toast.success("Nota cancelada com sucesso!", { id: tid });
+        setXCancelDialogOpen(false);
+        loadData();
+      } else {
+        toast.error(res.message || "Falha ao cancelar nota.", { id: tid });
+      }
+    } catch (e: any) {
+      toast.error(e.message, { id: tid });
+    } finally {
+      setXCancelando(false);
     }
   };
 
@@ -319,54 +295,38 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem 
-                        onClick={() => handleTransmitir(r)}
-                        disabled={["E", "C", "D", "1", "2"].includes(String(r.st_nf))}
-                      >
+                      <DropdownMenuItem onClick={() => handleTransmitir(r)} disabled={["E", "C", "D", "1", "2"].includes(String(r.st_nf))}>
                         <Send className="w-4 h-4 mr-2 text-blue-500" /> Transmitir SEFAZ
                       </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        onClick={() => handleImprimir(r)}
-                        disabled={!["E", "1"].includes(String(r.st_nf))}
-                      >
+                      <DropdownMenuItem onClick={() => handleImprimir(r)} disabled={!["E", "1"].includes(String(r.st_nf))}>
                         <Printer className="w-4 h-4 mr-2 text-gray-500" /> Imprimir DANFE
                       </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        onClick={() => handleDownloadXml(r)}
-                        disabled={!r.xml_nf}
-                      >
+                      <DropdownMenuItem onClick={() => handleDownloadXml(r)} disabled={!r.xml_nf}>
                         <Download className="w-4 h-4 mr-2 text-blue-400" /> Baixar XML
                       </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        onClick={() => handleOpenEmailDialog(r)}
-                        disabled={!["E", "1"].includes(String(r.st_nf))}
-                      >
+                      <DropdownMenuItem onClick={() => handleOpenEmailDialog(r)} disabled={!["E", "1"].includes(String(r.st_nf))}>
                         <Mail className="w-4 h-4 mr-2 text-indigo-400" /> Enviar por E-mail
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => openTab({ title: `NF-e #${r.nr_nota || r.nfe_cabecalho_id}`, component: "nfe-form", params: { nfe_cabecalho_id: r.nfe_cabecalho_id } })}>
-                        <Eye className="w-4 h-4 mr-2 text-primary" /> Visualizar Documento
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => { setXLogNfeId(r.nfe_cabecalho_id); setXLogDialogOpen(true); }}>
                         <Terminal className="w-4 h-4 mr-2 text-indigo-500" /> Log
                       </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => openTab({ title: `CCe NF-e ${r.nr_nota || r.nfe_cabecalho_id}`, component: "cce", params: { nfe_cabecalho_id: r.nfe_cabecalho_id } })}>
                         <FileText className="w-4 h-4 mr-2 text-amber-500" /> Carta de Correção
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive">
+                      <DropdownMenuItem 
+                        className="text-destructive"
+                        onClick={() => handleOpenCancelDialog(r)}
+                        disabled={String(r.st_nf) === "C"}
+                      >
                         <XCircle className="w-4 h-4 mr-2" /> Cancelar Nota
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => openTab({ title: `NF-e #${r.nr_nota || r.nfe_cabecalho_id}`, component: "nfe-form", params: { nfe_cabecalho_id: r.nfe_cabecalho_id } })}>
+                        <Eye className="w-4 h-4 mr-2 text-primary" /> Ver Detalhes
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                  
-                  {r.st_nf === "1" && (
-                    <button 
-                      onClick={() => handleDownloadXml(r)}
-                      className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
-                      title="Download XML"
-                    >
-                      <Download className="w-4 h-4" />
-                    </button>
-                  )}
                 </div>
               )
             }
@@ -392,53 +352,73 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
         />
       </div>
     </div>
-      <MonitorFiscalLogDialog 
-        open={XLogDialogOpen} 
-        onOpenChange={setXLogDialogOpen}
-        nfeCabecalhoId={XLogNfeId}
-      />
 
-      <Dialog open={XEmailDialogOpen} onOpenChange={setXEmailDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Mail className="w-5 h-5 text-primary" />
-              Enviar Documento por E-mail
-            </DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">E-mail do Destinatário</Label>
-              <Input 
-                id="email" 
-                placeholder="exemplo@email.com" 
-                value={XEmailDestino}
-                onChange={e => setXEmailDestino(e.target.value)}
-              />
-            </div>
-            <p className="text-[11px] text-muted-foreground bg-muted p-2 rounded border border-border">
-              A nota fiscal (XML) e o DANFE (PDF) serão anexados automaticamente. 
-              As faturas vinculadas também serão incluídas se disponíveis.
+    <MonitorFiscalLogDialog 
+      isOpen={XLogDialogOpen} 
+      onClose={() => setXLogDialogOpen(false)}
+      empresaId={XEmpresaId || 0}
+      nfeCabecalhoId={XLogNfeId}
+    />
+
+    <Dialog open={XEmailDialogOpen} onOpenChange={setXEmailDialogOpen}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Mail className="w-5 h-5 text-primary" /> Enviar por E-mail
+          </DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">E-mail do Destinatário</Label>
+            <Input id="email" value={XEmailDestino} onChange={e => setXEmailDestino(e.target.value)} />
+          </div>
+          <p className="text-[11px] text-muted-foreground">O XML e o PDF serão anexados automaticamente.</p>
+        </div>
+        <DialogFooter>
+          <button onClick={() => setXEmailDialogOpen(false)} className="px-4 py-2 text-xs font-bold bg-secondary rounded">CANCELAR</button>
+          <button onClick={handleEnviarEmail} disabled={XEmailEnviando} className="px-4 py-2 text-xs font-bold bg-primary text-primary-foreground rounded flex items-center gap-2">
+            {XEmailEnviando && <RefreshCw className="w-3 h-3 animate-spin" />} ENVIAR
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={XCancelDialogOpen} onOpenChange={setXCancelDialogOpen}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive">
+            <XCircle className="w-5 h-5" /> Cancelar Nota Fiscal
+          </DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="justificativa">Justificativa de Cancelamento (Mínimo 15 caracteres)</Label>
+            <textarea 
+              id="justificativa" 
+              className="w-full min-h-[100px] bg-background border border-input rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
+              placeholder="Descreva o motivo do cancelamento..."
+              value={XCancelJustificativa} 
+              onChange={e => setXCancelJustificativa(e.target.value)} 
+            />
+          </div>
+          <div className="p-3 bg-red-50 border border-red-100 rounded-lg">
+            <p className="text-[11px] text-red-600 font-medium">
+              Atenção: O cancelamento é irreversível e deve ser homologado pela SEFAZ dentro do prazo legal.
             </p>
           </div>
-          <DialogFooter>
-            <button 
-              onClick={() => setXEmailDialogOpen(false)}
-              className="px-4 py-2 text-xs font-bold bg-secondary rounded hover:bg-secondary/80"
-            >
-              CANCELAR
-            </button>
-            <button 
-              onClick={handleEnviarEmail}
-              disabled={XEmailEnviando}
-              className="px-4 py-2 text-xs font-bold bg-primary text-primary-foreground rounded hover:opacity-90 flex items-center gap-2"
-            >
-              {XEmailEnviando && <RefreshCw className="w-3 h-3 animate-spin" />}
-              ENVIAR AGORA
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+        <DialogFooter>
+          <button onClick={() => setXCancelDialogOpen(false)} className="px-4 py-2 text-xs font-bold bg-secondary rounded">VOLTAR</button>
+          <button 
+            onClick={handleCancelar} 
+            disabled={XCancelJustificativa.length < 15 || XCancelando} 
+            className="px-4 py-2 text-xs font-bold bg-destructive text-white rounded flex items-center gap-2 hover:bg-destructive/90 transition-colors"
+          >
+            {XCancelando && <RefreshCw className="w-3 h-3 animate-spin" />} CONFIRMAR CANCELAMENTO
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </>
   );
 };
