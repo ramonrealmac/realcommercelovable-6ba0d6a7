@@ -347,6 +347,7 @@ export async function emitirNfe(params: EmissaoParams): Promise<EmissaoResult> {
           tipo_certificado: fiscalConfig.tipo_certificado || 'ARQUIVO',
           csc: configItem.csc || '',
           id_csc: configItem.id_csc || '',
+          pasta_arquivos: (fiscalConfig as any).pasta_arquivos_fiscais || '',
         },
         referencia_id: nfe_cabecalho_id,
         referencia_tabela: 'fiscal_nfe_cabecalho',
