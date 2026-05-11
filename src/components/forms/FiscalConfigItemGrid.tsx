@@ -23,10 +23,9 @@ const XModelColumns: IGridColumn[] = [
   { key: "sequencia", label: "Próx. Nº", width: "100px", align: "right" },
   { key: "id_csc", label: "ID CSC", width: "90px" },
   { key: "csc", label: "CSC (Token)", width: "180px" },
-  { key: "tp_imp_nfe", label: "Imp. NFe", width: "110px", render: r => TIPOS_IMP.find(t => t.value === r.tp_imp_nfe)?.label || r.tp_imp_nfe || "-" },
-  { key: "nm_impressora_nfe", label: "Impressora NFe", width: "150px" },
-  { key: "tp_imp_nfce", label: "Imp. NFCe", width: "110px", render: r => TIPOS_IMP.find(t => t.value === r.tp_imp_nfce)?.label || r.tp_imp_nfce || "-" },
-  { key: "nm_impressora_nfce", label: "Impressora NFCe", width: "150px" },
+  { key: "enviar_email", label: "Env. E-mail", width: "90px", align: "center", render: r => r.enviar_email === 'S' ? "Sim" : "Não" },
+  { key: "tp_imp", label: "Tipo Imp.", width: "110px", render: r => TIPOS_IMP.find(t => t.value === r.tp_imp)?.label || r.tp_imp || "-" },
+  { key: "nm_impressora", label: "Impressora", width: "150px" },
 ];
 
 const FiscalConfigItemGrid: React.FC<FiscalConfigItemGridProps> = ({ XEmpresaId }) => {
@@ -44,10 +43,9 @@ const FiscalConfigItemGrid: React.FC<FiscalConfigItemGridProps> = ({ XEmpresaId 
   const [XEditSequencia, setXEditSequencia] = useState("1");
   const [XEditCsc, setXEditCsc] = useState("");
   const [XEditIdCsc, setXEditIdCsc] = useState("");
-  const [XEditTpImpNfe, setXEditTpImpNfe] = useState("PDF");
-  const [XEditTpImpNfce, setXEditTpImpNfce] = useState("PDF");
-  const [XEditImpNfe, setXEditImpNfe] = useState("");
-  const [XEditImpNfce, setXEditImpNfce] = useState("");
+  const [XEditTpImp, setXEditTpImp] = useState("PDF");
+  const [XEditNmImpressora, setXEditNmImpressora] = useState("");
+  const [XEditEnviarEmail, setXEditEnviarEmail] = useState("N");
 
   const loadData = useCallback(async () => {
     if (!XEmpresaId) return;
@@ -88,10 +86,9 @@ const FiscalConfigItemGrid: React.FC<FiscalConfigItemGridProps> = ({ XEmpresaId 
     setXEditSequencia("1");
     setXEditCsc("");
     setXEditIdCsc("");
-    setXEditTpImpNfe("PDF");
-    setXEditTpImpNfce("PDF");
-    setXEditImpNfe("");
-    setXEditImpNfce("");
+    setXEditTpImp("PDF");
+    setXEditNmImpressora("");
+    setXEditEnviarEmail("N");
   };
 
   const handleEditar = () => {
@@ -103,10 +100,9 @@ const FiscalConfigItemGrid: React.FC<FiscalConfigItemGridProps> = ({ XEmpresaId 
     setXEditSequencia(XSelectedItem.sequencia.toString());
     setXEditCsc(XSelectedItem.csc || "");
     setXEditIdCsc(XSelectedItem.id_csc || "");
-    setXEditTpImpNfe(XSelectedItem.tp_imp_nfe || "PDF");
-    setXEditTpImpNfce(XSelectedItem.tp_imp_nfce || "PDF");
-    setXEditImpNfe(XSelectedItem.nm_impressora_nfe || "");
-    setXEditImpNfce(XSelectedItem.nm_impressora_nfce || "");
+    setXEditTpImp(XSelectedItem.tp_imp || "PDF");
+    setXEditNmImpressora(XSelectedItem.nm_impressora || "");
+    setXEditEnviarEmail(XSelectedItem.enviar_email || "N");
   };
 
   const handleListarImpressoras = async () => {
@@ -136,10 +132,9 @@ const FiscalConfigItemGrid: React.FC<FiscalConfigItemGridProps> = ({ XEmpresaId 
       sequencia: parseInt(XEditSequencia) || 1,
       csc: XEditCsc.trim(),
       id_csc: XEditIdCsc.trim(),
-      tp_imp_nfe: XEditTpImpNfe,
-      tp_imp_nfce: XEditTpImpNfce,
-      nm_impressora_nfe: XEditImpNfe.trim() || null,
-      nm_impressora_nfce: XEditImpNfce.trim() || null,
+      tp_imp: XEditTpImp,
+      nm_impressora: XEditNmImpressora.trim() || null,
+      enviar_email: XEditEnviarEmail,
     };
 
     if (XEditMode === "insert") {
@@ -275,36 +270,21 @@ const FiscalConfigItemGrid: React.FC<FiscalConfigItemGridProps> = ({ XEmpresaId 
           {/* Linha 2: Configuração de impressão */}
           <div className="md:col-span-7 mt-1 grid grid-cols-1 md:grid-cols-5 gap-3 pt-3 border-t border-border/50">
             <div className="md:col-span-5 text-[10px] font-bold uppercase text-muted-foreground">
-              Configuração de impressão
+              Configuração de impressão e envio
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Imp. NFe (mod 55)</label>
-              <select value={XEditTpImpNfe} onChange={e => setXEditTpImpNfe(e.target.value)}
+            <div className="flex flex-col gap-1 md:col-span-1">
+              <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Tipo Impressão</label>
+              <select value={XEditTpImp} onChange={e => setXEditTpImp(e.target.value)}
                 className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus:ring-2 focus:ring-ring">
                 {TIPOS_IMP.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1 md:col-span-2">
-              <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Impressora NFe</label>
-              <input type="text" list="lst-impressoras" value={XEditImpNfe}
-                onChange={e => setXEditImpNfe(e.target.value)}
-                disabled={XEditTpImpNfe !== "IMPRESSORA"}
-                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
-                placeholder="Nome da impressora..." />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Imp. NFCe (mod 65)</label>
-              <select value={XEditTpImpNfce} onChange={e => setXEditTpImpNfce(e.target.value)}
-                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus:ring-2 focus:ring-ring">
-                {TIPOS_IMP.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Impressora NFCe</label>
+              <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Nome da Impressora</label>
               <div className="flex gap-2">
-                <input type="text" list="lst-impressoras" value={XEditImpNfce}
-                  onChange={e => setXEditImpNfce(e.target.value)}
-                  disabled={XEditTpImpNfce !== "IMPRESSORA"}
+                <input type="text" list="lst-impressoras" value={XEditNmImpressora}
+                  onChange={e => setXEditNmImpressora(e.target.value)}
+                  disabled={XEditTpImp !== "IMPRESSORA"}
                   className="flex-1 h-9 rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
                   placeholder="Nome da impressora..." />
                 <button type="button" onClick={handleListarImpressoras}
@@ -316,6 +296,14 @@ const FiscalConfigItemGrid: React.FC<FiscalConfigItemGridProps> = ({ XEmpresaId 
               <datalist id="lst-impressoras">
                 {XImpressoras.map(p => <option key={p} value={p} />)}
               </datalist>
+            </div>
+            <div className="flex flex-col gap-1 md:col-span-2">
+              <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Enviar E-mail após emissão</label>
+              <select value={XEditEnviarEmail} onChange={e => setXEditEnviarEmail(e.target.value)}
+                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus:ring-2 focus:ring-ring">
+                <option value="S">Sim (Sempre abrir tela de e-mail)</option>
+                <option value="N">Não (Nunca abrir automaticamente)</option>
+              </select>
             </div>
           </div>
         </div>
@@ -339,10 +327,9 @@ const FiscalConfigItemGrid: React.FC<FiscalConfigItemGridProps> = ({ XEmpresaId 
                 setXEditSequencia(item.sequencia.toString());
                 setXEditCsc(item.csc || "");
                 setXEditIdCsc(item.id_csc || "");
-                setXEditTpImpNfe(item.tp_imp_nfe || "PDF");
-                setXEditTpImpNfce(item.tp_imp_nfce || "PDF");
-                setXEditImpNfe(item.nm_impressora_nfe || "");
-                setXEditImpNfce(item.nm_impressora_nfce || "");
+                setXEditTpImp(item.tp_imp || "PDF");
+                setXEditNmImpressora(item.nm_impressora || "");
+                setXEditEnviarEmail(item.enviar_email || "N");
             }
           }}
           showFilters={XShowFilters}

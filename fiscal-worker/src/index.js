@@ -180,16 +180,15 @@ const processarEvento = async (evento) => {
                 if (nfe) {
                     const { data: ci } = await supabase
                         .from('fiscal_config_item')
-                        .select('tp_imp_nfe, tp_imp_nfce, nm_impressora_nfe, nm_impressora_nfce')
+                        .select('tp_imp, nm_impressora')
                         .eq('empresa_id', nfe.empresa_id)
                         .eq('modelo', String(nfe.modelo))
                         .eq('serie', String(nfe.serie))
                         .maybeSingle();
                     if (ci) {
-                        const isNfce = String(nfe.modelo) === '65' || evento.comando === 'EMITIR_NFCE';
                         payload.print_config = {
-                            tp_imp: isNfce ? (ci.tp_imp_nfce || 'PDF') : (ci.tp_imp_nfe || 'PDF'),
-                            nm_impressora: isNfce ? (ci.nm_impressora_nfce || '') : (ci.nm_impressora_nfe || '')
+                            tp_imp: ci.tp_imp || 'PDF',
+                            nm_impressora: ci.nm_impressora || ''
                         };
                         logger.info(`Config de impressão: tp_imp=${payload.print_config.tp_imp} impressora=${payload.print_config.nm_impressora}`);
                     }
@@ -236,31 +235,13 @@ const processarEvento = async (evento) => {
             }
         }
 
-        // 5. Salva o resultado (JSON) e marca status final do evento.
-        // EMITIDO = autorizado pela SEFAZ; ERRO = rejeitado/falha; CONCLUIDO mantido apenas legado.
-        const statusFinal = resultado.sucesso ? 'EMITIDO' : 'ERRO';
-        const { error: errEv } = await supabase
-            .from('fiscal_evento')
-            .update({
-                status: statusFinal,
-                ambiente: payload.config?.ambiente,
-                resposta: JSON.stringify(resultado),
-                xml_retorno: resultado.xml_retorno || resultado.xml_nfe || null,
-                mensagem_erro: resultado.sucesso ? null : (resultado.erro || "Falha na execução do comando"),
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', evento.id);
-        if (errEv) logger.error(`Erro ao atualizar fiscal_evento #${evento.id}: ${errEv.message}`);
-
-        logger.info(`Evento #${evento.id} processado. Sucesso: ${resultado.sucesso}`);
-
-        // 6. Impressão pós-processamento: nunca deve impedir atualização da nota/evento.
+        // 5. Impressão pós-processamento: executada antes de marcar o evento como finalizado
+        // para que a resposta já contenha o PDF/caminho de impressão se configurado.
+        let respostaFinal = { ...resultado };
         if (isEmissao && resultado.sucesso && payload.print_config) {
             try {
                 const xmlParaImpressao = resultado.xml_nfe || '';
-                if (!xmlParaImpressao) {
-                    logger.warn(`Evento #${evento.id}: XML da NF não disponível para impressão automática.`);
-                } else {
+                if (xmlParaImpressao) {
                     const cmdImpressao = String(payload.config?.modelo) === '65' ? 'IMPRIMIR_NFCE' : 'IMPRIMIR_NFE';
                     const impressao = await executarComandoFiscal(cmdImpressao, {
                         config: payload.config,
@@ -268,17 +249,35 @@ const processarEvento = async (evento) => {
                         dados: xmlParaImpressao,
                         chave: resultado.chave_nfe,
                     });
-                    logger.info(`Evento #${evento.id}: impressão fiscal ${impressao.sucesso ? 'OK' : 'falhou'}${impressao.erro ? ` - ${impressao.erro}` : ''}`);
-                    const respostaComImpressao = { ...resultado, impressao, pdf_path: impressao.pdf_path || resultado.pdf_path || null };
-                    await supabase
-                        .from('fiscal_evento')
-                        .update({ resposta: JSON.stringify(respostaComImpressao), updated_at: new Date().toISOString() })
-                        .eq('id', evento.id);
+                    logger.info(`Evento #${evento.id}: impressão automática ${impressao.sucesso ? 'OK' : 'falhou'}`);
+                    respostaFinal = { 
+                        ...resultado, 
+                        impressao, 
+                        pdf_base64: impressao.pdf_base64 || resultado.pdf_base64,
+                        pdf_path: impressao.pdf_path || resultado.pdf_path || null 
+                    };
                 }
             } catch (e) {
-                logger.warn(`Evento #${evento.id}: falha não bloqueante na impressão: ${e.message}`);
+                logger.warn(`Evento #${evento.id}: falha na impressão automática: ${e.message}`);
             }
         }
+
+        // 6. Salva o resultado final (JSON) e marca status final do evento.
+        const statusFinal = resultado.sucesso ? 'EMITIDO' : 'ERRO';
+        const { error: errEv } = await supabase
+            .from('fiscal_evento')
+            .update({
+                status: statusFinal,
+                ambiente: payload.config?.ambiente,
+                resposta: JSON.stringify(respostaFinal),
+                xml_retorno: resultado.xml_retorno || resultado.xml_nfe || null,
+                mensagem_erro: resultado.sucesso ? null : (resultado.erro || "Falha na execução do comando"),
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', evento.id);
+        
+        if (errEv) logger.error(`Erro ao finalizar fiscal_evento #${evento.id}: ${errEv.message}`);
+        logger.info(`Evento #${evento.id} finalizado com status ${statusFinal}.`);
         
     } catch (error) {
         logger.error(`Falha crítica ao processar evento #${evento.id}: ${error.message}`);

@@ -609,6 +609,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         movimento_id: movimentoId,
         nr_movimento: nrMov,
         cliente_nome: XPedidoSel ? XPedidoSel.cliente_nome : (XCliente?.nome_fantasia || XCliente?.razao_social || "(Consumidor)"),
+        cliente_id: XPedidoSel ? XPedidoSel.cadastro_id : (XCliente?.cadastro_id || null),
         caixa_nome: caixa.nome,
         dt_movimento: new Date(dtMovimento + "T00:00:00").toLocaleDateString("pt-BR"),
         itens: itensImp,

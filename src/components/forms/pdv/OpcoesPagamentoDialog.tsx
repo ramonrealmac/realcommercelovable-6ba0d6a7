@@ -1,8 +1,12 @@
 import React from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Printer, FileText, FileCode2, ScanLine, Loader2 } from "lucide-react";
+import { Printer, FileText, FileCode2, ScanLine, Loader2, Eye, X, ChevronRight, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import FiscalEmailDialog from "./FiscalEmailDialog";
+import { supabase } from "@/integrations/supabase/client";
 
 
 export interface IImpressaoItem {
@@ -21,6 +25,7 @@ export interface IImpressaoDados {
   dt_movimento: string;
   itens: IImpressaoItem[];
   total: number;
+  cliente_id?: number | null;
 }
 
 interface IProps {
@@ -84,6 +89,32 @@ const imprimir = (d: IImpressaoDados | null, modo: "bobina" | "a4") => {
 const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funcionarioId, onClose, onConcluir }) => {
   const [XSalvando, setXSalvando] = React.useState(false);
   const [XStatus, setXStatus] = React.useState<string>("");
+  const [XNfeId, setXNfeId] = React.useState<number | null>(null);
+  const [XLastPdf, setXLastPdf] = React.useState<string | null>(null);
+  const [XEmailDialogOpen, setXEmailDialogOpen] = React.useState(false);
+
+  const handleVisualizarFiscal = () => {
+    if (!XLastPdf) {
+      toast.error("PDF não disponível para visualização.");
+      return;
+    }
+    try {
+      const byteCharacters = atob(XLastPdf);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const file = new Blob([byteArray], { type: 'application/pdf' });
+      const fileURL = URL.createObjectURL(file);
+      const win = window.open(fileURL, 'danfe_view', '_blank');
+      if (!win) {
+        toast.error("O bloqueador de popups impediu a abertura do DANFE.");
+      }
+    } catch (err) {
+      toast.error("Erro ao abrir PDF.");
+    }
+  };
 
   const handleGerarFiscal = async (tipo: "NFE" | "NFCE") => {
     if (!dados?.movimento_id) return;
@@ -106,14 +137,16 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
 
     setXStatus(`Aguardando autorização da SEFAZ...`);
     const ret = await fiscalEmissaoService.aguardarEvento(res.fiscal_evento_id, 90000);
-    setXSalvando(false);
-    setXStatus("");
-
+    
     if (ret.success) {
-      toast.success(`${tipo} autorizada! Chave: ${ret.resposta?.chave_nfe || "—"}`);
+      toast.success(`${tipo} autorizada!`);
       
       // Abre o PDF se retornado pelo worker
       let pdfBase64 = ret.resposta?.pdf_base64 || ret.resposta?.impressao?.pdf_base64;
+      
+      if (res.nfe_cabecalho_id) {
+        setXNfeId(res.nfe_cabecalho_id);
+      }
 
       // Fallback: Se o worker não retornou o PDF na emissão (ex: config não era PDF ou falhou na emissão),
       // solicita explicitamente a geração do PDF para visualização no browser.
@@ -129,6 +162,7 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
       }
       
       if (pdfBase64) {
+        setXLastPdf(pdfBase64);
         try {
           const byteCharacters = atob(pdfBase64);
           const byteNumbers = new Array(byteCharacters.length);
@@ -138,14 +172,31 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
           const byteArray = new Uint8Array(byteNumbers);
           const file = new Blob([byteArray], { type: 'application/pdf' });
           const fileURL = URL.createObjectURL(file);
-          window.open(fileURL, '_blank');
+          const win = window.open(fileURL, 'danfe_view', '_blank');
+          if (!win) {
+            toast.error("O bloqueador de popups impediu a abertura do DANFE. Use o botão 'Visualizar' abaixo.");
+          }
         } catch (err) {
           console.error("Erro ao abrir PDF:", err);
-          toast.error("Erro ao abrir o PDF do DANFE.");
+          toast.error("Erro ao processar o PDF do DANFE.");
         }
       }
       
-      onConcluir();
+      // Verifica se deve enviar e-mail automaticamente
+      const { data: configItem } = await supabase
+        .from("fiscal_config_item")
+        .select("enviar_email")
+        .eq("empresa_id", empresaId)
+        .eq("modelo", tipo === "NFE" ? "55" : "65")
+        .limit(1)
+        .maybeSingle();
+
+      if (configItem?.enviar_email === "S") {
+        setXEmailDialogOpen(true);
+      }
+      
+      setXSalvando(false);
+      setXStatus("");
     } else {
       setXSalvando(false);
       setXStatus("");
@@ -154,56 +205,115 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
   };
 
   const cards = [
-    { key: "bobina", label: "Bobina", desc: "Impressão térmica 80mm", icon: <Printer size={28} />, color: "text-blue-600",
-      action: () => imprimir(dados, "bobina"), enabled: true },
-    { key: "a4", label: "A4", desc: "Folha grande", icon: <FileText size={28} />, color: "text-indigo-600",
-      action: () => imprimir(dados, "a4"), enabled: true },
-    { key: "nfe", label: "NFe", desc: "Nota Fiscal Eletrônica", icon: <FileCode2 size={28} />, color: "text-amber-600",
+    { key: "nfe", label: "NFe", desc: "Nota Fiscal Eletrônica", icon: <FileCode2 size={28} />, color: "text-amber-600", 
       action: () => handleGerarFiscal("NFE"), enabled: true },
-    { key: "nfce", label: "NFCe", desc: "Nota de Consumidor", icon: <ScanLine size={28} />, color: "text-emerald-600",
+    { key: "nfce", label: "NFCe", desc: "Nota de Consumidor", icon: <ScanLine size={28} />, color: "text-emerald-600", 
       action: () => handleGerarFiscal("NFCE"), enabled: true },
+    { key: "bobina", label: "Bobina", desc: "Impressão Térmica", icon: <Printer size={28} />, color: "text-slate-600", 
+      action: () => imprimir(dados, "bobina"), enabled: true },
+    { key: "a4", label: "A4 / PDF", desc: "Relatório de Pedido", icon: <FileText size={28} />, color: "text-blue-600", 
+      action: () => imprimir(dados, "a4"), enabled: true },
   ];
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !XSalvando && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="sm:max-w-[500px] bg-slate-50">
         <DialogHeader>
-          <DialogTitle>Documento da Venda</DialogTitle>
+          <DialogTitle className="text-2xl font-bold text-slate-800">Finalizar Venda</DialogTitle>
+          <DialogDescription className="text-slate-500">
+            Selecione uma opção de documento fiscal
+          </DialogDescription>
         </DialogHeader>
-        <div className="text-xs text-muted-foreground">
-          Selecione um documento para imprimir e prossiga para o pagamento.
-        </div>
-        {XStatus && (
-          <div className="flex items-center gap-2 text-xs bg-primary/10 text-primary border border-primary/30 rounded px-3 py-2">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            {XStatus}
-          </div>
-        )}
-        <div className="grid grid-cols-2 gap-3 py-2">
-          {cards.map(c => (
-            <button key={c.key} onClick={c.action} disabled={!c.enabled || XSalvando}
-              className={`border border-border rounded p-4 text-left flex items-center gap-3 transition relative
-                ${c.enabled && !XSalvando ? "hover:bg-accent hover:border-primary cursor-pointer" : "opacity-50 cursor-not-allowed"}`}>
-              <div className={c.color}>{c.icon}</div>
-              <div>
-                <div className="font-semibold text-sm">{c.label}</div>
-                <div className="text-xs text-muted-foreground">{c.desc}</div>
-              </div>
-              {XSalvando && (c.key === "nfe" || c.key === "nfce") && (
-                <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded">
-                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
+
+        <div className="relative py-6 flex flex-col items-center">
+          {/* Overlay de Bloqueio */}
+          {XSalvando && (
+            <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-[1px] rounded-xl animate-in fade-in duration-300">
+              <div className="flex flex-col items-center gap-4 p-8 bg-white shadow-2xl rounded-2xl border border-slate-100">
+                <Loader2 className="w-12 h-12 text-primary animate-spin" />
+                <div className="text-center">
+                  <p className="text-lg font-bold text-slate-800">Processando...</p>
+                  <p className="text-sm text-slate-500 max-w-[200px]">{XStatus}</p>
                 </div>
-              )}
-            </button>
-          ))}
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-4 w-full">
+            {cards.map((card) => (
+              <button
+                key={card.key}
+                disabled={XSalvando || !card.enabled}
+                onClick={card.action}
+                autoFocus={card.key === "bobina"}
+                className={cn(
+                  "flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all duration-200",
+                  "hover:shadow-lg active:scale-95 group",
+                  card.enabled 
+                    ? "bg-white border-slate-200 hover:border-primary/50" 
+                    : "bg-slate-100 border-slate-100 opacity-50 cursor-not-allowed"
+                )}
+              >
+                <div className={cn("mb-3 p-3 rounded-xl bg-slate-50 group-hover:bg-white transition-colors", card.color)}>
+                  {card.icon}
+                </div>
+                <div className="text-lg font-bold text-slate-800">{card.label}</div>
+                <div className="text-xs text-slate-500 text-center mt-1">{card.desc}</div>
+              </button>
+            ))}
+          </div>
+
+          {XLastPdf && (
+            <div className="mt-4 flex gap-2 w-full">
+              <Button variant="secondary" className="flex-1 gap-2 py-6 rounded-xl font-bold shadow-sm" onClick={handleVisualizarFiscal}>
+                <Eye size={20} /> VISUALIZAR
+              </Button>
+              <Button variant="outline" className="flex-1 gap-2 py-6 rounded-xl font-bold shadow-sm border-2" onClick={() => setXEmailDialogOpen(true)}>
+                <Mail size={20} /> ENVIAR E-MAIL
+              </Button>
+            </div>
+          )}
+
+          {XStatus && (
+            <div className="mt-6 flex flex-col items-center gap-3 animate-in fade-in slide-in-from-bottom-2">
+              <div className="flex gap-1">
+                <span className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                <span className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                <span className="w-2 h-2 bg-primary rounded-full animate-bounce"></span>
+              </div>
+              <p className="text-sm font-medium text-slate-600">{XStatus}</p>
+            </div>
+          )}
         </div>
-        <div className="flex justify-end gap-2 pt-3 border-t border-border">
-          <button onClick={onConcluir} disabled={XSalvando}
-            className="text-sm px-4 py-1.5 rounded bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50">
-            ✓ Concluir
-          </button>
-        </div>
+
+        <DialogFooter className="flex flex-col sm:flex-row gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onConcluir}
+            disabled={XSalvando}
+            className="flex-1 rounded-xl h-12"
+          >
+            Concluir Venda
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onClose}
+            disabled={XSalvando}
+            className="rounded-xl h-12"
+          >
+            Voltar
+          </Button>
+        </DialogFooter>
       </DialogContent>
+
+      <FiscalEmailDialog
+        open={XEmailDialogOpen}
+        onClose={() => setXEmailDialogOpen(false)}
+        nfeCabecalhoId={XNfeId}
+        empresaId={empresaId}
+        clienteId={dados?.cliente_id} 
+      />
     </Dialog>
   );
 };
