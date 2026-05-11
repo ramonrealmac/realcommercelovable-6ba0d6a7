@@ -478,6 +478,32 @@ const FiscalConfigForm = () => {
                   </CardContent>
                 </Card>
 
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-sm">Pasta Base de Arquivos Fiscais</CardTitle>
+                    <CardDescription>
+                      Caminho onde o Worker irá gravar XMLs, PDFs (DANFE/DANFCE), eventos e logs gerados
+                      pela ACBrLib. Se vazio, será usada a pasta padrão dentro do projeto
+                      (<code>AcbrDLL/Arquivos</code>). Use sempre um caminho absoluto acessível ao Worker.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <FormField
+                      control={form.control}
+                      name="pasta_arquivos_fiscais"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Pasta Base</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ex: C:\RealCommerce\Fiscal ou /var/realcommerce/fiscal" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+                </Card>
+
                 <div className="flex justify-between items-center bg-card p-4 rounded-lg border shadow-sm">
                   <div className="flex gap-2">
                     <Button type="button" variant="outline" onClick={testarSefaz} disabled={testing}>
