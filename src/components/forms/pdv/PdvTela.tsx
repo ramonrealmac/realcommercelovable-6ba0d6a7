@@ -675,9 +675,9 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       </div>
 
       {/* Body */}
-      <div className="flex-1 grid grid-cols-12 gap-3 p-3 overflow-hidden">
-        {/* Coluna esquerda (col-span-8): Venda direta OU detalhes do pedido */}
-        <div className={`col-span-8 flex flex-col border border-border rounded ${painelBg} overflow-hidden`}>
+      <div className="flex-1 flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory scroll-smooth gap-0 p-0 md:grid md:grid-cols-12 md:gap-3 md:p-3 md:overflow-hidden">
+        {/* Coluna esquerda: Venda direta OU detalhes do pedido (mobile = 100vw, desktop = col-span-8) */}
+        <div className={`w-screen shrink-0 snap-start p-3 md:p-0 md:w-auto md:shrink md:col-span-8 flex flex-col border border-border rounded ${painelBg} overflow-hidden`}>
           <div className="relative px-3 py-2 border-b border-border flex items-center justify-center bg-topbar">
             <span className="text-sm font-bold text-topbar-foreground opacity-70 uppercase tracking-wider">
               {XPedidoSel ? `Itens do Pedido Nº ${XPedidoSel.nr_movimento || XPedidoSel.movimento_id}` : "Venda Direta"}
@@ -751,8 +751,8 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
           </div>
         </div>
 
-        {/* Coluna direita (col-span-4): Pedidos a Receber (topo) + Resumo (rodapé) */}
-        <div className="col-span-4 flex flex-col gap-3 overflow-hidden">
+        {/* Coluna direita: Pedidos a Receber (topo) + Resumo (rodapé) — mobile = 100vw, desktop = col-span-4 */}
+        <div className="w-screen shrink-0 snap-start p-3 md:p-0 md:w-auto md:shrink md:col-span-4 flex flex-col gap-3 overflow-hidden">
           {/* Pedidos a Receber */}
           <div className={`flex-1 flex flex-col border border-border rounded ${painelBg} overflow-hidden min-h-0`}>
             <div className="relative px-3 py-2 border-b border-border flex items-center justify-center bg-topbar">
@@ -885,22 +885,37 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         </div>
       </div>
 
-      {/* Barra de atalhos */}
-      <div className="flex-shrink-0 border-t border-border bg-card/80 px-3 py-1 flex items-center gap-4 text-[11px] text-muted-foreground flex-wrap">
-        {[
-          { key: 'F1', label: 'Ajuda', color: 'bg-primary/10 border-primary/20 text-primary' },
-          { key: 'F2', label: 'Buscar Produto', color: 'bg-primary/10 border-primary/20 text-primary' },
-          { key: 'F3', label: 'Cliente', color: 'bg-primary/10 border-primary/20 text-primary' },
-          ...(XPodeInfVend ? [{ key: 'F4', label: 'Vendedor', color: 'bg-primary/10 border-primary/20 text-primary' }] : []),
-          { key: 'F5', label: 'Atualizar', color: 'bg-primary/10 border-primary/20 text-primary' },
-          { key: 'F6', label: 'Desconto', color: 'bg-primary/10 border-primary/20 text-primary' },
-          { key: 'F9', label: 'Finalizar', color: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400' },
-          { key: 'Esc', label: 'Limpar seleção', color: 'bg-rose-500/10 border-rose-500/20 text-rose-600' },
-        ].map(a => (
-          <span key={a.key} className="flex items-center gap-1">
+      {/* Barra de atalhos (clicáveis) */}
+      <div className="flex-shrink-0 border-t border-border bg-card/80 px-3 py-1 flex items-center gap-2 text-[11px] text-muted-foreground overflow-x-auto">
+        {([
+          { key: 'F1', label: 'Ajuda', color: 'bg-primary/10 border-primary/20 text-primary', enabled: true,
+            action: () => setXShowAtalhos(p => !p) },
+          { key: 'F2', label: 'Buscar Produto', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel,
+            action: () => { searchRef.current?.focus(); searchRef.current?.select(); } },
+          { key: 'F3', label: 'Cliente', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel,
+            action: () => setXOpenCliente(true) },
+          ...(XPodeInfVend ? [{ key: 'F4', label: 'Vendedor', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel,
+            action: () => setXOpenVend(true) }] : []),
+          { key: 'F5', label: 'Atualizar', color: 'bg-primary/10 border-primary/20 text-primary', enabled: true,
+            action: () => { carregarPedidos(); toast.info('Lista de pedidos atualizada.'); } },
+          { key: 'F6', label: 'Desconto', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel && XCart.length > 0,
+            action: () => setXOpenDesc(true) },
+          { key: 'F9', label: 'Finalizar', color: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400', enabled: podeReceber,
+            action: () => finalizarVenda() },
+          { key: 'Esc', label: 'Limpar seleção', color: 'bg-rose-500/10 border-rose-500/20 text-rose-600', enabled: !!XPedidoSel,
+            action: () => setXPedidoSel(null) },
+        ] as const).map(a => (
+          <button
+            key={a.key}
+            type="button"
+            onClick={a.action}
+            disabled={!a.enabled}
+            className="flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title={a.label}
+          >
             <kbd className={`px-1.5 py-0.5 rounded border font-mono font-bold shadow-sm ${a.color}`}>{a.key}</kbd>
             <span>{a.label}</span>
-          </span>
+          </button>
         ))}
       </div>
 
