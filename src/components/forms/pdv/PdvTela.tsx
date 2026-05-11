@@ -675,9 +675,9 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       </div>
 
       {/* Body */}
-      <div className="flex-1 grid grid-cols-12 gap-3 p-3 overflow-hidden">
-        {/* Coluna esquerda (col-span-8): Venda direta OU detalhes do pedido */}
-        <div className={`col-span-8 flex flex-col border border-border rounded ${painelBg} overflow-hidden`}>
+      <div className="flex-1 flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory scroll-smooth gap-0 p-0 md:grid md:grid-cols-12 md:gap-3 md:p-3 md:overflow-hidden">
+        {/* Coluna esquerda: Venda direta OU detalhes do pedido (mobile = 100vw, desktop = col-span-8) */}
+        <div className={`w-screen shrink-0 snap-start p-3 md:p-0 md:w-auto md:shrink md:col-span-8 flex flex-col border border-border rounded ${painelBg} overflow-hidden`}>
           <div className="relative px-3 py-2 border-b border-border flex items-center justify-center bg-topbar">
             <span className="text-sm font-bold text-topbar-foreground opacity-70 uppercase tracking-wider">
               {XPedidoSel ? `Itens do Pedido Nº ${XPedidoSel.nr_movimento || XPedidoSel.movimento_id}` : "Venda Direta"}
