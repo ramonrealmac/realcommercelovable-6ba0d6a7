@@ -885,22 +885,37 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         </div>
       </div>
 
-      {/* Barra de atalhos */}
-      <div className="flex-shrink-0 border-t border-border bg-card/80 px-3 py-1 flex items-center gap-4 text-[11px] text-muted-foreground flex-wrap">
-        {[
-          { key: 'F1', label: 'Ajuda', color: 'bg-primary/10 border-primary/20 text-primary' },
-          { key: 'F2', label: 'Buscar Produto', color: 'bg-primary/10 border-primary/20 text-primary' },
-          { key: 'F3', label: 'Cliente', color: 'bg-primary/10 border-primary/20 text-primary' },
-          ...(XPodeInfVend ? [{ key: 'F4', label: 'Vendedor', color: 'bg-primary/10 border-primary/20 text-primary' }] : []),
-          { key: 'F5', label: 'Atualizar', color: 'bg-primary/10 border-primary/20 text-primary' },
-          { key: 'F6', label: 'Desconto', color: 'bg-primary/10 border-primary/20 text-primary' },
-          { key: 'F9', label: 'Finalizar', color: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400' },
-          { key: 'Esc', label: 'Limpar seleção', color: 'bg-rose-500/10 border-rose-500/20 text-rose-600' },
-        ].map(a => (
-          <span key={a.key} className="flex items-center gap-1">
+      {/* Barra de atalhos (clicáveis) */}
+      <div className="flex-shrink-0 border-t border-border bg-card/80 px-3 py-1 flex items-center gap-2 text-[11px] text-muted-foreground overflow-x-auto">
+        {([
+          { key: 'F1', label: 'Ajuda', color: 'bg-primary/10 border-primary/20 text-primary', enabled: true,
+            action: () => setXShowAtalhos(p => !p) },
+          { key: 'F2', label: 'Buscar Produto', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel,
+            action: () => { searchRef.current?.focus(); searchRef.current?.select(); } },
+          { key: 'F3', label: 'Cliente', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel,
+            action: () => setXOpenCliente(true) },
+          ...(XPodeInfVend ? [{ key: 'F4', label: 'Vendedor', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel,
+            action: () => setXOpenVend(true) }] : []),
+          { key: 'F5', label: 'Atualizar', color: 'bg-primary/10 border-primary/20 text-primary', enabled: true,
+            action: () => { carregarPedidos(); toast.info('Lista de pedidos atualizada.'); } },
+          { key: 'F6', label: 'Desconto', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel && XCart.length > 0,
+            action: () => setXOpenDesc(true) },
+          { key: 'F9', label: 'Finalizar', color: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400', enabled: podeReceber,
+            action: () => finalizarVenda() },
+          { key: 'Esc', label: 'Limpar seleção', color: 'bg-rose-500/10 border-rose-500/20 text-rose-600', enabled: !!XPedidoSel,
+            action: () => setXPedidoSel(null) },
+        ] as const).map(a => (
+          <button
+            key={a.key}
+            type="button"
+            onClick={a.action}
+            disabled={!a.enabled}
+            className="flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title={a.label}
+          >
             <kbd className={`px-1.5 py-0.5 rounded border font-mono font-bold shadow-sm ${a.color}`}>{a.key}</kbd>
             <span>{a.label}</span>
-          </span>
+          </button>
         ))}
       </div>
 
