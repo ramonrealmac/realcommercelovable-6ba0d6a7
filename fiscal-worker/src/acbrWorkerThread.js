@@ -194,7 +194,7 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave, confi
         if (tp === 'IMPRESSORA' && printConfig.nm_impressora) {
             lib.ConfigGravarValor(handle, "DANFe", "Impressora", printConfig.nm_impressora);
         }
-        const pdfDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos/PDF");
+        const pdfDir = path.join(resolverBaseArquivos(configPayload), "PDF");
         if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
         
         // Limpa arquivos antigos da mesma chave para evitar pegar o arquivo errado
