@@ -79,7 +79,7 @@ const loadLibrary = (path, prefix) => {
                     funcoes.SalvarPDF = lib.func('int __cdecl NFE_SalvarPDF(void* handle, _Out_ char* sResposta, _Out_ int* esTamanho)');
                 } catch (e) { /* opcional */ }
                 try {
-                    funcoes.EnviarEmail = lib.func('int __cdecl NFE_EnviarEmail(void* handle, const char* ePara, const char* eChaveNFe, bool aEnviaPDF, const char* eAssunto, const char* eCc, const char* eAnexos, const char* eMensagem)');
+                    funcoes.EnviarEmail = lib.func('int __cdecl NFE_EnviarEmail(void* handle, const char* ePara, const char* eChaveNFe, int aEnviaPDF, const char* eAssunto, const char* eCc, const char* eAnexos, const char* eMensagem)');
                 } catch (e) {
                     console.warn('[FiscalLib] EnviarEmail indisponível:', e.message);
                 }
@@ -806,19 +806,25 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 
                 // 2. Configura SMTP
                 if (config_email) {
-                    libNFe.ConfigGravarValor(handle, "Email", "Servidor", config_email.host || "");
+                    libNFe.ConfigGravarValor(handle, "Email", "Servidor", String(config_email.host || ""));
                     libNFe.ConfigGravarValor(handle, "Email", "Porta", String(config_email.port || "587"));
-                    libNFe.ConfigGravarValor(handle, "Email", "Usuario", config_email.user || "");
-                    libNFe.ConfigGravarValor(handle, "Email", "Senha", config_email.pass || "");
+                    libNFe.ConfigGravarValor(handle, "Email", "Usuario", String(config_email.user || ""));
+                    libNFe.ConfigGravarValor(handle, "Email", "Senha", String(config_email.pass || ""));
+                    libNFe.ConfigGravarValor(handle, "Email", "Email", String(config_email.user || "")); // Geralmente o usuário é o próprio e-mail
                     libNFe.ConfigGravarValor(handle, "Email", "SSL", config_email.ssl ? "1" : "0");
                     libNFe.ConfigGravarValor(handle, "Email", "TLS", config_email.tls ? "1" : "0");
-                    libNFe.ConfigGravarValor(handle, "Email", "Nome", config_email.nome_remetente || "");
+                    libNFe.ConfigGravarValor(handle, "Email", "Nome", String(config_email.nome_remetente || ""));
                 }
 
                 // 3. Enviar
-                // ePara, eChaveNFe (vazio pois já carregou XML), aEnviaPDF (true), eAssunto, eCc, eAnexos, eMensagem
-                const listaAnexos = Array.isArray(anexos) ? anexos.join(';') : (anexos || "");
-                const ret = libNFe.EnviarEmail(handle, para, "", true, assunto || "", "", listaAnexos, mensagem || "");
+                // ePara, eChaveNFe (vazio pois já carregou XML), aEnviaPDF (1=true), eAssunto, eCc, eAnexos, eMensagem
+                const listaAnexos = Array.isArray(anexos) ? anexos.join(';') : String(anexos || "");
+                const targetPara = String(para || "");
+                const targetAssunto = String(assunto || "");
+                const targetMensagem = String(mensagem || "");
+                
+                console.log(`[FiscalLib] Chamando EnviarEmail para: ${targetPara}`);
+                const ret = libNFe.EnviarEmail(handle, targetPara, "", 1, targetAssunto, "", listaAnexos, targetMensagem);
                 
                 if (ret !== 0) {
                     return { sucesso: false, erro: lerRetornoACBr(libNFe, handle) || `Erro ${ret} ao enviar e-mail.` };

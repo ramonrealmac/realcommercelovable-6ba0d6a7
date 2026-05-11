@@ -1,5 +1,5 @@
 import React from "react";
-import { Printer, FileText, FileCode2, ScanLine, Loader2, Eye, X, ChevronRight, CheckCircle2 } from "lucide-react";
+import { Printer, FileText, FileCode2, ScanLine, Loader2, Eye, X, Mail, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -119,88 +119,98 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
   const handleGerarFiscal = async (tipo: "NFE" | "NFCE") => {
     if (!dados?.movimento_id) return;
 
-    setXSalvando(true);
-    setXStatus(`Gerando ${tipo} e enviando ao Fiscal Worker...`);
-    const res = await fiscalEmissaoService.gerarDocumentoFiscalFromMovimento(
-      dados.movimento_id,
-      tipo,
-      empresaId,
-      funcionarioId
-    );
+    try {
+      setXSalvando(true);
+      setXStatus(`Gerando ${tipo} e enviando ao Fiscal Worker...`);
+      const res = await fiscalEmissaoService.gerarDocumentoFiscalFromMovimento(
+        dados.movimento_id,
+        tipo,
+        empresaId,
+        funcionarioId
+      );
 
-    if (!res.success || !res.fiscal_evento_id) {
-      setXSalvando(false);
-      setXStatus("");
-      toast.error(`Erro ao gerar ${tipo}: ` + res.message);
-      return;
-    }
-
-    setXStatus(`Aguardando autorização da SEFAZ...`);
-    const ret = await fiscalEmissaoService.aguardarEvento(res.fiscal_evento_id, 90000);
-    
-    if (ret.success) {
-      toast.success(`${tipo} autorizada!`);
-      
-      // Abre o PDF se retornado pelo worker
-      let pdfBase64 = ret.resposta?.pdf_base64 || ret.resposta?.impressao?.pdf_base64;
-      
-      if (res.nfe_cabecalho_id) {
-        setXNfeId(res.nfe_cabecalho_id);
+      if (!res.success || !res.fiscal_evento_id) {
+        setXSalvando(false);
+        setXStatus("");
+        toast.error(`Erro ao gerar ${tipo}: ` + res.message);
+        return;
       }
 
-      // Fallback: Se o worker não retornou o PDF na emissão (ex: config não era PDF ou falhou na emissão),
-      // solicita explicitamente a geração do PDF para visualização no browser.
-      if (!pdfBase64 && res.nfe_cabecalho_id) {
-        console.log(`[OpcoesPagamentoDialog] PDF não retornado na emissão. Solicitando impressão explícita para nota ID: ${res.nfe_cabecalho_id}`);
-        setXStatus("Gerando DANFE para visualização...");
-        const impRes = await fiscalEmissaoService.imprimirDocumento(res.nfe_cabecalho_id, empresaId);
-        if (impRes.success) {
-          pdfBase64 = impRes.pdf_base64;
-        } else {
-          console.warn("[OpcoesPagamentoDialog] Falha ao gerar DANFE após emissão:", impRes.message);
+      setXStatus(`Aguardando autorização da SEFAZ...`);
+      const ret = await fiscalEmissaoService.aguardarEvento(res.fiscal_evento_id, 90000);
+      
+      if (ret.success) {
+        toast.success(`${tipo} autorizada!`);
+        
+        // Abre o PDF se retornado pelo worker
+        let pdfBase64 = ret.resposta?.pdf_base64 || ret.resposta?.impressao?.pdf_base64;
+        
+        if (res.nfe_cabecalho_id) {
+          setXNfeId(res.nfe_cabecalho_id);
         }
-      }
-      
-      if (pdfBase64) {
-        setXLastPdf(pdfBase64);
+
+        // Fallback: Se o worker não retornou o PDF na emissão, solicita explicitamente
+        if (!pdfBase64 && res.nfe_cabecalho_id) {
+          console.log(`[OpcoesPagamentoDialog] PDF não retornado na emissão. Solicitando impressão explícita para nota ID: ${res.nfe_cabecalho_id}`);
+          setXStatus("Gerando DANFE para visualização...");
+          const impRes = await fiscalEmissaoService.imprimirDocumento(res.nfe_cabecalho_id, empresaId);
+          if (impRes.success) {
+            pdfBase64 = impRes.pdf_base64;
+          } else {
+            console.warn("[OpcoesPagamentoDialog] Falha ao gerar DANFE após emissão:", impRes.message);
+          }
+        }
+        
+        if (pdfBase64) {
+          setXLastPdf(pdfBase64);
+          try {
+            const byteCharacters = atob(pdfBase64);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+              byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const file = new Blob([byteArray], { type: 'application/pdf' });
+            const fileURL = URL.createObjectURL(file);
+            const win = window.open(fileURL, 'danfe_view', '_blank');
+            if (!win) {
+              toast.error("O bloqueador de popups impediu a abertura do DANFE. Use o botão 'Visualizar' abaixo.");
+            }
+          } catch (err) {
+            console.error("Erro ao abrir PDF:", err);
+            toast.error("Erro ao processar o PDF do DANFE.");
+          }
+        }
+        
+        // Verifica se deve enviar e-mail automaticamente
         try {
-          const byteCharacters = atob(pdfBase64);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-          }
-          const byteArray = new Uint8Array(byteNumbers);
-          const file = new Blob([byteArray], { type: 'application/pdf' });
-          const fileURL = URL.createObjectURL(file);
-          const win = window.open(fileURL, 'danfe_view', '_blank');
-          if (!win) {
-            toast.error("O bloqueador de popups impediu a abertura do DANFE. Use o botão 'Visualizar' abaixo.");
-          }
-        } catch (err) {
-          console.error("Erro ao abrir PDF:", err);
-          toast.error("Erro ao processar o PDF do DANFE.");
-        }
-      }
-      
-      // Verifica se deve enviar e-mail automaticamente
-      const { data: configItem } = await supabase
-        .from("fiscal_config_item")
-        .select("enviar_email")
-        .eq("empresa_id", empresaId)
-        .eq("modelo", tipo === "NFE" ? "55" : "65")
-        .limit(1)
-        .maybeSingle();
+          const { data: configItem } = await supabase
+            .from("fiscal_config_item")
+            .select("enviar_email")
+            .eq("empresa_id", empresaId)
+            .eq("modelo", tipo === "NFE" ? "55" : "65")
+            .limit(1)
+            .maybeSingle();
 
-      if (configItem?.enviar_email === "S") {
-        setXEmailDialogOpen(true);
+          if (configItem?.enviar_email === "S") {
+            setXEmailDialogOpen(true);
+          }
+        } catch (errEmail) {
+          console.error("Erro ao verificar config de e-mail:", errEmail);
+        }
+        
+        setXSalvando(false);
+        setXStatus("");
+      } else {
+        setXSalvando(false);
+        setXStatus("");
+        toast.error(`Falha na ${tipo}: ${ret.mensagem || "verifique o log fiscal"}`);
       }
-      
+    } catch (err: any) {
+      console.error(`[OpcoesPagamentoDialog] Erro fatal em handleGerarFiscal:`, err);
       setXSalvando(false);
       setXStatus("");
-    } else {
-      setXSalvando(false);
-      setXStatus("");
-      toast.error(`Falha na ${tipo}: ${ret.mensagem || "verifique o log fiscal"}`);
+      toast.error("Ocorreu um erro inesperado: " + (err.message || "Erro interno"));
     }
   };
 
