@@ -185,7 +185,7 @@ const waitSync = (ms) => {
  * Tenta imprimir DANFE/DANFCE baseado em print_config { tp_imp, nm_impressora }.
  * Retorna um objeto de resultado e nunca propaga erro para o fluxo fiscal.
  */
-const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave) => {
+const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave, configPayload) => {
     if (!printConfig) return { sucesso: true, ignorado: true, pdf_path: null };
     const tp = (printConfig.tp_imp || 'PDF').toUpperCase();
     if (tp === 'NAO_IMPRIME' || tp === 'NAO IMPRIME' || tp === 'NONE') return { sucesso: true, ignorado: true, pdf_path: null };
