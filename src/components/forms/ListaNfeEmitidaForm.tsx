@@ -3,6 +3,8 @@ import { useAppContext } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
+import { useGridFilter } from "@/hooks/useGridFilter";
+
 import { 
   FileText, 
   RefreshCw, 
@@ -28,6 +30,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import MonitorFiscalLogDialog from "@/components/forms/MonitorFiscalLogDialog";
+
+interface IProps {
+  initialFilterId?: string | number;
+}
+
 
 const db = supabase as any;
 
@@ -65,7 +72,7 @@ const XGridCols: IGridColumn[] = [
   },
 ];
 
-const LiestaNfeEmitidaForm: React.FC = () => {
+const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
   const { XEmpresaId, openTab } = useAppContext();
   const [XData, setXData] = useState<any[]>([]);
   const [XLoading, setXLoading] = useState(false);
@@ -88,6 +95,13 @@ const LiestaNfeEmitidaForm: React.FC = () => {
   const [XCancelTarget, setXCancelTarget] = useState<any>(null);
   const [XCancelJustificativa, setXCancelJustificativa] = useState("");
   const [XCancelando, setXCancelando] = useState(false);
+
+  useEffect(() => {
+    if (initialFilterId) {
+      setXSearchFilters(prev => ({ ...prev, nr_nota: String(initialFilterId) }));
+    }
+  }, [initialFilterId]);
+
 
   const loadData = async () => {
     if (!XEmpresaId) return;
@@ -125,6 +139,9 @@ const LiestaNfeEmitidaForm: React.FC = () => {
       .subscribe();
     return () => { try { (supabase as any).removeChannel(ch); } catch {} };
   }, [XEmpresaId, XDtIni, XDtFim]);
+
+  const XFilteredData = useGridFilter(XData, XSearchFilters);
+
 
   const handleTransmitir = async (row: any) => {
     if (!XEmpresaId) return;
@@ -236,7 +253,7 @@ const LiestaNfeEmitidaForm: React.FC = () => {
     }
     setXCancelando(true);
     const tid = toast.loading("Enviando cancelamento para SEFAZ...");
-    console.log("[LiestaNfeEmitidaForm] Cancelando nota:", XCancelTarget);
+    console.log("[ListaNfeEmitidaForm] Cancelando nota:", XCancelTarget);
     try {
       const res = await fiscalEmissaoService.cancelarDocumento(XCancelTarget.nfe_cabecalho_id, XEmpresaId, XCancelJustificativa);
       if (res.success) {
@@ -331,7 +348,7 @@ const LiestaNfeEmitidaForm: React.FC = () => {
               )
             }
           ]}
-          data={XData}
+          data={XFilteredData}
           showFilters
           filterValues={XSearchFilters}
           onFilterChange={(k, v) => setXSearchFilters(prev => ({ ...prev, [k]: v }))}
@@ -423,4 +440,4 @@ const LiestaNfeEmitidaForm: React.FC = () => {
   );
 };
 
-export default LiestaNfeEmitidaForm;
+export default ListaNfeEmitidaForm;

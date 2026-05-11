@@ -25,7 +25,7 @@ import { Badge } from "@/components/ui/badge";
 
 const db = supabase as any;
 
-const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialFilterId }) => {
+const ListaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialFilterId }) => {
     const { XEmpresaId } = useAppContext();
     const [XData, setXData] = useState<any[]>([]);
     const [XLoading, setXLoading] = useState(false);
@@ -194,4 +194,4 @@ const LiestaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialF
     );
 };
 
-export default LiestaNfeEmitidaForm;
+export default ListaNfeEmitidaForm;

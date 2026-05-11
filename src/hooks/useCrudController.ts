@@ -134,7 +134,7 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
   const handleExcluir = useCallback(async () => {
     if (!XCurrentRecord) return;
     if (!confirm("Deseja realmente excluir este registro?")) return;
-    
+
     let error;
     if (config.XSoftDelete === false) {
       // Hard delete

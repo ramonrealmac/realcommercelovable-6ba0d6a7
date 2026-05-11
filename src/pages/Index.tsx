@@ -29,7 +29,7 @@ import FiscalRegraForm from "@/components/forms/FiscalRegraForm";
 import PedidoForm from "@/components/forms/PedidoForm";
 import NotaFiscalEntradaForm from "@/components/forms/NotaFiscalEntradaForm";
 import NfeRecebidasForm from "@/components/forms/NfeRecebidasForm";
-import LiestaNfeEmitidaForm from "@/components/forms/LiestaNfeEmitidaForm";
+import ListaNfeEmitidaForm from "@/components/forms/ListaNfeEmitidaForm";
 import NfeEmitidaForm from "@/components/forms/NfeEmitidaForm";
 import ConsultaTitulosReceberForm from "@/components/forms/ConsultaTitulosReceberForm";
 import BaixaPorClienteForm from "@/components/forms/BaixaPorClienteForm";
@@ -116,7 +116,7 @@ const AppContent = () => {
       case "nfe-recebidas":
         return <NfeRecebidasForm />;
       case "nfe-emitidas":
-        return <LiestaNfeEmitidaForm initialFilterId={params?.nfe_cabecalho_id} />;
+        return <ListaNfeEmitidaForm initialFilterId={params?.nfe_cabecalho_id} />;
       case "nfe-form":
         return <NfeEmitidaForm initialId={params?.nfe_cabecalho_id} />;
       case "consulta-titulos-receber":
