@@ -1,0 +1,16 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+README.md
+.env
+.env.local
+.env.*.local
+dist_electron
+electron-release
+*.bat
+*.ps1
+.dockerignore
+Dockerfile*
+docker-compose*
+nginx.conf

@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # Aplicação Web (React + Vite)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: realcommerce-app
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    networks:
+      - realcommerce-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Fiscal Worker (processador de eventos fiscais)
+  fiscal-worker:
+    build:
+      context: ./fiscal-worker
+      dockerfile: Dockerfile
+    container_name: realcommerce-fiscal-worker
+    restart: unless-stopped
+    env_file:
+      - ./fiscal-worker/.env
+    networks:
+      - realcommerce-network
+    depends_on:
+      - app
+
+  # Ponte do Provedor (bridge HTTP -> TCP)
+  provedor-bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile.bridge
+    container_name: realcommerce-provedor-bridge
+    ports:
+      - "3434:3434"
+    restart: unless-stopped
+    networks:
+      - realcommerce-network
+    depends_on:
+      - app
+
+networks:
+  realcommerce-network:
+    driver: bridge

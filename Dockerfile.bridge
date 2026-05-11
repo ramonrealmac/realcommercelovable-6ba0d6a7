@@ -1,0 +1,14 @@
+# Dockerfile da Ponte do Provedor (Node.js bridge HTTP -> TCP)
+FROM node:20-alpine
+
+# Diretório de trabalho
+WORKDIR /app
+
+# Copia o arquivo da ponte
+COPY provedor-bridge.cjs ./
+
+# Expõe a porta da ponte
+EXPOSE 3434
+
+# Comando para iniciar a ponte
+CMD ["node", "provedor-bridge.cjs"]

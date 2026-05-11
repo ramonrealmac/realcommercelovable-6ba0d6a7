@@ -2734,44 +2734,41 @@ export type Database = {
         Row: {
           csc: string | null
           empresa_id: number
+          enviar_email: string | null
           fiscal_config_item_id: number
           id_csc: string | null
           modelo: string
-          nm_impressora_nfce: string | null
-          nm_impressora_nfe: string | null
+          nm_impressora: string | null
           nome: string | null
           sequencia: number
           serie: string
-          tp_imp_nfce: string | null
-          tp_imp_nfe: string | null
+          tp_imp: string | null
         }
         Insert: {
           csc?: string | null
           empresa_id: number
+          enviar_email?: string | null
           fiscal_config_item_id?: number
           id_csc?: string | null
           modelo?: string
-          nm_impressora_nfce?: string | null
-          nm_impressora_nfe?: string | null
+          nm_impressora?: string | null
           nome?: string | null
           sequencia?: number
           serie?: string
-          tp_imp_nfce?: string | null
-          tp_imp_nfe?: string | null
+          tp_imp?: string | null
         }
         Update: {
           csc?: string | null
           empresa_id?: number
+          enviar_email?: string | null
           fiscal_config_item_id?: number
           id_csc?: string | null
           modelo?: string
-          nm_impressora_nfce?: string | null
-          nm_impressora_nfe?: string | null
+          nm_impressora?: string | null
           nome?: string | null
           sequencia?: number
           serie?: string
-          tp_imp_nfce?: string | null
-          tp_imp_nfe?: string | null
+          tp_imp?: string | null
         }
         Relationships: []
       }
