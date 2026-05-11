@@ -107,7 +107,8 @@ const FiscalConfigForm = () => {
             email_smtp_ssl: !!data.email_smtp_ssl,
             email_smtp_tls: !!data.email_smtp_tls,
             email_assunto_nfe: data.email_assunto_nfe || "NF-e emitida: [CHAVE]",
-            email_corpo_nfe: data.email_corpo_nfe || "Olá, segue em anexo a NF-e e o DANFE referente à sua compra."
+            email_corpo_nfe: data.email_corpo_nfe || "Olá, segue em anexo a NF-e e o DANFE referente à sua compra.",
+            pasta_arquivos_fiscais: (data as any).pasta_arquivos_fiscais || ""
           });
 
           if (data.cliente_padrao_id) {
