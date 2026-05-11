@@ -185,7 +185,7 @@ const FiscalConfigForm = () => {
       if (existing) {
         const { error } = await supabase
           .from("fiscal_config")
-          .update(payload)
+          .update(payload as any)
           .eq("empresa_id", XEmpresaId);
         if (error) throw error;
       } else {
@@ -194,7 +194,7 @@ const FiscalConfigForm = () => {
           .insert({
             empresa_id: XEmpresaId,
             ...payload
-          });
+          } as any);
         if (error) throw error;
       }
       toast.success("Configurações salvas com sucesso!");
