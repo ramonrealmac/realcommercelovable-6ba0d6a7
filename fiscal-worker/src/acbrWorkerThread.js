@@ -806,25 +806,43 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 
                 // 2. Configura SMTP
                 if (config_email) {
+                    console.log(`[FiscalLib] Configurando SMTP: ${config_email.host}:${config_email.port}`);
                     libNFe.ConfigGravarValor(handle, "Email", "Servidor", String(config_email.host || ""));
                     libNFe.ConfigGravarValor(handle, "Email", "Porta", String(config_email.port || "587"));
                     libNFe.ConfigGravarValor(handle, "Email", "Usuario", String(config_email.user || ""));
                     libNFe.ConfigGravarValor(handle, "Email", "Senha", String(config_email.pass || ""));
-                    libNFe.ConfigGravarValor(handle, "Email", "Email", String(config_email.user || "")); // Geralmente o usuário é o próprio e-mail
+                    libNFe.ConfigGravarValor(handle, "Email", "Email", String(config_email.user || "")); 
+                    libNFe.ConfigGravarValor(handle, "Email", "Nome", String(config_email.nome_remetente || ""));
                     libNFe.ConfigGravarValor(handle, "Email", "SSL", config_email.ssl ? "1" : "0");
                     libNFe.ConfigGravarValor(handle, "Email", "TLS", config_email.tls ? "1" : "0");
-                    libNFe.ConfigGravarValor(handle, "Email", "Nome", String(config_email.nome_remetente || ""));
                 }
 
                 // 3. Enviar
                 // ePara, eChaveNFe (vazio pois já carregou XML), aEnviaPDF (1=true), eAssunto, eCc, eAnexos, eMensagem
-                const listaAnexos = Array.isArray(anexos) ? anexos.join(';') : String(anexos || "");
                 const targetPara = String(para || "");
-                const targetAssunto = String(assunto || "");
-                const targetMensagem = String(mensagem || "");
+                const targetAssunto = String(assunto || "Nota Fiscal");
+                const targetMensagem = String(mensagem || "Segue em anexo.");
+                const targetAnexos = Array.isArray(anexos) ? anexos.join(';') : String(anexos || "");
                 
-                console.log(`[FiscalLib] Chamando EnviarEmail para: ${targetPara}`);
-                const ret = libNFe.EnviarEmail(handle, targetPara, "", 1, targetAssunto, "", listaAnexos, targetMensagem);
+                console.log(`[FiscalLib] >>> CHAMANDO EnviarEmail(handle, para=${targetPara}, chave=null, pdf=1, assunto=${targetAssunto}) <<<`);
+                
+                let ret;
+                try {
+                    ret = libNFe.EnviarEmail(
+                        handle, 
+                        targetPara, 
+                        null,             // eChaveNFe (usar nota carregada)
+                        1,                // aEnviaPDF (1 = True)
+                        targetAssunto, 
+                        null,             // eCc
+                        targetAnexos || null, 
+                        targetMensagem
+                    );
+                    console.log(`[FiscalLib] Retorno DLL EnviarEmail: ${ret}`);
+                } catch (errCall) {
+                    console.error(`[FiscalLib] EXCEÇÃO NA CHAMADA EnviarEmail: ${errCall.message}`);
+                    throw errCall;
+                }
                 
                 if (ret !== 0) {
                     return { sucesso: false, erro: lerRetornoACBr(libNFe, handle) || `Erro ${ret} ao enviar e-mail.` };
