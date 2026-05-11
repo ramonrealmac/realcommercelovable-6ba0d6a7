@@ -751,8 +751,8 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
           </div>
         </div>
 
-        {/* Coluna direita (col-span-4): Pedidos a Receber (topo) + Resumo (rodapé) */}
-        <div className="col-span-4 flex flex-col gap-3 overflow-hidden">
+        {/* Coluna direita: Pedidos a Receber (topo) + Resumo (rodapé) — mobile = 100vw, desktop = col-span-4 */}
+        <div className="w-screen shrink-0 snap-start p-3 md:p-0 md:w-auto md:shrink md:col-span-4 flex flex-col gap-3 overflow-hidden">
           {/* Pedidos a Receber */}
           <div className={`flex-1 flex flex-col border border-border rounded ${painelBg} overflow-hidden min-h-0`}>
             <div className="relative px-3 py-2 border-b border-border flex items-center justify-center bg-topbar">
