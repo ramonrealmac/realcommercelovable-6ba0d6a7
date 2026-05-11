@@ -625,7 +625,7 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 // Tenta gerar o PDF do comprovante de cancelamento
                 let pdfBase64 = null;
                 try {
-                    const eventoDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos/Evento");
+                    const eventoDir = path.join(resolverBaseArquivos(config), "Evento");
                     if (fs.existsSync(eventoDir)) {
                         const files = fs.readdirSync(eventoDir);
                         // Busca flexível: arquivos que contenham a chave e terminem em .xml
