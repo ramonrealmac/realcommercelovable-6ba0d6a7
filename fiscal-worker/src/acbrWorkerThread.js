@@ -277,6 +277,21 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave) => {
     }
 };
 
+const resolverBaseArquivos = (configPayload) => {
+    const custom = configPayload && configPayload.pasta_arquivos
+        ? String(configPayload.pasta_arquivos).trim()
+        : '';
+    if (custom) {
+        try {
+            if (!fs.existsSync(custom)) fs.mkdirSync(custom, { recursive: true });
+            return path.resolve(custom);
+        } catch (e) {
+            console.warn(`[FiscalLib] Falha ao usar pasta_arquivos="${custom}": ${e.message}. Caindo para padrão.`);
+        }
+    }
+    return path.resolve(process.cwd(), "AcbrDLL/Arquivos");
+};
+
 const configurarHandle = (lib, handle, configPayload) => {
     // Configuração dos Schemas XSD (Obrigatório para NFe/MDFe)
     const schemasPath = path.resolve(process.cwd(), "AcbrDLL/dep/Schemas/NFe");
@@ -285,8 +300,8 @@ const configurarHandle = (lib, handle, configPayload) => {
     lib.ConfigGravarValor(handle, "Principal", "TipoResposta", "2");      // 0=string, 1=XML, 2=JSON
     lib.ConfigGravarValor(handle, "Principal", "CodificacaoResposta", "0"); // 0=UTF-8
 
-    // Caminhos de Arquivos e Logs
-    const baseArquivos = path.resolve(process.cwd(), "AcbrDLL/Arquivos");
+    // Caminhos de Arquivos e Logs (parametrizado via configPayload.pasta_arquivos)
+    const baseArquivos = resolverBaseArquivos(configPayload);
     lib.ConfigGravarValor(handle, "NFe", "PathSalvar", baseArquivos);
     lib.ConfigGravarValor(handle, "NFe", "PathNFe", path.join(baseArquivos, "NFe"));
     lib.ConfigGravarValor(handle, "NFe", "PathInu", path.join(baseArquivos, "Inu"));
