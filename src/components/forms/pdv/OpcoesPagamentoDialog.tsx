@@ -113,7 +113,21 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
       toast.success(`${tipo} autorizada! Chave: ${ret.resposta?.chave_nfe || "—"}`);
       
       // Abre o PDF se retornado pelo worker
-      const pdfBase64 = ret.resposta?.pdf_base64 || ret.resposta?.impressao?.pdf_base64;
+      let pdfBase64 = ret.resposta?.pdf_base64 || ret.resposta?.impressao?.pdf_base64;
+
+      // Fallback: Se o worker não retornou o PDF na emissão (ex: config não era PDF ou falhou na emissão),
+      // solicita explicitamente a geração do PDF para visualização no browser.
+      if (!pdfBase64 && res.nfe_cabecalho_id) {
+        console.log(`[OpcoesPagamentoDialog] PDF não retornado na emissão. Solicitando impressão explícita para nota ID: ${res.nfe_cabecalho_id}`);
+        setXStatus("Gerando DANFE para visualização...");
+        const impRes = await fiscalEmissaoService.imprimirDocumento(res.nfe_cabecalho_id, empresaId);
+        if (impRes.success) {
+          pdfBase64 = impRes.pdf_base64;
+        } else {
+          console.warn("[OpcoesPagamentoDialog] Falha ao gerar DANFE após emissão:", impRes.message);
+        }
+      }
+      
       if (pdfBase64) {
         try {
           const byteCharacters = atob(pdfBase64);
@@ -127,11 +141,14 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
           window.open(fileURL, '_blank');
         } catch (err) {
           console.error("Erro ao abrir PDF:", err);
+          toast.error("Erro ao abrir o PDF do DANFE.");
         }
       }
       
       onConcluir();
     } else {
+      setXSalvando(false);
+      setXStatus("");
       toast.error(`Falha na ${tipo}: ${ret.mensagem || "verifique o log fiscal"}`);
     }
   };
