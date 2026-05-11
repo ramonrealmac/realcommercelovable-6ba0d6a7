@@ -828,6 +828,18 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                     libNFe.ConfigGravarValor(handle, "Email", "SSL", config_email.ssl ? "1" : "0");
                     libNFe.ConfigGravarValor(handle, "Email", "TLS", config_email.tls ? "1" : "0");
                     libNFe.ConfigGravarValor(handle, "Email", "Nome", config_email.nome_remetente || "");
+                    // Conta = endereço usado como remetente (From) — alguns servidores rejeitam sem isso
+                    libNFe.ConfigGravarValor(handle, "Email", "Conta", config_email.user || "");
+                    // DefaultHELO: corrige "Invalid HELO name" — alguns servidores rejeitam
+                    // quando o cliente envia "localhost" ou hostname interno. Usamos um FQDN
+                    // baseado no domínio do remetente ou do host SMTP.
+                    const heloFromUser = (config_email.user || "").split("@")[1] || "";
+                    const helo = (config_email.helo && String(config_email.helo).trim())
+                        || heloFromUser
+                        || (config_email.host || "")
+                        || "localhost.localdomain";
+                    libNFe.ConfigGravarValor(handle, "Email", "DefaultHELO", helo);
+                    console.log(`[FiscalLib] SMTP DefaultHELO definido como: ${helo}`);
                 }
 
                 // 3. Enviar
