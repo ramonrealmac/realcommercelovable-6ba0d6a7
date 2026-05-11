@@ -2617,6 +2617,7 @@ export type Database = {
           modelo_mdf: string | null
           modelo_nfce: string | null
           modelo_nfe: string | null
+          pasta_arquivos_fiscais: string | null
           senha_certificado: string | null
           serie_mdf: string | null
           serie_nfce: string | null
@@ -2663,6 +2664,7 @@ export type Database = {
           modelo_mdf?: string | null
           modelo_nfce?: string | null
           modelo_nfe?: string | null
+          pasta_arquivos_fiscais?: string | null
           senha_certificado?: string | null
           serie_mdf?: string | null
           serie_nfce?: string | null
@@ -2709,6 +2711,7 @@ export type Database = {
           modelo_mdf?: string | null
           modelo_nfce?: string | null
           modelo_nfe?: string | null
+          pasta_arquivos_fiscais?: string | null
           senha_certificado?: string | null
           serie_mdf?: string | null
           serie_nfce?: string | null

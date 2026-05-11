@@ -36,6 +36,7 @@ interface FiscalConfigFormValues {
   email_smtp_tls: boolean;
   email_assunto_nfe: string;
   email_corpo_nfe: string;
+  pasta_arquivos_fiscais: string;
 }
 
 const FiscalConfigForm = () => {
