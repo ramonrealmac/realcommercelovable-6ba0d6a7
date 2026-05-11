@@ -36,6 +36,7 @@ interface FiscalConfigFormValues {
   email_smtp_tls: boolean;
   email_assunto_nfe: string;
   email_corpo_nfe: string;
+  pasta_arquivos_fiscais: string;
 }
 
 const FiscalConfigForm = () => {
@@ -64,7 +65,8 @@ const FiscalConfigForm = () => {
       email_smtp_ssl: false,
       email_smtp_tls: true,
       email_assunto_nfe: "NF-e emitida: [CHAVE]",
-      email_corpo_nfe: "Olá, segue em anexo a NF-e e o DANFE referente à sua compra."
+      email_corpo_nfe: "Olá, segue em anexo a NF-e e o DANFE referente à sua compra.",
+      pasta_arquivos_fiscais: ""
     }
   });
 
@@ -81,7 +83,8 @@ const FiscalConfigForm = () => {
           .select(`
             tipo_certificado, certificado, senha_certificado, ambiente_nfe, cliente_padrao_id,
             email_smtp_host, email_smtp_port, email_smtp_user, email_smtp_pass, 
-            email_smtp_ssl, email_smtp_tls, email_assunto_nfe, email_corpo_nfe
+            email_smtp_ssl, email_smtp_tls, email_assunto_nfe, email_corpo_nfe,
+            pasta_arquivos_fiscais
           `)
           .eq("empresa_id", XEmpresaId)
           .maybeSingle();
@@ -104,7 +107,8 @@ const FiscalConfigForm = () => {
             email_smtp_ssl: !!data.email_smtp_ssl,
             email_smtp_tls: !!data.email_smtp_tls,
             email_assunto_nfe: data.email_assunto_nfe || "NF-e emitida: [CHAVE]",
-            email_corpo_nfe: data.email_corpo_nfe || "Olá, segue em anexo a NF-e e o DANFE referente à sua compra."
+            email_corpo_nfe: data.email_corpo_nfe || "Olá, segue em anexo a NF-e e o DANFE referente à sua compra.",
+            pasta_arquivos_fiscais: (data as any).pasta_arquivos_fiscais || ""
           });
 
           if (data.cliente_padrao_id) {
@@ -136,7 +140,8 @@ const FiscalConfigForm = () => {
             email_smtp_ssl: false,
             email_smtp_tls: true,
             email_assunto_nfe: "NF-e emitida: [CHAVE]",
-            email_corpo_nfe: "Olá, segue em anexo a NF-e e o DANFE referente à sua compra."
+            email_corpo_nfe: "Olá, segue em anexo a NF-e e o DANFE referente à sua compra.",
+            pasta_arquivos_fiscais: ""
           });
         }
       } catch (err: any) {
@@ -173,13 +178,14 @@ const FiscalConfigForm = () => {
         email_smtp_ssl: values.email_smtp_ssl,
         email_smtp_tls: values.email_smtp_tls,
         email_assunto_nfe: values.email_assunto_nfe,
-        email_corpo_nfe: values.email_corpo_nfe
+        email_corpo_nfe: values.email_corpo_nfe,
+        pasta_arquivos_fiscais: values.pasta_arquivos_fiscais || null
       };
 
       if (existing) {
         const { error } = await supabase
           .from("fiscal_config")
-          .update(payload)
+          .update(payload as any)
           .eq("empresa_id", XEmpresaId);
         if (error) throw error;
       } else {
@@ -188,7 +194,7 @@ const FiscalConfigForm = () => {
           .insert({
             empresa_id: XEmpresaId,
             ...payload
-          });
+          } as any);
         if (error) throw error;
       }
       toast.success("Configurações salvas com sucesso!");
@@ -469,6 +475,32 @@ const FiscalConfigForm = () => {
                         }}>Limpar</Button>
                       )}
                     </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-sm">Pasta Base de Arquivos Fiscais</CardTitle>
+                    <CardDescription>
+                      Caminho onde o Worker irá gravar XMLs, PDFs (DANFE/DANFCE), eventos e logs gerados
+                      pela ACBrLib. Se vazio, será usada a pasta padrão dentro do projeto
+                      (<code>AcbrDLL/Arquivos</code>). Use sempre um caminho absoluto acessível ao Worker.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <FormField
+                      control={form.control}
+                      name="pasta_arquivos_fiscais"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Pasta Base</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ex: C:\RealCommerce\Fiscal ou /var/realcommerce/fiscal" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </CardContent>
                 </Card>
 

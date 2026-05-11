@@ -185,7 +185,7 @@ const waitSync = (ms) => {
  * Tenta imprimir DANFE/DANFCE baseado em print_config { tp_imp, nm_impressora }.
  * Retorna um objeto de resultado e nunca propaga erro para o fluxo fiscal.
  */
-const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave) => {
+const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave, configPayload) => {
     if (!printConfig) return { sucesso: true, ignorado: true, pdf_path: null };
     const tp = (printConfig.tp_imp || 'PDF').toUpperCase();
     if (tp === 'NAO_IMPRIME' || tp === 'NAO IMPRIME' || tp === 'NONE') return { sucesso: true, ignorado: true, pdf_path: null };
@@ -194,7 +194,7 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave) => {
         if (tp === 'IMPRESSORA' && printConfig.nm_impressora) {
             lib.ConfigGravarValor(handle, "DANFe", "Impressora", printConfig.nm_impressora);
         }
-        const pdfDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos/PDF");
+        const pdfDir = path.join(resolverBaseArquivos(configPayload), "PDF");
         if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
         
         // Limpa arquivos antigos da mesma chave para evitar pegar o arquivo errado
@@ -277,6 +277,21 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave) => {
     }
 };
 
+const resolverBaseArquivos = (configPayload) => {
+    const custom = configPayload && configPayload.pasta_arquivos
+        ? String(configPayload.pasta_arquivos).trim()
+        : '';
+    if (custom) {
+        try {
+            if (!fs.existsSync(custom)) fs.mkdirSync(custom, { recursive: true });
+            return path.resolve(custom);
+        } catch (e) {
+            console.warn(`[FiscalLib] Falha ao usar pasta_arquivos="${custom}": ${e.message}. Caindo para padrão.`);
+        }
+    }
+    return path.resolve(process.cwd(), "AcbrDLL/Arquivos");
+};
+
 const configurarHandle = (lib, handle, configPayload) => {
     // Configuração dos Schemas XSD (Obrigatório para NFe/MDFe)
     const schemasPath = path.resolve(process.cwd(), "AcbrDLL/dep/Schemas/NFe");
@@ -285,8 +300,8 @@ const configurarHandle = (lib, handle, configPayload) => {
     lib.ConfigGravarValor(handle, "Principal", "TipoResposta", "2");      // 0=string, 1=XML, 2=JSON
     lib.ConfigGravarValor(handle, "Principal", "CodificacaoResposta", "0"); // 0=UTF-8
 
-    // Caminhos de Arquivos e Logs
-    const baseArquivos = path.resolve(process.cwd(), "AcbrDLL/Arquivos");
+    // Caminhos de Arquivos e Logs (parametrizado via configPayload.pasta_arquivos)
+    const baseArquivos = resolverBaseArquivos(configPayload);
     lib.ConfigGravarValor(handle, "NFe", "PathSalvar", baseArquivos);
     lib.ConfigGravarValor(handle, "NFe", "PathNFe", path.join(baseArquivos, "NFe"));
     lib.ConfigGravarValor(handle, "NFe", "PathInu", path.join(baseArquivos, "Inu"));
@@ -347,8 +362,8 @@ const configurarHandle = (lib, handle, configPayload) => {
     // Versão do schema de Distribuição DFe (não sobrescreve SSL definido acima)
     lib.ConfigGravarValor(handle, "DFe", "VersaoDistribuicaoDFe", "1.01");
     
-    // Ativar logs e salvamento de arquivos
-    const arquivosDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos");
+    // Ativar logs e salvamento de arquivos (mesma base parametrizada)
+    const arquivosDir = baseArquivos;
     const eventoDir = path.resolve(arquivosDir, "Evento");
     const pdfDir = path.resolve(arquivosDir, "PDF");
     
@@ -582,7 +597,7 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 const ret = libNFe.CarregarXML(handle, dados);
                 if (ret !== 0) return { sucesso: false, erro: '[IMPRIMIR] CarregarXML: ' + lerRetornoACBr(libNFe, handle), pdf_path: null };
                 const modeloLabel = comando === 'IMPRIMIR_NFCE' ? 'NFCE' : 'NFE';
-                return tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, modeloLabel, jsonPayload.chave);
+                return tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, modeloLabel, jsonPayload.chave, config);
             });
 
         case 'CANCELAR_NFE':
@@ -610,7 +625,7 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 // Tenta gerar o PDF do comprovante de cancelamento
                 let pdfBase64 = null;
                 try {
-                    const eventoDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos/Evento");
+                    const eventoDir = path.join(resolverBaseArquivos(config), "Evento");
                     if (fs.existsSync(eventoDir)) {
                         const files = fs.readdirSync(eventoDir);
                         // Busca flexível: arquivos que contenham a chave e terminem em .xml
@@ -623,7 +638,7 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                             if (retPdf === 0) {
                                 // O PDF do evento costuma ir para o PathPDF definido (AcbrDLL/Arquivos/PDF)
                                 // O nome costuma ser {chave}-procEventoNFe.pdf
-                                const pdfDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos/PDF");
+                                const pdfDir = path.join(resolverBaseArquivos(config), "PDF");
                                 const pdfName = eventFile.replace('.xml', '.pdf');
                                 const pdfPath = path.join(pdfDir, pdfName);
                                 
@@ -813,6 +828,18 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                     libNFe.ConfigGravarValor(handle, "Email", "SSL", config_email.ssl ? "1" : "0");
                     libNFe.ConfigGravarValor(handle, "Email", "TLS", config_email.tls ? "1" : "0");
                     libNFe.ConfigGravarValor(handle, "Email", "Nome", config_email.nome_remetente || "");
+                    // Conta = endereço usado como remetente (From) — alguns servidores rejeitam sem isso
+                    libNFe.ConfigGravarValor(handle, "Email", "Conta", config_email.user || "");
+                    // DefaultHELO: corrige "Invalid HELO name" — alguns servidores rejeitam
+                    // quando o cliente envia "localhost" ou hostname interno. Usamos um FQDN
+                    // baseado no domínio do remetente ou do host SMTP.
+                    const heloFromUser = (config_email.user || "").split("@")[1] || "";
+                    const helo = (config_email.helo && String(config_email.helo).trim())
+                        || heloFromUser
+                        || (config_email.host || "")
+                        || "localhost.localdomain";
+                    libNFe.ConfigGravarValor(handle, "Email", "DefaultHELO", helo);
+                    console.log(`[FiscalLib] SMTP DefaultHELO definido como: ${helo}`);
                 }
 
                 // 3. Enviar

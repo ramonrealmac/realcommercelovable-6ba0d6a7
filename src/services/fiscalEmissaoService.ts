@@ -683,7 +683,11 @@ export const fiscalEmissaoService = {
             user: fConfig.email_smtp_user,
             pass: fConfig.email_smtp_pass,
             ssl: fConfig.email_smtp_ssl,
-            tls: fConfig.email_smtp_tls
+            tls: fConfig.email_smtp_tls,
+            // HELO/EHLO: alguns servidores SMTP rejeitam "Invalid helo name" quando
+            // o cliente envia um hostname inválido (ex: localhost). Usamos o domínio
+            // do remetente como FQDN — é o valor mais aceito pelos servidores.
+            helo: (fConfig.email_smtp_user || "").split("@")[1] || fConfig.email_smtp_host || ""
           },
           config: {
             uf: fConfig.uf,
@@ -691,7 +695,8 @@ export const fiscalEmissaoService = {
             ambiente: fConfig.ambiente_nfe,
             certificadoPath: fConfig.certificado,
             certificadoSenha: fConfig.senha_certificado,
-            tipo_certificado: fConfig.tipo_certificado
+            tipo_certificado: fConfig.tipo_certificado,
+            pasta_arquivos: (fConfig as any).pasta_arquivos_fiscais || ''
           }
         }
       }).select("id").single();
