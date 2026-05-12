@@ -61,8 +61,8 @@ const CondicaoPagamentoForm: React.FC = () => {
       XGridCols={XGridCols}
       XExportTitle="Condições de Pagamento"
       renderCadastro={({ record, setField, mode, isEditing }) => (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:flex md:gap-4 gap-3">
+        <div className="space-y-4 pt-3 md:pt-0">
+          <div className="grid grid-cols-1 md:flex md:gap-4 gap-5">
             <div className="w-full md:w-32">
               <label className="block text-xs font-medium text-muted-foreground mb-1">Código</label>
               <input type="text" value={mode === "insert" ? "(Novo)" : record.condicao_id ?? ""} readOnly className="w-full border border-border rounded px-3 py-1.5 text-sm bg-secondary text-right" />
