@@ -183,7 +183,8 @@ const FiscalConfigForm = () => {
         email_smtp_tls: values.email_smtp_tls,
         email_assunto_nfe: values.email_assunto_nfe,
         email_corpo_nfe: values.email_corpo_nfe,
-        pasta_arquivos_fiscais: values.pasta_arquivos_fiscais || null
+        pasta_arquivos_fiscais: values.pasta_arquivos_fiscais || null,
+        nr_timeout_nfe: Math.max(10, Math.min(600, Number(values.nr_timeout_nfe) || 60))
       };
 
       if (existing) {
