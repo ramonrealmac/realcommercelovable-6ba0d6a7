@@ -160,8 +160,11 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
           }
           return;
         } else {
+          const modLbl = String(existente.modelo) === "55" ? "NFe" : "NFCe";
           toast.error(
-            `Já existe ${tipo} para este pedido (status ${cStat || "—"}: ${existente.x_motivo || "pendente"}). Corrija pelo Gerenciador de NF-e.`,
+            autorizada
+              ? `Este pedido já possui ${modLbl} autorizada. Não é permitido emitir outro documento fiscal para a mesma venda.`
+              : `Já existe ${modLbl} para este pedido (status ${cStat || "—"}: ${existente.x_motivo || "pendente"}). Corrija pelo Gerenciador de NF-e.`,
             { duration: 8000 }
           );
           return;
