@@ -70,7 +70,7 @@ const CartItemRow: React.FC<ICartItemRowProps> = ({ item, idx, XFonteProd, alter
   return (
       <div className={`px-3 py-2 flex items-center gap-2 border-b border-border ${idx % 2 ? "bg-muted/40" : ""}`}>
       <div className="flex-1">
-        <div className="font-medium truncate text-blue-700 dark:text-blue-400">{item.nm_produto}</div>
+        <div className="font-medium break-words text-blue-700 dark:text-blue-400">{item.nm_produto}</div>
         <div className="text-muted-foreground" style={{ fontSize: `${XFonteProd - 1}px` }}>
           {item.qt_item.toLocaleString("pt-BR")} {item.unidade_id || ""} × R$ {item.vl_unitario.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} = <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">R$ {(item.qt_item * item.vl_unitario).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         </div>
@@ -737,7 +737,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
                   <div key={it.movimento_item_id}
                     className={`px-3 py-2 border-b border-border ${idx % 2 ? "bg-muted/40" : ""}`}>
                     <div className="flex-1">
-                      <div className="font-medium truncate text-blue-700 dark:text-blue-400">{it.nm_produto}</div>
+                      <div className="font-medium break-words text-blue-700 dark:text-blue-400">{it.nm_produto}</div>
                       <div className="text-muted-foreground" style={{ fontSize: `${XFonteProd - 1}px` }}>
                         {fmt(Number(it.qt_movimento))} {it.unidade_id || ""} × R$ {fmt(Number(it.vl_und_produto))} = <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">R$ {fmt(Number(it.vl_movimento || it.qt_movimento * it.vl_und_produto))}</span>
                       </div>
@@ -815,7 +815,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
                     {/* Linha 1: Nº + Cliente */}
                     <div className="flex justify-between items-baseline gap-2">
                       <span className="font-bold text-foreground shrink-0">#{p.nr_movimento || p.movimento_id}</span>
-                      <span className="text-blue-600 dark:text-blue-400 font-semibold truncate flex-1">{p.cliente_nome}</span>
+                      <span className="text-blue-600 dark:text-blue-400 font-semibold break-words flex-1 min-w-0">{p.cliente_nome}</span>
                     </div>
                     {/* Linha 2: Vendedor + total */}
                     <div className="flex justify-between items-baseline gap-2" style={{ fontSize: `${Math.max(10, XFontePed - 1)}px` }}>
