@@ -338,13 +338,16 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
                 onClick={card.action}
                 autoFocus={card.key === "bobina"}
                 className={cn(
-                  "flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all duration-200",
+                  "relative flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all duration-200",
                   "hover:shadow-lg active:scale-95 group",
                   card.enabled
                     ? "bg-white border-slate-200 hover:border-primary/50"
                     : "bg-slate-100 border-slate-100 opacity-50 cursor-not-allowed"
                 )}
               >
+                <span className="absolute top-2 left-2 inline-flex items-center justify-center w-6 h-6 rounded-md bg-primary/10 text-primary text-xs font-bold">
+                  {card.shortcut}
+                </span>
                 <div className={cn("mb-3 p-3 rounded-xl bg-slate-50 group-hover:bg-white transition-colors", card.color)}>
                   {card.icon}
                 </div>
