@@ -136,11 +136,39 @@ export function gerarIniNfe(params) {
 
     linhas.push(`[ICMS${nr}]`);
     if (isSimples) {
-      linhas.push(`CSOSN=${it.csosn || it.cst_icms || '102'}`);
+      const csosn = String(it.csosn || it.cst_icms || '102');
+      linhas.push(`CSOSN=${csosn}`);
       linhas.push(`orig=${it.origem || 0}`);
-      if (Number(it.pc_icms) > 0) {
+
+      // CSOSN 101 / 201 / 900 → permite pCredSN/vCredICMSSN (crédito de ICMS do Simples)
+      if (['101', '201', '900'].includes(csosn) && Number(it.pc_icms) > 0) {
         linhas.push(`pCredSN=${Number(it.pc_icms).toFixed(4)}`);
         linhas.push(`vCredICMSSN=${Number(it.vl_icms || 0).toFixed(2)}`);
+      }
+
+      // CSOSN 201 / 202 / 203 → ICMS-ST a calcular (precisa modBCST/vBCST/pICMSST/vICMSST)
+      if (['201', '202', '203'].includes(csosn)) {
+        linhas.push(`modBCST=${it.mod_bc_st ?? 4}`);
+        linhas.push(`pMVAST=${Number(it.mva_st || 0).toFixed(4)}`);
+        linhas.push(`vBCST=${Number(it.vl_bc_st || 0).toFixed(2)}`);
+        linhas.push(`pICMSST=${Number(it.pc_icms_st || 0).toFixed(4)}`);
+        linhas.push(`vICMSST=${Number(it.vl_icms_st || 0).toFixed(2)}`);
+      }
+
+      // CSOSN 500 → ICMS cobrado anteriormente por ST (campos de retenção obrigatórios no XML)
+      if (csosn === '500') {
+        linhas.push(`vBCSTRet=${Number(it.vl_bc_st_ret || 0).toFixed(2)}`);
+        linhas.push(`pST=${Number(it.pc_icms_st_ret || it.pc_icms_st || 0).toFixed(4)}`);
+        linhas.push(`vICMSSubstituto=${Number(it.vl_icms_substituto || 0).toFixed(2)}`);
+        linhas.push(`vICMSSTRet=${Number(it.vl_icms_st_ret || 0).toFixed(2)}`);
+      }
+
+      // CSOSN 900 → também aceita campos próprios de ICMS (modBC/vBC/pICMS/vICMS) quando houver
+      if (csosn === '900' && Number(it.vl_icms || 0) > 0) {
+        linhas.push(`modBC=${it.mod_bc ?? 3}`);
+        linhas.push(`vBC=${Number(it.vl_bc || vTot).toFixed(2)}`);
+        linhas.push(`pICMS=${Number(it.pc_icms || 0).toFixed(4)}`);
+        linhas.push(`vICMS=${Number(it.vl_icms || 0).toFixed(2)}`);
       }
     } else {
       linhas.push(`CST=${it.cst_icms || '00'}`);
@@ -149,8 +177,16 @@ export function gerarIniNfe(params) {
       linhas.push(`vBC=${Number(it.vl_bc || vTot).toFixed(2)}`);
       linhas.push(`pICMS=${Number(it.pc_icms || 0).toFixed(4)}`);
       linhas.push(`vICMS=${Number(it.vl_icms || 0).toFixed(2)}`);
+
+      // CST 60 (regime normal) → ICMS retido anteriormente por ST
+      if (String(it.cst_icms) === '60') {
+        linhas.push(`vBCSTRet=${Number(it.vl_bc_st_ret || 0).toFixed(2)}`);
+        linhas.push(`pST=${Number(it.pc_icms_st_ret || 0).toFixed(4)}`);
+        linhas.push(`vICMSSubstituto=${Number(it.vl_icms_substituto || 0).toFixed(2)}`);
+        linhas.push(`vICMSSTRet=${Number(it.vl_icms_st_ret || 0).toFixed(2)}`);
+      }
     }
-    if (Number(it.vl_icms_st || 0) > 0) {
+    if (Number(it.vl_icms_st || 0) > 0 && !isSimples) {
       linhas.push(`modBCST=${it.mod_bc_st || 4}`);
       linhas.push(`pMVAST=${Number(it.mva_st || 0).toFixed(4)}`);
       linhas.push(`vBCST=${Number(it.vl_bc_st || 0).toFixed(2)}`);
@@ -259,15 +295,8 @@ export function gerarIniNfe(params) {
   if (isNFCe) {
     const idCsc = String(configItem?.id_csc || '').trim();
     const csc = String(configItem?.csc || '').trim();
-    // Validação para evitar Access Violation no DLL ACBrLib quando CSC é placeholder/inválido.
-    // CSC real tem 36 caracteres (UUID-like) e IdCSC normalmente 6 dígitos.
-    if (!idCsc || !csc || csc.length < 16 || /^0+$/.test(csc.replace(/\D/g, ''))) {
-      throw new Error(
-        `CSC/IdCSC inválido para emissão de NFC-e (modelo 65). ` +
-        `Configure o Token CSC real (mínimo 16 caracteres, fornecido pela SEFAZ-${ufEmit}) ` +
-        `em Configuração Fiscal > Item ${modelo}/${serie}. ` +
-        `Valores recebidos: IdCSC="${idCsc}", CSC com ${csc.length} caracteres.`
-      );
+    if (!idCsc || !csc) {
+      console.warn(`[gerarIniNfe] Atenção: NFC-e sem IdCSC/CSC configurado (item modelo ${modelo}/${serie}).`);
     }
     linhas.push('[NFCe]');
     linhas.push(`IdCSC=${idCsc}`);
