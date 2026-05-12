@@ -16,7 +16,7 @@ interface ICondicao {
 
 const XGridCols: IGridColumn[] = [
   { key: "condicao_id", label: "Código", width: "80px", align: "right" },
-  { key: "descricao", label: "Descrição", width: "1fr" },
+  { key: "descricao", label: "Descrição", width: "200px" },
   { key: "tp_doc", label: "Tipo Doc.", width: "100px" },
 ];
 
