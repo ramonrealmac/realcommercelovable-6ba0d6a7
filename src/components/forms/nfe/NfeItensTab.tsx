@@ -208,7 +208,7 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
 
   useEffect(() => { loadItens(); }, [loadItens]);
 
-  const set = (key: string, val: any) => setXF(prev => ({ ...prev, [key]: val }));
+  const set = (key: string, val: XFieldValue) => setXF(prev => ({ ...prev, [key]: val }));
   const recalcTotal = (f: Partial<INfeItem>) => {
     const qt = parseNum(f.qt_entrada);
     const vlu = parseNum(f.vl_unit);
@@ -217,7 +217,7 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
   };
 
   const handleBlur = (key: string) => {
-    const current = (XF as any)[key];
+    const current = XF[key];
     if (current === undefined || current === null || current === "") return;
     set(key, fmtInput(current, key));
   };
@@ -235,7 +235,7 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
   };
 
   const buildPayload = () => {
-    const XPayload: any = {
+    const XPayload: XPayload = {
       nfe_cabecalho_id: nfeCabecalhoId,
       empresa_id: empresaId,
       produto_id: XF.produto_id ? Number(XF.produto_id) : null,
@@ -243,7 +243,7 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
     };
 
     XTextKeys.forEach((XKey) => {
-      const XRaw = String((XF as any)[XKey] ?? "").trim();
+      const XRaw = String(XF[XKey] ?? "").trim();
       if (["ncm", "cfop", "cest", "gtin", "csosn", "c_enq"].includes(XKey)) {
         XPayload[XKey] = onlyDigits(XRaw, XKey === "ncm" ? 8 : XKey === "cfop" ? 4 : XKey === "cest" ? 7 : undefined);
       } else {
@@ -252,11 +252,11 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
     });
 
     XIntKeys.forEach((XKey) => {
-      if (XKey !== "nr_item") XPayload[XKey] = parseInt(String((XF as any)[XKey] || "0"), 10) || 0;
+      if (XKey !== "nr_item") XPayload[XKey] = parseInt(String(XF[XKey] || "0"), 10) || 0;
     });
 
     XNumericKeys.forEach((XKey) => {
-      XPayload[XKey] = parseNum((XF as any)[XKey]);
+      XPayload[XKey] = parseNum(XF[XKey]);
     });
 
     if (!String(XF.vl_total ?? "").trim() || parseNum(XF.vl_total) === 0) XPayload.vl_total = recalcTotal(XF);
