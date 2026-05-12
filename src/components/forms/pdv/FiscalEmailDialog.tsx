@@ -7,6 +7,7 @@ import { Mail, Send, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
 import { supabase } from "@/integrations/supabase/client";
+import FiscalProgressDialog from "@/components/fiscal/FiscalProgressDialog";
 
 interface FiscalEmailDialogProps {
   open: boolean;
