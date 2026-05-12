@@ -204,6 +204,7 @@ const FiscalConfigForm = () => {
         if (error) throw error;
       }
       toast.success("Configurações salvas com sucesso!");
+      fiscalEmissaoService.invalidarTimeoutCache(XEmpresaId);
     } catch (err: any) {
       toast.error("Erro ao salvar: " + err.message);
     } finally {
