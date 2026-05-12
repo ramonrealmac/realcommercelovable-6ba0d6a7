@@ -169,7 +169,7 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
   podeEditar,
   onTotaisChanged,
 }) => {
-  const [XItens, setXItens] = useState<any[]>([]);
+  const [XItens, setXItens] = useState<XItemRow[]>([]);
   const [XCurrentIdx, setXCurrentIdx] = useState<number | null>(null);
   const [XMode, setXMode] = useState<"view" | "edit" | "insert">("view");
   const [XF, setXF] = useState<Partial<INfeItem>>(formatItemForEdit(emptyItem()));
@@ -180,20 +180,20 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
     const { data, error } = await db.from("fiscal_nfe_item").select("*").eq("nfe_cabecalho_id", nfeCabecalhoId).eq("excluido", false).order("nr_item");
     if (error) { toast.error("Erro ao carregar itens: " + error.message); return; }
 
-    const rows = data || [];
-    const prodIds = [...new Set(rows.map((r: any) => r.produto_id).filter(Boolean))];
-    let prodMap: Record<number, string> = {};
+    const rows: XItemRow[] = data || [];
+    const prodIds = [...new Set(rows.map((r) => r.produto_id).filter(Boolean))];
+    const prodMap: Record<number, string> = {};
     if (prodIds.length > 0) {
       const { data: prods } = await db.from("produto").select("produto_id, nome").in("produto_id", prodIds);
-      (prods || []).forEach((p: any) => { prodMap[p.produto_id] = p.nome; });
+      ((prods || []) as XProdutoOption[]).forEach((p) => { prodMap[p.produto_id] = p.nome; });
     }
-    const enriched = rows.map((r: any) => ({ ...r, _produto_nome: r.produto_id ? (prodMap[r.produto_id] || `#${r.produto_id}`) : null }));
+    const enriched = rows.map((r) => ({ ...r, _produto_nome: r.produto_id ? (prodMap[r.produto_id] || `#${r.produto_id}`) : null }));
     setXItens(enriched);
 
     if (onTotaisChanged) {
-      const vl_total = enriched.reduce((a: number, i: any) => a + Number(i.vl_total || 0), 0);
-      const vl_ipi = enriched.reduce((a: number, i: any) => a + Number(i.vl_ipi || 0), 0);
-      const vl_icms_st = enriched.reduce((a: number, i: any) => a + Number(i.vl_icms_st || 0), 0);
+      const vl_total = enriched.reduce((a: number, i) => a + Number(i.vl_total || 0), 0);
+      const vl_ipi = enriched.reduce((a: number, i) => a + Number(i.vl_ipi || 0), 0);
+      const vl_icms_st = enriched.reduce((a: number, i) => a + Number(i.vl_icms_st || 0), 0);
       onTotaisChanged({ vl_total, vl_ipi, vl_icms_st });
     }
   }, [nfeCabecalhoId, onTotaisChanged]);
