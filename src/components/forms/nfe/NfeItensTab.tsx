@@ -6,9 +6,14 @@ import GridActionToolbar, { gridActions } from "@/components/grid/GridActionTool
 import { Link } from "lucide-react";
 import type { INfeItem } from "./types";
 
-const db = supabase as any;
+const db = supabase;
+type XFieldValue = string | number | null | undefined;
+type XFormItem = Partial<INfeItem> & Record<string, XFieldValue>;
+type XItemRow = XFormItem & { nfe_item_id?: number; produto_id?: number | null; _produto_nome?: string | null };
+type XPayload = Record<string, string | number | null>;
+type XProdutoOption = { produto_id: number; nome: string; referencia?: string };
 
-const parseNum = (XValue: any) => {
+const parseNum = (XValue: unknown) => {
   if (XValue === undefined || XValue === null || XValue === "") return 0;
   if (typeof XValue === "number") return XValue;
   const XNormalized = String(XValue).replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
@@ -16,12 +21,12 @@ const parseNum = (XValue: any) => {
   return isNaN(XParsed) ? 0 : XParsed;
 };
 
-const fmt = (XValue: any, XDecimals: number) => Number(parseNum(XValue) || 0).toLocaleString("pt-BR", {
+const fmt = (XValue: unknown, XDecimals: number) => Number(parseNum(XValue) || 0).toLocaleString("pt-BR", {
   minimumFractionDigits: XDecimals,
   maximumFractionDigits: XDecimals,
 });
-const fmt2 = (XValue: any) => fmt(XValue, 2);
-const fmt4 = (XValue: any) => fmt(XValue, 4);
+const fmt2 = (XValue: unknown) => fmt(XValue, 2);
+const fmt4 = (XValue: unknown) => fmt(XValue, 4);
 
 interface NfeItensTabProps {
   nfeCabecalhoId: number | null;
