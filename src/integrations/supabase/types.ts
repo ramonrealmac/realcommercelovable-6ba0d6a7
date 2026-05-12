@@ -3357,12 +3357,19 @@ export type Database = {
           vl_cofins: number
           vl_desconto: number
           vl_despesa: number
+          vl_fcp: number
+          vl_fcp_st: number
+          vl_fcp_st_ret: number
           vl_frete: number
           vl_ibs: number
           vl_icms: number
+          vl_icms_deson: number
           vl_icms_st: number
+          vl_ii: number
           vl_ipi: number
+          vl_ipi_devol: number
           vl_is: number
+          vl_outro: number
           vl_pis: number
           vl_produto: number
           vl_seguro: number
@@ -3405,12 +3412,19 @@ export type Database = {
           vl_cofins?: number
           vl_desconto?: number
           vl_despesa?: number
+          vl_fcp?: number
+          vl_fcp_st?: number
+          vl_fcp_st_ret?: number
           vl_frete?: number
           vl_ibs?: number
           vl_icms?: number
+          vl_icms_deson?: number
           vl_icms_st?: number
+          vl_ii?: number
           vl_ipi?: number
+          vl_ipi_devol?: number
           vl_is?: number
+          vl_outro?: number
           vl_pis?: number
           vl_produto?: number
           vl_seguro?: number
@@ -3453,12 +3467,19 @@ export type Database = {
           vl_cofins?: number
           vl_desconto?: number
           vl_despesa?: number
+          vl_fcp?: number
+          vl_fcp_st?: number
+          vl_fcp_st_ret?: number
           vl_frete?: number
           vl_ibs?: number
           vl_icms?: number
+          vl_icms_deson?: number
           vl_icms_st?: number
+          vl_ii?: number
           vl_ipi?: number
+          vl_ipi_devol?: number
           vl_is?: number
+          vl_outro?: number
           vl_pis?: number
           vl_produto?: number
           vl_seguro?: number
@@ -3570,6 +3591,8 @@ export type Database = {
           empresa_id: number
           excluido: boolean
           gtin: string
+          mod_bc: number | null
+          mod_bc_st: number | null
           ncm: string
           nfe_cabecalho_id: number
           nfe_item_id: number
@@ -3578,6 +3601,8 @@ export type Database = {
           origem: number
           pc_cbs: number
           pc_cofins: number
+          pc_cred_sn: number
+          pc_fcp: number
           pc_fcp_st: number
           pc_ibs: number
           pc_icms: number
@@ -3586,24 +3611,37 @@ export type Database = {
           pc_is: number
           pc_mva: number
           pc_pis: number
+          pc_red_bc: number
+          pc_red_bc_st: number
           produto_id: number | null
           qt_entrada: number
+          qt_tributavel: number
           unidade: string
           updated_at: string
           vl_bc: number
+          vl_bc_cofins: number
+          vl_bc_ipi: number
+          vl_bc_pis: number
           vl_bc_st: number
           vl_cbs: number
           vl_cofins: number
+          vl_cred_sn: number
           vl_desconto: number
+          vl_fcp: number
           vl_fcp_st: number
+          vl_frete: number
           vl_ibs: number
           vl_icms: number
+          vl_icms_deson: number
           vl_icms_st: number
           vl_ipi: number
           vl_is: number
+          vl_outro: number
           vl_pis: number
+          vl_seguro: number
           vl_total: number
           vl_unit: number
+          vl_unit_tributavel: number
         }
         Insert: {
           c_enq?: string
@@ -3622,6 +3660,8 @@ export type Database = {
           empresa_id: number
           excluido?: boolean
           gtin?: string
+          mod_bc?: number | null
+          mod_bc_st?: number | null
           ncm?: string
           nfe_cabecalho_id: number
           nfe_item_id?: never
@@ -3630,6 +3670,8 @@ export type Database = {
           origem?: number
           pc_cbs?: number
           pc_cofins?: number
+          pc_cred_sn?: number
+          pc_fcp?: number
           pc_fcp_st?: number
           pc_ibs?: number
           pc_icms?: number
@@ -3638,24 +3680,37 @@ export type Database = {
           pc_is?: number
           pc_mva?: number
           pc_pis?: number
+          pc_red_bc?: number
+          pc_red_bc_st?: number
           produto_id?: number | null
           qt_entrada?: number
+          qt_tributavel?: number
           unidade?: string
           updated_at?: string
           vl_bc?: number
+          vl_bc_cofins?: number
+          vl_bc_ipi?: number
+          vl_bc_pis?: number
           vl_bc_st?: number
           vl_cbs?: number
           vl_cofins?: number
+          vl_cred_sn?: number
           vl_desconto?: number
+          vl_fcp?: number
           vl_fcp_st?: number
+          vl_frete?: number
           vl_ibs?: number
           vl_icms?: number
+          vl_icms_deson?: number
           vl_icms_st?: number
           vl_ipi?: number
           vl_is?: number
+          vl_outro?: number
           vl_pis?: number
+          vl_seguro?: number
           vl_total?: number
           vl_unit?: number
+          vl_unit_tributavel?: number
         }
         Update: {
           c_enq?: string
@@ -3674,6 +3729,8 @@ export type Database = {
           empresa_id?: number
           excluido?: boolean
           gtin?: string
+          mod_bc?: number | null
+          mod_bc_st?: number | null
           ncm?: string
           nfe_cabecalho_id?: number
           nfe_item_id?: never
@@ -3682,6 +3739,8 @@ export type Database = {
           origem?: number
           pc_cbs?: number
           pc_cofins?: number
+          pc_cred_sn?: number
+          pc_fcp?: number
           pc_fcp_st?: number
           pc_ibs?: number
           pc_icms?: number
@@ -3690,24 +3749,37 @@ export type Database = {
           pc_is?: number
           pc_mva?: number
           pc_pis?: number
+          pc_red_bc?: number
+          pc_red_bc_st?: number
           produto_id?: number | null
           qt_entrada?: number
+          qt_tributavel?: number
           unidade?: string
           updated_at?: string
           vl_bc?: number
+          vl_bc_cofins?: number
+          vl_bc_ipi?: number
+          vl_bc_pis?: number
           vl_bc_st?: number
           vl_cbs?: number
           vl_cofins?: number
+          vl_cred_sn?: number
           vl_desconto?: number
+          vl_fcp?: number
           vl_fcp_st?: number
+          vl_frete?: number
           vl_ibs?: number
           vl_icms?: number
+          vl_icms_deson?: number
           vl_icms_st?: number
           vl_ipi?: number
           vl_is?: number
+          vl_outro?: number
           vl_pis?: number
+          vl_seguro?: number
           vl_total?: number
           vl_unit?: number
+          vl_unit_tributavel?: number
         }
         Relationships: [
           {
@@ -6559,6 +6631,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      fu_calcular_impostos_movimento: {
+        Args: {
+          p_modelo?: string
+          p_movimento_id: number
+          p_nr_nota?: string
+          p_serie?: string
+        }
+        Returns: number
+      }
       fu_chat_is_membro: {
         Args: { _sala_id: number; _user_id: string }
         Returns: boolean
@@ -6642,6 +6723,10 @@ export type Database = {
       fu_recalcular_pedido: {
         Args: { _movimento_id: number }
         Returns: undefined
+      }
+      fu_round_abnt: {
+        Args: { p_dec?: number; p_val: number }
+        Returns: number
       }
       fu_transition_pedido_status: {
         Args: {
