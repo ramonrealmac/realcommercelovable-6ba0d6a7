@@ -71,9 +71,24 @@ export interface INfeItem {
   cest: string;
   c_enq: string;
   qt_entrada: number;
+  qt_tributavel: number;
   vl_unit: number;
+  vl_unit_tributavel: number;
   vl_desconto: number;
+  vl_frete: number;
+  vl_seguro: number;
+  vl_outro: number;
   vl_total: number;
+  mod_bc: number | null;
+  mod_bc_st: number | null;
+  vl_bc: number;
+  vl_bc_ipi: number;
+  vl_bc_pis: number;
+  vl_bc_cofins: number;
+  vl_icms: number;
+  vl_icms_deson: number;
+  vl_fcp: number;
+  vl_cred_sn: number;
   // Valores impostos
   vl_ipi: number;
   vl_icms_st: number;
@@ -93,6 +108,10 @@ export interface INfeItem {
   pc_ibs: number;
   pc_cbs: number;
   pc_is: number;
+  pc_fcp: number;
+  pc_cred_sn: number;
+  pc_red_bc: number;
+  pc_red_bc_st: number;
   // CSTs
   cst_icms: string;
   cst_ipi: string;
