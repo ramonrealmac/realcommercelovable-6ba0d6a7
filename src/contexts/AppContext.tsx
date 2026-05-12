@@ -32,6 +32,8 @@ interface AppContextType {
   closeSidebar: () => void;
   XLogomarca: string;
   setXLogomarca: (url: string) => void;
+  XChatBotVisible: boolean;
+  toggleChatBot: () => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
