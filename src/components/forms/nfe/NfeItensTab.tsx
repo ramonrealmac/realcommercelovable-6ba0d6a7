@@ -115,17 +115,56 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
   const isEditing = XMode === "edit" || XMode === "insert";
   const inputCls = "w-full border-b border-border bg-transparent px-1 py-1 text-sm focus:border-primary outline-none transition-all";
 
+  // Helpers para inputs reutilizáveis
+  const Txt = ({ k, label, span = 2, right = false, bold = false, accent = "" }: any) => (
+    <div className={`col-span-${span}`}>
+      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{label}</label>
+      <input
+        type="text"
+        value={(XF as any)[k] ?? ""}
+        onChange={e => set(k, e.target.value)}
+        className={`${inputCls} ${right ? "text-right" : ""} ${bold ? "font-bold" : ""} ${accent}`}
+      />
+    </div>
+  );
+  const Num = ({ k, label, span = 2, accent = "" }: any) => (
+    <div className={`col-span-${span}`}>
+      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{label}</label>
+      <input
+        type="text"
+        value={(XF as any)[k] ?? ""}
+        onBlur={() => handleBlur(k)}
+        onChange={e => set(k, e.target.value)}
+        className={`${inputCls} text-right ${accent}`}
+      />
+    </div>
+  );
+  const Section = ({ title, children }: any) => (
+    <div className="space-y-2">
+      <div className="text-[11px] font-bold uppercase tracking-wider text-primary/80 border-b border-border/60 pb-1">{title}</div>
+      <div className="grid grid-cols-12 gap-3">{children}</div>
+    </div>
+  );
+
   return (
     <div className="space-y-4">
-      {/* Formulário de item com Estilo Premium */}
+      {/* Formulário completo do item */}
       {isEditing && (
-        <div className="p-4 bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-border/60 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-          <div className="grid grid-cols-12 gap-4">
+        <div className="p-4 bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-border/60 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300 max-h-[70vh] overflow-y-auto">
+          {/* Identificação */}
+          <Section title="Identificação">
             <div className="col-span-1">
               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Item</label>
               <input type="number" value={XF.nr_item || ""} onChange={e => set("nr_item", parseInt(e.target.value) || 0)} className={inputCls + " text-right"} />
             </div>
-            <div className="col-span-7">
+            <Txt k="cd_prod_fornec" label="Cód. Forn." span={2} />
+            <Txt k="gtin" label="GTIN" span={2} />
+            <Txt k="ncm" label="NCM" span={2} />
+            <Txt k="cest" label="CEST" span={1} />
+            <Txt k="cfop" label="CFOP" span={1} />
+            <Txt k="unidade" label="Un." span={1} />
+            <Txt k="c_enq" label="cEnq" span={2} />
+            <div className="col-span-8">
               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Descrição NF</label>
               <input value={XF.nm_produto || ""} onChange={e => set("nm_produto", e.target.value.toUpperCase())} className={inputCls} />
             </div>
@@ -136,24 +175,71 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
                 {XProdutos.map(p => <option key={p.produto_id} value={p.produto_id}>{p.nome}</option>)}
               </select>
             </div>
-          </div>
-          <div className="grid grid-cols-12 gap-4 items-end">
-            <div className="col-span-2">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantidade</label>
-              <input type="text" value={XF.qt_entrada || ""} onBlur={() => handleBlur("qt_entrada")} onChange={e => set("qt_entrada", e.target.value)} className={inputCls + " text-right font-bold"} />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Vlr. Unitário</label>
-              <input type="text" value={XF.vl_unit || ""} onBlur={() => handleBlur("vl_unit")} onChange={e => set("vl_unit", e.target.value)} className={inputCls + " text-right font-bold text-emerald-600"} />
-            </div>
-            <div className="col-span-3 flex gap-2 justify-end ml-auto">
-               <button onClick={handleSalvar} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-border bg-transparent text-emerald-600 hover:bg-emerald-50 transition-all">
-                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Salvar
-               </button>
-               <button onClick={() => { setXMode("view"); setXCurrentIdx(null); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-border bg-transparent text-rose-600 hover:bg-rose-50 transition-all">
-                 <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> Cancelar
-               </button>
-            </div>
+          </Section>
+
+          {/* Quantidades e Valores */}
+          <Section title="Quantidades e Valores">
+            <Num k="qt_entrada" label="Quantidade" span={2} />
+            <Num k="vl_unit" label="Vlr. Unitário" span={2} accent="text-emerald-600 font-bold" />
+            <Num k="vl_desconto" label="Desconto" span={2} />
+            <Num k="vl_total" label="Total" span={2} accent="font-bold" />
+          </Section>
+
+          {/* ICMS */}
+          <Section title="ICMS">
+            <Txt k="cst_icms" label="CST" span={1} />
+            <Txt k="csosn" label="CSOSN" span={1} />
+            <Num k="pc_icms" label="Alíq. ICMS %" span={2} />
+            <Txt k="origem" label="Origem" span={1} />
+          </Section>
+
+          {/* ICMS-ST */}
+          <Section title="ICMS-ST / FCP-ST">
+            <Num k="pc_mva" label="MVA %" span={2} />
+            <Num k="vl_bc_st" label="BC ST" span={2} />
+            <Num k="pc_icms_st" label="Alíq. ST %" span={2} />
+            <Num k="vl_icms_st" label="Vlr. ICMS-ST" span={2} />
+            <Num k="pc_fcp_st" label="FCP-ST %" span={2} />
+            <Num k="vl_fcp_st" label="Vlr. FCP-ST" span={2} />
+          </Section>
+
+          {/* IPI */}
+          <Section title="IPI">
+            <Txt k="cst_ipi" label="CST IPI" span={2} />
+            <Num k="pc_ipi" label="Alíq. IPI %" span={2} />
+            <Num k="vl_ipi" label="Vlr. IPI" span={2} />
+          </Section>
+
+          {/* PIS / COFINS */}
+          <Section title="PIS / COFINS">
+            <Txt k="cst_pis" label="CST PIS" span={2} />
+            <Num k="pc_pis" label="Alíq. PIS %" span={2} />
+            <Num k="vl_pis" label="Vlr. PIS" span={2} />
+            <Txt k="cst_cofins" label="CST COFINS" span={2} />
+            <Num k="pc_cofins" label="Alíq. COFINS %" span={2} />
+            <Num k="vl_cofins" label="Vlr. COFINS" span={2} />
+          </Section>
+
+          {/* IBS / CBS / IS (Reforma) */}
+          <Section title="IBS / CBS / IS (Reforma)">
+            <Txt k="cst_ibs" label="CST IBS" span={2} />
+            <Num k="pc_ibs" label="Alíq. IBS %" span={2} />
+            <Num k="vl_ibs" label="Vlr. IBS" span={2} />
+            <Txt k="cst_cbs" label="CST CBS" span={2} />
+            <Num k="pc_cbs" label="Alíq. CBS %" span={2} />
+            <Num k="vl_cbs" label="Vlr. CBS" span={2} />
+            <Txt k="cst_is" label="CST IS" span={2} />
+            <Num k="pc_is" label="Alíq. IS %" span={2} />
+            <Num k="vl_is" label="Vlr. IS" span={2} />
+          </Section>
+
+          <div className="flex gap-2 justify-end pt-2 border-t border-border/60 sticky bottom-0 bg-slate-50/95 dark:bg-slate-900/95 -mx-4 -mb-4 px-4 py-3 rounded-b-xl">
+            <button onClick={handleSalvar} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg border border-border bg-transparent text-emerald-600 hover:bg-emerald-50 transition-all">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Salvar
+            </button>
+            <button onClick={() => { setXMode("view"); setXCurrentIdx(null); }} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg border border-border bg-transparent text-rose-600 hover:bg-rose-50 transition-all">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> Cancelar
+            </button>
           </div>
         </div>
       )}
