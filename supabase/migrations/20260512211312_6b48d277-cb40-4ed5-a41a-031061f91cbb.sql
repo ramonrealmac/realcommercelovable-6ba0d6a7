@@ -1,0 +1,1 @@
+ALTER TABLE public.empresa ADD COLUMN IF NOT EXISTS pdv_pesquisa_campos text DEFAULT '["codigo","nome","unidade","preco","estoque_disp","reservado"]';
