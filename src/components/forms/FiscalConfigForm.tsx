@@ -509,6 +509,41 @@ const FiscalConfigForm = () => {
                   </CardContent>
                 </Card>
 
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-sm">Tempo Limite de Operações Fiscais</CardTitle>
+                    <CardDescription>
+                      Tempo máximo (em segundos) que o sistema aguardará a resposta do Fiscal Worker /
+                      SEFAZ em emissão de NFe/NFCe, cancelamento, inutilização e envio de e-mail.
+                      Após esse tempo a operação retorna como TIMEOUT e libera o sistema.
+                      Mínimo 10s, máximo 600s.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <FormField
+                      control={form.control}
+                      name="nr_timeout_nfe"
+                      render={({ field }) => (
+                        <FormItem className="max-w-[220px]">
+                          <FormLabel>Timeout (segundos)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={10}
+                              max={600}
+                              step={5}
+                              placeholder="60"
+                              {...field}
+                              onChange={(e) => field.onChange(Number(e.target.value))}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+                </Card>
+
                 <div className="flex justify-between items-center bg-card p-4 rounded-lg border shadow-sm">
                   <div className="flex gap-2">
                     <Button type="button" variant="outline" onClick={testarSefaz} disabled={testing}>
