@@ -429,14 +429,16 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !XSalvando && onClose()}>
-      <DialogContent className="max-w-5xl p-0 overflow-hidden">
+      <DialogContent className="max-w-5xl p-0 overflow-hidden w-screen h-[100dvh] max-h-[100dvh] sm:rounded-none md:w-full md:h-auto md:max-h-[90vh] md:rounded-lg">
         <div className="flex items-center h-10 bg-topbar text-topbar-foreground px-4 gap-2 shrink-0">
           <CreditCard size={18} />
           <h2 className="text-sm font-semibold">Meios de Pagamento e Prazos</h2>
         </div>
 
-        <div className="p-3">
-          <div className="grid grid-cols-12 gap-x-10 gap-y-2 items-end">
+        <div className="md:p-3 overflow-hidden">
+          <div className="flex overflow-x-auto overflow-y-auto snap-x snap-mandatory scroll-smooth h-full md:h-auto md:overflow-visible md:grid md:grid-cols-12 md:gap-x-10 md:gap-y-2 md:items-end">
+            {/* === MOBILE LEFT PANEL / DESKTOP: interleaved === */}
+            <div className="w-full shrink-0 snap-start basis-full p-3 flex flex-col gap-2 overflow-y-auto md:basis-auto md:w-auto md:shrink md:p-0 md:contents md:gap-0">
             {/* Row 1: Condição vs Total Pedido */}
             <div className="col-span-7">
               <label className="text-[10px] font-bold text-muted-foreground uppercase leading-none mb-1 block">Condição</label>
