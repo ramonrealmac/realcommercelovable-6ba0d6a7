@@ -231,7 +231,11 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                 <label className="text-xs text-muted-foreground">Dt. Saída</label>
                 <input type="date" readOnly={ro} value={(record.dt_saida || "").toString().substring(0, 10)} onChange={e => setField("dt_saida" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-1">
+                <label className="text-xs text-muted-foreground">Dt. Entrada</label>
+                <input type="date" readOnly={ro} value={((record as any).dt_entrada || "").toString().substring(0, 10)} onChange={e => setField("dt_entrada" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
+              </div>
+              <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Status</label>
                 <input readOnly value={NFE_ST_LABELS[stAtual] || stAtual} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary" />
               </div>
