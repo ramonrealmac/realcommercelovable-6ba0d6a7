@@ -347,9 +347,7 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
                     : "bg-slate-100 border-slate-100 opacity-50 cursor-not-allowed"
                 )}
               >
-                <span className="absolute top-2 left-2 inline-flex items-center justify-center w-6 h-6 rounded-md bg-primary/10 text-primary text-xs font-bold">
-                  {card.shortcut}
-                </span>
+                {/* Atalho integrado ao label */}
                 <div className={cn("mb-3 p-3 rounded-xl bg-slate-50 group-hover:bg-white transition-colors", card.color)}>
                   {card.icon}
                 </div>
