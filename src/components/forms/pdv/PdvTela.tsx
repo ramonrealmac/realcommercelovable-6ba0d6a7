@@ -815,7 +815,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
                     {/* Linha 1: Nº + Cliente */}
                     <div className="flex justify-between items-baseline gap-2">
                       <span className="font-bold text-foreground shrink-0">#{p.nr_movimento || p.movimento_id}</span>
-                      <span className="text-blue-600 dark:text-blue-400 font-semibold truncate flex-1">{p.cliente_nome}</span>
+                      <span className="text-blue-600 dark:text-blue-400 font-semibold break-words flex-1 min-w-0">{p.cliente_nome}</span>
                     </div>
                     {/* Linha 2: Vendedor + total */}
                     <div className="flex justify-between items-baseline gap-2" style={{ fontSize: `${Math.max(10, XFontePed - 1)}px` }}>
