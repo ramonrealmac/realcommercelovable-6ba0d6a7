@@ -126,6 +126,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   const [XCliente, setXCliente] = useState<IClienteRow | null>(null);
   const [XVendedor, setXVendedor] = useState<IVendedorRow | null>(null);
   const [XSearchTerm, setXSearchTerm] = useState("");
+  const [XQtProx, setXQtProx] = useState<number>(1);
   const [XOpenProduto, setXOpenProduto] = useState(false);
   const [XOpenCliente, setXOpenCliente] = useState(false);
   const [XOpenVend, setXOpenVend] = useState(false);
