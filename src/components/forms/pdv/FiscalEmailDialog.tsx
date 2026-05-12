@@ -60,7 +60,10 @@ const FiscalEmailDialog: React.FC<FiscalEmailDialogProps> = ({ open, onClose, nf
 
     setLoading(true);
     try {
+      const totalSeg = await fiscalEmissaoService.obterTimeoutFiscalSeg(empresaId);
+      setProg({ open: true, total: totalSeg, restante: totalSeg });
       const res = await fiscalEmissaoService.enviarEmail(nfeCabecalhoId, empresaId, email);
+      setProg(p => ({ ...p, open: false }));
       if (res.success) {
         toast.success("E-mail enfileirado para envio!");
         onClose();
@@ -68,6 +71,7 @@ const FiscalEmailDialog: React.FC<FiscalEmailDialogProps> = ({ open, onClose, nf
         toast.error("Erro ao enviar e-mail: " + res.message);
       }
     } catch (err: any) {
+      setProg(p => ({ ...p, open: false }));
       toast.error("Falha na comunicação: " + err.message);
     } finally {
       setLoading(false);
