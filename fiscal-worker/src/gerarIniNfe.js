@@ -106,11 +106,17 @@ export function gerarIniNfe(params) {
     const vUnit = Number(it.vl_unit || 0);
     const vTot = Number(it.vl_total || 0);
 
+    // Regra SEFAZ: em homologação, o xProd do PRIMEIRO item deve ser a frase mágica
+    const ehPrimeiroItemHomolog = (i === 0 && ambiente === '2');
+    const xProdFinal = ehPrimeiroItemHomolog
+      ? 'NOTA FISCAL EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL'
+      : (it.nm_produto || '');
+
     linhas.push(`[Produto${nr}]`);
     linhas.push(`cProd=${it.produto_id || String(i + 1).padStart(6, '0')}`);
     linhas.push(`cEAN=${it.gtin || 'SEM GTIN'}`);
     linhas.push(`cEANTrib=${it.gtin || 'SEM GTIN'}`);
-    linhas.push(`xProd=${it.nm_produto || ''}`);
+    linhas.push(`xProd=${xProdFinal}`);
     linhas.push(`NCM=${it.ncm || ''}`);
     if (it.cest) linhas.push(`CEST=${it.cest}`);
     linhas.push(`CFOP=${it.cfop || '5102'}`);
@@ -251,9 +257,21 @@ export function gerarIniNfe(params) {
   }
 
   if (isNFCe) {
+    const idCsc = String(configItem?.id_csc || '').trim();
+    const csc = String(configItem?.csc || '').trim();
+    // Validação para evitar Access Violation no DLL ACBrLib quando CSC é placeholder/inválido.
+    // CSC real tem 36 caracteres (UUID-like) e IdCSC normalmente 6 dígitos.
+    if (!idCsc || !csc || csc.length < 16 || /^0+$/.test(csc.replace(/\D/g, ''))) {
+      throw new Error(
+        `CSC/IdCSC inválido para emissão de NFC-e (modelo 65). ` +
+        `Configure o Token CSC real (mínimo 16 caracteres, fornecido pela SEFAZ-${ufEmit}) ` +
+        `em Configuração Fiscal > Item ${modelo}/${serie}. ` +
+        `Valores recebidos: IdCSC="${idCsc}", CSC com ${csc.length} caracteres.`
+      );
+    }
     linhas.push('[NFCe]');
-    linhas.push(`IdCSC=${configItem?.id_csc || ''}`);
-    linhas.push(`CSC=${configItem?.csc || ''}`);
+    linhas.push(`IdCSC=${idCsc}`);
+    linhas.push(`CSC=${csc}`);
     linhas.push('');
   }
 
