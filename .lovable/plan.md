@@ -1,90 +1,85 @@
-## Objetivo
+## Reformular o dialog "Pesquisar Produto" do PDV
 
-Adicionar timeout configurável e visível (com contagem regressiva) para todas as operações que aguardam resposta do `fiscal-worker` — emissão NFe/NFCe, cancelamento, inutilização e envio de e-mail — tanto no PDV quanto no Gerenciador Fiscal.
+Arquivo único alterado: `src/components/forms/pedido/ProdutoSearchDialog.tsx`
+(reusado pelo PDV via `PdvTela.tsx` — sem mudanças no PDV).
 
-## 1. Banco de dados
+### 1. Novo layout: lista de coluna única com quebra de linha
 
-Adicionar coluna em `fiscal_config`:
+Substituir a grade `grid-cols-12` por linhas `flex flex-wrap` onde os campos
+escolhidos aparecem concatenados, separados por um divisor sutil (`·`),
+com `break-words` permitindo quebra para a linha de baixo quando não couber.
 
-- `nr_timeout_nfe` (int, default 60) — tempo limite em segundos, único para todas as operações fiscais.
-
-## 2. Tela de Configuração Fiscal
-
-Em `src/components/forms/FiscalConfigForm.tsx`, na aba geral, adicionar:
-
-- Campo numérico "Tempo limite de espera (segundos)" — default 60, mínimo 10, máximo 300.
-
-## 3. Camada de serviço
-
-`src/services/fiscalEmissaoService.ts`:
-
-- Helper `obterTimeoutFiscal(empresaId): Promise<number>` — lê `nr_timeout_nfe` da `fiscal_config` (cache curto por empresa, fallback 60s) e devolve em ms.
-- Refatorar `aguardarEvento(eventoId, timeoutMs?, onTick?)`:
-  - se `timeoutMs` ausente → usa `obterTimeoutFiscal(empresaId)`;
-  - **dispara `onTick(segundosRestantes)` a cada 2 segundos** (regressivo);
-  - ao expirar: marca o `fiscal_evento` com `status='TIMEOUT'` e `mensagem_erro='Tempo limite excedido (Xs) aguardando o Fiscal Worker'`, e resolve `{ success:false, status:'TIMEOUT', mensagem }` (não rejeita).
-- Substituir os timeouts hardcoded (`15000`, `20000`, `25000`, `90000`) pelo helper em:
-  - `emitirNfce` / `emitirNfe`
-  - `enviarEmail`
-  - `cancelarDocumento`
-  - `inutilizar` (se houver chamada equivalente)
-
-`src/services/provedorService.ts`:
-
-- Substituir o `timeoutMs = 25000` fixo do `enviarComando` pelo mesmo helper, com fallback de 60s.
-- Aceitar `onTick` opcional para reuso pelo Gerenciador Fiscal.
-
-## 4. UI — dialog reutilizável com contagem regressiva
-
-Criar `src/components/fiscal/FiscalProgressDialog.tsx`:
-
-- Modal **não-fechável** (sem botão "Cancelar espera") enquanto a operação está em andamento — só fecha quando o serviço retorna ou quando o timeout zera.
-- Conteúdo:
-  - Título dinâmico ("Emitindo NFC-e…", "Cancelando NF-e…", "Enviando e-mail…", etc.).
-  - Barra de progresso com `value = (restante / total) * 100`.
-  - Texto grande "Liberando em **Xs**" atualizado pelo `onTick` a cada 2s.
-- Ao atingir 0: fecha automaticamente, exibe `toast.error("Tempo limite excedido")`. O serviço já marcou o evento como `TIMEOUT`; quando/se o worker concluir depois, o realtime existente atualiza o registro normalmente.
-
-## 5. Integrações de UI
-
-Envolver toda chamada que dispara operação fiscal pelo dialog acima:
-
-- `src/components/forms/pdv/OpcoesPagamentoDialog.tsx` (NFC-e do caixa) — substitui o `nEvento(..., 90000)` por chamada com `onTick`.
-- `src/components/forms/pdv/FiscalEmailDialog.tsx` — envio de e-mail.
-- `src/components/forms/ListaNfeEmitidaForm.tsx` (Gerenciador Fiscal) — `nEmail` e `nDocumento` (cancelamento).
-- Qualquer outro ponto de emissão/cancelamento NFe/NFCe acionado pelo Gerenciador Fiscal.
-
-## 6. Detalhes técnicos
+Exemplo visual de uma linha:
 
 ```text
-fiscal_config
-  + nr_timeout_nfe int default 60        -- segundos (único parâmetro)
-
-fiscalEmissaoService
-  obterTimeoutFiscal(empresaId): ms      -- cache por empresa
-  aguardarEvento(id, timeoutMs?, onTick?)
-    - sem timeoutMs -> obterTimeoutFiscal
-    - poll do evento em loop curto (300ms)
-    - setInterval(2000) -> onTick(segundosRestantes)
-    - ao expirar: UPDATE fiscal_evento SET status='TIMEOUT'
-                  resolve { success:false, status:'TIMEOUT', mensagem }
-
-<FiscalProgressDialog
-  open
-  titulo="Emitindo NFC-e..."
-  segundosTotais={timeoutSegundos}
-  segundosRestantes={tickValue}
-/>
+#1234 · CAMISETA POLO MANGA CURTA AZUL MARINHO TAM G ·
+UN · R$ 89,90 · Estq: 12,000 · Reserv: 1,000
 ```
 
-Padrão de uso:
+A 2ª grade (estoque por depósito) é mantida como está (já é informativa
+e cabe num único formato tabular pequeno).
 
-```ts
-const total = await fiscalEmissaoService.obterTimeoutFiscalSeg(empresaId);
-setProg({ open:true, total, restante: total, titulo:"Emitindo NFC-e..." });
-const r = await fiscalEmissaoService.aguardarEvento(
-  eventoId, total*1000,
-  (s) => setProg(p => ({ ...p, restante: s }))
-);
-setProg(p => ({ ...p, open:false }));
+### 2. Cores por campo (via tokens semânticos do design system)
+
+Cada "chip" da linha recebe uma cor própria:
+
+- **Código** (`produto_id`) → azul (`text-blue-600 dark:text-blue-400`), fonte mono
+- **Nome** → azul mais escuro / primary (`text-primary font-medium`)
+- **Unidade** → muted (`text-muted-foreground`)
+- **Preço normal** → preto/foreground (`text-foreground`)
+- **Preço em promoção** (quando `st_promo`) → verde (`text-green-600 dark:text-green-400 font-semibold`), com o preço normal riscado ao lado
+- **Estoque disponível**:
+  - `> 0` → azul (`text-blue-600 dark:text-blue-400`)
+  - `= 0` → cinza (`text-muted-foreground`)
+  - `< 0` → vermelho (`text-red-600 dark:text-red-400 font-semibold`)
+- **Reservado** → laranja suave (`text-amber-600 dark:text-amber-400`)
+- **Referência / GTIN** → muted/mono
+
+Linha selecionada continua com `bg-primary/15`; zebra preservada.
+
+### 3. Seleção de campos visíveis (persistida em `empresa`)
+
+Adicionar no header do dialog um botão "Campos" (ícone engrenagem) que
+abre um popover com checkboxes para cada campo disponível:
+
+- Código
+- Nome (sempre obrigatório, desabilitado)
+- Referência
+- GTIN
+- Unidade
+- Preço de venda
+- Preço promocional
+- Estoque disponível
+- Estoque reservado
+- Estoque na empresa atual
+
+A seleção é salva na tabela `empresa`, em uma nova coluna
+`pdv_pesquisa_campos` (`text`, JSON com array de chaves), default
+`'["codigo","nome","unidade","preco","estoque_disp","reservado"]'`.
+Carregada via `useEmpresaParam('pdv_pesquisa_campos', defaults)` e
+gravada via `update` em `empresa` ao confirmar o popover.
+
+> Para incluir referência/GTIN no SELECT, basta adicioná-los já no
+> `select(...)` atual (referência e gtin já são buscados, só não exibidos).
+
+### 4. Migração necessária
+
+```sql
+ALTER TABLE public.empresa
+  ADD COLUMN IF NOT EXISTS pdv_pesquisa_campos text
+  DEFAULT '["codigo","nome","unidade","preco","estoque_disp","reservado"]';
 ```
+
+### Pontos de confirmação
+
+1. Confirma persistir a configuração **por empresa** (todos os usuários da
+   empresa veem os mesmos campos)? Alternativa seria por funcionário
+   (`funcionario.pdv_pesquisa_campos`) — mais granular.
+2. Mantém a 2ª grade (estoque por depósito) inalterada?
+3. As cores propostas estão de acordo, ou prefere ajuste (ex: nome em
+   preto e código em azul)?
+
+### Resumo
+Lista vira "card-linha" único com chips coloridos que quebram linha
+naturalmente, e um popover de configuração permite ao usuário escolher
+quais campos aparecem — preferência persistida em `empresa.pdv_pesquisa_campos`.
