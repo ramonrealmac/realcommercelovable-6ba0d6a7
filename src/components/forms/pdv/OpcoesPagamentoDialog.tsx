@@ -124,13 +124,11 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
     if (!dados?.movimento_id) return;
 
     try {
-      // 0. Verifica se já existe NF para este pedido/modelo
-      const modeloChk = tipo === "NFE" ? "55" : "65";
+      // 0. Verifica se já existe QUALQUER documento fiscal vinculado a este pedido
       const { data: existente } = await supabase
         .from("fiscal_nfe_cabecalho")
         .select("nfe_cabecalho_id, c_stat, x_motivo, modelo")
-        .eq("movimento_id", dados.movimento_id)
-        .eq("modelo", modeloChk)
+        .or(`movimento_id.eq.${dados.movimento_id},pedido_id.eq.${dados.movimento_id}`)
         .eq("excluido", false)
         .order("nfe_cabecalho_id", { ascending: false })
         .limit(1)
@@ -139,7 +137,8 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
       if (existente?.nfe_cabecalho_id) {
         const cStat = Number(existente.c_stat || 0);
         const autorizada = cStat === 100 || cStat === 150;
-        if (autorizada) {
+        const mesmoModelo = String(existente.modelo) === (tipo === "NFE" ? "55" : "65");
+        if (autorizada && mesmoModelo) {
           setXSalvando(true);
           setXStatus("Reemitindo DANFE da nota já autorizada...");
           setXNfeId(existente.nfe_cabecalho_id);
@@ -161,8 +160,11 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
           }
           return;
         } else {
+          const modLbl = String(existente.modelo) === "55" ? "NFe" : "NFCe";
           toast.error(
-            `Já existe ${tipo} para este pedido (status ${cStat || "—"}: ${existente.x_motivo || "pendente"}). Corrija pelo Gerenciador de NF-e.`,
+            autorizada
+              ? `Este pedido já possui ${modLbl} autorizada. Não é permitido emitir outro documento fiscal para a mesma venda.`
+              : `Já existe ${modLbl} para este pedido (status ${cStat || "—"}: ${existente.x_motivo || "pendente"}). Corrija pelo Gerenciador de NF-e.`,
             { duration: 8000 }
           );
           return;
@@ -271,19 +273,19 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
 
   const cards = [
     {
-      key: "bobina", shortcut: "1", label: "Bobina", desc: "Impressão Térmica", icon: <Printer size={28} />, color: "text-slate-600",
+      key: "bobina", shortcut: "1", label: "1. Bobina", desc: "Impressão Térmica", icon: <Printer size={28} />, color: "text-slate-600",
       action: () => imprimir(dados, "bobina"), enabled: true
     },
     {
-      key: "a4", shortcut: "2", label: "A4 / PDF", desc: "Relatório de Pedido", icon: <FileText size={28} />, color: "text-blue-600",
+      key: "a4", shortcut: "2", label: "2. A4 / PDF", desc: "Relatório de Pedido", icon: <FileText size={28} />, color: "text-blue-600",
       action: () => imprimir(dados, "a4"), enabled: true
     },
     {
-      key: "nfce", shortcut: "3", label: "NFCe", desc: "Nota de Consumidor", icon: <ScanLine size={28} />, color: "text-emerald-600",
+      key: "nfce", shortcut: "3", label: "3. NFCe", desc: "Nota de Consumidor", icon: <ScanLine size={28} />, color: "text-emerald-600",
       action: () => handleGerarFiscal("NFCE"), enabled: true
     },
     {
-      key: "nfe", shortcut: "4", label: "NFe", desc: "Nota Fiscal Eletrônica", icon: <FileCode2 size={28} />, color: "text-amber-600",
+      key: "nfe", shortcut: "4", label: "4. NFe", desc: "Nota Fiscal Eletrônica", icon: <FileCode2 size={28} />, color: "text-amber-600",
       action: () => handleGerarFiscal("NFE"), enabled: true
     },
   ];
@@ -345,9 +347,7 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
                     : "bg-slate-100 border-slate-100 opacity-50 cursor-not-allowed"
                 )}
               >
-                <span className="absolute top-2 left-2 inline-flex items-center justify-center w-6 h-6 rounded-md bg-primary/10 text-primary text-xs font-bold">
-                  {card.shortcut}
-                </span>
+                {/* Atalho integrado ao label */}
                 <div className={cn("mb-3 p-3 rounded-xl bg-slate-50 group-hover:bg-white transition-colors", card.color)}>
                   {card.icon}
                 </div>
