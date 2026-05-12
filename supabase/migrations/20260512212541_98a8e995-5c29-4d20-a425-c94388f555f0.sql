@@ -1,0 +1,1 @@
+ALTER TABLE public.empresa ADD COLUMN IF NOT EXISTS pdv_pesquisa_campos_cliente text DEFAULT '["codigo","cnpj","razao_social","fantasia"]'::text;
