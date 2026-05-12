@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import FiscalEmailDialog from "./FiscalEmailDialog";
+import FiscalProgressDialog from "@/components/fiscal/FiscalProgressDialog";
 import { supabase } from "@/integrations/supabase/client";
 
 
@@ -92,6 +93,9 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
   const [XNfeId, setXNfeId] = React.useState<number | null>(null);
   const [XLastPdf, setXLastPdf] = React.useState<string | null>(null);
   const [XEmailDialogOpen, setXEmailDialogOpen] = React.useState(false);
+  const [XProg, setXProg] = React.useState<{ open: boolean; titulo: string; total: number; restante: number }>({
+    open: false, titulo: "", total: 60, restante: 60
+  });
 
   const handleVisualizarFiscal = () => {
     if (!XLastPdf) {
@@ -137,7 +141,13 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
       }
 
       setXStatus(`Aguardando autorização da SEFAZ...`);
-      const ret = await fiscalEmissaoService.aguardarEvento(res.fiscal_evento_id, 90000);
+      const totalSeg = await fiscalEmissaoService.obterTimeoutFiscalSeg(empresaId);
+      setXProg({ open: true, titulo: `Emitindo ${tipo}...`, total: totalSeg, restante: totalSeg });
+      const ret = await fiscalEmissaoService.aguardarEvento(res.fiscal_evento_id, {
+        empresaId,
+        onTick: (s) => setXProg(p => ({ ...p, restante: s })),
+      });
+      setXProg(p => ({ ...p, open: false }));
 
       if (ret.success) {
         toast.success(`${tipo} autorizada!`);
@@ -331,6 +341,14 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
         nfeCabecalhoId={XNfeId}
         empresaId={empresaId}
         clienteId={dados?.cliente_id}
+      />
+
+      <FiscalProgressDialog
+        open={XProg.open}
+        titulo={XProg.titulo}
+        descricao="Aguardando resposta do Fiscal Worker / SEFAZ."
+        segundosTotais={XProg.total}
+        segundosRestantes={XProg.restante}
       />
     </Dialog>
   );

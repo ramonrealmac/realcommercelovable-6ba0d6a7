@@ -30,6 +30,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import MonitorFiscalLogDialog from "@/components/forms/MonitorFiscalLogDialog";
+import FiscalProgressDialog from "@/components/fiscal/FiscalProgressDialog";
 
 interface IProps {
   initialFilterId?: string | number;
@@ -95,6 +96,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
   const [XCancelTarget, setXCancelTarget] = useState<any>(null);
   const [XCancelJustificativa, setXCancelJustificativa] = useState("");
   const [XCancelando, setXCancelando] = useState(false);
+  const [XProg, setXProg] = useState<{ open: boolean; titulo: string; total: number }>({ open: false, titulo: "", total: 60 });
 
   useEffect(() => {
     if (initialFilterId) {
@@ -218,7 +220,10 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
     setXEmailEnviando(true);
     const tid = toast.loading("Enviando e-mail...");
     try {
+      const totalSeg = await fiscalEmissaoService.obterTimeoutFiscalSeg(XEmpresaId);
+      setXProg({ open: true, titulo: "Enviando e-mail...", total: totalSeg });
       const res = await fiscalEmissaoService.enviarEmail(XEmailTarget.nfe_cabecalho_id, XEmpresaId, XEmailDestino);
+      setXProg(p => ({ ...p, open: false }));
       if (res.success) {
         toast.success("E-mail enfileirado.", { id: tid });
         setXEmailDialogOpen(false);
@@ -226,6 +231,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
         toast.error(res.message || "Falha no envio.", { id: tid });
       }
     } catch (e: any) {
+      setXProg(p => ({ ...p, open: false }));
       toast.error(e.message, { id: tid });
     } finally {
       setXEmailEnviando(false);
@@ -255,7 +261,10 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
     const tid = toast.loading("Enviando cancelamento para SEFAZ...");
     console.log("[ListaNfeEmitidaForm] Cancelando nota:", XCancelTarget);
     try {
+      const totalSeg = await fiscalEmissaoService.obterTimeoutFiscalSeg(XEmpresaId);
+      setXProg({ open: true, titulo: "Cancelando documento...", total: totalSeg });
       const res = await fiscalEmissaoService.cancelarDocumento(XCancelTarget.nfe_cabecalho_id, XEmpresaId, XCancelJustificativa);
+      setXProg(p => ({ ...p, open: false }));
       if (res.success) {
         toast.success("Nota cancelada com sucesso!", { id: tid });
         setXCancelDialogOpen(false);
@@ -264,6 +273,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
         toast.error(res.message || "Falha ao cancelar nota.", { id: tid });
       }
     } catch (e: any) {
+      setXProg(p => ({ ...p, open: false }));
       toast.error(e.message, { id: tid });
     } finally {
       setXCancelando(false);
@@ -436,6 +446,14 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <FiscalProgressDialog
+      open={XProg.open}
+      titulo={XProg.titulo}
+      descricao="Aguardando resposta do Fiscal Worker / SEFAZ."
+      segundosTotais={XProg.total}
+      selfTick
+    />
     </>
   );
 };

@@ -7,6 +7,7 @@ import { Mail, Send, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
 import { supabase } from "@/integrations/supabase/client";
+import FiscalProgressDialog from "@/components/fiscal/FiscalProgressDialog";
 
 interface FiscalEmailDialogProps {
   open: boolean;
@@ -20,6 +21,7 @@ const FiscalEmailDialog: React.FC<FiscalEmailDialogProps> = ({ open, onClose, nf
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const [prog, setProg] = useState<{ open: boolean; total: number; restante: number }>({ open: false, total: 60, restante: 60 });
 
   useEffect(() => {
     if (open && clienteId) {
@@ -58,7 +60,10 @@ const FiscalEmailDialog: React.FC<FiscalEmailDialogProps> = ({ open, onClose, nf
 
     setLoading(true);
     try {
+      const totalSeg = await fiscalEmissaoService.obterTimeoutFiscalSeg(empresaId);
+      setProg({ open: true, total: totalSeg, restante: totalSeg });
       const res = await fiscalEmissaoService.enviarEmail(nfeCabecalhoId, empresaId, email);
+      setProg(p => ({ ...p, open: false }));
       if (res.success) {
         toast.success("E-mail enfileirado para envio!");
         onClose();
@@ -66,6 +71,7 @@ const FiscalEmailDialog: React.FC<FiscalEmailDialogProps> = ({ open, onClose, nf
         toast.error("Erro ao enviar e-mail: " + res.message);
       }
     } catch (err: any) {
+      setProg(p => ({ ...p, open: false }));
       toast.error("Falha na comunicação: " + err.message);
     } finally {
       setLoading(false);
@@ -124,6 +130,14 @@ const FiscalEmailDialog: React.FC<FiscalEmailDialogProps> = ({ open, onClose, nf
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <FiscalProgressDialog
+        open={prog.open}
+        titulo="Enviando e-mail..."
+        descricao="Aguardando o Fiscal Worker enviar o XML e o DANFE."
+        segundosTotais={prog.total}
+        selfTick
+      />
     </Dialog>
   );
 };
