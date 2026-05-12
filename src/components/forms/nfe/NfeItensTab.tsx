@@ -300,12 +300,12 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
   const inputCls = "w-full border border-border rounded px-2 py-1.5 text-sm bg-card focus:ring-2 focus:ring-ring outline-none disabled:opacity-70";
   const readCls = "w-full border border-border rounded px-2 py-1.5 text-sm bg-secondary text-right";
 
-  const Txt = ({ k, label, span = 2, digits, max, upper = true, right = false }: any) => (
+  const Txt = ({ k, label, span = 2, digits, max, upper = true, right = false }: XTextInputProps) => (
     <div style={{ gridColumn: `span ${span} / span ${span}` }}>
       <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
       <input
         type="text"
-        value={(XF as any)[k] ?? ""}
+        value={String(XF[k] ?? "")}
         onChange={e => {
           const XVal = digits ? onlyDigits(e.target.value, max) : (upper ? e.target.value.toUpperCase() : e.target.value);
           set(k, XVal);
@@ -318,12 +318,12 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
     </div>
   );
 
-  const Num = ({ k, label, span = 2, readOnly = false }: any) => (
+  const Num = ({ k, label, span = 2, readOnly = false }: XNumInputProps) => (
     <div style={{ gridColumn: `span ${span} / span ${span}` }}>
       <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
       <input
         type="text"
-        value={(XF as any)[k] ?? ""}
+        value={String(XF[k] ?? "")}
         onBlur={() => handleBlur(k)}
         onFocus={e => e.target.select()}
         onChange={e => !readOnly && set(k, e.target.value)}
@@ -334,7 +334,7 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
     </div>
   );
 
-  const Section = ({ title, children }: any) => (
+  const Section = ({ title, children }: XSectionProps) => (
     <fieldset className="border border-border rounded p-3">
       <legend className="text-xs font-medium text-muted-foreground px-2">{title}</legend>
       <div className="grid grid-cols-12 gap-3">{children}</div>
