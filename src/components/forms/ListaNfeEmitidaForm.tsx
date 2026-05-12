@@ -220,7 +220,10 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
     setXEmailEnviando(true);
     const tid = toast.loading("Enviando e-mail...");
     try {
+      const totalSeg = await fiscalEmissaoService.obterTimeoutFiscalSeg(XEmpresaId);
+      setXProg({ open: true, titulo: "Enviando e-mail...", total: totalSeg });
       const res = await fiscalEmissaoService.enviarEmail(XEmailTarget.nfe_cabecalho_id, XEmpresaId, XEmailDestino);
+      setXProg(p => ({ ...p, open: false }));
       if (res.success) {
         toast.success("E-mail enfileirado.", { id: tid });
         setXEmailDialogOpen(false);
@@ -228,6 +231,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
         toast.error(res.message || "Falha no envio.", { id: tid });
       }
     } catch (e: any) {
+      setXProg(p => ({ ...p, open: false }));
       toast.error(e.message, { id: tid });
     } finally {
       setXEmailEnviando(false);
