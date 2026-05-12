@@ -383,21 +383,13 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
         <DialogFooter className="flex flex-col sm:flex-row gap-2">
           <Button
             type="button"
-            variant="outline"
+            variant="default"
             onClick={onConcluir}
             disabled={XSalvando}
-            className="flex-1 rounded-xl h-12"
+            className="flex-1 rounded-xl h-12 gap-2"
           >
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-primary-foreground/20 text-xs font-bold">5</span>
             Concluir Venda
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={onClose}
-            disabled={XSalvando}
-            className="rounded-xl h-12"
-          >
-            Voltar
           </Button>
         </DialogFooter>
       </DialogContent>
