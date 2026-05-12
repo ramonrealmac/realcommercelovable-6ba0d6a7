@@ -79,7 +79,7 @@ const loadLibrary = (path, prefix) => {
                     funcoes.SalvarPDF = lib.func('int __cdecl NFE_SalvarPDF(void* handle, _Out_ char* sResposta, _Out_ int* esTamanho)');
                 } catch (e) { /* opcional */ }
                 try {
-                    funcoes.EnviarEmail = lib.func('int __cdecl NFE_EnviarEmail(void* handle, const char* ePara, const char* eChaveNFe, int aEnviaPDF, const char* eAssunto, const char* eCc, const char* eAnexos, const char* eMensagem)');
+                    funcoes.EnviarEmail = lib.func('int __cdecl NFE_EnviarEmail(void* handle, const char* ePara, const char* eChaveNFe, bool aEnviaPDF, const char* eAssunto, const char* eCc, const char* eAnexos, const char* eMensagem)');
                 } catch (e) {
                     console.warn('[FiscalLib] EnviarEmail indisponível:', e.message);
                 }
@@ -785,36 +785,58 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
             return executarNaDLL(libNFe, config, async (handle) => {
                 const { para, assunto, mensagem, anexos, config_email, xml } = jsonPayload;
                 
-                // 1. Carrega o XML da nota
-                libNFe.LimparLista(handle);
-                // Busca o XML tanto em 'xml' quanto em 'dados' para compatibilidade
-                const xmlContent = String(jsonPayload.xml || jsonPayload.dados || "").trim();
+                // 1. Salva o XML em um arquivo temporário para garantir que a DLL consiga ler para gerar o PDF
+                const tempDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos/Temp");
+                if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
                 
-                if (xmlContent) {
-                    console.log(`[FiscalLib] Carregando XML para e-mail (${xmlContent.length} bytes)...`);
-                    console.log(`[FiscalLib] Prefixo do XML: ${xmlContent.substring(0, 80)}`);
-                    const retXml = libNFe.CarregarXML(handle, xmlContent);
-                    if (retXml !== 0) {
-                        const erro = lerRetornoACBr(libNFe, handle);
-                        console.error(`[FiscalLib] Erro ao carregar XML para e-mail: ${erro}`);
-                        throw new Error(`Erro ao carregar XML: ${erro}`);
-                    }
-                } else {
-                    console.error(`[FiscalLib] Erro: XML não fornecido no payload.`);
-                    throw new Error("Conteúdo do XML não fornecido para o envio de e-mail.");
+                const xmlContent = String(jsonPayload.xml || jsonPayload.dados || "").trim();
+                if (!xmlContent) throw new Error("Conteúdo do XML não fornecido para o envio de e-mail.");
+                
+                const tempXmlPath = path.join(tempDir, `email_temp_${crypto.randomUUID()}.xml`);
+                fs.writeFileSync(tempXmlPath, xmlContent);
+                console.log(`[FiscalLib] XML temporário salvo em: ${tempXmlPath}`);
+                
+                // Carrega o XML (opcional, mas bom para garantir)
+                libNFe.LimparLista(handle);
+                const retXml = libNFe.CarregarXML(handle, tempXmlPath);
+                if (retXml !== 0) {
+                    console.warn(`[FiscalLib] Aviso ao carregar XML via path: ${lerRetornoACBr(libNFe, handle)}`);
                 }
                 
                 // 2. Configura SMTP
                 if (config_email) {
                     console.log(`[FiscalLib] Configurando SMTP: ${config_email.host}:${config_email.port}`);
-                    libNFe.ConfigGravarValor(handle, "Email", "Servidor", String(config_email.host || ""));
-                    libNFe.ConfigGravarValor(handle, "Email", "Porta", String(config_email.port || "587"));
-                    libNFe.ConfigGravarValor(handle, "Email", "Usuario", String(config_email.user || ""));
-                    libNFe.ConfigGravarValor(handle, "Email", "Senha", String(config_email.pass || ""));
-                    libNFe.ConfigGravarValor(handle, "Email", "Email", String(config_email.user || "")); 
-                    libNFe.ConfigGravarValor(handle, "Email", "Nome", String(config_email.nome_remetente || ""));
-                    libNFe.ConfigGravarValor(handle, "Email", "SSL", config_email.ssl ? "1" : "0");
-                    libNFe.ConfigGravarValor(handle, "Email", "TLS", config_email.tls ? "1" : "0");
+                    const rawNome = String(config_email.nome_remetente || "Realcommerce");
+                    const safeHelo = rawNome.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.-]/g, "");
+                    const senderEmail = String(config_email.user || "");
+
+                    // 2.a Grava configurações básicas que já sabemos que funcionam
+                    const r1 = libNFe.ConfigGravarValor(handle, "Email", "Servidor", String(config_email.host || ""));
+                    const r2 = libNFe.ConfigGravarValor(handle, "Email", "Porta", String(config_email.port || "587"));
+                    const r3 = libNFe.ConfigGravarValor(handle, "Email", "Usuario", senderEmail);
+                    const r4 = libNFe.ConfigGravarValor(handle, "Email", "Senha", String(config_email.pass || ""));
+                    const rNome = libNFe.ConfigGravarValor(handle, "Email", "Nome", rawNome);
+                    const rSSL = libNFe.ConfigGravarValor(handle, "Email", "SSL", config_email.ssl ? "1" : "0");
+                    const rTLS = libNFe.ConfigGravarValor(handle, "Email", "TLS", config_email.tls ? "1" : "0");
+
+                    // 2.b SCANNER DE CHAVES: Vamos descobrir qual chave essa DLL aceita para HELO e FROM
+                    const keysHELO = ["LocalHostName", "LocalHost", "Helo", "Hostname", "HostName", "Maquina", "NomeMaquina", "NomeHost"];
+                    const keysFrom = ["From", "EndRemetente", "Email", "Remetente", "Conta"];
+                    
+                    const aceitasHELO = [];
+                    const aceitasFrom = [];
+
+                    for (const k of keysHELO) {
+                        if (libNFe.ConfigGravarValor(handle, "Email", k, safeHelo) === 0) aceitasHELO.push(k);
+                    }
+                    for (const k of keysFrom) {
+                        if (libNFe.ConfigGravarValor(handle, "Email", k, senderEmail) === 0) aceitasFrom.push(k);
+                    }
+
+                    console.log(`[FiscalLib] SMTP Config Básica: Serv=${r1}, Port=${r2}, User=${r3}, Pass=${r4}, Nome=${rNome}, SSL=${rSSL}, TLS=${rTLS}`);
+                    console.log(`[FiscalLib] SCANNER - Chaves HELO aceitas: [${aceitasHELO.join(", ")}]`);
+                    console.log(`[FiscalLib] SCANNER - Chaves From aceitas: [${aceitasFrom.join(", ")}]`);
+                    console.log(`[FiscalLib] Usando HELO sanitizado: "${safeHelo}"`);
                 }
 
                 // 3. Enviar
@@ -824,24 +846,32 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 const targetMensagem = String(mensagem || "Segue em anexo.");
                 const targetAnexos = Array.isArray(anexos) ? anexos.join(';') : String(anexos || "");
                 
-                console.log(`[FiscalLib] >>> CHAMANDO EnviarEmail(handle, para=${targetPara}, chave=null, pdf=1, assunto=${targetAssunto}) <<<`);
+                console.log(`[FiscalLib] >>> CHAMANDO EnviarEmail(handle, para=${targetPara}, path=${tempXmlPath}, pdf=true) <<<`);
                 
                 let ret;
                 try {
                     ret = libNFe.EnviarEmail(
                         handle, 
                         targetPara, 
-                        null,             // eChaveNFe (usar nota carregada)
-                        1,                // aEnviaPDF (1 = True)
+                        tempXmlPath,      
+                        true,             // aEnviaPDF (true)
                         targetAssunto, 
-                        null,             // eCc
+                        null,             
                         targetAnexos || null, 
                         targetMensagem
                     );
+                    
+                    if (ret === -10) {
+                        console.warn("[FiscalLib] Retorno -10 detectado. Tentando sem PDF como fallback...");
+                        ret = libNFe.EnviarEmail(handle, targetPara, tempXmlPath, false, targetAssunto, null, targetAnexos || null, targetMensagem);
+                    }
+                    
                     console.log(`[FiscalLib] Retorno DLL EnviarEmail: ${ret}`);
                 } catch (errCall) {
                     console.error(`[FiscalLib] EXCEÇÃO NA CHAMADA EnviarEmail: ${errCall.message}`);
                     throw errCall;
+                } finally {
+                    try { if (fs.existsSync(tempXmlPath)) fs.unlinkSync(tempXmlPath); } catch (e) {}
                 }
                 
                 if (ret !== 0) {

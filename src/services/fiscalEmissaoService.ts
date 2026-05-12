@@ -646,6 +646,9 @@ export const fiscalEmissaoService = {
       const { data: fConfig } = await db.from("fiscal_config").select("*").eq("empresa_id", empresaId).single();
       if (!fConfig) return { success: false, message: "Configuração fiscal não encontrada." };
 
+      const { data: emp } = await db.from("empresa").select("nome_fantasia").eq("empresa_id", empresaId).single();
+      const nomeEmpresa = emp?.nome_fantasia || "Realcommerce";
+
       let emailDestino = para;
       if (!emailDestino && cab.cadastro_id) {
         const { data: cad } = await db.from("cadastro").select("email").eq("cadastro_id", cab.cadastro_id).single();
@@ -683,7 +686,8 @@ export const fiscalEmissaoService = {
             user: fConfig.email_smtp_user,
             pass: fConfig.email_smtp_pass,
             ssl: fConfig.email_smtp_ssl,
-            tls: fConfig.email_smtp_tls
+            tls: fConfig.email_smtp_tls,
+            nome_remetente: nomeEmpresa
           },
           config: {
             uf: fConfig.uf,
