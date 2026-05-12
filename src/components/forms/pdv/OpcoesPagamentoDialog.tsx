@@ -93,6 +93,9 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
   const [XNfeId, setXNfeId] = React.useState<number | null>(null);
   const [XLastPdf, setXLastPdf] = React.useState<string | null>(null);
   const [XEmailDialogOpen, setXEmailDialogOpen] = React.useState(false);
+  const [XProg, setXProg] = React.useState<{ open: boolean; titulo: string; total: number; restante: number }>({
+    open: false, titulo: "", total: 60, restante: 60
+  });
 
   const handleVisualizarFiscal = () => {
     if (!XLastPdf) {
