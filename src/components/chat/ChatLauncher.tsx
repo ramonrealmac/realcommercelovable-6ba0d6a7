@@ -1,9 +1,13 @@
 import React, { useState } from "react";
 import ChatPanel from "./ChatPanel";
 import botStatic from "@/assets/realsys-bot.png";
+import { useAppContext } from "@/contexts/AppContext";
 
 const ChatLauncher: React.FC = () => {
   const [XOpen, setXOpen] = useState(false);
+  const { XChatBotVisible } = useAppContext();
+
+  if (!XChatBotVisible) return null;
 
   return (
     <>
