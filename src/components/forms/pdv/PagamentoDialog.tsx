@@ -520,7 +520,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
 
             {/* Row 4: Valores vs Troco */}
             <div className="col-span-7 max-md:col-span-1 max-md:col-start-1 max-md:snap-start max-md:px-3">
-              <div className="grid grid-cols-8 gap-2 items-end">
+              <div className="grid grid-cols-8 max-md:grid-cols-5 gap-2 items-end">
                 <div className="col-span-2">
                   <label className="text-[10px] font-bold text-muted-foreground uppercase leading-none mb-1 block">Vlr a Pagar</label>
                   <input
