@@ -6,7 +6,7 @@ import ShortcutsBar from "./ShortcutsBar";
 import ChatInternoTopBarButton from "@/components/chat-interno/ChatInternoTopBarButton";
 
 const TopBar = () => {
-  const { XEmpresaId, setXEmpresaId, setXEmpresaMatrizId, XEmpresas, toggleSidebar, openTab } = useAppContext();
+  const { XEmpresaId, setXEmpresaId, setXEmpresaMatrizId, XEmpresas, toggleSidebar, openTab, XChatBotVisible, toggleChatBot } = useAppContext();
 
   const [XMenuOpen, setXMenuOpen] = useState(false);
   const [XUserEmail, setXUserEmail] = useState("");
