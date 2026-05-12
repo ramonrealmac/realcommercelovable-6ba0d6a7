@@ -181,6 +181,59 @@ const waitSync = (ms) => {
     while (Date.now() - start < ms) { }
 };
 
+const normalizarGtinFiscal = (valor) => {
+    const raw = String(valor || '').trim().toUpperCase();
+    if (!raw || raw === 'SEM GTIN') return 'SEM GTIN';
+    const digitos = raw.replace(/\D/g, '');
+    return /^(\d{8}|\d{12}|\d{13}|\d{14})$/.test(digitos) ? digitos : 'SEM GTIN';
+};
+
+const normalizarIniNFeAntesDaDll = (iniContent) => {
+    const linhas = String(iniContent || '').split(/\r?\n/);
+    const saida = [];
+    let secaoAtual = '';
+    let icms500 = false;
+    let camposIcms = new Set();
+
+    const fecharSecaoIcms = () => {
+        if (!/^\[ICMS\d{3}\]$/i.test(secaoAtual) || !icms500) return;
+        if (!camposIcms.has('vbcstret')) saida.push('vBCSTRet=0.00');
+        if (!camposIcms.has('pst')) saida.push('pST=0.0000');
+        if (!camposIcms.has('vicmssubstituto')) saida.push('vICMSSubstituto=0.00');
+        if (!camposIcms.has('vicmsstret')) saida.push('vICMSSTRet=0.00');
+    };
+
+    for (const linha of linhas) {
+        const secao = linha.match(/^\[[^\]]+\]$/);
+        if (secao) {
+            fecharSecaoIcms();
+            secaoAtual = linha.trim();
+            icms500 = false;
+            camposIcms = new Set();
+            saida.push(linha);
+            continue;
+        }
+
+        const par = linha.match(/^([^=]+)=(.*)$/);
+        if (par) {
+            const chave = par[1].trim();
+            const chaveLower = chave.toLowerCase();
+            if (chaveLower === 'cean' || chaveLower === 'ceantrib') {
+                saida.push(`${chave}=${normalizarGtinFiscal(par[2])}`);
+                continue;
+            }
+            if (/^\[ICMS\d{3}\]$/i.test(secaoAtual)) {
+                camposIcms.add(chaveLower);
+                if (chaveLower === 'csosn' && String(par[2]).trim() === '500') icms500 = true;
+            }
+        }
+        saida.push(linha);
+    }
+    fecharSecaoIcms();
+
+    return saida.join('\r\n');
+};
+
 /**
  * Tenta imprimir DANFE/DANFCE baseado em print_config { tp_imp, nm_impressora }.
  * Retorna um objeto de resultado e nunca propaga erro para o fluxo fiscal.
@@ -447,7 +500,7 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
             return executarNaDLL(libNFe, config, async (handle) => {
                 libNFe.LimparLista(handle);
                 
-                const iniContent = typeof jsonPayload.dados === 'string' ? jsonPayload.dados : JSON.stringify(jsonPayload.dados);
+                const iniContent = normalizarIniNFeAntesDaDll(typeof jsonPayload.dados === 'string' ? jsonPayload.dados : JSON.stringify(jsonPayload.dados));
                 console.log(`[FiscalLib] CarregarINI NFe (${iniContent.length} chars)...`);
                 
                 let ret = libNFe.CarregarINI(handle, iniContent);
@@ -513,7 +566,7 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
             return executarNaDLL(libNFe, config, async (handle) => {
                 libNFe.LimparLista(handle);
                 
-                const iniContent = typeof jsonPayload.dados === 'string' ? jsonPayload.dados : JSON.stringify(jsonPayload.dados);
+                const iniContent = normalizarIniNFeAntesDaDll(typeof jsonPayload.dados === 'string' ? jsonPayload.dados : JSON.stringify(jsonPayload.dados));
                 console.log(`[FiscalLib] CarregarINI NFCe (${iniContent.length} chars)...`);
                 
                 let ret = libNFe.CarregarINI(handle, iniContent);
