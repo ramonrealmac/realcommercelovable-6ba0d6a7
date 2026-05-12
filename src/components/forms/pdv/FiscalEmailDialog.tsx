@@ -21,6 +21,7 @@ const FiscalEmailDialog: React.FC<FiscalEmailDialogProps> = ({ open, onClose, nf
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const [prog, setProg] = useState<{ open: boolean; total: number; restante: number }>({ open: false, total: 60, restante: 60 });
 
   useEffect(() => {
     if (open && clienteId) {
