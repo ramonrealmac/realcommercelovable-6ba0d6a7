@@ -500,7 +500,7 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
             return executarNaDLL(libNFe, config, async (handle) => {
                 libNFe.LimparLista(handle);
                 
-                const iniContent = typeof jsonPayload.dados === 'string' ? jsonPayload.dados : JSON.stringify(jsonPayload.dados);
+                const iniContent = normalizarIniNFeAntesDaDll(typeof jsonPayload.dados === 'string' ? jsonPayload.dados : JSON.stringify(jsonPayload.dados));
                 console.log(`[FiscalLib] CarregarINI NFe (${iniContent.length} chars)...`);
                 
                 let ret = libNFe.CarregarINI(handle, iniContent);
@@ -566,7 +566,7 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
             return executarNaDLL(libNFe, config, async (handle) => {
                 libNFe.LimparLista(handle);
                 
-                const iniContent = typeof jsonPayload.dados === 'string' ? jsonPayload.dados : JSON.stringify(jsonPayload.dados);
+                const iniContent = normalizarIniNFeAntesDaDll(typeof jsonPayload.dados === 'string' ? jsonPayload.dados : JSON.stringify(jsonPayload.dados));
                 console.log(`[FiscalLib] CarregarINI NFCe (${iniContent.length} chars)...`);
                 
                 let ret = libNFe.CarregarINI(handle, iniContent);
