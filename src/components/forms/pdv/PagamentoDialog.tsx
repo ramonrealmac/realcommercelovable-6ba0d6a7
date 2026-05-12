@@ -438,7 +438,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
         <div className="md:p-3 overflow-hidden flex-1 min-h-0">
           <div className="h-full grid grid-cols-[repeat(2,100vw)] auto-rows-min overflow-x-auto overflow-y-auto snap-x snap-mandatory scroll-smooth md:h-auto md:grid-cols-12 md:gap-x-10 md:gap-y-2 md:items-end md:overflow-visible md:auto-rows-auto">
             {/* Row 1: Condição vs Total Pedido */}
-            <div className="col-span-7">
+            <div className="col-span-7 max-md:col-span-1 max-md:col-start-1 max-md:snap-start max-md:px-3">
               <label className="text-[10px] font-bold text-muted-foreground uppercase leading-none mb-1 block">Condição</label>
               <select ref={condicaoRef} value={XCondicaoId} onChange={e => setCondicao(Number(e.target.value))}
                 className={`w-full border border-border rounded px-2 py-1 text-sm h-9 ${brancoCls}`}>
@@ -446,7 +446,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
                 {XCondicoes.map(c => <option key={c.condicao_id} value={c.condicao_id}>{c.descricao}</option>)}
               </select>
             </div>
-            <div className="col-span-5">
+            <div className="col-span-5 max-md:col-span-1 max-md:col-start-2 max-md:snap-start max-md:px-3">
               <div 
                 onClick={() => setXCalcDisplay(totalPedido.toFixed(2).replace(".", ","))}
                 className="border border-amber-300 rounded px-3 py-1 bg-amber-50 dark:bg-amber-950/30 flex justify-between items-center h-9 cursor-pointer hover:bg-amber-100 transition-colors">
@@ -459,7 +459,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
             </div>
 
             {/* Row 2: Bandeira vs Valor Pago */}
-            <div className="col-span-7">
+            <div className="col-span-7 max-md:col-span-1 max-md:col-start-1 max-md:snap-start max-md:px-3">
               <label className="text-[10px] font-bold text-muted-foreground uppercase leading-none mb-1 block">Bandeira</label>
               <select
                 ref={bandeiraRef}
@@ -472,7 +472,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
                 {XBandeiras.map(b => <option key={b.bandeira_id} value={b.bandeira_id}>{b.descricao}</option>)}
               </select>
             </div>
-            <div className="col-span-5">
+            <div className="col-span-5 max-md:col-span-1 max-md:col-start-2 max-md:snap-start max-md:px-3">
               <div 
                 onClick={() => setXCalcDisplay(totalPago.toFixed(2).replace(".", ","))}
                 className="border border-emerald-200 rounded px-3 py-1 bg-emerald-50/60 dark:bg-emerald-950/20 flex justify-between items-center h-9 cursor-pointer hover:bg-emerald-100/50 transition-colors">
@@ -485,7 +485,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
             </div>
 
             {/* Row 3: Operadora/Autoriz vs Valor a Pagar */}
-            <div className="col-span-7">
+            <div className="col-span-7 max-md:col-span-1 max-md:col-start-1 max-md:snap-start max-md:px-3">
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[10px] font-bold text-muted-foreground uppercase leading-none mb-1 block">Operadora</label>
@@ -506,7 +506,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
                 </div>
               </div>
             </div>
-            <div className="col-span-5">
+            <div className="col-span-5 max-md:col-span-1 max-md:col-start-2 max-md:snap-start max-md:px-3">
               <div 
                 onClick={() => setXCalcDisplay(valorAPagar.toFixed(2).replace(".", ","))}
                 className={`border rounded px-3 py-1 flex justify-between items-center h-9 cursor-pointer transition-colors border-rose-200 bg-rose-50/60 dark:bg-rose-950/20 hover:bg-rose-100/50`}>
@@ -519,7 +519,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
             </div>
 
             {/* Row 4: Valores vs Troco */}
-            <div className="col-span-7">
+            <div className="col-span-7 max-md:col-span-1 max-md:col-start-1 max-md:snap-start max-md:px-3">
               <div className="grid grid-cols-8 gap-2 items-end">
                 <div className="col-span-2">
                   <label className="text-[10px] font-bold text-muted-foreground uppercase leading-none mb-1 block">Vlr a Pagar</label>
@@ -557,7 +557,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
                 </div>
               </div>
             </div>
-            <div className="col-span-5">
+            <div className="col-span-5 max-md:col-span-1 max-md:col-start-2 max-md:snap-start max-md:px-3">
               <div 
                 onClick={() => setXCalcDisplay(troco.toFixed(2).replace(".", ","))}
                 className={`border rounded px-3 py-1 flex justify-between items-center h-9 cursor-pointer transition-colors border-blue-400 bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100`}>
@@ -570,7 +570,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
             </div>
 
             {/* Row 5: Grid vs Calculator */}
-            <div className="col-span-7 flex flex-col pt-2 self-stretch">
+            <div className="col-span-7 max-md:col-span-1 max-md:col-start-1 max-md:snap-start max-md:px-3 flex flex-col pt-2 self-stretch">
               <div className="flex-1">
                 <DataGrid
                   columns={cols}
@@ -596,7 +596,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
                 </button>
               </div>
             </div>
-            <div className="col-span-5 flex flex-col pt-2 self-stretch">
+            <div className="col-span-5 max-md:col-span-1 max-md:col-start-2 max-md:snap-start max-md:px-3 flex flex-col pt-2 self-stretch">
               {/* Calculadora compacta ocupando o resto da altura */}
               <div className="flex-1 bg-muted/30 border border-border rounded-lg p-2 flex flex-col gap-1 shadow-inner min-h-[350px]">
                 <div className="flex items-center gap-1 mb-1 px-1">
