@@ -703,7 +703,7 @@ export const fiscalEmissaoService = {
 
       if (evErr) return { success: false, message: evErr.message };
 
-      const res = await this.aguardarEvento(evento.id, 25000);
+      const res = await this.aguardarEvento(evento.id, { empresaId });
 
       if (res.success && res.pdf_base64) {
         try {
