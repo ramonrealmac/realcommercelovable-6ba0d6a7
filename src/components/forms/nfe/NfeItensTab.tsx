@@ -14,7 +14,6 @@ type XPayload = Record<string, string | number | null>;
 type XProdutoOption = { produto_id: number; nome: string; referencia?: string };
 type XTextInputProps = { k: string; label: string; span?: number; digits?: boolean; max?: number; upper?: boolean; right?: boolean };
 type XNumInputProps = { k: string; label: string; span?: number; readOnly?: boolean };
-type XSectionProps = { title: string; children: React.ReactNode };
 
 const parseNum = (XValue: unknown) => {
   if (XValue === undefined || XValue === null || XValue === "") return 0;
@@ -264,7 +263,7 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
   };
 
   const handleSalvar = async () => {
-    if (!nfeCabecalhoId) return;
+    if (!nfeCabecalhoId) { toast.error("Salve o cabeçalho da NF-e antes de gravar os itens."); return; }
     if (!XF.nm_produto?.trim()) { toast.error("Informe a descrição do produto."); return; }
 
     const payload = buildPayload();
@@ -300,7 +299,7 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
   const inputCls = "w-full border border-border rounded px-2 py-1.5 text-sm bg-card focus:ring-2 focus:ring-ring outline-none disabled:opacity-70";
   const readCls = "w-full border border-border rounded px-2 py-1.5 text-sm bg-secondary text-right";
 
-  const Txt = ({ k, label, span = 2, digits, max, upper = true, right = false }: XTextInputProps) => (
+  const renderTxt = ({ k, label, span = 2, digits, max, upper = true, right = false }: XTextInputProps) => (
     <div style={{ gridColumn: `span ${span} / span ${span}` }}>
       <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
       <input
@@ -310,7 +309,6 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
           const XVal = digits ? onlyDigits(e.target.value, max) : (upper ? e.target.value.toUpperCase() : e.target.value);
           set(k, XVal);
         }}
-        onFocus={e => e.target.select()}
         className={`${inputCls} ${right ? "text-right" : ""}`}
         inputMode={digits ? "numeric" : "text"}
         maxLength={max}
@@ -318,14 +316,13 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
     </div>
   );
 
-  const Num = ({ k, label, span = 2, readOnly = false }: XNumInputProps) => (
+  const renderNum = ({ k, label, span = 2, readOnly = false }: XNumInputProps) => (
     <div style={{ gridColumn: `span ${span} / span ${span}` }}>
       <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
       <input
         type="text"
         value={String(XF[k] ?? "")}
         onBlur={() => handleBlur(k)}
-        onFocus={e => e.target.select()}
         onChange={e => !readOnly && set(k, e.target.value)}
         readOnly={readOnly}
         className={`${readOnly ? readCls : inputCls} text-right`}
@@ -334,7 +331,7 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
     </div>
   );
 
-  const Section = ({ title, children }: XSectionProps) => (
+  const renderSection = (title: string, children: React.ReactNode) => (
     <fieldset className="border border-border rounded p-3">
       <legend className="text-xs font-medium text-muted-foreground px-2">{title}</legend>
       <div className="grid grid-cols-12 gap-3">{children}</div>
@@ -345,18 +342,19 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
     <div className="space-y-4">
       {isEditing && (
         <div className="p-3 bg-card rounded border border-border space-y-3 max-h-[70vh] overflow-y-auto">
-          <Section title="Identificação">
-            <Num k="nr_item" label="Item" span={1} />
-            <Txt k="cd_prod_fornec" label="Cód. Forn." span={2} />
-            <Txt k="gtin" label="GTIN" span={2} digits max={14} />
-            <Txt k="ncm" label="NCM" span={2} digits max={8} />
-            <Txt k="cest" label="CEST" span={1} digits max={7} />
-            <Txt k="cfop" label="CFOP" span={1} digits max={4} />
-            <Txt k="unidade" label="Un." span={1} />
-            <Txt k="c_enq" label="cEnq" span={2} digits max={3} />
+          {renderSection("Identificação", (
+              <>
+            {renderNum({ k: "nr_item", label: "Item", span: 1 })}
+            {renderTxt({ k: "cd_prod_fornec", label: "Cód. Forn.", span: 2 })}
+            {renderTxt({ k: "gtin", label: "GTIN", span: 2, digits: true, max: 14 })}
+            {renderTxt({ k: "ncm", label: "NCM", span: 2, digits: true, max: 8 })}
+            {renderTxt({ k: "cest", label: "CEST", span: 1, digits: true, max: 7 })}
+            {renderTxt({ k: "cfop", label: "CFOP", span: 1, digits: true, max: 4 })}
+            {renderTxt({ k: "unidade", label: "Un.", span: 1 })}
+            {renderTxt({ k: "c_enq", label: "cEnq", span: 2, digits: true, max: 3 })}
             <div className="col-span-8">
               <label className="block text-xs font-medium text-muted-foreground mb-1">Descrição NF</label>
-              <input value={XF.nm_produto || ""} onChange={e => set("nm_produto", e.target.value.toUpperCase())} onFocus={e => e.target.select()} className={inputCls} />
+              <input value={XF.nm_produto || ""} onChange={e => set("nm_produto", e.target.value.toUpperCase())} className={inputCls} />
             </div>
             <div className="col-span-4">
               <label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1"><Link size={12}/> Produto Vinculado</label>
@@ -365,82 +363,95 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
                 {XProdutos.map(p => <option key={p.produto_id} value={p.produto_id}>{p.produto_id} — {p.nome}</option>)}
               </select>
             </div>
-          </Section>
+          </>
+            ))}
 
-          <Section title="Quantidades e Valores">
-            <Num k="qt_entrada" label="Quantidade" span={2} />
-            <Num k="qt_tributavel" label="Qtd. Tributável" span={2} />
-            <Num k="vl_unit" label="Vlr. Unitário" span={2} />
-            <Num k="vl_unit_tributavel" label="Vlr. Unit. Trib." span={2} />
-            <Num k="vl_desconto" label="Desconto" span={2} />
-            <Num k="vl_frete" label="Frete" span={2} />
-            <Num k="vl_seguro" label="Seguro" span={2} />
-            <Num k="vl_outro" label="Outras Desp." span={2} />
-            <Num k="vl_total" label="Total" span={2} />
-          </Section>
+          {renderSection("Quantidades e Valores", (
+            <>
+            {renderNum({ k: "qt_entrada", label: "Quantidade", span: 2 })}
+            {renderNum({ k: "qt_tributavel", label: "Qtd. Tributável", span: 2 })}
+            {renderNum({ k: "vl_unit", label: "Vlr. Unitário", span: 2 })}
+            {renderNum({ k: "vl_unit_tributavel", label: "Vlr. Unit. Trib.", span: 2 })}
+            {renderNum({ k: "vl_desconto", label: "Desconto", span: 2 })}
+            {renderNum({ k: "vl_frete", label: "Frete", span: 2 })}
+            {renderNum({ k: "vl_seguro", label: "Seguro", span: 2 })}
+            {renderNum({ k: "vl_outro", label: "Outras Desp.", span: 2 })}
+            {renderNum({ k: "vl_total", label: "Total", span: 2 })}
+          </>
+            ))}
 
-          <Section title="ICMS">
-            <Num k="origem" label="Origem" span={1} />
-            <Txt k="cst_icms" label="CST" span={1} digits max={3} />
-            <Txt k="csosn" label="CSOSN" span={1} digits max={4} />
-            <Num k="mod_bc" label="Mod. BC" span={1} />
-            <Num k="vl_bc" label="BC ICMS" span={2} />
-            <Num k="pc_red_bc" label="Red. BC %" span={2} />
-            <Num k="pc_icms" label="ICMS %" span={2} />
-            <Num k="vl_icms" label="Vlr. ICMS" span={2} />
-            <Num k="pc_fcp" label="FCP %" span={2} />
-            <Num k="vl_fcp" label="Vlr. FCP" span={2} />
-            <Num k="vl_icms_deson" label="ICMS Deson." span={2} />
-          </Section>
+          {renderSection("ICMS", (
+            <>
+            {renderNum({ k: "origem", label: "Origem", span: 1 })}
+            {renderTxt({ k: "cst_icms", label: "CST", span: 1, digits: true, max: 3 })}
+            {renderTxt({ k: "csosn", label: "CSOSN", span: 1, digits: true, max: 4 })}
+            {renderNum({ k: "mod_bc", label: "Mod. BC", span: 1 })}
+            {renderNum({ k: "vl_bc", label: "BC ICMS", span: 2 })}
+            {renderNum({ k: "pc_red_bc", label: "Red. BC %", span: 2 })}
+            {renderNum({ k: "pc_icms", label: "ICMS %", span: 2 })}
+            {renderNum({ k: "vl_icms", label: "Vlr. ICMS", span: 2 })}
+            {renderNum({ k: "pc_fcp", label: "FCP %", span: 2 })}
+            {renderNum({ k: "vl_fcp", label: "Vlr. FCP", span: 2 })}
+            {renderNum({ k: "vl_icms_deson", label: "ICMS Deson.", span: 2 })}
+          </>
+            ))}
 
-          <Section title="ICMS-ST / FCP-ST / Crédito SN">
-            <Num k="mod_bc_st" label="Mod. BC ST" span={1} />
-            <Num k="pc_mva" label="MVA %" span={2} />
-            <Num k="vl_bc_st" label="BC ST" span={2} />
-            <Num k="pc_red_bc_st" label="Red. BC ST %" span={2} />
-            <Num k="pc_icms_st" label="ICMS-ST %" span={2} />
-            <Num k="vl_icms_st" label="Vlr. ICMS-ST" span={2} />
-            <Num k="pc_fcp_st" label="FCP-ST %" span={2} />
-            <Num k="vl_fcp_st" label="Vlr. FCP-ST" span={2} />
-            <Num k="pc_cred_sn" label="Créd. SN %" span={2} />
-            <Num k="vl_cred_sn" label="Vlr. Créd. SN" span={2} />
-          </Section>
+          {renderSection("ICMS-ST / FCP-ST / Crédito SN", (
+            <>
+            {renderNum({ k: "mod_bc_st", label: "Mod. BC ST", span: 1 })}
+            {renderNum({ k: "pc_mva", label: "MVA %", span: 2 })}
+            {renderNum({ k: "vl_bc_st", label: "BC ST", span: 2 })}
+            {renderNum({ k: "pc_red_bc_st", label: "Red. BC ST %", span: 2 })}
+            {renderNum({ k: "pc_icms_st", label: "ICMS-ST %", span: 2 })}
+            {renderNum({ k: "vl_icms_st", label: "Vlr. ICMS-ST", span: 2 })}
+            {renderNum({ k: "pc_fcp_st", label: "FCP-ST %", span: 2 })}
+            {renderNum({ k: "vl_fcp_st", label: "Vlr. FCP-ST", span: 2 })}
+            {renderNum({ k: "pc_cred_sn", label: "Créd. SN %", span: 2 })}
+            {renderNum({ k: "vl_cred_sn", label: "Vlr. Créd. SN", span: 2 })}
+          </>
+            ))}
 
-          <Section title="IPI">
-            <Txt k="cst_ipi" label="CST IPI" span={2} digits max={2} />
-            <Num k="vl_bc_ipi" label="BC IPI" span={2} />
-            <Num k="pc_ipi" label="IPI %" span={2} />
-            <Num k="vl_ipi" label="Vlr. IPI" span={2} />
-          </Section>
+          {renderSection("IPI", (
+            <>
+            {renderTxt({ k: "cst_ipi", label: "CST IPI", span: 2, digits: true, max: 2 })}
+            {renderNum({ k: "vl_bc_ipi", label: "BC IPI", span: 2 })}
+            {renderNum({ k: "pc_ipi", label: "IPI %", span: 2 })}
+            {renderNum({ k: "vl_ipi", label: "Vlr. IPI", span: 2 })}
+          </>
+            ))}
 
-          <Section title="PIS / COFINS">
-            <Txt k="cst_pis" label="CST PIS" span={2} digits max={2} />
-            <Num k="vl_bc_pis" label="BC PIS" span={2} />
-            <Num k="pc_pis" label="PIS %" span={2} />
-            <Num k="vl_pis" label="Vlr. PIS" span={2} />
-            <Txt k="cst_cofins" label="CST COFINS" span={2} digits max={2} />
-            <Num k="vl_bc_cofins" label="BC COFINS" span={2} />
-            <Num k="pc_cofins" label="COFINS %" span={2} />
-            <Num k="vl_cofins" label="Vlr. COFINS" span={2} />
-          </Section>
+          {renderSection("PIS / COFINS", (
+            <>
+            {renderTxt({ k: "cst_pis", label: "CST PIS", span: 2, digits: true, max: 2 })}
+            {renderNum({ k: "vl_bc_pis", label: "BC PIS", span: 2 })}
+            {renderNum({ k: "pc_pis", label: "PIS %", span: 2 })}
+            {renderNum({ k: "vl_pis", label: "Vlr. PIS", span: 2 })}
+            {renderTxt({ k: "cst_cofins", label: "CST COFINS", span: 2, digits: true, max: 2 })}
+            {renderNum({ k: "vl_bc_cofins", label: "BC COFINS", span: 2 })}
+            {renderNum({ k: "pc_cofins", label: "COFINS %", span: 2 })}
+            {renderNum({ k: "vl_cofins", label: "Vlr. COFINS", span: 2 })}
+          </>
+            ))}
 
-          <Section title="IBS / CBS / IS (Reforma)">
-            <Txt k="cst_ibs" label="CST IBS" span={2} digits max={3} />
-            <Num k="pc_ibs" label="IBS %" span={2} />
-            <Num k="vl_ibs" label="Vlr. IBS" span={2} />
-            <Txt k="cst_cbs" label="CST CBS" span={2} digits max={3} />
-            <Num k="pc_cbs" label="CBS %" span={2} />
-            <Num k="vl_cbs" label="Vlr. CBS" span={2} />
-            <Txt k="cst_is" label="CST IS" span={2} digits max={3} />
-            <Num k="pc_is" label="IS %" span={2} />
-            <Num k="vl_is" label="Vlr. IS" span={2} />
-          </Section>
+          {renderSection("IBS / CBS / IS (Reforma)", (
+            <>
+            {renderTxt({ k: "cst_ibs", label: "CST IBS", span: 2, digits: true, max: 3 })}
+            {renderNum({ k: "pc_ibs", label: "IBS %", span: 2 })}
+            {renderNum({ k: "vl_ibs", label: "Vlr. IBS", span: 2 })}
+            {renderTxt({ k: "cst_cbs", label: "CST CBS", span: 2, digits: true, max: 3 })}
+            {renderNum({ k: "pc_cbs", label: "CBS %", span: 2 })}
+            {renderNum({ k: "vl_cbs", label: "Vlr. CBS", span: 2 })}
+            {renderTxt({ k: "cst_is", label: "CST IS", span: 2, digits: true, max: 3 })}
+            {renderNum({ k: "pc_is", label: "IS %", span: 2 })}
+            {renderNum({ k: "vl_is", label: "Vlr. IS", span: 2 })}
+          </>
+            ))}
 
           <div className="flex gap-2 justify-end pt-2 sticky bottom-0 bg-card border-t border-border">
-            <button onClick={handleSalvar} className="px-4 py-2 text-xs font-bold rounded border border-border bg-primary text-primary-foreground hover:bg-primary/90 transition-all">
+            <button type="button" onClick={handleSalvar} className="px-4 py-2 text-xs font-bold rounded border border-border bg-primary text-primary-foreground hover:bg-primary/90 transition-all">
               Salvar
             </button>
-            <button onClick={() => { setXMode("view"); setXCurrentIdx(null); }} className="px-4 py-2 text-xs font-bold rounded border border-border bg-card text-destructive hover:bg-accent transition-all">
+            <button type="button" onClick={() => { setXMode("view"); setXCurrentIdx(null); }} className="px-4 py-2 text-xs font-bold rounded border border-border bg-card text-destructive hover:bg-accent transition-all">
               Cancelar
             </button>
           </div>
