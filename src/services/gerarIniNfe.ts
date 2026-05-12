@@ -144,9 +144,10 @@ export function gerarIniNfe(params: GerarIniParams): string {
     const vTot = Number(it.vl_total || 0);
 
     linhas.push(`[Produto${nr}]`);
+    const gtinFiscal = normalizarGtinFiscal(it.gtin);
     linhas.push(`cProd=${it.produto_id || String(i + 1).padStart(6, '0')}`);
-    linhas.push(`cEAN=${it.gtin || 'SEM GTIN'}`);
-    linhas.push(`cEANTrib=${it.gtin || 'SEM GTIN'}`);
+    linhas.push(`cEAN=${gtinFiscal}`);
+    linhas.push(`cEANTrib=${gtinFiscal}`);
     linhas.push(`xProd=${it.nm_produto || ''}`);
     linhas.push(`NCM=${it.ncm || ''}`);
     if (it.cest) linhas.push(`CEST=${it.cest}`);
@@ -323,6 +324,13 @@ export function gerarIniNfe(params: GerarIniParams): string {
 
 function limparNumeros(s: string): string {
   return (s || '').replace(/\D/g, '');
+}
+
+function normalizarGtinFiscal(valor: string): string {
+  const raw = String(valor || '').trim().toUpperCase();
+  if (!raw || raw === 'SEM GTIN') return 'SEM GTIN';
+  const digitos = raw.replace(/\D/g, '');
+  return /^(\d{8}|\d{12}|\d{13}|\d{14})$/.test(digitos) ? digitos : 'SEM GTIN';
 }
 
 function normalizarCidadeFiscal(cidade: any, registro: any = {}, fallback: any = {}) {
