@@ -651,8 +651,8 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card">
-        <div className="flex items-center gap-4 text-sm">
+      <div className="flex items-center justify-between gap-2 px-2 md:px-4 py-2 border-b border-border bg-card overflow-x-auto">
+        <div className="hidden md:flex items-center gap-4 text-sm">
           <span className="font-semibold text-primary">PDV</span>
           <span className="text-muted-foreground">Caixa: <strong className="text-blue-600 dark:text-blue-400">{caixa.nome}</strong></span>
           <span className="text-muted-foreground">Data: <strong className="text-foreground">{new Date(dtMovimento + "T00:00:00").toLocaleDateString("pt-BR")}</strong></span>
@@ -664,18 +664,36 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
             <span className="text-muted-foreground whitespace-nowrap">NFC-e: <strong className="text-amber-600 dark:text-amber-400">{caixa.nfce_nome}</strong></span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        {/* Quantidade próximo lançamento (apenas mobile) */}
+        <div className="flex md:hidden items-center gap-1 shrink-0">
+          <span className="text-[10px] text-muted-foreground uppercase font-semibold mr-1">Qt</span>
+          <button onClick={() => setXQtProx(q => Math.max(0.001, +(q - 1).toFixed(3)))}
+            className="w-8 h-8 border border-border rounded text-lg font-bold hover:bg-accent leading-none">−</button>
+          <input
+            type="text"
+            value={XQtProx.toString().replace(".", ",")}
+            onChange={(e) => {
+              const n = parseFloat(e.target.value.replace(",", "."));
+              if (!isNaN(n) && n > 0) setXQtProx(n);
+              else if (e.target.value === "") setXQtProx(0);
+            }}
+            className="w-14 h-8 text-center border border-border rounded text-sm bg-white text-black font-bold"
+          />
+          <button onClick={() => setXQtProx(q => +(q + 1).toFixed(3))}
+            className="w-8 h-8 border border-border rounded text-lg font-bold hover:bg-accent leading-none">+</button>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
           <button onClick={() => setXOpenFuncoes(true)}
             className="text-sm px-3 py-1 rounded border border-amber-400 text-amber-700 dark:text-amber-400 flex items-center gap-1 hover:bg-amber-50 dark:hover:bg-amber-950/30">
-            <Wrench size={14} /> Funções
+            <Wrench size={14} /> <span className="hidden sm:inline">Funções</span>
           </button>
           <button onClick={() => setXOpenConfig(true)}
             className="text-sm px-3 py-1 rounded border border-border flex items-center gap-1 hover:bg-accent">
-            <Settings size={14} /> Configurar
+            <Settings size={14} /> <span className="hidden sm:inline">Configurar</span>
           </button>
           <button onClick={onSair}
             className="text-sm px-3 py-1 rounded border border-rose-300 text-rose-700 dark:text-rose-400 flex items-center gap-1 hover:bg-rose-50 dark:hover:bg-rose-950/30">
-            <LogOut size={14} /> Sair
+            <LogOut size={14} /> <span className="hidden sm:inline">Sair</span>
           </button>
         </div>
       </div>
