@@ -435,10 +435,8 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
           <h2 className="text-sm font-semibold">Meios de Pagamento e Prazos</h2>
         </div>
 
-        <div className="md:p-3 overflow-hidden">
-          <div className="flex overflow-x-auto overflow-y-auto snap-x snap-mandatory scroll-smooth h-full md:h-auto md:overflow-visible md:grid md:grid-cols-12 md:gap-x-10 md:gap-y-2 md:items-end">
-            {/* === MOBILE LEFT PANEL / DESKTOP: interleaved === */}
-            <div className="w-full shrink-0 snap-start basis-full p-3 flex flex-col gap-2 overflow-y-auto md:basis-auto md:w-auto md:shrink md:p-0 md:contents md:gap-0">
+        <div className="md:p-3 overflow-hidden flex-1 min-h-0">
+          <div className="h-full grid grid-cols-[repeat(2,100vw)] auto-rows-min overflow-x-auto overflow-y-auto snap-x snap-mandatory scroll-smooth md:h-auto md:grid-cols-12 md:gap-x-10 md:gap-y-2 md:items-end md:overflow-visible md:auto-rows-auto">
             {/* Row 1: Condição vs Total Pedido */}
             <div className="col-span-7">
               <label className="text-[10px] font-bold text-muted-foreground uppercase leading-none mb-1 block">Condição</label>
