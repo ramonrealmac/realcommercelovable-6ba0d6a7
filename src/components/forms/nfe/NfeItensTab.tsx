@@ -12,6 +12,9 @@ type XFormItem = Partial<INfeItem> & Record<string, XFieldValue>;
 type XItemRow = XFormItem & { nfe_item_id?: number; produto_id?: number | null; _produto_nome?: string | null };
 type XPayload = Record<string, string | number | null>;
 type XProdutoOption = { produto_id: number; nome: string; referencia?: string };
+type XTextInputProps = { k: string; label: string; span?: number; digits?: boolean; max?: number; upper?: boolean; right?: boolean };
+type XNumInputProps = { k: string; label: string; span?: number; readOnly?: boolean };
+type XSectionProps = { title: string; children: React.ReactNode };
 
 const parseNum = (XValue: unknown) => {
   if (XValue === undefined || XValue === null || XValue === "") return 0;
