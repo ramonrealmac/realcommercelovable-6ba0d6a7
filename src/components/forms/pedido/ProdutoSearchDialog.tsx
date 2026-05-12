@@ -325,18 +325,18 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
     push("codigo", <span className="font-mono text-blue-600 dark:text-blue-400">#{r.produto_id}</span>);
     push("referencia", r.referencia ? <span className="font-mono text-muted-foreground">Ref: {r.referencia}</span> : null);
     push("gtin", r.gtin ? <span className="font-mono text-muted-foreground">GTIN: {r.gtin}</span> : null);
-    push("nome", <span className="text-primary font-medium break-words">{r.nome}</span>);
+    push("nome", <span className="text-blue-800 dark:text-blue-300 font-medium break-words">{r.nome}</span>);
     push("unidade", r.unidade_id ? <span className="text-muted-foreground">{r.unidade_id}</span> : null);
 
     const showPromo = r.st_promo && r.preco_promocional > 0;
     push("preco",
       showPromo
         ? <span className="line-through text-muted-foreground font-mono">R$ {fmtNum(r.preco_venda)}</span>
-        : <span className="text-foreground font-mono">R$ {fmtNum(r.preco_venda)}</span>
+        : <span className="text-black dark:text-white font-mono">R$ {fmtNum(r.preco_venda)}</span>
     );
     push("preco_promo",
       showPromo
-        ? <span className="text-green-600 dark:text-green-400 font-semibold font-mono">Promo R$ {fmtNum(r.preco_promocional)}</span>
+        ? <span className="text-green-600 dark:text-green-400 font-semibold font-mono">R$ {fmtNum(r.preco_promocional)}</span>
         : null
     );
 
@@ -461,11 +461,9 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
               Estoque por depósito {XSelectedIdx != null ? `— ${XRows[XSelectedIdx]?.nome}` : ""}
             </div>
             <div className="grid grid-cols-12 gap-2 px-3 py-1.5 bg-muted text-[11px] font-semibold text-muted-foreground">
-              <div className="col-span-1 text-right">Cód.</div>
-              <div className="col-span-3">Depósito</div>
-              <div className="col-span-3">Empresa</div>
+              <div className="col-span-6">Depósito</div>
               <div className="col-span-2 text-right">Físico</div>
-              <div className="col-span-1 text-right">Reserv.</div>
+              <div className="col-span-2 text-right">Reserv.</div>
               <div className="col-span-2 text-right">Disponível</div>
             </div>
             <div className="overflow-y-auto" style={{ maxHeight: "126px" }}>
@@ -491,11 +489,9 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
                     className={`grid grid-cols-12 gap-2 px-3 py-1 text-[11px] border-t border-border cursor-pointer hover:bg-accent/50 ${zebra}`}
                     title="Duplo clique: seleciona produto e depósito"
                   >
-                    <div className="col-span-1 text-right font-mono">{d.deposito_id}</div>
-                    <div className="col-span-3 truncate">{d.deposito_nome}</div>
-                    <div className="col-span-3 truncate">{d.empresa_nome}</div>
+                    <div className="col-span-6 truncate">{d.deposito_nome}</div>
                     <div className="col-span-2 text-right font-mono">{fmtNum(d.estoque_fisico, 3)}</div>
-                    <div className="col-span-1 text-right font-mono text-muted-foreground">{fmtNum(d.estoque_reservado, 3)}</div>
+                    <div className="col-span-2 text-right font-mono text-muted-foreground">{fmtNum(d.estoque_reservado, 3)}</div>
                     <div className={`col-span-2 text-right font-mono rounded px-1 ${corEstoqueDep(d)}`}>
                       {fmtNum(d.estoque_disponivel, 3)}
                     </div>
