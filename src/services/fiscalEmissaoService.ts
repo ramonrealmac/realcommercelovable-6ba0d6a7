@@ -361,13 +361,92 @@ export const fiscalEmissaoService = {
   },
 
   /**
+   * Cache simples de timeout por empresa (evita refazer a query a cada operação).
+   * Chave: empresa_id; valor: { ts, segundos }.
+   */
+  _timeoutCache: new Map<number, { ts: number; segundos: number }>(),
+
+  /**
+   * Lê o parâmetro `nr_timeout_nfe` da fiscal_config (em segundos).
+   * Cache de 30s por empresa. Fallback: 60 segundos.
+   */
+  async obterTimeoutFiscalSeg(empresaId: number): Promise<number> {
+    if (!empresaId) return 60;
+    const cached = (this._timeoutCache as any).get(empresaId);
+    if (cached && Date.now() - cached.ts < 30000) return cached.segundos;
+    try {
+      const { data } = await db.from("fiscal_config").select("nr_timeout_nfe").eq("empresa_id", empresaId).maybeSingle();
+      const s = Math.max(10, Math.min(600, Number(data?.nr_timeout_nfe) || 60));
+      (this._timeoutCache as any).set(empresaId, { ts: Date.now(), segundos: s });
+      return s;
+    } catch {
+      return 60;
+    }
+  },
+
+  /**
+   * Invalida o cache de timeout (chamar quando a config for atualizada).
+   */
+  invalidarTimeoutCache(empresaId?: number) {
+    if (empresaId) (this._timeoutCache as any).delete(empresaId);
+    else (this._timeoutCache as any).clear();
+  },
+
+  /**
    * Aguarda um fiscal_evento finalizar (CONCLUIDO/ERRO) consultando por polling.
    * Retorna a resposta parseada do worker.
+   *
+   * Assinatura compatível:
+   *  - aguardarEvento(eventoId, timeoutMs)
+   *  - aguardarEvento(eventoId, { timeoutMs?, empresaId?, onTick? })
+   *  - aguardarEvento(eventoId, undefined, onTick, empresaId)  (variação utilitária)
+   *
+   * Quando `timeoutMs` é omitido e `empresaId` é informado, usa
+   * `nr_timeout_nfe` da `fiscal_config`. Caso contrário, 60s.
+   *
+   * `onTick(segundosRestantes)` é disparado a cada 2 segundos para a UI.
    */
-  async aguardarEvento(eventoId: number, timeoutMs: number = 60000): Promise<{ success: boolean; resposta?: any; status?: string; mensagem?: string }> {
+  async aguardarEvento(
+    eventoId: number,
+    optsOrTimeout?: number | { timeoutMs?: number; empresaId?: number; onTick?: (segundosRestantes: number) => void },
+    onTick?: (segundosRestantes: number) => void,
+    empresaId?: number,
+  ): Promise<{ success: boolean; resposta?: any; status?: string; mensagem?: string }> {
+    // Normaliza parâmetros (aceita assinatura antiga e nova).
+    let timeoutMs: number | undefined;
+    let tickCb: ((s: number) => void) | undefined = onTick;
+    let empId: number | undefined = empresaId;
+    if (typeof optsOrTimeout === "number") {
+      timeoutMs = optsOrTimeout;
+    } else if (optsOrTimeout && typeof optsOrTimeout === "object") {
+      timeoutMs = optsOrTimeout.timeoutMs;
+      tickCb = optsOrTimeout.onTick || tickCb;
+      empId = optsOrTimeout.empresaId || empId;
+    }
+    if (!timeoutMs) {
+      const seg = empId ? await this.obterTimeoutFiscalSeg(empId) : 60;
+      timeoutMs = seg * 1000;
+    }
+    const segundosTotais = Math.ceil(timeoutMs / 1000);
+
+    const inicio = Date.now();
     const intervalo = 1000;
-    const tentativas = Math.ceil(timeoutMs / intervalo);
-    for (let i = 0; i < tentativas; i++) {
+    let proximoTick = 0;
+
+    if (tickCb) tickCb(segundosTotais);
+
+    while (true) {
+      const decorridoMs = Date.now() - inicio;
+      if (decorridoMs >= timeoutMs) break;
+
+      // Tick a cada 2 segundos
+      const decorridoSeg = Math.floor(decorridoMs / 1000);
+      if (tickCb && decorridoSeg >= proximoTick) {
+        const restante = Math.max(0, segundosTotais - decorridoSeg);
+        try { tickCb(restante); } catch { /* noop */ }
+        proximoTick = decorridoSeg + 2;
+      }
+
       await new Promise(r => setTimeout(r, intervalo));
       const { data: ev } = await db
         .from("fiscal_evento")
@@ -379,6 +458,7 @@ export const fiscalEmissaoService = {
         let resposta: any = null;
         try { resposta = typeof ev.resposta === "string" ? JSON.parse(ev.resposta) : ev.resposta; } catch { /* ignore */ }
         const ok = (ev.status === "EMITIDO" || ev.status === "CONCLUIDO") && !!resposta?.sucesso;
+        if (tickCb) { try { tickCb(0); } catch { /* noop */ } }
         return {
           success: ok,
           status: ev.status,
@@ -387,7 +467,17 @@ export const fiscalEmissaoService = {
         };
       }
     }
-    return { success: false, status: "TIMEOUT", mensagem: "Tempo esgotado aguardando o Fiscal Worker." };
+
+    // Timeout — marca o evento (best effort) e retorna.
+    const msg = `Tempo limite excedido (${segundosTotais}s) aguardando o Fiscal Worker.`;
+    try {
+      await db.from("fiscal_evento")
+        .update({ status: "TIMEOUT", mensagem_erro: msg })
+        .eq("id", eventoId)
+        .in("status", ["PENDENTE", "PROCESSANDO"]);
+    } catch { /* noop */ }
+    if (tickCb) { try { tickCb(0); } catch { /* noop */ } }
+    return { success: false, status: "TIMEOUT", mensagem: msg };
   },
 
   /**
