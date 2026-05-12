@@ -559,7 +559,7 @@ export const fiscalEmissaoService = {
 
       if (evErr) return { success: false, message: evErr.message };
 
-      const res = await this.aguardarEvento(evento.id, 15000);
+      const res = await this.aguardarEvento(evento.id, { empresaId });
       if (res.success && res.resposta?.pdf_base64) {
         return { success: true, pdf_base64: res.resposta.pdf_base64 };
       }
