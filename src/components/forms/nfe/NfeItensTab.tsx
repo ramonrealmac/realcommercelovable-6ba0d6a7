@@ -117,7 +117,7 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
 
   // Helpers para inputs reutilizáveis
   const Txt = ({ k, label, span = 2, right = false, bold = false, accent = "" }: any) => (
-    <div className={`col-span-${span}`}>
+    <div style={{ gridColumn: `span ${span} / span ${span}` }}>
       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{label}</label>
       <input
         type="text"
@@ -128,7 +128,7 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
     </div>
   );
   const Num = ({ k, label, span = 2, accent = "" }: any) => (
-    <div className={`col-span-${span}`}>
+    <div style={{ gridColumn: `span ${span} / span ${span}` }}>
       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{label}</label>
       <input
         type="text"
