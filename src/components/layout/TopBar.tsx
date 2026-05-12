@@ -87,6 +87,14 @@ const TopBar = () => {
 
       <ChatInternoTopBarButton />
 
+      <button
+        onClick={toggleChatBot}
+        className="p-1.5 hover:bg-foreground/10 rounded"
+        title={XChatBotVisible ? "Ocultar agente RealSys" : "Mostrar agente RealSys"}
+      >
+        {XChatBotVisible ? <Bot size={20} /> : <BotOff size={20} className="opacity-60" />}
+      </button>
+
       {/* User avatar + dropdown */}
       <div className="relative" ref={XMenuRef}>
         <button
