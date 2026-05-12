@@ -261,7 +261,10 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
     const tid = toast.loading("Enviando cancelamento para SEFAZ...");
     console.log("[ListaNfeEmitidaForm] Cancelando nota:", XCancelTarget);
     try {
+      const totalSeg = await fiscalEmissaoService.obterTimeoutFiscalSeg(XEmpresaId);
+      setXProg({ open: true, titulo: "Cancelando documento...", total: totalSeg });
       const res = await fiscalEmissaoService.cancelarDocumento(XCancelTarget.nfe_cabecalho_id, XEmpresaId, XCancelJustificativa);
+      setXProg(p => ({ ...p, open: false }));
       if (res.success) {
         toast.success("Nota cancelada com sucesso!", { id: tid });
         setXCancelDialogOpen(false);
@@ -270,6 +273,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
         toast.error(res.message || "Falha ao cancelar nota.", { id: tid });
       }
     } catch (e: any) {
+      setXProg(p => ({ ...p, open: false }));
       toast.error(e.message, { id: tid });
     } finally {
       setXCancelando(false);
