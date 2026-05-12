@@ -737,7 +737,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
                   <div key={it.movimento_item_id}
                     className={`px-3 py-2 border-b border-border ${idx % 2 ? "bg-muted/40" : ""}`}>
                     <div className="flex-1">
-                      <div className="font-medium truncate text-blue-700 dark:text-blue-400">{it.nm_produto}</div>
+                      <div className="font-medium break-words text-blue-700 dark:text-blue-400">{it.nm_produto}</div>
                       <div className="text-muted-foreground" style={{ fontSize: `${XFonteProd - 1}px` }}>
                         {fmt(Number(it.qt_movimento))} {it.unidade_id || ""} × R$ {fmt(Number(it.vl_und_produto))} = <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">R$ {fmt(Number(it.vl_movimento || it.qt_movimento * it.vl_und_produto))}</span>
                       </div>
