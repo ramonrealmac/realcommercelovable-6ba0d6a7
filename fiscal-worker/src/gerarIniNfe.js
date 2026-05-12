@@ -295,15 +295,8 @@ export function gerarIniNfe(params) {
   if (isNFCe) {
     const idCsc = String(configItem?.id_csc || '').trim();
     const csc = String(configItem?.csc || '').trim();
-    // Validação para evitar Access Violation no DLL ACBrLib quando CSC é placeholder/inválido.
-    // CSC real tem 36 caracteres (UUID-like) e IdCSC normalmente 6 dígitos.
-    if (!idCsc || !csc || csc.length < 16 || /^0+$/.test(csc.replace(/\D/g, ''))) {
-      throw new Error(
-        `CSC/IdCSC inválido para emissão de NFC-e (modelo 65). ` +
-        `Configure o Token CSC real (mínimo 16 caracteres, fornecido pela SEFAZ-${ufEmit}) ` +
-        `em Configuração Fiscal > Item ${modelo}/${serie}. ` +
-        `Valores recebidos: IdCSC="${idCsc}", CSC com ${csc.length} caracteres.`
-      );
+    if (!idCsc || !csc) {
+      console.warn(`[gerarIniNfe] Atenção: NFC-e sem IdCSC/CSC configurado (item modelo ${modelo}/${serie}).`);
     }
     linhas.push('[NFCe]');
     linhas.push(`IdCSC=${idCsc}`);
