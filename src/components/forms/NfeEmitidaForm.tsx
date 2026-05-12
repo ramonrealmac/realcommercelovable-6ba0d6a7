@@ -180,6 +180,31 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                   <label className="text-xs text-muted-foreground">Observações da NF-e</label>
                   <textarea readOnly={ro} value={record.obs_nf ?? ""} onChange={e => setField("obs_nf" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-2 text-sm min-h-[100px]" />
                 </div>
+
+                {/* Cancelamento */}
+                <div className="border border-border rounded p-3 bg-card">
+                  <p className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">Cancelamento</p>
+                  <div className="grid grid-cols-12 gap-3">
+                    <div className="col-span-3">
+                      <label className="text-xs text-muted-foreground">Dt. Cancelamento</label>
+                      <input readOnly value={(record as any).dt_cancelamento ? new Date((record as any).dt_cancelamento).toLocaleString("pt-BR") : ""} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary" />
+                    </div>
+                    <div className="col-span-3">
+                      <label className="text-xs text-muted-foreground">Protocolo Cancel.</label>
+                      <input readOnly value={(record as any).protocolo_cancelamento ?? ""} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary font-mono" />
+                    </div>
+                    <div className="col-span-6">
+                      <label className="text-xs text-muted-foreground">Motivo Cancelamento</label>
+                      <input readOnly={ro} value={(record as any).motivo_cancelamento ?? ""} onChange={e => setField("motivo_cancelamento" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* XML */}
+                <div>
+                  <label className="text-xs text-muted-foreground">XML da NF-e</label>
+                  <textarea readOnly value={record.xml_nf ?? ""} className="w-full border border-border rounded px-2 py-2 text-[10px] font-mono min-h-[120px] bg-secondary/50" />
+                </div>
               </div>
             );
           },
