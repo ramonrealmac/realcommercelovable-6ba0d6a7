@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from "react";
-import { Menu, LogOut, KeyRound, Shield, Users, UserCog } from "lucide-react";
+import { Menu, LogOut, KeyRound, Shield, Users, UserCog, Bot, BotOff } from "lucide-react";
 import { useAppContext } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import ShortcutsBar from "./ShortcutsBar";
 import ChatInternoTopBarButton from "@/components/chat-interno/ChatInternoTopBarButton";
 
 const TopBar = () => {
-  const { XEmpresaId, setXEmpresaId, setXEmpresaMatrizId, XEmpresas, toggleSidebar, openTab } = useAppContext();
+  const { XEmpresaId, setXEmpresaId, setXEmpresaMatrizId, XEmpresas, toggleSidebar, openTab, XChatBotVisible, toggleChatBot } = useAppContext();
 
   const [XMenuOpen, setXMenuOpen] = useState(false);
   const [XUserEmail, setXUserEmail] = useState("");
@@ -86,6 +86,14 @@ const TopBar = () => {
       <div className="hidden md:block flex-1" />
 
       <ChatInternoTopBarButton />
+
+      <button
+        onClick={toggleChatBot}
+        className="p-1.5 hover:bg-foreground/10 rounded"
+        title={XChatBotVisible ? "Ocultar agente RealSys" : "Mostrar agente RealSys"}
+      >
+        {XChatBotVisible ? <Bot size={20} /> : <BotOff size={20} className="opacity-60" />}
+      </button>
 
       {/* User avatar + dropdown */}
       <div className="relative" ref={XMenuRef}>

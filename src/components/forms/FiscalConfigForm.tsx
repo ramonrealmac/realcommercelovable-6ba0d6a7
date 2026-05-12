@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAppContext } from "@/contexts/AppContext";
 import MonitorFiscalLogDialog from "./MonitorFiscalLogDialog";
 import ClienteSearchDialog, { IClienteRow } from "./pedido/ClienteSearchDialog";
+import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,7 @@ interface FiscalConfigFormValues {
   email_assunto_nfe: string;
   email_corpo_nfe: string;
   pasta_arquivos_fiscais: string;
+  nr_timeout_nfe: number;
 }
 
 const FiscalConfigForm = () => {
@@ -66,7 +68,8 @@ const FiscalConfigForm = () => {
       email_smtp_tls: true,
       email_assunto_nfe: "NF-e emitida: [CHAVE]",
       email_corpo_nfe: "Olá, segue em anexo a NF-e e o DANFE referente à sua compra.",
-      pasta_arquivos_fiscais: ""
+      pasta_arquivos_fiscais: "",
+      nr_timeout_nfe: 60
     }
   });
 
@@ -84,7 +87,7 @@ const FiscalConfigForm = () => {
             tipo_certificado, certificado, senha_certificado, ambiente_nfe, cliente_padrao_id,
             email_smtp_host, email_smtp_port, email_smtp_user, email_smtp_pass, 
             email_smtp_ssl, email_smtp_tls, email_assunto_nfe, email_corpo_nfe,
-            pasta_arquivos_fiscais
+            pasta_arquivos_fiscais, nr_timeout_nfe
           `)
           .eq("empresa_id", XEmpresaId)
           .maybeSingle();
@@ -108,7 +111,8 @@ const FiscalConfigForm = () => {
             email_smtp_tls: !!data.email_smtp_tls,
             email_assunto_nfe: data.email_assunto_nfe || "NF-e emitida: [CHAVE]",
             email_corpo_nfe: data.email_corpo_nfe || "Olá, segue em anexo a NF-e e o DANFE referente à sua compra.",
-            pasta_arquivos_fiscais: (data as any).pasta_arquivos_fiscais || ""
+            pasta_arquivos_fiscais: (data as any).pasta_arquivos_fiscais || "",
+            nr_timeout_nfe: Number((data as any).nr_timeout_nfe) || 60
           });
 
           if (data.cliente_padrao_id) {
@@ -141,7 +145,8 @@ const FiscalConfigForm = () => {
             email_smtp_tls: true,
             email_assunto_nfe: "NF-e emitida: [CHAVE]",
             email_corpo_nfe: "Olá, segue em anexo a NF-e e o DANFE referente à sua compra.",
-            pasta_arquivos_fiscais: ""
+            pasta_arquivos_fiscais: "",
+            nr_timeout_nfe: 60
           });
         }
       } catch (err: any) {
@@ -179,7 +184,8 @@ const FiscalConfigForm = () => {
         email_smtp_tls: values.email_smtp_tls,
         email_assunto_nfe: values.email_assunto_nfe,
         email_corpo_nfe: values.email_corpo_nfe,
-        pasta_arquivos_fiscais: values.pasta_arquivos_fiscais || null
+        pasta_arquivos_fiscais: values.pasta_arquivos_fiscais || null,
+        nr_timeout_nfe: Math.max(10, Math.min(600, Number(values.nr_timeout_nfe) || 60))
       };
 
       if (existing) {
@@ -198,6 +204,7 @@ const FiscalConfigForm = () => {
         if (error) throw error;
       }
       toast.success("Configurações salvas com sucesso!");
+      fiscalEmissaoService.invalidarTimeoutCache(XEmpresaId);
     } catch (err: any) {
       toast.error("Erro ao salvar: " + err.message);
     } finally {
@@ -496,6 +503,41 @@ const FiscalConfigForm = () => {
                           <FormLabel>Pasta Base</FormLabel>
                           <FormControl>
                             <Input placeholder="Ex: C:\RealCommerce\Fiscal ou /var/realcommerce/fiscal" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-sm">Tempo Limite de Operações Fiscais</CardTitle>
+                    <CardDescription>
+                      Tempo máximo (em segundos) que o sistema aguardará a resposta do Fiscal Worker /
+                      SEFAZ em emissão de NFe/NFCe, cancelamento, inutilização e envio de e-mail.
+                      Após esse tempo a operação retorna como TIMEOUT e libera o sistema.
+                      Mínimo 10s, máximo 600s.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <FormField
+                      control={form.control}
+                      name="nr_timeout_nfe"
+                      render={({ field }) => (
+                        <FormItem className="max-w-[220px]">
+                          <FormLabel>Timeout (segundos)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={10}
+                              max={600}
+                              step={5}
+                              placeholder="60"
+                              {...field}
+                              onChange={(e) => field.onChange(Number(e.target.value))}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

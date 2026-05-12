@@ -17,6 +17,7 @@ interface IClienteInfo { id: number; cnpj: string; razao: string; }
 
 const XGridCols: IGridColumn[] = [
   { key: "nfe_cabecalho_id", label: "ID",      width: "60px",  align: "right" },
+  { key: "pedido_id",        label: "Pedido",  width: "80px",  align: "right", render: r => r.pedido_id || r.movimento_id || "" },
   { key: "tp_nf",            label: "Tipo",    width: "70px",  render: r => r.tp_nf === 0 ? "Entrada" : "Saída" },
   { key: "nr_nota",          label: "Nota",    width: "90px" },
   { key: "serie",            label: "Série",   width: "50px",  align: "center" },
@@ -221,6 +222,10 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
               <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">ID</label>
                 <input readOnly value={record.nfe_cabecalho_id ?? (mode === "insert" ? "(Novo)" : "")} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right" />
+              </div>
+              <div className="col-span-1">
+                <label className="text-xs text-muted-foreground">Pedido</label>
+                <input readOnly value={(record as any).pedido_id ?? (record as any).movimento_id ?? ""} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right" title="Nº do pedido (movimento) que originou esta nota" />
               </div>
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Tipo de Nota</label>

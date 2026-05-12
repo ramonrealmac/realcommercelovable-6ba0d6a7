@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import FiscalEmailDialog from "./FiscalEmailDialog";
+import FiscalProgressDialog from "@/components/fiscal/FiscalProgressDialog";
 import { supabase } from "@/integrations/supabase/client";
 
 
@@ -92,6 +93,9 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
   const [XNfeId, setXNfeId] = React.useState<number | null>(null);
   const [XLastPdf, setXLastPdf] = React.useState<string | null>(null);
   const [XEmailDialogOpen, setXEmailDialogOpen] = React.useState(false);
+  const [XProg, setXProg] = React.useState<{ open: boolean; titulo: string; total: number; restante: number }>({
+    open: false, titulo: "", total: 60, restante: 60
+  });
 
   const handleVisualizarFiscal = () => {
     if (!XLastPdf) {
@@ -120,6 +124,53 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
     if (!dados?.movimento_id) return;
 
     try {
+      // 0. Verifica se já existe QUALQUER documento fiscal vinculado a este pedido
+      const { data: existente } = await supabase
+        .from("fiscal_nfe_cabecalho")
+        .select("nfe_cabecalho_id, c_stat, x_motivo, modelo")
+        .eq("movimento_id", dados.movimento_id)
+        .eq("excluido", false)
+        .order("nfe_cabecalho_id", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existente?.nfe_cabecalho_id) {
+        const cStat = Number(existente.c_stat || 0);
+        const autorizada = cStat === 100 || cStat === 150;
+        const mesmoModelo = String(existente.modelo) === (tipo === "NFE" ? "55" : "65");
+        if (autorizada && mesmoModelo) {
+          setXSalvando(true);
+          setXStatus("Reemitindo DANFE da nota já autorizada...");
+          setXNfeId(existente.nfe_cabecalho_id);
+          const impRes = await fiscalEmissaoService.imprimirDocumento(existente.nfe_cabecalho_id, empresaId);
+          setXSalvando(false);
+          setXStatus("");
+          if (impRes.success && impRes.pdf_base64) {
+            setXLastPdf(impRes.pdf_base64);
+            try {
+              const bc = atob(impRes.pdf_base64);
+              const arr = new Uint8Array(bc.length);
+              for (let i = 0; i < bc.length; i++) arr[i] = bc.charCodeAt(i);
+              const url = URL.createObjectURL(new Blob([arr], { type: "application/pdf" }));
+              window.open(url, "danfe_view", "_blank");
+            } catch {}
+            toast.success("DANFE reemitido (nota já autorizada).");
+          } else {
+            toast.error("Falha ao reemitir DANFE: " + (impRes.message || "erro"));
+          }
+          return;
+        } else {
+          const modLbl = String(existente.modelo) === "55" ? "NFe" : "NFCe";
+          toast.error(
+            autorizada
+              ? `Este pedido já possui ${modLbl} autorizada. Não é permitido emitir outro documento fiscal para a mesma venda.`
+              : `Já existe ${modLbl} para este pedido (status ${cStat || "—"}: ${existente.x_motivo || "pendente"}). Corrija pelo Gerenciador de NF-e.`,
+            { duration: 8000 }
+          );
+          return;
+        }
+      }
+
       setXSalvando(true);
       setXStatus(`Gerando ${tipo} e enviando ao Fiscal Worker...`);
       const res = await fiscalEmissaoService.gerarDocumentoFiscalFromMovimento(
@@ -137,7 +188,13 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
       }
 
       setXStatus(`Aguardando autorização da SEFAZ...`);
-      const ret = await fiscalEmissaoService.aguardarEvento(res.fiscal_evento_id, 90000);
+      const totalSeg = await fiscalEmissaoService.obterTimeoutFiscalSeg(empresaId);
+      setXProg({ open: true, titulo: `Emitindo ${tipo}...`, total: totalSeg, restante: totalSeg });
+      const ret = await fiscalEmissaoService.aguardarEvento(res.fiscal_evento_id, {
+        empresaId,
+        onTick: (s) => setXProg(p => ({ ...p, restante: s })),
+      });
+      setXProg(p => ({ ...p, open: false }));
 
       if (ret.success) {
         toast.success(`${tipo} autorizada!`);
@@ -216,26 +273,53 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
 
   const cards = [
     {
-      key: "nfe", label: "NFe", desc: "Nota Fiscal Eletrônica", icon: <FileCode2 size={28} />, color: "text-amber-600",
-      action: () => handleGerarFiscal("NFE"), enabled: true
-    },
-    {
-      key: "nfce", label: "NFCe", desc: "Nota de Consumidor", icon: <ScanLine size={28} />, color: "text-emerald-600",
-      action: () => handleGerarFiscal("NFCE"), enabled: true
-    },
-    {
-      key: "bobina", label: "Bobina", desc: "Impressão Térmica", icon: <Printer size={28} />, color: "text-slate-600",
+      key: "bobina", shortcut: "1", label: "1. Bobina", desc: "Impressão Térmica", icon: <Printer size={28} />, color: "text-slate-600",
       action: () => imprimir(dados, "bobina"), enabled: true
     },
     {
-      key: "a4", label: "A4 / PDF", desc: "Relatório de Pedido", icon: <FileText size={28} />, color: "text-blue-600",
+      key: "a4", shortcut: "2", label: "2. A4 / PDF", desc: "Relatório de Pedido", icon: <FileText size={28} />, color: "text-blue-600",
       action: () => imprimir(dados, "a4"), enabled: true
+    },
+    {
+      key: "nfce", shortcut: "3", label: "3. NFCe", desc: "Nota de Consumidor", icon: <ScanLine size={28} />, color: "text-emerald-600",
+      action: () => handleGerarFiscal("NFCE"), enabled: true
+    },
+    {
+      key: "nfe", shortcut: "4", label: "4. NFe", desc: "Nota Fiscal Eletrônica", icon: <FileCode2 size={28} />, color: "text-amber-600",
+      action: () => handleGerarFiscal("NFE"), enabled: true
     },
   ];
 
+  // Atalhos de teclado: 1=Bobina, 2=A4, 3=NFCe, 4=NFe, 5=Concluir
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (!open) return;
+    try { window.focus(); } catch {}
+    const t = setTimeout(() => { try { contentRef.current?.focus(); } catch {} }, 50);
+    const onKey = (e: KeyboardEvent) => {
+      if (XSalvando) return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
+      const k = e.key;
+      if (k === "1") { e.preventDefault(); cards[0].action(); }
+      else if (k === "2") { e.preventDefault(); cards[1].action(); }
+      else if (k === "3") { e.preventDefault(); cards[2].action(); }
+      else if (k === "4") { e.preventDefault(); cards[3].action(); }
+      else if (k === "5") { e.preventDefault(); onConcluir(); }
+    };
+    window.addEventListener("keydown", onKey, true);
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("keydown", onKey, true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, XSalvando, dados, empresaId, funcionarioId]);
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !XSalvando && onClose()}>
-      <DialogContent className="sm:max-w-[500px] bg-slate-50">
+      <DialogContent ref={contentRef} tabIndex={-1} className="sm:max-w-[500px] bg-slate-50 outline-none">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold text-slate-800">Finalizar Venda</DialogTitle>
           <DialogDescription className="text-slate-500">
@@ -264,13 +348,14 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
                 onClick={card.action}
                 autoFocus={card.key === "bobina"}
                 className={cn(
-                  "flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all duration-200",
+                  "relative flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all duration-200",
                   "hover:shadow-lg active:scale-95 group",
                   card.enabled
                     ? "bg-white border-slate-200 hover:border-primary/50"
                     : "bg-slate-100 border-slate-100 opacity-50 cursor-not-allowed"
                 )}
               >
+                {/* Atalho integrado ao label */}
                 <div className={cn("mb-3 p-3 rounded-xl bg-slate-50 group-hover:bg-white transition-colors", card.color)}>
                   {card.icon}
                 </div>
@@ -306,21 +391,13 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
         <DialogFooter className="flex flex-col sm:flex-row gap-2">
           <Button
             type="button"
-            variant="outline"
+            variant="default"
             onClick={onConcluir}
             disabled={XSalvando}
-            className="flex-1 rounded-xl h-12"
+            className="flex-1 rounded-xl h-12 gap-2"
           >
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-primary-foreground/20 text-xs font-bold">5</span>
             Concluir Venda
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={onClose}
-            disabled={XSalvando}
-            className="rounded-xl h-12"
-          >
-            Voltar
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -331,6 +408,14 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
         nfeCabecalhoId={XNfeId}
         empresaId={empresaId}
         clienteId={dados?.cliente_id}
+      />
+
+      <FiscalProgressDialog
+        open={XProg.open}
+        titulo={XProg.titulo}
+        descricao="Aguardando resposta do Fiscal Worker / SEFAZ."
+        segundosTotais={XProg.total}
+        segundosRestantes={XProg.restante}
       />
     </Dialog>
   );

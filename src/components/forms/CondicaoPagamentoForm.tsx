@@ -16,7 +16,7 @@ interface ICondicao {
 
 const XGridCols: IGridColumn[] = [
   { key: "condicao_id", label: "Código", width: "80px", align: "right" },
-  { key: "descricao", label: "Descrição", width: "1fr" },
+  { key: "descricao", label: "Descrição", width: "200px" },
   { key: "tp_doc", label: "Tipo Doc.", width: "100px" },
 ];
 
@@ -61,8 +61,8 @@ const CondicaoPagamentoForm: React.FC = () => {
       XGridCols={XGridCols}
       XExportTitle="Condições de Pagamento"
       renderCadastro={({ record, setField, mode, isEditing }) => (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:flex md:gap-4 gap-3">
+        <div className="space-y-4 pt-3 md:pt-0">
+          <div className="grid grid-cols-1 md:flex md:gap-4 gap-5">
             <div className="w-full md:w-32">
               <label className="block text-xs font-medium text-muted-foreground mb-1">Código</label>
               <input type="text" value={mode === "insert" ? "(Novo)" : record.condicao_id ?? ""} readOnly className="w-full border border-border rounded px-3 py-1.5 text-sm bg-secondary text-right" />
@@ -94,7 +94,7 @@ const CondicaoPagamentoForm: React.FC = () => {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-foreground mb-2">Prazos (dias)</h3>
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-x-3 gap-y-5">
               {PRAZO_KEYS.map((k, i) => (
                 <div key={k}>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">{i + 1}ª Parcela</label>
