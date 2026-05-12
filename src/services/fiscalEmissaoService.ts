@@ -114,190 +114,37 @@ export const fiscalEmissaoService = {
         throw new Error(`Item de configuração fiscal ${configItemId} não localizado.`);
       }
 
-      // 4. Buscar Regra Fiscal Cabeçalho
-      const { data: regras } = await db
-        .from("fiscal_regra")
-        .select("*")
-        .eq("empresa_id", empresaId)
-        .eq("tp_operacao_id", movimento.tp_operacao_id)
-        .eq("regime_trib", empresa.regime_trib)
-        .eq("excluido", false)
-        .order("prioridade", { ascending: false });
-
-      const regra = regras?.[0];
-      if (!regra) {
-        throw new Error("Nenhuma regra fiscal ativa encontrada para esta operação e regime tributário.");
-      }
-
-      // 4.1 Incrementar Sequência na Configuração
-      const nrNota = Number(fConfigItem.sequencia || 0);
+      // 4. Sequência da nota
+      const nrNota = Number(fConfigItem.sequencia || 1);
       console.log(`[FiscalService] Utilizando nr_nota: ${nrNota} para ${tipo}`);
-      
+
+      // 5. CALCULA NO BANCO via RPC — popula fiscal_nfe_cabecalho/item
+      const modelo = tipo === "NFE" ? "55" : "65";
+      const { data: nfeIdRet, error: eCalc } = await db.rpc("fu_calcular_impostos_movimento", {
+        p_movimento_id: movimentoId,
+        p_modelo: modelo,
+        p_serie: String(fConfigItem.serie || "001"),
+        p_nr_nota: String(nrNota),
+      });
+      if (eCalc) throw new Error(eCalc.message || "Erro no cálculo fiscal.");
+      const cabId: number = nfeIdRet as number;
+
+      // 5.1 Incrementa sequencial
       const { error: updateSeqErr } = await db
         .from("fiscal_config_item")
         .update({ sequencia: nrNota + 1 })
         .eq("fiscal_config_item_id", fConfigItem.fiscal_config_item_id);
-      
-      if (updateSeqErr) {
-        console.error("[FiscalService] Erro ao incrementar sequência:", updateSeqErr);
-      }
+      if (updateSeqErr) console.error("[FiscalService] Erro ao incrementar sequência:", updateSeqErr);
 
-      // 5. Preparar Cabeçalho
-      const nfeCabecalho = {
-        empresa_id: empresaId,
-        cadastro_id: movimento.cadastro_id,
-        movimento_id: movimentoId,
-        deposito_id: movimento.deposito_id,
-        modelo: Number(fConfigItem.modelo || (tipo === "NFE" ? 55 : 65)),
-        serie: Number(fConfigItem.serie || 1),
-        nr_nota: nrNota || 1,
-        tp_nf: 1, // Saída
-        tp_emis: 1, // Normal
-        fin_nfe: 1, // Normal
-        nat_op: regra.descricao?.substring(0, 60),
-        dt_emissao: new Date().toISOString(),
-        dt_saida: new Date().toISOString(),
-        st_nf: "A", // Aberta/Pendente
-        origem_inclusao: "M", // Manual/Interna
-        vl_produto: (movimento as any).vl_produto ?? (movimento as any).vl_produtos ?? 0,
-        vl_desconto: movimento.vl_desconto || 0,
-        vl_frete: movimento.vl_frete || 0,
-        vl_seguro: movimento.vl_seguro || 0,
-        vl_despesa: movimento.vl_despesa || 0,
-        vl_total_nf: movimento.vl_movimento || (movimento as any).vl_total || 0,
-        updated_at: new Date().toISOString()
-      };
-
-      const { data: cabData, error: cabErr } = await db
+      // 6. Relê cabeçalho calculado
+      const { data: cabData } = await db
         .from("fiscal_nfe_cabecalho")
-        .insert(nfeCabecalho)
-        .select()
+        .select("*")
+        .eq("nfe_cabecalho_id", cabId)
         .single();
+      const nfeCabecalho = cabData;
 
-      if (cabErr) throw cabErr;
-      const cabId = cabData.nfe_cabecalho_id;
-
-      // 6. Processar Itens e Impostos
-      let totalIcms = 0, totalIpi = 0, totalPis = 0, totalCofins = 0;
-      let totalIbs = 0, totalCbs = 0, totalIs = 0;
-
-      console.log("[fiscalEmissaoService] Iniciando loop de itens.");
-      const itensM = (movimento.movimento_item || []).filter((it: any) => !it.excluido);
-      console.log("[fiscalEmissaoService] Qtd itens ativos:", itensM.length);
-
-      for (let i = 0; i < itensM.length; i++) {
-        const mItem = itensM[i];
-        console.log(`[fiscalEmissaoService] Item ${i+1}:`, mItem.nm_produto || (mItem as any).cd_produto);
-        const prod = mItem.produto;
-        
-        // Buscar regra para cada imposto do item
-        const { data: regrasItem } = await db
-          .from("fiscal_regra_item")
-          .select("*")
-          .eq("fiscal_regra_id", regra.fiscal_regra_id)
-          .eq("empresa_id", empresaId);
-
-        // Função auxiliar para filtrar regra específica do item
-        const findMelhorRegraItem = (tipoImp: string) => {
-          return (regrasItem || []).filter(r => r.tipo_imposto === tipoImp).sort((a, b) => {
-            let scoreA = 0, scoreB = 0;
-            if (a.uf_destino === parceiro?.endereco_estado_id) scoreA += 10;
-            if (b.uf_destino === parceiro?.endereco_estado_id) scoreB += 10;
-            if (a.ncm_filtro === prod?.ncm) scoreA += 5;
-            if (b.ncm_filtro === prod?.ncm) scoreB += 5;
-            return scoreB - scoreA;
-          })[0];
-        };
-
-        const rIcms = findMelhorRegraItem("ICMS");
-        const rPis = findMelhorRegraItem("PIS");
-        const rCofins = findMelhorRegraItem("COFINS");
-        const rIpi = findMelhorRegraItem("IPI");
-        const rIbsCbs = findMelhorRegraItem("IBSCBS");
-
-        const bc = (mItem.vl_produto || 0) - (mItem.vl_desconto || 0);
-        
-        const calcTax = (bc: number, aliq: number | null, red: number | null) => {
-          const base = bc * (1 - (red || 0) / 100);
-          return (base * (aliq || 0)) / 100;
-        };
-
-        const vIcms = calcTax(bc, rIcms?.aliquota, rIcms?.base_reducao);
-        const vPis = calcTax(bc, rPis?.aliquota, rPis?.base_reducao);
-        const vCofins = calcTax(bc, rCofins?.aliquota, rCofins?.base_reducao);
-        const vIpi = calcTax(bc, rIpi?.aliquota, rIpi?.base_reducao);
-        const vIbs = calcTax(bc, rIbsCbs?.ibs_aliquota, null);
-        const vCbs = calcTax(bc, rIbsCbs?.cbs_aliquota, null);
-        const vIs = calcTax(bc, rIbsCbs?.is_aliquota, null);
-
-        totalIcms += vIcms; totalPis += vPis; totalCofins += vCofins; totalIpi += vIpi;
-        totalIbs += vIbs; totalCbs += vCbs; totalIs += vIs;
-
-        const nfeItem = {
-          nfe_cabecalho_id: cabId,
-          empresa_id: empresaId,
-          nr_item: i + 1,
-          produto_id: mItem.produto_id,
-          nm_produto: prod?.nome || "PRODUTO SEM NOME",
-          unidade: prod?.unidade_id || "UN",
-          qt_entrada: mItem.qt_movimento, // Na tabela de item chama qt_entrada mas serve pra saida tb
-          vl_unit: mItem.vl_und_produto,
-          vl_total: mItem.vl_produto,
-          vl_desconto: mItem.vl_desconto,
-          cfop: regra.cfop_id ? (await db.from("cfop").select("cd_cfop").eq("cfop_id", regra.cfop_id).single()).data?.cd_cfop : "5102",
-          ncm: prod?.ncm || "",
-          cest: prod?.cest || "",
-          origem: prod?.origem || 0,
-          cst_icms: rIcms?.cst_csosn || "000",
-          pc_icms: rIcms?.aliquota || 0,
-          vl_bc: mItem.vl_produto,
-          vl_icms: vIcms,
-          vl_icms_st: 0,
-          cst_pis: rPis?.cst_pis_cofins || "01",
-          pc_pis: rPis?.aliquota || 0,
-          vl_pis: vPis,
-          cst_cofins: rCofins?.cst_pis_cofins || "01",
-          pc_cofins: rCofins?.aliquota || 0,
-          vl_cofins: vCofins,
-          cst_ipi: rIpi?.cst_pis_cofins || "53",
-          pc_ipi: rIpi?.aliquota || 0,
-          vl_ipi: vIpi,
-          c_enq: rIpi?.ipi_c_enq || "999",
-          cst_ibs: rIbsCbs?.cst_csosn || "",
-          pc_ibs: rIbsCbs?.ibs_aliquota || 0,
-          vl_ibs: vIbs,
-          cst_cbs: rIbsCbs?.cst_csosn || "",
-          pc_cbs: rIbsCbs?.cbs_aliquota || 0,
-          vl_cbs: vCbs,
-          cst_is: rIbsCbs?.cst_csosn || "",
-          pc_is: rIbsCbs?.is_aliquota || 0,
-          vl_is: vIs,
-          updated_at: new Date().toISOString()
-        };
-
-        console.log(`[fiscalEmissaoService] Inserindo fiscal_nfe_item para item ${i+1}...`);
-        const { error: eItem } = await db.from("fiscal_nfe_item").insert(nfeItem);
-        if (eItem) {
-          console.error(`[fiscalEmissaoService] Erro ao inserir item ${i+1}:`, eItem);
-          throw new Error(`Erro no item ${i+1}: ${eItem.message}`);
-        }
-      }
-
-      // 7. Atualizar totais no cabeçalho
-      await db.from("fiscal_nfe_cabecalho")
-        .update({
-          vl_bc: (movimento as any).vl_produto || (movimento as any).vl_produtos || 0,
-          vl_icms: totalIcms,
-          vl_pis: totalPis,
-          vl_cofins: totalCofins,
-          vl_ipi: totalIpi,
-          vl_ibs: totalIbs,
-          vl_cbs: totalCbs,
-          vl_is: totalIs,
-        })
-        .eq("nfe_cabecalho_id", cabId);
-
-      // 8. Inserir Pagamentos
+      // 7. Inserir Pagamentos
       const totalVenda = Number(nfeCabecalho.vl_total_nf || 0);
       console.log(`[FiscalService] Verificando pagamentos para movimento ${movimentoId}. Total Venda: ${totalVenda}`);
       const { data: pagtosMov, error: errPagtos } = await db
