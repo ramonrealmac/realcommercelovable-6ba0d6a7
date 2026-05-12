@@ -7,6 +7,7 @@ import GridActionToolbar, { gridActions } from "@/components/grid/GridActionTool
 import { useAppContext } from "@/contexts/AppContext";
 import type { IPdvPagamentoLinha, IMovimentoPagamento } from "./types";
 import { CreditCard, ShoppingCart, Wallet, ArrowRightLeft, Calculator, X, Delete, Trash2, Check } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const db = supabase as any;
 
