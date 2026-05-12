@@ -96,6 +96,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
   const [XCancelTarget, setXCancelTarget] = useState<any>(null);
   const [XCancelJustificativa, setXCancelJustificativa] = useState("");
   const [XCancelando, setXCancelando] = useState(false);
+  const [XProg, setXProg] = useState<{ open: boolean; titulo: string; total: number }>({ open: false, titulo: "", total: 60 });
 
   useEffect(() => {
     if (initialFilterId) {
