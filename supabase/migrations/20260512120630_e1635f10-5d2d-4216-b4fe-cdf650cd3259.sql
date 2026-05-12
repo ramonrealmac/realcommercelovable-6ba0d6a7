@@ -1,0 +1,1 @@
+ALTER TABLE public.fiscal_config ADD COLUMN IF NOT EXISTS nr_timeout_nfe integer NOT NULL DEFAULT 60;
