@@ -273,19 +273,19 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
 
   const cards = [
     {
-      key: "bobina", shortcut: "1", label: "Bobina", desc: "Impressão Térmica", icon: <Printer size={28} />, color: "text-slate-600",
+      key: "bobina", shortcut: "1", label: "1. Bobina", desc: "Impressão Térmica", icon: <Printer size={28} />, color: "text-slate-600",
       action: () => imprimir(dados, "bobina"), enabled: true
     },
     {
-      key: "a4", shortcut: "2", label: "A4 / PDF", desc: "Relatório de Pedido", icon: <FileText size={28} />, color: "text-blue-600",
+      key: "a4", shortcut: "2", label: "2. A4 / PDF", desc: "Relatório de Pedido", icon: <FileText size={28} />, color: "text-blue-600",
       action: () => imprimir(dados, "a4"), enabled: true
     },
     {
-      key: "nfce", shortcut: "3", label: "NFCe", desc: "Nota de Consumidor", icon: <ScanLine size={28} />, color: "text-emerald-600",
+      key: "nfce", shortcut: "3", label: "3. NFCe", desc: "Nota de Consumidor", icon: <ScanLine size={28} />, color: "text-emerald-600",
       action: () => handleGerarFiscal("NFCE"), enabled: true
     },
     {
-      key: "nfe", shortcut: "4", label: "NFe", desc: "Nota Fiscal Eletrônica", icon: <FileCode2 size={28} />, color: "text-amber-600",
+      key: "nfe", shortcut: "4", label: "4. NFe", desc: "Nota Fiscal Eletrônica", icon: <FileCode2 size={28} />, color: "text-amber-600",
       action: () => handleGerarFiscal("NFE"), enabled: true
     },
   ];
