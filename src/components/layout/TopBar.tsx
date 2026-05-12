@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Menu, LogOut, KeyRound, Shield, Users, UserCog } from "lucide-react";
+import { Menu, LogOut, KeyRound, Shield, Users, UserCog, Bot, BotOff } from "lucide-react";
 import { useAppContext } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import ShortcutsBar from "./ShortcutsBar";
