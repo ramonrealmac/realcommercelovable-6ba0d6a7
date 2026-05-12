@@ -39,9 +39,27 @@ const FiscalProgressDialog: React.FC<IProps> = ({
   descricao,
   segundosTotais,
   segundosRestantes,
+  selfTick,
 }) => {
   const total = Math.max(1, segundosTotais);
-  const restante = Math.max(0, Math.min(segundosRestantes, total));
+  const [internalRest, setInternalRest] = React.useState<number>(total);
+
+  // Reinicia o contador interno toda vez que o dialog abre.
+  React.useEffect(() => {
+    if (open) setInternalRest(total);
+  }, [open, total]);
+
+  // Decremento interno (somente se selfTick e nenhum valor externo controlado).
+  React.useEffect(() => {
+    if (!open || !selfTick || typeof segundosRestantes === "number") return;
+    const id = setInterval(() => {
+      setInternalRest((r) => Math.max(0, r - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [open, selfTick, segundosRestantes]);
+
+  const restanteRaw = typeof segundosRestantes === "number" ? segundosRestantes : internalRest;
+  const restante = Math.max(0, Math.min(restanteRaw, total));
   const decorrido = total - restante;
   const pct = Math.round((decorrido / total) * 100);
 
