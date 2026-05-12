@@ -48,6 +48,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [XActiveTabId, setXActiveTabId] = useState<string | null>(null);
   const [XSidebarOpen, setXSidebarOpen] = useState(false);
   const [XLogomarca, setXLogomarca] = useState("");
+  const [XChatBotVisible, setXChatBotVisible] = useState<boolean>(() => {
+    try { return localStorage.getItem("XChatBotVisible") !== "0"; } catch { return true; }
+  });
+  const toggleChatBot = useCallback(() => {
+    setXChatBotVisible(p => {
+      const nv = !p;
+      try { localStorage.setItem("XChatBotVisible", nv ? "1" : "0"); } catch {}
+      return nv;
+    });
+  }, []);
 
   const openTab = useCallback((tab: Omit<AppTab, "id">) => {
     const XExisting = XTabs.find(t => t.component === tab.component);
