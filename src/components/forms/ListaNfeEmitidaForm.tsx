@@ -446,6 +446,14 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <FiscalProgressDialog
+      open={XProg.open}
+      titulo={XProg.titulo}
+      descricao="Aguardando resposta do Fiscal Worker / SEFAZ."
+      segundosTotais={XProg.total}
+      selfTick
+    />
     </>
   );
 };
