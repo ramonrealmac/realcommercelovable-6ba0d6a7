@@ -4187,6 +4187,7 @@ export type Database = {
           pc_comissao_prz: number | null
           tamanho_fonte_pedidos: number
           tamanho_fonte_produtos: number
+          tamanho_fonte_totais: number | null
           tempo_refresh_pdv: number
           tp_comissao: string | null
           usr_id: number | null
@@ -4210,6 +4211,7 @@ export type Database = {
           pc_comissao_prz?: number | null
           tamanho_fonte_pedidos?: number
           tamanho_fonte_produtos?: number
+          tamanho_fonte_totais?: number | null
           tempo_refresh_pdv?: number
           tp_comissao?: string | null
           usr_id?: number | null
@@ -4233,6 +4235,7 @@ export type Database = {
           pc_comissao_prz?: number | null
           tamanho_fonte_pedidos?: number
           tamanho_fonte_produtos?: number
+          tamanho_fonte_totais?: number | null
           tempo_refresh_pdv?: number
           tp_comissao?: string | null
           usr_id?: number | null
