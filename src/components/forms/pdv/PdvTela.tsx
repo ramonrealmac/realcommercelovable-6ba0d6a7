@@ -1088,11 +1088,13 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         funcionarioId={caixa.funcionario_id}
         fontePedidos={XFontePed}
         fonteProdutos={XFonteProd}
+        fonteTotais={XFonteTot}
         tempoRefresh={XRefreshSeg}
         onClose={() => setXOpenConfig(false)}
         onSalvar={(v) => {
           setXFontePed(v.fontePedidos);
           setXFonteProd(v.fonteProdutos);
+          setXFonteTot(v.fonteTotais);
           setXRefreshSeg(v.tempoRefresh);
         }}
       />
