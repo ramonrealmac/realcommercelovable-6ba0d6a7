@@ -141,7 +141,13 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
       }
 
       setXStatus(`Aguardando autorização da SEFAZ...`);
-      const ret = await fiscalEmissaoService.aguardarEvento(res.fiscal_evento_id, 90000);
+      const totalSeg = await fiscalEmissaoService.obterTimeoutFiscalSeg(empresaId);
+      setXProg({ open: true, titulo: `Emitindo ${tipo}...`, total: totalSeg, restante: totalSeg });
+      const ret = await fiscalEmissaoService.aguardarEvento(res.fiscal_evento_id, {
+        empresaId,
+        onTick: (s) => setXProg(p => ({ ...p, restante: s })),
+      });
+      setXProg(p => ({ ...p, open: false }));
 
       if (ret.success) {
         toast.success(`${tipo} autorizada!`);
