@@ -130,6 +130,14 @@ const FiscalEmailDialog: React.FC<FiscalEmailDialogProps> = ({ open, onClose, nf
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <FiscalProgressDialog
+        open={prog.open}
+        titulo="Enviando e-mail..."
+        descricao="Aguardando o Fiscal Worker enviar o XML e o DANFE."
+        segundosTotais={prog.total}
+        selfTick
+      />
     </Dialog>
   );
 };
