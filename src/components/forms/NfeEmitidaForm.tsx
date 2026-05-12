@@ -223,6 +223,10 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                 <label className="text-xs text-muted-foreground">ID</label>
                 <input readOnly value={record.nfe_cabecalho_id ?? (mode === "insert" ? "(Novo)" : "")} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right" />
               </div>
+              <div className="col-span-1">
+                <label className="text-xs text-muted-foreground">Pedido</label>
+                <input readOnly value={(record as any).pedido_id ?? (record as any).movimento_id ?? ""} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right" title="Nº do pedido (movimento) que originou esta nota" />
+              </div>
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Tipo de Nota</label>
                 <select disabled={ro} value={record.tp_nf ?? 1} onChange={e => setField("tp_nf" as any, Number(e.target.value) as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
