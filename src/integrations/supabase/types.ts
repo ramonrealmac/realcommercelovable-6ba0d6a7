@@ -3348,6 +3348,7 @@ export type Database = {
           nr_protocolo: string
           obs_nf: string
           origem_inclusao: string
+          pedido_id: number | null
           protocolo_cancelamento: string | null
           recibo_sefaz: string | null
           serie: string
@@ -3403,6 +3404,7 @@ export type Database = {
           nr_protocolo?: string
           obs_nf?: string
           origem_inclusao?: string
+          pedido_id?: number | null
           protocolo_cancelamento?: string | null
           recibo_sefaz?: string | null
           serie?: string
@@ -3458,6 +3460,7 @@ export type Database = {
           nr_protocolo?: string
           obs_nf?: string
           origem_inclusao?: string
+          pedido_id?: number | null
           protocolo_cancelamento?: string | null
           recibo_sefaz?: string | null
           serie?: string
