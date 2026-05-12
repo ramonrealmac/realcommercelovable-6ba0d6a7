@@ -129,6 +129,15 @@ export const fiscalEmissaoService = {
       if (eCalc) throw new Error(eCalc.message || "Erro no cálculo fiscal.");
       const cabId: number = nfeIdRet as number;
 
+      // 5.0 Vincula o pedido (movimento) ao cabeçalho fiscal
+      try {
+        await db.from("fiscal_nfe_cabecalho")
+          .update({ pedido_id: movimentoId })
+          .eq("nfe_cabecalho_id", cabId);
+      } catch (eUpdPed) {
+        console.warn("[FiscalService] Falha ao gravar pedido_id no cabeçalho:", eUpdPed);
+      }
+
       // 5.1 Incrementa sequencial
       const { error: updateSeqErr } = await db
         .from("fiscal_config_item")
