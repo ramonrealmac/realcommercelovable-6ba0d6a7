@@ -351,7 +351,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
     }
   };
 
-  const cols: IGridColumn[] = [
+  const colsAll: IGridColumn[] = [
     { key: "condicao_descricao", label: "Condição", width: "1fr" },
     { key: "qt_parcela", label: "Parc.", width: "60px", align: "right" },
     { key: "vl_parcela", label: "Vlr Parcela", width: "100px", align: "right", render: r => fmt(r.vl_parcela) },
@@ -362,6 +362,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
       </button>
     )},
   ];
+  const cols = isMobile ? colsAll.filter(c => !["qt_parcela", "vl_parcela"].includes(c.key)) : colsAll;
 
   const selecionado = XSelectedIdx != null ? XLinhas[XSelectedIdx] : null;
 
