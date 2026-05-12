@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import FiscalEmailDialog from "./FiscalEmailDialog";
+import FiscalProgressDialog from "@/components/fiscal/FiscalProgressDialog";
 import { supabase } from "@/integrations/supabase/client";
 
 
