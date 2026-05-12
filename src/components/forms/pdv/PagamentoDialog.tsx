@@ -532,12 +532,12 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
                     className={`w-full border border-border rounded px-2 py-1 text-sm text-right h-9 font-bold ${brancoCls}`}
                   />
                 </div>
-                <div className="col-span-1">
+                <div className="col-span-1 max-md:hidden">
                   <label className="text-[10px] font-bold text-muted-foreground uppercase leading-none mb-1 block">Vezes</label>
                   <input type="number" value={XQtParcela} readOnly tabIndex={-1}
                     className={`w-full border border-border rounded px-2 py-1 text-sm text-right bg-secondary h-9 ${NO_SPIN}`} />
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-2 max-md:hidden">
                   <label className="text-[10px] font-bold text-muted-foreground uppercase leading-none mb-1 block">Vlr Parcela</label>
                   <div tabIndex={-1} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right text-foreground select-text h-9 flex items-center justify-end font-medium">
                     {fmt(vlParcela)}
