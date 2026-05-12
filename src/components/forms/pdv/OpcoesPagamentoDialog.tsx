@@ -124,13 +124,11 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
     if (!dados?.movimento_id) return;
 
     try {
-      // 0. Verifica se já existe NF para este pedido/modelo
-      const modeloChk = tipo === "NFE" ? "55" : "65";
+      // 0. Verifica se já existe QUALQUER documento fiscal vinculado a este pedido
       const { data: existente } = await supabase
         .from("fiscal_nfe_cabecalho")
         .select("nfe_cabecalho_id, c_stat, x_motivo, modelo")
-        .eq("movimento_id", dados.movimento_id)
-        .eq("modelo", modeloChk)
+        .or(`movimento_id.eq.${dados.movimento_id},pedido_id.eq.${dados.movimento_id}`)
         .eq("excluido", false)
         .order("nfe_cabecalho_id", { ascending: false })
         .limit(1)
@@ -139,7 +137,8 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
       if (existente?.nfe_cabecalho_id) {
         const cStat = Number(existente.c_stat || 0);
         const autorizada = cStat === 100 || cStat === 150;
-        if (autorizada) {
+        const mesmoModelo = String(existente.modelo) === (tipo === "NFE" ? "55" : "65");
+        if (autorizada && mesmoModelo) {
           setXSalvando(true);
           setXStatus("Reemitindo DANFE da nota já autorizada...");
           setXNfeId(existente.nfe_cabecalho_id);
