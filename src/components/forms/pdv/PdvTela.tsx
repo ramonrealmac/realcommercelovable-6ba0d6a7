@@ -106,6 +106,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   // Configurações por funcionário
   const [XFontePed, setXFontePed] = useState<number>(caixa.tamanho_fonte_pedidos || 12);
   const [XFonteProd, setXFonteProd] = useState<number>(caixa.tamanho_fonte_produtos || 12);
+  const [XFonteTot, setXFonteTot] = useState<number>(caixa.tamanho_fonte_totais || 12);
   const [XRefreshSeg, setXRefreshSeg] = useState<number>(caixa.tempo_refresh_pdv || 30);
   const [XOpenConfig, setXOpenConfig] = useState(false);
   const [XOpenFuncoes, setXOpenFuncoes] = useState(false);
