@@ -94,6 +94,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       XTabs, XActiveTabId, openTab, closeTab, setActiveTab: setXActiveTabId,
       XSidebarOpen, toggleSidebar, closeSidebar,
       XLogomarca, setXLogomarca,
+      XChatBotVisible, toggleChatBot,
     }}>
       {children}
     </AppContext.Provider>
