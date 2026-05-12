@@ -643,7 +643,7 @@ export const fiscalEmissaoService = {
 
       if (evErr) return { success: false, message: evErr.message };
 
-      const res = await this.aguardarEvento(evento.id, 20000);
+      const res = await this.aguardarEvento(evento.id, { empresaId });
       return { success: res.success, message: res.mensagem };
     } catch (e: any) {
       return { success: false, message: e.message };
