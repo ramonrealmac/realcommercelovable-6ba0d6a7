@@ -429,7 +429,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !XSalvando && onClose()}>
-      <DialogContent className="max-w-5xl p-0 overflow-hidden w-screen h-[100dvh] max-h-[100dvh] sm:rounded-none md:w-full md:h-auto md:max-h-[90vh] md:rounded-lg">
+      <DialogContent className="max-w-5xl p-0 overflow-hidden w-screen h-[100dvh] max-h-[100dvh] gap-0 grid-rows-[auto_1fr] sm:rounded-none md:w-full md:h-auto md:max-h-[90vh] md:rounded-lg md:grid-rows-none md:block">
         <div className="flex items-center h-10 bg-topbar text-topbar-foreground px-4 gap-2 shrink-0">
           <CreditCard size={18} />
           <h2 className="text-sm font-semibold">Meios de Pagamento e Prazos</h2>
