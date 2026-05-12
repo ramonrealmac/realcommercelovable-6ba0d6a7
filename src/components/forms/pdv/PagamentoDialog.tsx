@@ -56,6 +56,7 @@ interface IProps {
 
 const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarregados, onClose, onConfirmar }) => {
   const { XEmpresaId } = useAppContext();
+  const isMobile = useIsMobile();
   const [XCondicoes, setXCondicoes] = useState<ICondicao[]>([]);
   const [XBandeiras, setXBandeiras] = useState<IBandeira[]>([]);
   const [XOperadoras, setXOperadoras] = useState<IOperadora[]>([]);
