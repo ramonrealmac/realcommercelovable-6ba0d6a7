@@ -13,16 +13,18 @@ interface IProps {
   funcionarioId: number;
   fontePedidos: number;
   fonteProdutos: number;
+  fonteTotais: number;
   tempoRefresh: number;
   onClose: () => void;
-  onSalvar: (v: { fontePedidos: number; fonteProdutos: number; tempoRefresh: number }) => void;
+  onSalvar: (v: { fontePedidos: number; fonteProdutos: number; fonteTotais: number; tempoRefresh: number }) => void;
 }
 
 const ConfigurarDialog: React.FC<IProps> = ({
-  open, funcionarioId, fontePedidos, fonteProdutos, tempoRefresh, onClose, onSalvar,
+  open, funcionarioId, fontePedidos, fonteProdutos, fonteTotais, tempoRefresh, onClose, onSalvar,
 }) => {
   const [XFontePed, setXFontePed] = useState(fontePedidos);
   const [XFonteProd, setXFonteProd] = useState(fonteProdutos);
+  const [XFonteTot, setXFonteTot] = useState(fonteTotais);
   const [XRefresh, setXRefresh] = useState(tempoRefresh);
   const [XSalvando, setXSalvando] = useState(false);
 
@@ -30,9 +32,10 @@ const ConfigurarDialog: React.FC<IProps> = ({
     if (open) {
       setXFontePed(fontePedidos);
       setXFonteProd(fonteProdutos);
+      setXFonteTot(fonteTotais);
       setXRefresh(tempoRefresh);
     }
-  }, [open, fontePedidos, fonteProdutos, tempoRefresh]);
+  }, [open, fontePedidos, fonteProdutos, fonteTotais, tempoRefresh]);
 
   const clampFont = (v: number) => Math.min(MAX_FONT, Math.max(MIN_FONT, v));
   const clampRefresh = (v: number) => Math.min(99999, Math.max(5, Math.floor(v || 5)));
@@ -43,12 +46,13 @@ const ConfigurarDialog: React.FC<IProps> = ({
       const payload = {
         tamanho_fonte_pedidos: XFontePed,
         tamanho_fonte_produtos: XFonteProd,
+        tamanho_fonte_totais: XFonteTot,
         tempo_refresh_pdv: XRefresh,
       };
       const { error } = await db.from("funcionario").update(payload).eq("funcionario_id", funcionarioId);
       if (error) throw new Error(error.message);
       toast.success("Configurações salvas.");
-      onSalvar({ fontePedidos: XFontePed, fonteProdutos: XFonteProd, tempoRefresh: XRefresh });
+      onSalvar({ fontePedidos: XFontePed, fonteProdutos: XFonteProd, fonteTotais: XFonteTot, tempoRefresh: XRefresh });
       onClose();
     } catch (e: any) {
       toast.error(e.message || "Falha ao salvar");
@@ -93,6 +97,9 @@ const ConfigurarDialog: React.FC<IProps> = ({
           <FontControl label="Fonte — Lista de Produtos"
             value={XFonteProd} setValue={setXFonteProd}
             sample="Produto Exemplo  1,000 UN × 10,00" />
+          <FontControl label="Fonte — Totais (Subtotal, Desconto, Total)"
+            value={XFonteTot} setValue={setXFonteTot}
+            sample="Subtotal R$ 100,00  Desc. R$ 5,00  Total R$ 95,00" />
           <div className="border border-border rounded p-3 space-y-2">
             <div className="text-xs font-semibold text-foreground">Tempo de Refresh (segundos)</div>
             <input type="number" min={5} max={99999} step={1}

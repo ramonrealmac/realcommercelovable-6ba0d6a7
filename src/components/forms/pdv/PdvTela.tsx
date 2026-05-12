@@ -106,6 +106,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   // Configurações por funcionário
   const [XFontePed, setXFontePed] = useState<number>(caixa.tamanho_fonte_pedidos || 12);
   const [XFonteProd, setXFonteProd] = useState<number>(caixa.tamanho_fonte_produtos || 12);
+  const [XFonteTot, setXFonteTot] = useState<number>(caixa.tamanho_fonte_totais || 12);
   const [XRefreshSeg, setXRefreshSeg] = useState<number>(caixa.tempo_refresh_pdv || 30);
   const [XOpenConfig, setXOpenConfig] = useState(false);
   const [XOpenFuncoes, setXOpenFuncoes] = useState(false);
@@ -876,22 +877,22 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
               {/* Badges de totais */}
               <div className="grid grid-cols-3 gap-1.5 mt-2">
                 <div className="border border-blue-300 bg-blue-50 dark:bg-blue-950/30 rounded px-2 py-1 flex flex-col">
-                  <div className="flex items-center gap-1 text-[10px] text-blue-900 dark:text-blue-200 font-bold uppercase w-full justify-start">
-                    <ShoppingCart size={10} /> Subtotal
+                  <div className="flex items-center gap-1 text-blue-900 dark:text-blue-200 font-bold uppercase w-full justify-start" style={{ fontSize: `${XFonteTot * 0.83}px` }}>
+                    <ShoppingCart size={Math.max(8, Math.round(XFonteTot * 0.83))} /> Subtotal
                   </div>
-                  <div className="font-bold text-lg text-blue-900 dark:text-blue-200 leading-none w-full text-right mt-0.5">{fmt(baseSubtotal)}</div>
+                  <div className="font-bold text-blue-900 dark:text-blue-200 leading-none w-full text-right mt-0.5" style={{ fontSize: `${XFonteTot * 1.5}px` }}>{fmt(baseSubtotal)}</div>
                 </div>
                 <div className="border border-amber-300 bg-amber-50 dark:bg-amber-950/30 rounded px-2 py-1 flex flex-col">
-                  <div className="flex items-center gap-1 text-[10px] text-amber-900 dark:text-amber-200 font-bold uppercase w-full justify-start">
-                    <Tag size={10} /> Desc.{XPcDesc > 0 ? ` ${XPcDesc.toFixed(1)}%` : ""}
+                  <div className="flex items-center gap-1 text-amber-900 dark:text-amber-200 font-bold uppercase w-full justify-start" style={{ fontSize: `${XFonteTot * 0.83}px` }}>
+                    <Tag size={Math.max(8, Math.round(XFonteTot * 0.83))} /> Desc.{XPcDesc > 0 ? ` ${XPcDesc.toFixed(1)}%` : ""}
                   </div>
-                  <div className="font-bold text-lg text-amber-900 dark:text-amber-200 leading-none w-full text-right mt-0.5">{fmt(vlDescAplicado)}</div>
+                  <div className="font-bold text-amber-900 dark:text-amber-200 leading-none w-full text-right mt-0.5" style={{ fontSize: `${XFonteTot * 1.5}px` }}>{fmt(vlDescAplicado)}</div>
                 </div>
                 <div className="border border-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 rounded px-2 py-1 flex flex-col">
-                  <div className="flex items-center gap-1 text-[10px] text-emerald-900 dark:text-emerald-200 font-bold uppercase w-full justify-start">
-                    <CircleDollarSign size={10} /> Total
+                  <div className="flex items-center gap-1 text-emerald-900 dark:text-emerald-200 font-bold uppercase w-full justify-start" style={{ fontSize: `${XFonteTot * 0.83}px` }}>
+                    <CircleDollarSign size={Math.max(8, Math.round(XFonteTot * 0.83))} /> Total
                   </div>
-                  <div className="font-bold text-2xl text-emerald-900 dark:text-emerald-200 leading-none w-full text-right mt-0.5">{fmt(totalReceber)}</div>
+                  <div className="font-bold text-emerald-900 dark:text-emerald-200 leading-none w-full text-right mt-0.5" style={{ fontSize: `${XFonteTot * 2}px` }}>{fmt(totalReceber)}</div>
                 </div>
               </div>
             </div>
@@ -1087,11 +1088,13 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         funcionarioId={caixa.funcionario_id}
         fontePedidos={XFontePed}
         fonteProdutos={XFonteProd}
+        fonteTotais={XFonteTot}
         tempoRefresh={XRefreshSeg}
         onClose={() => setXOpenConfig(false)}
         onSalvar={(v) => {
           setXFontePed(v.fontePedidos);
           setXFonteProd(v.fonteProdutos);
+          setXFonteTot(v.fonteTotais);
           setXRefreshSeg(v.tempoRefresh);
         }}
       />

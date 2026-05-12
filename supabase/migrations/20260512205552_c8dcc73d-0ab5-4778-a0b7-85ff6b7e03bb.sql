@@ -1,0 +1,1 @@
+ALTER TABLE public.funcionario ADD COLUMN IF NOT EXISTS tamanho_fonte_totais integer DEFAULT 12;

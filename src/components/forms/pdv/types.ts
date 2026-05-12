@@ -3,6 +3,7 @@ export interface IPdvCaixa {
   nome: string;
   tamanho_fonte_pedidos?: number;
   tamanho_fonte_produtos?: number;
+  tamanho_fonte_totais?: number;
   tempo_refresh_pdv?: number;
   caixa_inf_vend?: string | null;
   caixa_cnc_venda?: string | null;
