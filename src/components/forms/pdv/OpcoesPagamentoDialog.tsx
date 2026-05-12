@@ -128,7 +128,7 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
       const { data: existente } = await supabase
         .from("fiscal_nfe_cabecalho")
         .select("nfe_cabecalho_id, c_stat, x_motivo, modelo")
-        .or(`movimento_id.eq.${dados.movimento_id},pedido_id.eq.${dados.movimento_id}`)
+        .eq("movimento_id", dados.movimento_id)
         .eq("excluido", false)
         .order("nfe_cabecalho_id", { ascending: false })
         .limit(1)
@@ -291,12 +291,15 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
   ];
 
   // Atalhos de teclado: 1=Bobina, 2=A4, 3=NFCe, 4=NFe, 5=Concluir
+  const contentRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     if (!open) return;
+    try { window.focus(); } catch {}
+    const t = setTimeout(() => { try { contentRef.current?.focus(); } catch {} }, 50);
     const onKey = (e: KeyboardEvent) => {
       if (XSalvando) return;
       const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
       const k = e.key;
       if (k === "1") { e.preventDefault(); cards[0].action(); }
       else if (k === "2") { e.preventDefault(); cards[1].action(); }
@@ -304,14 +307,19 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
       else if (k === "4") { e.preventDefault(); cards[3].action(); }
       else if (k === "5") { e.preventDefault(); onConcluir(); }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("keydown", onKey, true);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, XSalvando, dados, empresaId, funcionarioId]);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !XSalvando && onClose()}>
-      <DialogContent className="sm:max-w-[500px] bg-slate-50">
+      <DialogContent ref={contentRef} tabIndex={-1} className="sm:max-w-[500px] bg-slate-50 outline-none">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold text-slate-800">Finalizar Venda</DialogTitle>
           <DialogDescription className="text-slate-500">
