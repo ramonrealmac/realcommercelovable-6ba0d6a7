@@ -308,11 +308,12 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
 
   // ===== Venda direta =====
   const adicionarProdutoAoCarrinho = (p: IProdutoRow, depositoId?: number) => {
+    const qt = XQtProx > 0 ? XQtProx : 1;
     setXCart(prev => {
       const idx = prev.findIndex(c => c.produto_id === p.produto_id);
       if (idx >= 0) {
         const cp = [...prev];
-        cp[idx] = { ...cp[idx], qt_item: cp[idx].qt_item + 1 };
+        cp[idx] = { ...cp[idx], qt_item: cp[idx].qt_item + qt };
         return cp;
       }
       const preco = p.st_promo && p.preco_promocional > 0 ? p.preco_promocional : p.preco_venda;
@@ -322,11 +323,12 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         nm_produto: p.nome,
         unidade_id: p.unidade_id,
         vl_unitario: preco,
-        qt_item: 1,
+        qt_item: qt,
         deposito_id: depositoId || XParams?.deposito_estoque_caixa || null,
       }];
     });
     setXSearchTerm("");
+    setXQtProx(1);
     setTimeout(() => searchRef.current?.focus(), 50);
   };
 
