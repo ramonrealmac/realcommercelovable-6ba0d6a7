@@ -1,63 +1,90 @@
-# PDV Mobile — Layout 2× rolável + Atalhos clicáveis
-
 ## Objetivo
-No mobile (`< 768px`), a tela do PDV/Caixa deve ter **largura igual a 2× a viewport** com **rolagem horizontal**, de modo que:
-- O **primeiro "painel" (100vw)** mostre a Venda Direta (busca de produto + carrinho), ocupando a tela inteira.
-- O **segundo "painel" (100vw)** mostre Pedidos a Receber + Resumo + Finalizar Venda.
-- O usuário arrasta lateralmente para alternar entre as duas áreas.
 
-No desktop (`≥ 768px`), o layout atual de 12 colunas (8/4) é mantido sem alterações.
+Adicionar timeout configurável e visível (com contagem regressiva) para todas as operações que aguardam resposta do `fiscal-worker` — emissão NFe/NFCe, cancelamento, inutilização e envio de e-mail — tanto no PDV quanto no Gerenciador Fiscal.
 
-Adicionalmente, a barra inferior de atalhos (F1, F2, F3, F4, F5, F6, F9, Esc) — hoje renderizada apenas como `<kbd>` informativos — passa a ser **botões clicáveis** que executam a mesma ação do teclado, tornando o PDV utilizável sem teclado físico (ideal para celular/tablet).
+## 1. Banco de dados
 
-## Mudanças (arquivo único: `src/components/forms/pdv/PdvTela.tsx`)
+Adicionar coluna em `fiscal_config`:
 
-### 1. Grid principal responsivo (linha 678)
-Substituir o container do grid por uma estrutura híbrida:
+- `nr_timeout_nfe` (int, default 60) — tempo limite em segundos, único para todas as operações fiscais.
 
-- **Desktop (`md:`)**: mantém `grid grid-cols-12 gap-3 p-3` (8/4) como hoje.
-- **Mobile**: usa `flex` com `overflow-x-auto snap-x snap-mandatory`, e cada coluna recebe `w-screen snap-start shrink-0` (em vez de `col-span-*`). Largura total natural = 2× viewport.
+## 2. Tela de Configuração Fiscal
 
-Forma proposta (Tailwind):
+Em `src/components/forms/FiscalConfigForm.tsx`, na aba geral, adicionar:
+
+- Campo numérico "Tempo limite de espera (segundos)" — default 60, mínimo 10, máximo 300.
+
+## 3. Camada de serviço
+
+`src/services/fiscalEmissaoService.ts`:
+
+- Helper `obterTimeoutFiscal(empresaId): Promise<number>` — lê `nr_timeout_nfe` da `fiscal_config` (cache curto por empresa, fallback 60s) e devolve em ms.
+- Refatorar `aguardarEvento(eventoId, timeoutMs?, onTick?)`:
+  - se `timeoutMs` ausente → usa `obterTimeoutFiscal(empresaId)`;
+  - **dispara `onTick(segundosRestantes)` a cada 2 segundos** (regressivo);
+  - ao expirar: marca o `fiscal_evento` com `status='TIMEOUT'` e `mensagem_erro='Tempo limite excedido (Xs) aguardando o Fiscal Worker'`, e resolve `{ success:false, status:'TIMEOUT', mensagem }` (não rejeita).
+- Substituir os timeouts hardcoded (`15000`, `20000`, `25000`, `90000`) pelo helper em:
+  - `emitirNfce` / `emitirNfe`
+  - `enviarEmail`
+  - `cancelarDocumento`
+  - `inutilizar` (se houver chamada equivalente)
+
+`src/services/provedorService.ts`:
+
+- Substituir o `timeoutMs = 25000` fixo do `enviarComando` pelo mesmo helper, com fallback de 60s.
+- Aceitar `onTick` opcional para reuso pelo Gerenciador Fiscal.
+
+## 4. UI — dialog reutilizável com contagem regressiva
+
+Criar `src/components/fiscal/FiscalProgressDialog.tsx`:
+
+- Modal **não-fechável** (sem botão "Cancelar espera") enquanto a operação está em andamento — só fecha quando o serviço retorna ou quando o timeout zera.
+- Conteúdo:
+  - Título dinâmico ("Emitindo NFC-e…", "Cancelando NF-e…", "Enviando e-mail…", etc.).
+  - Barra de progresso com `value = (restante / total) * 100`.
+  - Texto grande "Liberando em **Xs**" atualizado pelo `onTick` a cada 2s.
+- Ao atingir 0: fecha automaticamente, exibe `toast.error("Tempo limite excedido")`. O serviço já marcou o evento como `TIMEOUT`; quando/se o worker concluir depois, o realtime existente atualiza o registro normalmente.
+
+## 5. Integrações de UI
+
+Envolver toda chamada que dispara operação fiscal pelo dialog acima:
+
+- `src/components/forms/pdv/OpcoesPagamentoDialog.tsx` (NFC-e do caixa) — substitui o `nEvento(..., 90000)` por chamada com `onTick`.
+- `src/components/forms/pdv/FiscalEmailDialog.tsx` — envio de e-mail.
+- `src/components/forms/ListaNfeEmitidaForm.tsx` (Gerenciador Fiscal) — `nEmail` e `nDocumento` (cancelamento).
+- Qualquer outro ponto de emissão/cancelamento NFe/NFCe acionado pelo Gerenciador Fiscal.
+
+## 6. Detalhes técnicos
 
 ```text
-container:  flex overflow-x-auto snap-x snap-mandatory
-            md:grid md:grid-cols-12 md:gap-3 md:overflow-hidden
-            p-3 flex-1
+fiscal_config
+  + nr_timeout_nfe int default 60        -- segundos (único parâmetro)
 
-coluna 1:   w-screen shrink-0 snap-start
-            md:w-auto md:shrink md:col-span-8
-            (resto das classes atuais preservadas)
+fiscalEmissaoService
+  obterTimeoutFiscal(empresaId): ms      -- cache por empresa
+  aguardarEvento(id, timeoutMs?, onTick?)
+    - sem timeoutMs -> obterTimeoutFiscal
+    - poll do evento em loop curto (300ms)
+    - setInterval(2000) -> onTick(segundosRestantes)
+    - ao expirar: UPDATE fiscal_evento SET status='TIMEOUT'
+                  resolve { success:false, status:'TIMEOUT', mensagem }
 
-coluna 2:   w-screen shrink-0 snap-start
-            md:w-auto md:shrink md:col-span-4
-            (resto preservado)
+<FiscalProgressDialog
+  open
+  titulo="Emitindo NFC-e..."
+  segundosTotais={timeoutSegundos}
+  segundosRestantes={tickValue}
+/>
 ```
 
-Observação técnica: como `w-screen` em mobile inclui o `p-3` do container, ajustar para `w-[calc(100vw-1.5rem)]` ou remover padding lateral em mobile (`px-0 md:p-3`) para que cada painel encaixe perfeitamente na tela. Adicionar `scroll-smooth` para experiência melhor.
+Padrão de uso:
 
-### 2. Atalhos como botões clicáveis (linhas 888–905)
-Refatorar a barra de atalhos para que cada item seja um `<button>` em vez de `<span>`. Cada botão dispara a mesma ação que o `useEffect` de `keydown` já executa:
-
-- **F1** → `setXShowAtalhos(p => !p)`
-- **F2** → focar `searchRef`
-- **F3** → `setXOpenCliente(true)` (se `!XPedidoSel`)
-- **F4** → `setXOpenVend(true)` (se `!XPedidoSel && XPodeInfVend`)
-- **F5** → `carregarPedidos()`
-- **F6** → `setXOpenDesc(true)` (se `!XPedidoSel && XCart.length > 0`)
-- **F9** → `finalizarVenda()`
-- **Esc** → `setXPedidoSel(null)`
-
-O badge (`<kbd>`) continua aparecendo dentro do botão à esquerda do label, preservando o visual atual. Em mobile, a barra ganha `overflow-x-auto` para acomodar todos os botões.
-
-Para evitar duplicação entre teclado e clique, extrair as ações em um pequeno objeto/handler reutilizado por ambos os caminhos (opcional; pode-se manter inline se preferir mudança mínima).
-
-### 3. Sem mudanças em
-- Lógica de negócio (criação de movimento, pagamento, fiscal, impressão)
-- Outros formulários do PDV (FuncoesDialog, PagamentoDialog, etc.)
-- Layout desktop (mantido idêntico via breakpoint `md:`)
-
-## Resultado esperado
-
-- **Desktop**: nenhum impacto visual.
-- **Mobile**: ao abrir o PDV, vê-se a Venda Direta ocupando 100% da tela. Deslizando para a direita (ou clicando o atalho), aparece Pedidos a Receber + Resumo + botão Finalizar. Os botões F1…F9 ficam tocáveis para uso sem teclado.
+```ts
+const total = await fiscalEmissaoService.obterTimeoutFiscalSeg(empresaId);
+setProg({ open:true, total, restante: total, titulo:"Emitindo NFC-e..." });
+const r = await fiscalEmissaoService.aguardarEvento(
+  eventoId, total*1000,
+  (s) => setProg(p => ({ ...p, restante: s }))
+);
+setProg(p => ({ ...p, open:false }));
+```
