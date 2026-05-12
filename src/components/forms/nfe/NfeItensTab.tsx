@@ -6,10 +6,29 @@ import GridActionToolbar, { gridActions } from "@/components/grid/GridActionTool
 import { Link } from "lucide-react";
 import type { INfeItem } from "./types";
 
-const db = supabase as any;
+const db = supabase;
+type XFieldValue = string | number | boolean | null | undefined;
+type XFormItem = Partial<INfeItem> & Record<string, XFieldValue>;
+type XItemRow = XFormItem & { nfe_item_id?: number; produto_id?: number | null; _produto_nome?: string | null };
+type XPayload = Record<string, string | number | null>;
+type XProdutoOption = { produto_id: number; nome: string; referencia?: string };
+type XTextInputProps = { k: string; label: string; span?: number; digits?: boolean; max?: number; upper?: boolean; right?: boolean };
+type XNumInputProps = { k: string; label: string; span?: number; readOnly?: boolean };
 
-const fmt6 = (v: number) => Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 6, maximumFractionDigits: 6 });
-const fmt2 = (v: number) => Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const parseNum = (XValue: unknown) => {
+  if (XValue === undefined || XValue === null || XValue === "") return 0;
+  if (typeof XValue === "number") return XValue;
+  const XNormalized = String(XValue).replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
+  const XParsed = parseFloat(XNormalized);
+  return isNaN(XParsed) ? 0 : XParsed;
+};
+
+const fmt = (XValue: unknown, XDecimals: number) => Number(parseNum(XValue) || 0).toLocaleString("pt-BR", {
+  minimumFractionDigits: XDecimals,
+  maximumFractionDigits: XDecimals,
+});
+const fmt2 = (XValue: unknown) => fmt(XValue, 2);
+const fmt4 = (XValue: unknown) => fmt(XValue, 4);
 
 interface NfeItensTabProps {
   nfeCabecalhoId: number | null;
@@ -21,27 +40,127 @@ interface NfeItensTabProps {
 const COLS: IGridColumn[] = [
   { key: "nr_item",       label: "Item",        width: "60px",   align: "right" },
   { key: "cd_prod_fornec",label: "Cód. Forn.",  width: "100px" },
-  { key: "_produto",      label: "Produto",     width: "2fr",    render: (r) => r._produto_nome || <span className="text-amber-500 italic text-xs">⚠ sem vínculo</span> },
+  { key: "_produto",      label: "Produto",     width: "2fr",    render: (r) => r._produto_nome || <span className="text-destructive italic text-xs">sem vínculo</span> },
   { key: "nm_produto",    label: "Desc. NF",    width: "2fr" },
   { key: "ncm",           label: "NCM",         width: "90px" },
+  { key: "cest",          label: "CEST",        width: "90px" },
   { key: "cfop",          label: "CFOP",        width: "70px" },
   { key: "unidade",       label: "Un.",         width: "60px",   align: "center" },
-  { key: "qt_entrada",    label: "Qtd.",        width: "100px",  align: "right", render: (r) => fmt6(r.qt_entrada) },
-  { key: "vl_unit",       label: "Vlr. Unit.",  width: "110px",  align: "right", render: (r) => fmt6(r.vl_unit) },
+  { key: "qt_entrada",    label: "Qtd.",        width: "100px",  align: "right", render: (r) => fmt4(r.qt_entrada) },
+  { key: "vl_unit",       label: "Vlr. Unit.",  width: "110px",  align: "right", render: (r) => fmt2(r.vl_unit) },
   { key: "vl_desconto",   label: "Desc.",       width: "90px",   align: "right", render: (r) => fmt2(r.vl_desconto) },
   { key: "vl_ipi",        label: "IPI",         width: "90px",   align: "right", render: (r) => fmt2(r.vl_ipi) },
   { key: "vl_icms_st",    label: "ICMS-ST",     width: "90px",   align: "right", render: (r) => fmt2(r.vl_icms_st) },
   { key: "vl_total",      label: "Total",       width: "110px",  align: "right", render: (r) => fmt2(r.vl_total) },
 ];
 
-const emptyItem = (): Partial<INfeItem> => ({
-  nr_item: 0, cd_prod_fornec: "", nm_produto: "", ncm: "", cfop: "", unidade: "",
-  gtin: "", qt_entrada: 0, vl_unit: 0, vl_desconto: 0, vl_total: 0,
-  vl_ipi: 0, vl_icms_st: 0, vl_pis: 0, vl_cofins: 0, vl_fcp_st: 0,
-  pc_ipi: 0, pc_icms: 0, pc_icms_st: 0, pc_pis: 0, pc_cofins: 0, pc_fcp_st: 0,
-  cst_icms: "", cst_ipi: "", cst_pis: "", cst_cofins: "", pc_mva: 0, vl_bc_st: 0,
+const XPercentKeys = new Set([
+  "pc_ipi", "pc_icms", "pc_icms_st", "pc_pis", "pc_cofins", "pc_fcp_st", "pc_ibs", "pc_cbs", "pc_is",
+  "pc_mva", "pc_cred_sn", "pc_fcp", "pc_red_bc", "pc_red_bc_st",
+]);
+const XQuantityKeys = new Set(["qt_entrada", "qt_tributavel"]);
+const XIntKeys = new Set(["nr_item", "origem", "mod_bc", "mod_bc_st"]);
+const XValueKeys = new Set([
+  "vl_unit", "vl_unit_tributavel", "vl_desconto", "vl_total", "vl_ipi", "vl_icms_st", "vl_pis", "vl_cofins",
+  "vl_fcp_st", "vl_ibs", "vl_cbs", "vl_is", "vl_bc", "vl_bc_st", "vl_bc_ipi", "vl_bc_pis", "vl_bc_cofins",
+  "vl_cred_sn", "vl_fcp", "vl_frete", "vl_icms", "vl_icms_deson", "vl_outro", "vl_seguro",
+]);
+const XNumericKeys = new Set([...XPercentKeys, ...XQuantityKeys, ...XValueKeys]);
+
+const XTextKeys = [
+  "cd_prod_fornec", "nm_produto", "ncm", "cfop", "unidade", "gtin", "csosn", "cest", "c_enq",
+  "cst_icms", "cst_ipi", "cst_pis", "cst_cofins", "cst_ibs", "cst_cbs", "cst_is",
+];
+
+const decimalsFor = (XKey: string) => {
+  if (XPercentKeys.has(XKey)) return 4;
+  if (XQuantityKeys.has(XKey)) return 4;
+  if (XIntKeys.has(XKey)) return 0;
+  return 2;
+};
+
+const fmtInput = (XValue: unknown, XKey: string) => {
+  if (XValue === undefined || XValue === null || XValue === "") return "";
+  if (XIntKeys.has(XKey)) return String(parseInt(String(XValue), 10) || 0);
+  return parseNum(XValue).toFixed(decimalsFor(XKey)).replace(".", ",");
+};
+
+const onlyDigits = (XValue: string, XMax?: number) => {
+  const XDigits = XValue.replace(/\D/g, "");
+  return XMax ? XDigits.slice(0, XMax) : XDigits;
+};
+
+const emptyItem = (): XFormItem => ({
+  nr_item: 0,
+  cd_prod_fornec: "",
+  nm_produto: "",
+  ncm: "",
+  cfop: "",
+  unidade: "",
+  gtin: "",
+  origem: 0,
+  csosn: "",
+  cest: "",
+  c_enq: "",
+  qt_entrada: 0,
+  qt_tributavel: 0,
+  vl_unit: 0,
+  vl_unit_tributavel: 0,
+  vl_desconto: 0,
+  vl_frete: 0,
+  vl_seguro: 0,
+  vl_outro: 0,
+  vl_total: 0,
+  mod_bc: 0,
+  vl_bc: 0,
+  pc_red_bc: 0,
+  vl_icms: 0,
+  pc_fcp: 0,
+  vl_fcp: 0,
+  vl_icms_deson: 0,
+  mod_bc_st: 0,
+  vl_ipi: 0,
+  vl_icms_st: 0,
+  vl_pis: 0,
+  vl_cofins: 0,
+  vl_fcp_st: 0,
+  vl_ibs: 0,
+  vl_cbs: 0,
+  vl_is: 0,
+  vl_cred_sn: 0,
+  pc_ipi: 0,
+  pc_icms: 0,
+  pc_icms_st: 0,
+  pc_pis: 0,
+  pc_cofins: 0,
+  pc_fcp_st: 0,
+  pc_ibs: 0,
+  pc_cbs: 0,
+  pc_is: 0,
+  pc_mva: 0,
+  pc_cred_sn: 0,
+  pc_red_bc_st: 0,
+  cst_icms: "",
+  cst_ipi: "",
+  cst_pis: "",
+  cst_cofins: "",
+  cst_ibs: "",
+  cst_cbs: "",
+  cst_is: "",
+  vl_bc_st: 0,
+  vl_bc_ipi: 0,
+  vl_bc_pis: 0,
+  vl_bc_cofins: 0,
   produto_id: undefined,
 });
+
+const formatItemForEdit = (XItem: XFormItem) => {
+  const XFormatted: XFormItem = { ...XItem };
+  [...XNumericKeys, ...XIntKeys].forEach((XKey) => {
+    if (XFormatted[XKey] !== undefined && XFormatted[XKey] !== null) XFormatted[XKey] = fmtInput(XFormatted[XKey], XKey);
+  });
+  return XFormatted;
+};
 
 const NfeItensTab: React.FC<NfeItensTabProps> = ({
   nfeCabecalhoId,
@@ -49,38 +168,38 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
   podeEditar,
   onTotaisChanged,
 }) => {
-  const [XItens, setXItens] = useState<any[]>([]);
+  const [XItens, setXItens] = useState<XItemRow[]>([]);
   const [XCurrentIdx, setXCurrentIdx] = useState<number | null>(null);
   const [XMode, setXMode] = useState<"view" | "edit" | "insert">("view");
-  const [XF, setXF] = useState<Partial<INfeItem>>(emptyItem());
-  const [XProdutos, setXProdutos] = useState<{ produto_id: number; nome: string; referencia: string }[]>([]);
+  const [XF, setXF] = useState<XFormItem>(formatItemForEdit(emptyItem()));
+  const [XProdutos, setXProdutos] = useState<{ produto_id: number; nome: string; referencia?: string }[]>([]);
 
   const loadItens = useCallback(async () => {
     if (!nfeCabecalhoId) { setXItens([]); return; }
     const { data, error } = await db.from("fiscal_nfe_item").select("*").eq("nfe_cabecalho_id", nfeCabecalhoId).eq("excluido", false).order("nr_item");
     if (error) { toast.error("Erro ao carregar itens: " + error.message); return; }
 
-    const rows = data || [];
-    const prodIds = [...new Set(rows.map((r: any) => r.produto_id).filter(Boolean))];
-    let prodMap: Record<number, string> = {};
+    const rows: XItemRow[] = data || [];
+    const prodIds = [...new Set(rows.map((r) => r.produto_id).filter(Boolean))];
+    const prodMap: Record<number, string> = {};
     if (prodIds.length > 0) {
       const { data: prods } = await db.from("produto").select("produto_id, nome").in("produto_id", prodIds);
-      (prods || []).forEach((p: any) => { prodMap[p.produto_id] = p.nome; });
+      ((prods || []) as XProdutoOption[]).forEach((p) => { prodMap[p.produto_id] = p.nome; });
     }
-    const enriched = rows.map((r: any) => ({ ...r, _produto_nome: r.produto_id ? (prodMap[r.produto_id] || `#${r.produto_id}`) : null }));
+    const enriched = rows.map((r) => ({ ...r, _produto_nome: r.produto_id ? (prodMap[r.produto_id] || `#${r.produto_id}`) : null }));
     setXItens(enriched);
 
     if (onTotaisChanged) {
-      const vl_total = enriched.reduce((a: number, i: any) => a + Number(i.vl_total || 0), 0);
-      const vl_ipi = enriched.reduce((a: number, i: any) => a + Number(i.vl_ipi || 0), 0);
-      const vl_icms_st = enriched.reduce((a: number, i: any) => a + Number(i.vl_icms_st || 0), 0);
+      const vl_total = enriched.reduce((a: number, i) => a + Number(i.vl_total || 0), 0);
+      const vl_ipi = enriched.reduce((a: number, i) => a + Number(i.vl_ipi || 0), 0);
+      const vl_icms_st = enriched.reduce((a: number, i) => a + Number(i.vl_icms_st || 0), 0);
       onTotaisChanged({ vl_total, vl_ipi, vl_icms_st });
     }
   }, [nfeCabecalhoId, onTotaisChanged]);
 
   useEffect(() => {
     const loadProdutos = async () => {
-      const { data } = await db.from("produto").select("produto_id, nome").eq("excluido", false).order("nome").limit(500);
+      const { data } = await db.from("produto").select("produto_id, nome, referencia").eq("excluido", false).order("nome").limit(500);
       setXProdutos(data || []);
     };
     loadProdutos();
@@ -88,77 +207,257 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
 
   useEffect(() => { loadItens(); }, [loadItens]);
 
-  const set = (key: string, val: any) => setXF(prev => ({ ...prev, [key]: val }));
-  const parseNum = (v: any) => { if (!v && v !== 0) return 0; if (typeof v === "number") return v; const s = String(v).replace(/\s/g, "").replace(/\./g, "").replace(",", "."); const n = parseFloat(s); return isNaN(n) ? 0 : n; };
-  const recalcTotal = (f: Partial<INfeItem>) => { const qt = parseNum(f.qt_entrada); const vlu = parseNum(f.vl_unit); const desc = parseNum(f.vl_desconto); return Math.round((qt * vlu - desc + Number.EPSILON) * 100) / 100; };
+  const set = (key: string, val: XFieldValue) => setXF(prev => ({ ...prev, [key]: val }));
+  const recalcTotal = (f: Partial<INfeItem>) => {
+    const qt = parseNum(f.qt_entrada);
+    const vlu = parseNum(f.vl_unit);
+    const desc = parseNum(f.vl_desconto);
+    return Math.round((qt * vlu - desc + Number.EPSILON) * 100) / 100;
+  };
 
   const handleBlur = (key: string) => {
-    const current = XF[key as keyof INfeItem];
+    const current = XF[key];
     if (current === undefined || current === null || current === "") return;
-    const val = parseNum(current);
-    const decimals = (key === "qt_entrada" || key === "vl_unit") ? 6 : 2;
-    set(key, val.toFixed(decimals).replace(".", ","));
+    set(key, fmtInput(current, key));
+  };
+
+  const handleNovo = () => {
+    setXMode("insert");
+    setXF(formatItemForEdit({ ...emptyItem(), nr_item: XItens.length + 1 }));
+    setXCurrentIdx(null);
+  };
+
+  const handleEditar = () => {
+    if (XCurrentIdx === null) return;
+    setXMode("edit");
+    setXF(formatItemForEdit({ ...XItens[XCurrentIdx], produto_id: XItens[XCurrentIdx].produto_id || undefined }));
+  };
+
+  const buildPayload = () => {
+    const XPayload: XPayload = {
+      nfe_cabecalho_id: nfeCabecalhoId,
+      empresa_id: empresaId,
+      produto_id: XF.produto_id ? Number(XF.produto_id) : null,
+      nr_item: parseInt(String(XF.nr_item || XItens.length + 1), 10) || XItens.length + 1,
+    };
+
+    XTextKeys.forEach((XKey) => {
+      const XRaw = String(XF[XKey] ?? "").trim();
+      if (["ncm", "cfop", "cest", "gtin", "csosn", "c_enq"].includes(XKey)) {
+        XPayload[XKey] = onlyDigits(XRaw, XKey === "ncm" ? 8 : XKey === "cfop" ? 4 : XKey === "cest" ? 7 : undefined);
+      } else {
+        XPayload[XKey] = XRaw.toUpperCase();
+      }
+    });
+
+    XIntKeys.forEach((XKey) => {
+      if (XKey !== "nr_item") XPayload[XKey] = parseInt(String(XF[XKey] || "0"), 10) || 0;
+    });
+
+    XNumericKeys.forEach((XKey) => {
+      XPayload[XKey] = parseNum(XF[XKey]);
+    });
+
+    if (!String(XF.vl_total ?? "").trim() || parseNum(XF.vl_total) === 0) XPayload.vl_total = recalcTotal(XF);
+    return XPayload;
   };
 
   const handleSalvar = async () => {
-    if (!nfeCabecalhoId) return;
+    if (!nfeCabecalhoId) { toast.error("Salve o cabeçalho da NF-e antes de gravar os itens."); return; }
     if (!XF.nm_produto?.trim()) { toast.error("Informe a descrição do produto."); return; }
-    const payload: any = { ...XF, nfe_cabecalho_id: nfeCabecalhoId, empresa_id: empresaId, nm_produto: XF.nm_produto!.toUpperCase(), qt_entrada: parseNum(XF.qt_entrada), vl_unit: parseNum(XF.vl_unit), vl_desconto: parseNum(XF.vl_desconto), vl_total: recalcTotal(XF) };
+
+    const payload = buildPayload();
     if (XMode === "edit" && XCurrentIdx !== null) {
-      await db.from("fiscal_nfe_item").update({ ...payload, updated_at: new Date().toISOString() }).eq("nfe_item_id", XItens[XCurrentIdx].nfe_item_id);
+      const { error } = await db.from("fiscal_nfe_item")
+        .update({ ...payload, updated_at: new Date().toISOString() })
+        .eq("nfe_item_id", XItens[XCurrentIdx].nfe_item_id);
+      if (error) { toast.error("Erro ao atualizar item: " + error.message); return; }
+      toast.success("Item atualizado.");
     } else {
-      await db.from("fiscal_nfe_item").insert(payload);
+      const { error } = await db.from("fiscal_nfe_item").insert(payload);
+      if (error) { toast.error("Erro ao incluir item: " + error.message); return; }
+      toast.success("Item incluído.");
     }
-    setXMode("view"); setXCurrentIdx(null); await loadItens();
+    setXMode("view");
+    setXCurrentIdx(null);
+    await loadItens();
+  };
+
+  const handleExcluir = async () => {
+    if (XCurrentIdx === null) return;
+    if (!confirm("Excluir este item?")) return;
+    const { error } = await db.from("fiscal_nfe_item")
+      .update({ excluido: true, updated_at: new Date().toISOString() })
+      .eq("nfe_item_id", XItens[XCurrentIdx].nfe_item_id);
+    if (error) { toast.error("Erro ao excluir item: " + error.message); return; }
+    toast.success("Item excluído.");
+    setXCurrentIdx(null);
+    await loadItens();
   };
 
   const isEditing = XMode === "edit" || XMode === "insert";
-  const inputCls = "w-full border-b border-border bg-transparent px-1 py-1 text-sm focus:border-primary outline-none transition-all";
+  const inputCls = "w-full border border-border rounded px-2 py-1.5 text-sm bg-card focus:ring-2 focus:ring-ring outline-none disabled:opacity-70";
+  const readCls = "w-full border border-border rounded px-2 py-1.5 text-sm bg-secondary text-right";
+
+  const renderTxt = ({ k, label, span = 2, digits, max, upper = true, right = false }: XTextInputProps) => (
+    <div style={{ gridColumn: `span ${span} / span ${span}` }}>
+      <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
+      <input
+        type="text"
+        value={String(XF[k] ?? "")}
+        onChange={e => {
+          const XVal = digits ? onlyDigits(e.target.value, max) : (upper ? e.target.value.toUpperCase() : e.target.value);
+          set(k, XVal);
+        }}
+        className={`${inputCls} ${right ? "text-right" : ""}`}
+        inputMode={digits ? "numeric" : "text"}
+        maxLength={max}
+      />
+    </div>
+  );
+
+  const renderNum = ({ k, label, span = 2, readOnly = false }: XNumInputProps) => (
+    <div style={{ gridColumn: `span ${span} / span ${span}` }}>
+      <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
+      <input
+        type="text"
+        value={String(XF[k] ?? "")}
+        onBlur={() => handleBlur(k)}
+        onChange={e => !readOnly && set(k, e.target.value)}
+        readOnly={readOnly}
+        className={`${readOnly ? readCls : inputCls} text-right`}
+        inputMode="decimal"
+      />
+    </div>
+  );
+
+  const renderSection = (title: string, children: React.ReactNode) => (
+    <fieldset className="border border-border rounded p-3">
+      <legend className="text-xs font-medium text-muted-foreground px-2">{title}</legend>
+      <div className="grid grid-cols-12 gap-3">{children}</div>
+    </fieldset>
+  );
 
   return (
     <div className="space-y-4">
-      {/* Formulário de item com Estilo Premium */}
       {isEditing && (
-        <div className="p-4 bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-border/60 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-          <div className="grid grid-cols-12 gap-4">
-            <div className="col-span-1">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Item</label>
-              <input type="number" value={XF.nr_item || ""} onChange={e => set("nr_item", parseInt(e.target.value) || 0)} className={inputCls + " text-right"} />
-            </div>
-            <div className="col-span-7">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Descrição NF</label>
+        <div className="p-3 bg-card rounded border border-border space-y-3 max-h-[70vh] overflow-y-auto">
+          {renderSection("Identificação", (
+              <>
+            {renderNum({ k: "nr_item", label: "Item", span: 1 })}
+            {renderTxt({ k: "cd_prod_fornec", label: "Cód. Forn.", span: 2 })}
+            {renderTxt({ k: "gtin", label: "GTIN", span: 2, digits: true, max: 14 })}
+            {renderTxt({ k: "ncm", label: "NCM", span: 2, digits: true, max: 8 })}
+            {renderTxt({ k: "cest", label: "CEST", span: 1, digits: true, max: 7 })}
+            {renderTxt({ k: "cfop", label: "CFOP", span: 1, digits: true, max: 4 })}
+            {renderTxt({ k: "unidade", label: "Un.", span: 1 })}
+            {renderTxt({ k: "c_enq", label: "cEnq", span: 2, digits: true, max: 3 })}
+            <div className="col-span-8">
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Descrição NF</label>
               <input value={XF.nm_produto || ""} onChange={e => set("nm_produto", e.target.value.toUpperCase())} className={inputCls} />
             </div>
             <div className="col-span-4">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 flex items-center gap-1"><Link size={12}/> Produto Vinculado</label>
-              <select value={XF.produto_id ?? ""} onChange={e => set("produto_id", e.target.value ? parseInt(e.target.value) : undefined)} className="w-full border-b border-border bg-transparent py-1 text-sm outline-none focus:border-primary">
+              <label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1"><Link size={12}/> Produto Vinculado</label>
+              <select value={XF.produto_id ?? ""} onChange={e => set("produto_id", e.target.value ? parseInt(e.target.value) : undefined)} className={inputCls}>
                 <option value="">— Selecione —</option>
-                {XProdutos.map(p => <option key={p.produto_id} value={p.produto_id}>{p.nome}</option>)}
+                {XProdutos.map(p => <option key={p.produto_id} value={p.produto_id}>{p.produto_id} — {p.nome}</option>)}
               </select>
             </div>
-          </div>
-          <div className="grid grid-cols-12 gap-4 items-end">
-            <div className="col-span-2">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantidade</label>
-              <input type="text" value={XF.qt_entrada || ""} onBlur={() => handleBlur("qt_entrada")} onChange={e => set("qt_entrada", e.target.value)} className={inputCls + " text-right font-bold"} />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Vlr. Unitário</label>
-              <input type="text" value={XF.vl_unit || ""} onBlur={() => handleBlur("vl_unit")} onChange={e => set("vl_unit", e.target.value)} className={inputCls + " text-right font-bold text-emerald-600"} />
-            </div>
-            <div className="col-span-3 flex gap-2 justify-end ml-auto">
-               <button onClick={handleSalvar} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-border bg-transparent text-emerald-600 hover:bg-emerald-50 transition-all">
-                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Salvar
-               </button>
-               <button onClick={() => { setXMode("view"); setXCurrentIdx(null); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-border bg-transparent text-rose-600 hover:bg-rose-50 transition-all">
-                 <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> Cancelar
-               </button>
-            </div>
+          </>
+            ))}
+
+          {renderSection("Quantidades e Valores", (
+            <>
+            {renderNum({ k: "qt_entrada", label: "Quantidade", span: 2 })}
+            {renderNum({ k: "qt_tributavel", label: "Qtd. Tributável", span: 2 })}
+            {renderNum({ k: "vl_unit", label: "Vlr. Unitário", span: 2 })}
+            {renderNum({ k: "vl_unit_tributavel", label: "Vlr. Unit. Trib.", span: 2 })}
+            {renderNum({ k: "vl_desconto", label: "Desconto", span: 2 })}
+            {renderNum({ k: "vl_frete", label: "Frete", span: 2 })}
+            {renderNum({ k: "vl_seguro", label: "Seguro", span: 2 })}
+            {renderNum({ k: "vl_outro", label: "Outras Desp.", span: 2 })}
+            {renderNum({ k: "vl_total", label: "Total", span: 2 })}
+          </>
+            ))}
+
+          {renderSection("ICMS", (
+            <>
+            {renderNum({ k: "origem", label: "Origem", span: 1 })}
+            {renderTxt({ k: "cst_icms", label: "CST", span: 1, digits: true, max: 3 })}
+            {renderTxt({ k: "csosn", label: "CSOSN", span: 1, digits: true, max: 4 })}
+            {renderNum({ k: "mod_bc", label: "Mod. BC", span: 1 })}
+            {renderNum({ k: "vl_bc", label: "BC ICMS", span: 2 })}
+            {renderNum({ k: "pc_red_bc", label: "Red. BC %", span: 2 })}
+            {renderNum({ k: "pc_icms", label: "ICMS %", span: 2 })}
+            {renderNum({ k: "vl_icms", label: "Vlr. ICMS", span: 2 })}
+            {renderNum({ k: "pc_fcp", label: "FCP %", span: 2 })}
+            {renderNum({ k: "vl_fcp", label: "Vlr. FCP", span: 2 })}
+            {renderNum({ k: "vl_icms_deson", label: "ICMS Deson.", span: 2 })}
+          </>
+            ))}
+
+          {renderSection("ICMS-ST / FCP-ST / Crédito SN", (
+            <>
+            {renderNum({ k: "mod_bc_st", label: "Mod. BC ST", span: 1 })}
+            {renderNum({ k: "pc_mva", label: "MVA %", span: 2 })}
+            {renderNum({ k: "vl_bc_st", label: "BC ST", span: 2 })}
+            {renderNum({ k: "pc_red_bc_st", label: "Red. BC ST %", span: 2 })}
+            {renderNum({ k: "pc_icms_st", label: "ICMS-ST %", span: 2 })}
+            {renderNum({ k: "vl_icms_st", label: "Vlr. ICMS-ST", span: 2 })}
+            {renderNum({ k: "pc_fcp_st", label: "FCP-ST %", span: 2 })}
+            {renderNum({ k: "vl_fcp_st", label: "Vlr. FCP-ST", span: 2 })}
+            {renderNum({ k: "pc_cred_sn", label: "Créd. SN %", span: 2 })}
+            {renderNum({ k: "vl_cred_sn", label: "Vlr. Créd. SN", span: 2 })}
+          </>
+            ))}
+
+          {renderSection("IPI", (
+            <>
+            {renderTxt({ k: "cst_ipi", label: "CST IPI", span: 2, digits: true, max: 2 })}
+            {renderNum({ k: "vl_bc_ipi", label: "BC IPI", span: 2 })}
+            {renderNum({ k: "pc_ipi", label: "IPI %", span: 2 })}
+            {renderNum({ k: "vl_ipi", label: "Vlr. IPI", span: 2 })}
+          </>
+            ))}
+
+          {renderSection("PIS / COFINS", (
+            <>
+            {renderTxt({ k: "cst_pis", label: "CST PIS", span: 2, digits: true, max: 2 })}
+            {renderNum({ k: "vl_bc_pis", label: "BC PIS", span: 2 })}
+            {renderNum({ k: "pc_pis", label: "PIS %", span: 2 })}
+            {renderNum({ k: "vl_pis", label: "Vlr. PIS", span: 2 })}
+            {renderTxt({ k: "cst_cofins", label: "CST COFINS", span: 2, digits: true, max: 2 })}
+            {renderNum({ k: "vl_bc_cofins", label: "BC COFINS", span: 2 })}
+            {renderNum({ k: "pc_cofins", label: "COFINS %", span: 2 })}
+            {renderNum({ k: "vl_cofins", label: "Vlr. COFINS", span: 2 })}
+          </>
+            ))}
+
+          {renderSection("IBS / CBS / IS (Reforma)", (
+            <>
+            {renderTxt({ k: "cst_ibs", label: "CST IBS", span: 2, digits: true, max: 3 })}
+            {renderNum({ k: "pc_ibs", label: "IBS %", span: 2 })}
+            {renderNum({ k: "vl_ibs", label: "Vlr. IBS", span: 2 })}
+            {renderTxt({ k: "cst_cbs", label: "CST CBS", span: 2, digits: true, max: 3 })}
+            {renderNum({ k: "pc_cbs", label: "CBS %", span: 2 })}
+            {renderNum({ k: "vl_cbs", label: "Vlr. CBS", span: 2 })}
+            {renderTxt({ k: "cst_is", label: "CST IS", span: 2, digits: true, max: 3 })}
+            {renderNum({ k: "pc_is", label: "IS %", span: 2 })}
+            {renderNum({ k: "vl_is", label: "Vlr. IS", span: 2 })}
+          </>
+            ))}
+
+          <div className="flex gap-2 justify-end pt-2 sticky bottom-0 bg-card border-t border-border">
+            <button type="button" onClick={handleSalvar} className="px-4 py-2 text-xs font-bold rounded border border-border bg-primary text-primary-foreground hover:bg-primary/90 transition-all">
+              Salvar
+            </button>
+            <button type="button" onClick={() => { setXMode("view"); setXCurrentIdx(null); }} className="px-4 py-2 text-xs font-bold rounded border border-border bg-card text-destructive hover:bg-accent transition-all">
+              Cancelar
+            </button>
           </div>
         </div>
       )}
 
-      {/* Grid de itens com botões integrados na mesma linha */}
       <DataGrid
         columns={COLS}
         data={XItens}
@@ -167,13 +466,14 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
         showRecordCount={false}
         selectedIdx={XCurrentIdx}
         onRowClick={(_, idx) => setXCurrentIdx(idx)}
+        onRowDoubleClick={(_, idx) => { setXCurrentIdx(idx); if (podeEditar && !isEditing) { setXMode("edit"); setXF(formatItemForEdit({ ...XItens[idx], produto_id: XItens[idx].produto_id || undefined })); } }}
         toolbarLeft={podeEditar ? (
           <GridActionToolbar
             actions={[
-              gridActions.incluir(() => { setXMode("insert"); setXF(emptyItem()); setXCurrentIdx(null); }),
-              gridActions.alterar(() => { if (XCurrentIdx !== null) { setXMode("edit"); setXF({ ...XItens[XCurrentIdx] }); } }, XCurrentIdx === null || isEditing),
+              gridActions.incluir(handleNovo, isEditing),
+              gridActions.alterar(handleEditar, XCurrentIdx === null || isEditing),
               null,
-              gridActions.excluir(() => { if (confirm("Excluir?")) { /* lógica excluir */ } }, XCurrentIdx === null || isEditing),
+              gridActions.excluir(handleExcluir, XCurrentIdx === null || isEditing),
               gridActions.atualizar(loadItens),
             ]}
             count={`${XItens.length} item(s)`}
@@ -185,4 +485,3 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
 };
 
 export default NfeItensTab;
-

@@ -34,7 +34,7 @@ const loadLibrary = (path, prefix) => {
         try {
             const lib = koffi.load(path);
             console.log(`[FiscalLib] Biblioteca ${prefix} carregada de: ${path}`);
-            
+
             // Funções Comuns a todas as Libs ACBr
             const funcoes = {
                 Inicializar: lib.func('int __cdecl ' + prefix + '_Inicializar(_Out_ void **handle, const char* eArqConfig, const char* eChaveCrypt)'),
@@ -58,21 +58,21 @@ const loadLibrary = (path, prefix) => {
                 try {
                     // Tenta nomes variados conforme a versão da DLL (NFE_ImprimirDANFEPDF ou NFE_ImprimirPDF)
                     funcoes.ImprimirDANFEPDF = lib.func('int __cdecl NFE_ImprimirDANFEPDF(void* handle)');
-                } catch (e) { 
+                } catch (e) {
                     try {
                         funcoes.ImprimirDANFEPDF = lib.func('int __cdecl NFE_ImprimirPDF(void* handle)');
                     } catch (e2) {
-                        console.warn('[FiscalLib] ImprimirDANFEPDF/ImprimirPDF indisponível:', e2.message); 
+                        console.warn('[FiscalLib] ImprimirDANFEPDF/ImprimirPDF indisponível:', e2.message);
                     }
                 }
                 try {
                     funcoes.ImprimirDANFE = lib.func('int __cdecl NFE_ImprimirDANFE(void* handle, const char* eArquivoXml, const char* eImpressora, int nCopias, const char* eProtocolo, bool bMostrarPreview, const char* eMarcaDagua, bool bViaConsumidor)');
-                } catch (e) { 
+                } catch (e) {
                     try {
                         // Algumas versões usam apenas NFE_Imprimir
                         funcoes.ImprimirDANFE = lib.func('int __cdecl NFE_Imprimir(void* handle, const char* eImpressora, int nCopias, const char* eProtocolo, bool bMostrarPreview, const char* eMarcaDagua, bool bViaConsumidor)');
                     } catch (e2) {
-                        console.warn('[FiscalLib] ImprimirDANFE/Imprimir indisponível:', e2.message); 
+                        console.warn('[FiscalLib] ImprimirDANFE/Imprimir indisponível:', e2.message);
                     }
                 }
                 try {
@@ -125,9 +125,9 @@ const lerRetornoACBr = (lib, handle) => {
     const bufferTamanho = Buffer.alloc(4);
     bufferTamanho.writeInt32LE(9999, 0); // Tamanho inicial alocado
     const bufferMensagem = Buffer.alloc(9999);
-    
+
     lib.UltimoRetorno(handle, bufferMensagem, bufferTamanho);
-    
+
     let tamanhoReal = bufferTamanho.readInt32LE(0);
     if (tamanhoReal < 0 || tamanhoReal > 9999) tamanhoReal = 9999;
     return bufferMensagem.toString('utf8', 0, tamanhoReal).replace(/\0/g, '');
@@ -139,18 +139,18 @@ const lerRetornoACBr = (lib, handle) => {
  */
 const parsearRetornoNfe = (retorno) => {
     if (!retorno) return { chave_nfe: null, nr_protocolo: null, c_stat: null, x_motivo: null, recibo_sefaz: null };
-    
+
     const extrair = (chave) => {
         const regex = new RegExp(`${chave}[=:]\\s*"?([^\\r\\n",}]+)"?`, 'i');
         const m = retorno.match(regex);
         return m ? m[1].trim() : null;
     };
 
-    let c_stat    = extrair('cStat') || extrair('CStat');
-    let x_motivo  = extrair('xMotivo') || extrair('XMotivo');
+    let c_stat = extrair('cStat') || extrair('CStat');
+    let x_motivo = extrair('xMotivo') || extrair('XMotivo');
     let chave_nfe = extrair('chNFe') || extrair('ChNFe') || extrair('ChaveNFe');
-    let nr_prot   = extrair('nProt') || extrair('NProt') || extrair('Protocolo');
-    let recibo    = extrair('nRec') || extrair('NRec') || extrair('Recibo');
+    let nr_prot = extrair('nProt') || extrair('NProt') || extrair('Protocolo');
+    let recibo = extrair('nRec') || extrair('NRec') || extrair('Recibo');
 
     if (!chave_nfe) {
         const mChave = retorno.match(/chNFe="([^"]{44})"/i) || retorno.match(/<chNFe>([^<]{44})<\/chNFe>/i);
@@ -181,22 +181,75 @@ const waitSync = (ms) => {
     while (Date.now() - start < ms) { }
 };
 
+const normalizarGtinFiscal = (valor) => {
+    const raw = String(valor || '').trim().toUpperCase();
+    if (!raw || raw === 'SEM GTIN') return 'SEM GTIN';
+    const digitos = raw.replace(/\D/g, '');
+    return /^(\d{8}|\d{12}|\d{13}|\d{14})$/.test(digitos) ? digitos : 'SEM GTIN';
+};
+
+const normalizarIniNFeAntesDaDll = (iniContent) => {
+    const linhas = String(iniContent || '').split(/\r?\n/);
+    const saida = [];
+    let secaoAtual = '';
+    let icms500 = false;
+    let camposIcms = new Set();
+
+    const fecharSecaoIcms = () => {
+        if (!/^\[ICMS\d{3}\]$/i.test(secaoAtual) || !icms500) return;
+        if (!camposIcms.has('vbcstret')) saida.push('vBCSTRet=0.00');
+        if (!camposIcms.has('pst')) saida.push('pST=0.0000');
+        if (!camposIcms.has('vicmssubstituto')) saida.push('vICMSSubstituto=0.00');
+        if (!camposIcms.has('vicmsstret')) saida.push('vICMSSTRet=0.00');
+    };
+
+    for (const linha of linhas) {
+        const secao = linha.match(/^\[[^\]]+\]$/);
+        if (secao) {
+            fecharSecaoIcms();
+            secaoAtual = linha.trim();
+            icms500 = false;
+            camposIcms = new Set();
+            saida.push(linha);
+            continue;
+        }
+
+        const par = linha.match(/^([^=]+)=(.*)$/);
+        if (par) {
+            const chave = par[1].trim();
+            const chaveLower = chave.toLowerCase();
+            if (chaveLower === 'cean' || chaveLower === 'ceantrib') {
+                saida.push(`${chave}=${normalizarGtinFiscal(par[2])}`);
+                continue;
+            }
+            if (/^\[ICMS\d{3}\]$/i.test(secaoAtual)) {
+                camposIcms.add(chaveLower);
+                if (chaveLower === 'csosn' && String(par[2]).trim() === '500') icms500 = true;
+            }
+        }
+        saida.push(linha);
+    }
+    fecharSecaoIcms();
+
+    return saida.join('\r\n');
+};
+
 /**
  * Tenta imprimir DANFE/DANFCE baseado em print_config { tp_imp, nm_impressora }.
  * Retorna um objeto de resultado e nunca propaga erro para o fluxo fiscal.
  */
-const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave) => {
+const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave, configPayload) => {
     if (!printConfig) return { sucesso: true, ignorado: true, pdf_path: null };
     const tp = (printConfig.tp_imp || 'PDF').toUpperCase();
     if (tp === 'NAO_IMPRIME' || tp === 'NAO IMPRIME' || tp === 'NONE') return { sucesso: true, ignorado: true, pdf_path: null };
-    
+
     try {
         if (tp === 'IMPRESSORA' && printConfig.nm_impressora) {
             lib.ConfigGravarValor(handle, "DANFe", "Impressora", printConfig.nm_impressora);
         }
-        const pdfDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos/PDF");
+        const pdfDir = path.join(resolverBaseArquivos(configPayload), "PDF");
         if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
-        
+
         // Limpa arquivos antigos da mesma chave para evitar pegar o arquivo errado
         if (chave) {
             try {
@@ -210,10 +263,10 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave) => {
         }
 
         lib.ConfigGravarValor(handle, "DANFe", "PathPDF", pdfDir);
-        lib.ConfigGravarValor(handle, "NFe", "PathPDF", pdfDir); 
+        lib.ConfigGravarValor(handle, "NFe", "PathPDF", pdfDir);
         lib.ConfigGravarValor(handle, "DANFe", "MostraPreview", "0");
         lib.ConfigGravarValor(handle, "DANFe", "MostraStatus", "0");
-        
+
         if (tp === 'PDF' && lib.ImprimirDANFEPDF) {
             const ret = lib.ImprimirDANFEPDF(handle);
             console.log(`[FiscalLib] ImprimirDANFEPDF (${modeloLabel}) ret=${ret}`);
@@ -222,7 +275,7 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave) => {
                 console.error(`[FiscalLib] Erro na DLL ao gerar PDF: ${errDll}`);
                 return { sucesso: false, erro: errDll || `ImprimirDANFEPDF retornou ${ret}`, pdf_path: null };
             }
-            
+
             // Aguarda um curto tempo para o SO liberar o arquivo
             waitSync(500);
 
@@ -238,7 +291,7 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave) => {
                     if (fs.existsSync(pAlt)) finalPdf = pAlt;
                 }
             }
-            
+
             if (!finalPdf) {
                 const files = fs.readdirSync(pdfDir);
                 console.warn(`[FiscalLib] PDF não localizado em ${pdfDir}. Esperado: ${chave}-nfe.pdf. Arquivos presentes:`, files);
@@ -254,8 +307,8 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave) => {
                 return { sucesso: false, erro: `Falha ao ler arquivo gerado: ${e.message}`, pdf_path: finalPdf };
             }
 
-            return { 
-                sucesso: true, 
+            return {
+                sucesso: true,
                 pdf_path: finalPdf,
                 pdf_base64
             };
@@ -277,6 +330,21 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave) => {
     }
 };
 
+const resolverBaseArquivos = (configPayload) => {
+    const custom = configPayload && configPayload.pasta_arquivos
+        ? String(configPayload.pasta_arquivos).trim()
+        : '';
+    if (custom) {
+        try {
+            if (!fs.existsSync(custom)) fs.mkdirSync(custom, { recursive: true });
+            return path.resolve(custom);
+        } catch (e) {
+            console.warn(`[FiscalLib] Falha ao usar pasta_arquivos="${custom}": ${e.message}. Caindo para padrão.`);
+        }
+    }
+    return path.resolve(process.cwd(), "AcbrDLL/Arquivos");
+};
+
 const configurarHandle = (lib, handle, configPayload) => {
     // Configuração dos Schemas XSD (Obrigatório para NFe/MDFe)
     const schemasPath = path.resolve(process.cwd(), "AcbrDLL/dep/Schemas/NFe");
@@ -285,8 +353,8 @@ const configurarHandle = (lib, handle, configPayload) => {
     lib.ConfigGravarValor(handle, "Principal", "TipoResposta", "2");      // 0=string, 1=XML, 2=JSON
     lib.ConfigGravarValor(handle, "Principal", "CodificacaoResposta", "0"); // 0=UTF-8
 
-    // Caminhos de Arquivos e Logs
-    const baseArquivos = path.resolve(process.cwd(), "AcbrDLL/Arquivos");
+    // Caminhos de Arquivos e Logs (parametrizado via configPayload.pasta_arquivos)
+    const baseArquivos = resolverBaseArquivos(configPayload);
     lib.ConfigGravarValor(handle, "NFe", "PathSalvar", baseArquivos);
     lib.ConfigGravarValor(handle, "NFe", "PathNFe", path.join(baseArquivos, "NFe"));
     lib.ConfigGravarValor(handle, "NFe", "PathInu", path.join(baseArquivos, "Inu"));
@@ -294,18 +362,18 @@ const configurarHandle = (lib, handle, configPayload) => {
     lib.ConfigGravarValor(handle, "Principal", "LogPath", path.resolve(process.cwd(), "AcbrDLL/log"));
 
     if (!configPayload) return;
-    
+
     // Configuração do Certificado (Híbrido: Arquivo vs Repositório)
     const tipoCertificado = configPayload.tipo_certificado || 'ARQUIVO';
-    
+
     if (tipoCertificado === 'REPOSITORIO') {
         // Usa Repositório do Windows (WinCrypt/WinHttp) - ideal para certificados A3 em HSM/Token
         lib.ConfigGravarValor(handle, "DFe", "SSLLib", "4");         // 4=libWinCrypt (SChannel/WinCrypt)
         lib.ConfigGravarValor(handle, "DFe", "SSLCryptLib", "3");   // 3=cryWinCrypt
         lib.ConfigGravarValor(handle, "DFe", "SSLHttpLib", "2");    // 2=httpWinHttp
         lib.ConfigGravarValor(handle, "DFe", "SSLXmlSignLib", "4"); // 4=xsLibXml2 (enum ACBrLib atual: 0=None,1=XmlSec,2=MsXml,3=MsXmlCapicom,4=LibXml2)
-        
-        if (configPayload.certificadoPath) { 
+
+        if (configPayload.certificadoPath) {
             lib.ConfigGravarValor(handle, "DFe", "NumeroSerie", configPayload.certificadoPath);
             lib.ConfigGravarValor(handle, "DFe", "ArquivoPFX", "");
             lib.ConfigGravarValor(handle, "DFe", "Senha", "");
@@ -316,7 +384,7 @@ const configurarHandle = (lib, handle, configPayload) => {
         lib.ConfigGravarValor(handle, "DFe", "SSLCryptLib", "1");   // 1=cryOpenSSL
         lib.ConfigGravarValor(handle, "DFe", "SSLHttpLib", "3");    // 3=httpOpenSSL
         lib.ConfigGravarValor(handle, "DFe", "SSLXmlSignLib", "4"); // 4=xsLibXml2 (a opção implementada na compilação padrão da ACBrLib)
-        
+
         if (configPayload.certificadoPath) {
             lib.ConfigGravarValor(handle, "DFe", "ArquivoPFX", configPayload.certificadoPath);
             lib.ConfigGravarValor(handle, "DFe", "Senha", configPayload.certificadoSenha || "");
@@ -330,7 +398,7 @@ const configurarHandle = (lib, handle, configPayload) => {
         // SEFAZ/Banco: 1 = Produção, 2 = Homologação
         // ACBrLib (TACBrAmbiente): 0 = taProducao, 1 = taHomologacao
         const ambACBr = configPayload.ambiente.toString() === '1' ? '0' : '1';
-        
+
         lib.ConfigGravarValor(handle, "NFe", "Ambiente", ambACBr);
         lib.ConfigGravarValor(handle, "DFe", "Ambiente", ambACBr);
         console.log(`[FiscalLib] Ambiente configurado: ${ambACBr === '0' ? 'PRODUÇÃO' : 'HOMOLOGAÇÃO'}`);
@@ -343,15 +411,15 @@ const configurarHandle = (lib, handle, configPayload) => {
     }
 
     if (configPayload.cnpj) lib.ConfigGravarValor(handle, "Emitente", "CNPJ", configPayload.cnpj);
-    
+
     // Versão do schema de Distribuição DFe (não sobrescreve SSL definido acima)
     lib.ConfigGravarValor(handle, "DFe", "VersaoDistribuicaoDFe", "1.01");
-    
-    // Ativar logs e salvamento de arquivos
-    const arquivosDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos");
+
+    // Ativar logs e salvamento de arquivos (mesma base parametrizada)
+    const arquivosDir = baseArquivos;
     const eventoDir = path.resolve(arquivosDir, "Evento");
     const pdfDir = path.resolve(arquivosDir, "PDF");
-    
+
     if (!fs.existsSync(eventoDir)) fs.mkdirSync(eventoDir, { recursive: true });
     if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
 
@@ -368,13 +436,13 @@ const configurarHandle = (lib, handle, configPayload) => {
  */
 const executarNaDLL = async (lib, configPayload, callbackExecucao) => {
     if (!lib) throw new Error("A DLL nativa não está carregada no ambiente.");
-    
+
     // 1. Instanciar o Handle isolado com um INI único por thread para evitar corrupção de concorrência
     const handlePtr = [null];
     const baseIni = path.resolve(process.cwd(), "ACBrNFe.ini");
     const uniqueId = crypto.randomUUID();
     const threadIni = path.resolve(process.cwd(), `ACBrNFe_Thread_${uniqueId}.ini`);
-    
+
     try {
         if (fs.existsSync(baseIni)) {
             fs.copyFileSync(baseIni, threadIni);
@@ -389,21 +457,21 @@ const executarNaDLL = async (lib, configPayload, callbackExecucao) => {
     if (retInit !== 0) {
         let erroDetalhado = "Erro desconhecido";
         if (handlePtr[0]) {
-            try { erroDetalhado = lerRetornoACBr(lib, handlePtr[0]); } catch(e) {}
+            try { erroDetalhado = lerRetornoACBr(lib, handlePtr[0]); } catch (e) { }
         }
-        try { if (fs.existsSync(threadIni)) fs.unlinkSync(threadIni); } catch(e) {}
+        try { if (fs.existsSync(threadIni)) fs.unlinkSync(threadIni); } catch (e) { }
         throw new Error("Falha ao inicializar a ACBrLib (Handle MT). Retorno: " + retInit + " | Detalhe: " + erroDetalhado);
     }
-    
+
     const handle = handlePtr[0];
-    
+
     try {
         // 2. Configurar o Emitente dinamicamente
         configurarHandle(lib, handle, configPayload);
-        
+
         // 3. Executar o fluxo da nota solicitado
         return await callbackExecucao(handle);
-        
+
     } finally {
         // 4. Sempre finalizar e destruir o Handle na memória e apagar o INI temporário
         if (handle) lib.Finalizar(handle);
@@ -423,37 +491,37 @@ const executarNaDLL = async (lib, configPayload, callbackExecucao) => {
 const executarComandoFiscal = async (comando, jsonPayload) => {
     const config = jsonPayload.config || {};
     const dados = jsonPayload.dados || ""; // String INI ou XML
-    
+
     console.log(`[FiscalLib] Executando comando: ${comando}...`);
-    
+
     switch (comando) {
         case 'EMITIR_NFE':
             config.modelo = 55;
             return executarNaDLL(libNFe, config, async (handle) => {
                 libNFe.LimparLista(handle);
-                
-                const iniContent = typeof jsonPayload.dados === 'string' ? jsonPayload.dados : JSON.stringify(jsonPayload.dados);
+
+                const iniContent = normalizarIniNFeAntesDaDll(typeof jsonPayload.dados === 'string' ? jsonPayload.dados : JSON.stringify(jsonPayload.dados));
                 console.log(`[FiscalLib] CarregarINI NFe (${iniContent.length} chars)...`);
-                
+
                 let ret = libNFe.CarregarINI(handle, iniContent);
                 if (ret !== 0) throw new Error('[NFE] CarregarINI: ' + lerRetornoACBr(libNFe, handle));
-                
+
                 const bufferResposta = Buffer.alloc(TAMANHO_BUFFER);
                 const bufferTamanho = Buffer.alloc(4);
                 bufferTamanho.writeInt32LE(TAMANHO_BUFFER, 0);
-                
+
                 ret = libNFe.Enviar(handle, 1, false, true, false, bufferResposta, bufferTamanho);
                 const ultimoRetorno = lerRetornoACBr(libNFe, handle);
                 const tamanho = bufferTamanho.readInt32LE(0);
                 const xmlRetorno = tamanho > 0 && tamanho !== TAMANHO_BUFFER
                     ? bufferResposta.toString('utf8', 0, tamanho)
                     : '';
-                
+
                 console.log(`[FiscalLib] Enviar NFe ret=${ret} | UltimoRetorno: ${ultimoRetorno.substring(0, 200)}`);
-                
+
                 const parsed = parsearRetornoNfe(ultimoRetorno || xmlRetorno);
                 const sucesso = parsed.c_stat === '100';
-                
+
                 // Após sucesso, recuperar o XML assinado da NFe (procNFe completo) via ObterXml(0)
                 let xml_nfe = '';
                 if (sucesso) {
@@ -476,8 +544,8 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 // A impressão é executada fora da emissão, depois que o banco já foi atualizado.
                 // Isso impede travamento/perda do retorno fiscal por falha da impressora/PDF.
                 const impressao = sucesso ? { sucesso: true, adiada: true, pdf_path: null } : { sucesso: false, pdf_path: null };
-                
-                return { 
+
+                return {
                     sucesso,
                     chave_nfe: parsed.chave_nfe,
                     nr_protocolo: parsed.nr_protocolo,
@@ -497,29 +565,29 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
             config.modelo = 65;
             return executarNaDLL(libNFe, config, async (handle) => {
                 libNFe.LimparLista(handle);
-                
-                const iniContent = typeof jsonPayload.dados === 'string' ? jsonPayload.dados : JSON.stringify(jsonPayload.dados);
+
+                const iniContent = normalizarIniNFeAntesDaDll(typeof jsonPayload.dados === 'string' ? jsonPayload.dados : JSON.stringify(jsonPayload.dados));
                 console.log(`[FiscalLib] CarregarINI NFCe (${iniContent.length} chars)...`);
-                
+
                 let ret = libNFe.CarregarINI(handle, iniContent);
                 if (ret !== 0) throw new Error('[NFCe] CarregarINI: ' + lerRetornoACBr(libNFe, handle));
-                
+
                 const bufferResposta = Buffer.alloc(TAMANHO_BUFFER);
                 const bufferTamanho = Buffer.alloc(4);
                 bufferTamanho.writeInt32LE(TAMANHO_BUFFER, 0);
-                
+
                 ret = libNFe.Enviar(handle, 1, false, true, false, bufferResposta, bufferTamanho);
                 const ultimoRetorno = lerRetornoACBr(libNFe, handle);
                 const tamanho = bufferTamanho.readInt32LE(0);
                 const xmlRetorno = tamanho > 0 && tamanho !== TAMANHO_BUFFER
                     ? bufferResposta.toString('utf8', 0, tamanho)
                     : '';
-                
+
                 console.log(`[FiscalLib] Enviar NFCe ret=${ret} | UltimoRetorno: ${ultimoRetorno.substring(0, 200)}`);
-                
+
                 const parsed = parsearRetornoNfe(ultimoRetorno || xmlRetorno);
                 const sucesso = parsed.c_stat === '100';
-                
+
                 // Após sucesso, recuperar o XML assinado da NFCe (procNFe completo) via ObterXml(0)
                 let xml_nfe = '';
                 if (sucesso) {
@@ -542,8 +610,8 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 // A impressão é executada fora da emissão, depois que o banco já foi atualizado.
                 // Isso impede travamento/perda do retorno fiscal por falha da impressora/PDF.
                 const impressao = sucesso ? { sucesso: true, adiada: true, pdf_path: null } : { sucesso: false, pdf_path: null };
-                
-                return { 
+
+                return {
                     sucesso,
                     chave_nfe: parsed.chave_nfe,
                     nr_protocolo: parsed.nr_protocolo,
@@ -564,14 +632,14 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 libMDFe.LimparLista(handle);
                 let ret = libMDFe.CarregarINI(handle, dados);
                 if (ret !== 0) throw new Error(lerRetornoACBr(libMDFe, handle));
-                
+
                 const bufferResposta = Buffer.alloc(9999);
                 const bufferTamanho = Buffer.alloc(4);
                 bufferTamanho.writeInt32LE(9999, 0);
-                
+
                 ret = libMDFe.Enviar(handle, 1, false, true, false, bufferResposta, bufferTamanho);
                 if (ret !== 0) throw new Error(lerRetornoACBr(libMDFe, handle));
-                
+
                 return { sucesso: true, xml_retorno: bufferResposta.toString('utf8', 0, bufferTamanho.readInt32LE(0)) };
             });
 
@@ -582,7 +650,7 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 const ret = libNFe.CarregarXML(handle, dados);
                 if (ret !== 0) return { sucesso: false, erro: '[IMPRIMIR] CarregarXML: ' + lerRetornoACBr(libNFe, handle), pdf_path: null };
                 const modeloLabel = comando === 'IMPRIMIR_NFCE' ? 'NFCE' : 'NFE';
-                return tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, modeloLabel, jsonPayload.chave);
+                return tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, modeloLabel, jsonPayload.chave, config);
             });
 
         case 'CANCELAR_NFE':
@@ -590,32 +658,32 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
             return executarNaDLL(libNFe, config, async (handle) => {
                 const { chave, justificativa, cnpj } = jsonPayload;
                 const nfeId = jsonPayload.nfe_cabecalho_id;
-                
+
                 console.log(`[FiscalLib] Cancelando ${comando}: ${chave}...`);
-                
+
                 const bufferResposta = Buffer.alloc(TAMANHO_BUFFER);
                 const bufferTamanho = Buffer.alloc(4);
                 bufferTamanho.writeInt32LE(TAMANHO_BUFFER, 0);
-                
+
                 const ret = libNFe.Cancelar(handle, chave, justificativa, cnpj, 1, bufferResposta, bufferTamanho);
                 if (ret !== 0) throw new Error(lerRetornoACBr(libNFe, handle));
-                
+
                 const resposta = bufferResposta.toString('utf8', 0, bufferTamanho.readInt32LE(0));
-                
+
                 // Parse do Protocolo de Cancelamento
                 let nProt = "";
                 const mProt = resposta.match(/nProt=(\d+)/i) || resposta.match(/<nProt>(\d+)<\/nProt>/i);
                 if (mProt) nProt = mProt[1];
-                
+
                 // Tenta gerar o PDF do comprovante de cancelamento
                 let pdfBase64 = null;
                 try {
-                    const eventoDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos/Evento");
+                    const eventoDir = path.join(resolverBaseArquivos(config), "Evento");
                     if (fs.existsSync(eventoDir)) {
                         const files = fs.readdirSync(eventoDir);
                         // Busca flexível: arquivos que contenham a chave e terminem em .xml
                         const eventFile = files.find(f => f.includes(chave) && f.toLowerCase().endsWith('.xml'));
-                        
+
                         if (eventFile && libNFe.ImprimirEventoPDF) {
                             const eventPath = path.join(eventoDir, eventFile);
                             console.log(`[FiscalLib] XML de evento localizado: ${eventPath}`);
@@ -623,10 +691,10 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                             if (retPdf === 0) {
                                 // O PDF do evento costuma ir para o PathPDF definido (AcbrDLL/Arquivos/PDF)
                                 // O nome costuma ser {chave}-procEventoNFe.pdf
-                                const pdfDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos/PDF");
+                                const pdfDir = path.join(resolverBaseArquivos(config), "PDF");
                                 const pdfName = eventFile.replace('.xml', '.pdf');
                                 const pdfPath = path.join(pdfDir, pdfName);
-                                
+
                                 if (fs.existsSync(pdfPath)) {
                                     pdfBase64 = fs.readFileSync(pdfPath).toString('base64');
                                     console.log(`[FiscalLib] Comprovante de cancelamento gerado: ${pdfPath}`);
@@ -637,7 +705,7 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 } catch (e) {
                     console.warn(`[Worker] Falha ao gerar PDF do comprovante: ${e.message}`);
                 }
-                
+
                 return { sucesso: true, protocol: nProt, pdf_base64: pdfBase64, resposta };
             });
 
@@ -646,14 +714,14 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 libNFe.LimparListaEventos(handle);
                 let ret = libNFe.CarregarEventoINI(handle, dados);
                 if (ret !== 0) throw new Error(lerRetornoACBr(libNFe, handle));
-                
+
                 const bufferResposta = Buffer.alloc(9999);
                 const bufferTamanho = Buffer.alloc(4);
                 bufferTamanho.writeInt32LE(9999, 0);
-                
+
                 ret = libNFe.EnviarEvento(handle, 1, bufferResposta, bufferTamanho);
                 if (ret !== 0) throw new Error(lerRetornoACBr(libNFe, handle));
-                
+
                 return { sucesso: true, manifestacao_retorno: bufferResposta.toString('utf8', 0, bufferTamanho.readInt32LE(0)) };
             });
 
@@ -662,14 +730,14 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
             return executarNaDLL(libNFe, config, async (handle) => {
                 let ret = libNFe.CarregarXML(handle, dados); // Pode ser um path ou string XML
                 if (ret !== 0) throw new Error(lerRetornoACBr(libNFe, handle));
-                
+
                 const bufferResposta = Buffer.alloc(99999); // Buffer maior para XML
                 const bufferTamanho = Buffer.alloc(4);
                 bufferTamanho.writeInt32LE(99999, 0);
-                
+
                 ret = libNFe.ObterXml(handle, 0, bufferResposta, bufferTamanho); // Pega o index 0
                 if (ret !== 0) throw new Error(lerRetornoACBr(libNFe, handle));
-                
+
                 return { sucesso: true, xml: bufferResposta.toString('utf8', 0, bufferTamanho.readInt32LE(0)) };
             });
 
@@ -678,10 +746,10 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 const bufferResposta = Buffer.alloc(9999);
                 const bufferTamanho = Buffer.alloc(4);
                 bufferTamanho.writeInt32LE(9999, 0);
-                
+
                 let ret = libNFe.StatusServico(handle, bufferResposta, bufferTamanho);
                 if (ret !== 0) throw new Error(lerRetornoACBr(libNFe, handle));
-                
+
                 return { sucesso: true, status_retorno: bufferResposta.toString('utf8', 0, bufferTamanho.readInt32LE(0)) };
             });
 
@@ -784,59 +852,46 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
         case 'ENVIAR_EMAIL_NFE':
             return executarNaDLL(libNFe, config, async (handle) => {
                 const { para, assunto, mensagem, anexos, config_email, xml } = jsonPayload;
-                
+
                 // 1. Salva o XML em um arquivo temporário para garantir que a DLL consiga ler para gerar o PDF
                 const tempDir = path.resolve(process.cwd(), "AcbrDLL/Arquivos/Temp");
                 if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-                
+
                 const xmlContent = String(jsonPayload.xml || jsonPayload.dados || "").trim();
                 if (!xmlContent) throw new Error("Conteúdo do XML não fornecido para o envio de e-mail.");
-                
+
                 const tempXmlPath = path.join(tempDir, `email_temp_${crypto.randomUUID()}.xml`);
                 fs.writeFileSync(tempXmlPath, xmlContent);
                 console.log(`[FiscalLib] XML temporário salvo em: ${tempXmlPath}`);
-                
+
                 // Carrega o XML (opcional, mas bom para garantir)
                 libNFe.LimparLista(handle);
                 const retXml = libNFe.CarregarXML(handle, tempXmlPath);
                 if (retXml !== 0) {
                     console.warn(`[FiscalLib] Aviso ao carregar XML via path: ${lerRetornoACBr(libNFe, handle)}`);
                 }
-                
+
                 // 2. Configura SMTP
                 if (config_email) {
-                    console.log(`[FiscalLib] Configurando SMTP: ${config_email.host}:${config_email.port}`);
-                    const rawNome = String(config_email.nome_remetente || "Realcommerce");
-                    const safeHelo = rawNome.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.-]/g, "");
-                    const senderEmail = String(config_email.user || "");
-
-                    // 2.a Grava configurações básicas que já sabemos que funcionam
-                    const r1 = libNFe.ConfigGravarValor(handle, "Email", "Servidor", String(config_email.host || ""));
-                    const r2 = libNFe.ConfigGravarValor(handle, "Email", "Porta", String(config_email.port || "587"));
-                    const r3 = libNFe.ConfigGravarValor(handle, "Email", "Usuario", senderEmail);
-                    const r4 = libNFe.ConfigGravarValor(handle, "Email", "Senha", String(config_email.pass || ""));
-                    const rNome = libNFe.ConfigGravarValor(handle, "Email", "Nome", rawNome);
-                    const rSSL = libNFe.ConfigGravarValor(handle, "Email", "SSL", config_email.ssl ? "1" : "0");
-                    const rTLS = libNFe.ConfigGravarValor(handle, "Email", "TLS", config_email.tls ? "1" : "0");
-
-                    // 2.b SCANNER DE CHAVES: Vamos descobrir qual chave essa DLL aceita para HELO e FROM
-                    const keysHELO = ["LocalHostName", "LocalHost", "Helo", "Hostname", "HostName", "Maquina", "NomeMaquina", "NomeHost"];
-                    const keysFrom = ["From", "EndRemetente", "Email", "Remetente", "Conta"];
-                    
-                    const aceitasHELO = [];
-                    const aceitasFrom = [];
-
-                    for (const k of keysHELO) {
-                        if (libNFe.ConfigGravarValor(handle, "Email", k, safeHelo) === 0) aceitasHELO.push(k);
-                    }
-                    for (const k of keysFrom) {
-                        if (libNFe.ConfigGravarValor(handle, "Email", k, senderEmail) === 0) aceitasFrom.push(k);
-                    }
-
-                    console.log(`[FiscalLib] SMTP Config Básica: Serv=${r1}, Port=${r2}, User=${r3}, Pass=${r4}, Nome=${rNome}, SSL=${rSSL}, TLS=${rTLS}`);
-                    console.log(`[FiscalLib] SCANNER - Chaves HELO aceitas: [${aceitasHELO.join(", ")}]`);
-                    console.log(`[FiscalLib] SCANNER - Chaves From aceitas: [${aceitasFrom.join(", ")}]`);
-                    console.log(`[FiscalLib] Usando HELO sanitizado: "${safeHelo}"`);
+                    libNFe.ConfigGravarValor(handle, "Email", "Servidor", config_email.host || "");
+                    libNFe.ConfigGravarValor(handle, "Email", "Porta", String(config_email.port || "587"));
+                    libNFe.ConfigGravarValor(handle, "Email", "Usuario", config_email.user || "");
+                    libNFe.ConfigGravarValor(handle, "Email", "Senha", config_email.pass || "");
+                    libNFe.ConfigGravarValor(handle, "Email", "SSL", config_email.ssl ? "1" : "0");
+                    libNFe.ConfigGravarValor(handle, "Email", "TLS", config_email.tls ? "1" : "0");
+                    libNFe.ConfigGravarValor(handle, "Email", "Nome", config_email.nome_remetente || "");
+                    // Conta = endereço usado como remetente (From) — alguns servidores rejeitam sem isso
+                    libNFe.ConfigGravarValor(handle, "Email", "Conta", config_email.user || "");
+                    // DefaultHELO: corrige "Invalid HELO name" — alguns servidores rejeitam
+                    // quando o cliente envia "localhost" ou hostname interno. Usamos um FQDN
+                    // baseado no domínio do remetente ou do host SMTP.
+                    const heloFromUser = (config_email.user || "").split("@")[1] || "";
+                    const helo = (config_email.helo && String(config_email.helo).trim())
+                        || heloFromUser
+                        || (config_email.host || "")
+                        || "localhost.localdomain";
+                    libNFe.ConfigGravarValor(handle, "Email", "DefaultHELO", helo);
+                    console.log(`[FiscalLib] SMTP DefaultHELO definido como: ${helo}`);
                 }
 
                 // 3. Enviar
@@ -845,35 +900,35 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 const targetAssunto = String(assunto || "Nota Fiscal");
                 const targetMensagem = String(mensagem || "Segue em anexo.");
                 const targetAnexos = Array.isArray(anexos) ? anexos.join(';') : String(anexos || "");
-                
+
                 console.log(`[FiscalLib] >>> CHAMANDO EnviarEmail(handle, para=${targetPara}, path=${tempXmlPath}, pdf=true) <<<`);
-                
+
                 let ret;
                 try {
                     ret = libNFe.EnviarEmail(
-                        handle, 
-                        targetPara, 
-                        tempXmlPath,      
+                        handle,
+                        targetPara,
+                        tempXmlPath,
                         true,             // aEnviaPDF (true)
-                        targetAssunto, 
-                        null,             
-                        targetAnexos || null, 
+                        targetAssunto,
+                        null,
+                        targetAnexos || null,
                         targetMensagem
                     );
-                    
+
                     if (ret === -10) {
                         console.warn("[FiscalLib] Retorno -10 detectado. Tentando sem PDF como fallback...");
                         ret = libNFe.EnviarEmail(handle, targetPara, tempXmlPath, false, targetAssunto, null, targetAnexos || null, targetMensagem);
                     }
-                    
+
                     console.log(`[FiscalLib] Retorno DLL EnviarEmail: ${ret}`);
                 } catch (errCall) {
                     console.error(`[FiscalLib] EXCEÇÃO NA CHAMADA EnviarEmail: ${errCall.message}`);
                     throw errCall;
                 } finally {
-                    try { if (fs.existsSync(tempXmlPath)) fs.unlinkSync(tempXmlPath); } catch (e) {}
+                    try { if (fs.existsSync(tempXmlPath)) fs.unlinkSync(tempXmlPath); } catch (e) { }
                 }
-                
+
                 if (ret !== 0) {
                     return { sucesso: false, erro: lerRetornoACBr(libNFe, handle) || `Erro ${ret} ao enviar e-mail.` };
                 }

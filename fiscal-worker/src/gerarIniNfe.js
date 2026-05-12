@@ -106,11 +106,18 @@ export function gerarIniNfe(params) {
     const vUnit = Number(it.vl_unit || 0);
     const vTot = Number(it.vl_total || 0);
 
+    // Regra SEFAZ: em homologação, o xProd do PRIMEIRO item deve ser a frase mágica
+    const ehPrimeiroItemHomolog = (i === 0 && ambiente === '2');
+    const xProdFinal = ehPrimeiroItemHomolog
+      ? 'NOTA FISCAL EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL'
+      : (it.nm_produto || '');
+
     linhas.push(`[Produto${nr}]`);
+    const gtinFiscal = normalizarGtinFiscal(it.gtin);
     linhas.push(`cProd=${it.produto_id || String(i + 1).padStart(6, '0')}`);
-    linhas.push(`cEAN=${it.gtin || 'SEM GTIN'}`);
-    linhas.push(`cEANTrib=${it.gtin || 'SEM GTIN'}`);
-    linhas.push(`xProd=${it.nm_produto || ''}`);
+    linhas.push(`cEAN=${gtinFiscal}`);
+    linhas.push(`cEANTrib=${gtinFiscal}`);
+    linhas.push(`xProd=${xProdFinal}`);
     linhas.push(`NCM=${it.ncm || ''}`);
     if (it.cest) linhas.push(`CEST=${it.cest}`);
     linhas.push(`CFOP=${it.cfop || '5102'}`);
@@ -130,11 +137,39 @@ export function gerarIniNfe(params) {
 
     linhas.push(`[ICMS${nr}]`);
     if (isSimples) {
-      linhas.push(`CSOSN=${it.csosn || it.cst_icms || '102'}`);
+      const csosn = String(it.csosn || it.cst_icms || '102');
+      linhas.push(`CSOSN=${csosn}`);
       linhas.push(`orig=${it.origem || 0}`);
-      if (Number(it.pc_icms) > 0) {
+
+      // CSOSN 101 / 201 / 900 → permite pCredSN/vCredICMSSN (crédito de ICMS do Simples)
+      if (['101', '201', '900'].includes(csosn) && Number(it.pc_icms) > 0) {
         linhas.push(`pCredSN=${Number(it.pc_icms).toFixed(4)}`);
         linhas.push(`vCredICMSSN=${Number(it.vl_icms || 0).toFixed(2)}`);
+      }
+
+      // CSOSN 201 / 202 / 203 → ICMS-ST a calcular (precisa modBCST/vBCST/pICMSST/vICMSST)
+      if (['201', '202', '203'].includes(csosn)) {
+        linhas.push(`modBCST=${it.mod_bc_st ?? 4}`);
+        linhas.push(`pMVAST=${Number(it.mva_st || 0).toFixed(4)}`);
+        linhas.push(`vBCST=${Number(it.vl_bc_st || 0).toFixed(2)}`);
+        linhas.push(`pICMSST=${Number(it.pc_icms_st || 0).toFixed(4)}`);
+        linhas.push(`vICMSST=${Number(it.vl_icms_st || 0).toFixed(2)}`);
+      }
+
+      // CSOSN 500 → ICMS cobrado anteriormente por ST (campos de retenção obrigatórios no XML)
+      if (csosn === '500') {
+        linhas.push(`vBCSTRet=${Number(it.vl_bc_st_ret || 0).toFixed(2)}`);
+        linhas.push(`pST=${Number(it.pc_icms_st_ret || it.pc_icms_st || 0).toFixed(4)}`);
+        linhas.push(`vICMSSubstituto=${Number(it.vl_icms_substituto || 0).toFixed(2)}`);
+        linhas.push(`vICMSSTRet=${Number(it.vl_icms_st_ret || 0).toFixed(2)}`);
+      }
+
+      // CSOSN 900 → também aceita campos próprios de ICMS (modBC/vBC/pICMS/vICMS) quando houver
+      if (csosn === '900' && Number(it.vl_icms || 0) > 0) {
+        linhas.push(`modBC=${it.mod_bc ?? 3}`);
+        linhas.push(`vBC=${Number(it.vl_bc || vTot).toFixed(2)}`);
+        linhas.push(`pICMS=${Number(it.pc_icms || 0).toFixed(4)}`);
+        linhas.push(`vICMS=${Number(it.vl_icms || 0).toFixed(2)}`);
       }
     } else {
       linhas.push(`CST=${it.cst_icms || '00'}`);
@@ -143,8 +178,16 @@ export function gerarIniNfe(params) {
       linhas.push(`vBC=${Number(it.vl_bc || vTot).toFixed(2)}`);
       linhas.push(`pICMS=${Number(it.pc_icms || 0).toFixed(4)}`);
       linhas.push(`vICMS=${Number(it.vl_icms || 0).toFixed(2)}`);
+
+      // CST 60 (regime normal) → ICMS retido anteriormente por ST
+      if (String(it.cst_icms) === '60') {
+        linhas.push(`vBCSTRet=${Number(it.vl_bc_st_ret || 0).toFixed(2)}`);
+        linhas.push(`pST=${Number(it.pc_icms_st_ret || 0).toFixed(4)}`);
+        linhas.push(`vICMSSubstituto=${Number(it.vl_icms_substituto || 0).toFixed(2)}`);
+        linhas.push(`vICMSSTRet=${Number(it.vl_icms_st_ret || 0).toFixed(2)}`);
+      }
     }
-    if (Number(it.vl_icms_st || 0) > 0) {
+    if (Number(it.vl_icms_st || 0) > 0 && !isSimples) {
       linhas.push(`modBCST=${it.mod_bc_st || 4}`);
       linhas.push(`pMVAST=${Number(it.mva_st || 0).toFixed(4)}`);
       linhas.push(`vBCST=${Number(it.vl_bc_st || 0).toFixed(2)}`);
@@ -251,9 +294,14 @@ export function gerarIniNfe(params) {
   }
 
   if (isNFCe) {
+    const idCsc = String(configItem?.id_csc || '').trim();
+    const csc = String(configItem?.csc || '').trim();
+    if (!idCsc || !csc) {
+      console.warn(`[gerarIniNfe] Atenção: NFC-e sem IdCSC/CSC configurado (item modelo ${modelo}/${serie}).`);
+    }
     linhas.push('[NFCe]');
-    linhas.push(`IdCSC=${configItem?.id_csc || ''}`);
-    linhas.push(`CSC=${configItem?.csc || ''}`);
+    linhas.push(`IdCSC=${idCsc}`);
+    linhas.push(`CSC=${csc}`);
     linhas.push('');
   }
 
@@ -262,6 +310,13 @@ export function gerarIniNfe(params) {
 
 function limparNumeros(s) {
   return String(s || '').replace(/\D/g, '');
+}
+
+function normalizarGtinFiscal(valor) {
+  const raw = String(valor || '').trim().toUpperCase();
+  if (!raw || raw === 'SEM GTIN') return 'SEM GTIN';
+  const digitos = raw.replace(/\D/g, '');
+  return /^(\d{8}|\d{12}|\d{13}|\d{14})$/.test(digitos) ? digitos : 'SEM GTIN';
 }
 
 function normalizarCidadeFiscal(cidade, registro = {}, fallback = {}) {

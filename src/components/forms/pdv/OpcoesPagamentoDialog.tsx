@@ -1,5 +1,5 @@
 import React from "react";
-import { Printer, FileText, FileCode2, ScanLine, Loader2, Eye, X, Mail, CheckCircle2 } from "lucide-react";
+import { Printer, FileText, FileCode2, ScanLine, Loader2, Eye, X, ChevronRight, CheckCircle2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -138,13 +138,13 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
 
       setXStatus(`Aguardando autorização da SEFAZ...`);
       const ret = await fiscalEmissaoService.aguardarEvento(res.fiscal_evento_id, 90000);
-      
+
       if (ret.success) {
         toast.success(`${tipo} autorizada!`);
-        
+
         // Abre o PDF se retornado pelo worker
         let pdfBase64 = ret.resposta?.pdf_base64 || ret.resposta?.impressao?.pdf_base64;
-        
+
         if (res.nfe_cabecalho_id) {
           setXNfeId(res.nfe_cabecalho_id);
         }
@@ -160,7 +160,7 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
             console.warn("[OpcoesPagamentoDialog] Falha ao gerar DANFE após emissão:", impRes.message);
           }
         }
-        
+
         if (pdfBase64) {
           setXLastPdf(pdfBase64);
           try {
@@ -181,7 +181,7 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
             toast.error("Erro ao processar o PDF do DANFE.");
           }
         }
-        
+
         // Verifica se deve enviar e-mail automaticamente
         try {
           const { data: configItem } = await supabase
@@ -198,7 +198,7 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
         } catch (errEmail) {
           console.error("Erro ao verificar config de e-mail:", errEmail);
         }
-        
+
         setXSalvando(false);
         setXStatus("");
       } else {
@@ -215,14 +215,22 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
   };
 
   const cards = [
-    { key: "nfe", label: "NFe", desc: "Nota Fiscal Eletrônica", icon: <FileCode2 size={28} />, color: "text-amber-600", 
-      action: () => handleGerarFiscal("NFE"), enabled: true },
-    { key: "nfce", label: "NFCe", desc: "Nota de Consumidor", icon: <ScanLine size={28} />, color: "text-emerald-600", 
-      action: () => handleGerarFiscal("NFCE"), enabled: true },
-    { key: "bobina", label: "Bobina", desc: "Impressão Térmica", icon: <Printer size={28} />, color: "text-slate-600", 
-      action: () => imprimir(dados, "bobina"), enabled: true },
-    { key: "a4", label: "A4 / PDF", desc: "Relatório de Pedido", icon: <FileText size={28} />, color: "text-blue-600", 
-      action: () => imprimir(dados, "a4"), enabled: true },
+    {
+      key: "nfe", label: "NFe", desc: "Nota Fiscal Eletrônica", icon: <FileCode2 size={28} />, color: "text-amber-600",
+      action: () => handleGerarFiscal("NFE"), enabled: true
+    },
+    {
+      key: "nfce", label: "NFCe", desc: "Nota de Consumidor", icon: <ScanLine size={28} />, color: "text-emerald-600",
+      action: () => handleGerarFiscal("NFCE"), enabled: true
+    },
+    {
+      key: "bobina", label: "Bobina", desc: "Impressão Térmica", icon: <Printer size={28} />, color: "text-slate-600",
+      action: () => imprimir(dados, "bobina"), enabled: true
+    },
+    {
+      key: "a4", label: "A4 / PDF", desc: "Relatório de Pedido", icon: <FileText size={28} />, color: "text-blue-600",
+      action: () => imprimir(dados, "a4"), enabled: true
+    },
   ];
 
   return (
@@ -258,8 +266,8 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
                 className={cn(
                   "flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all duration-200",
                   "hover:shadow-lg active:scale-95 group",
-                  card.enabled 
-                    ? "bg-white border-slate-200 hover:border-primary/50" 
+                  card.enabled
+                    ? "bg-white border-slate-200 hover:border-primary/50"
                     : "bg-slate-100 border-slate-100 opacity-50 cursor-not-allowed"
                 )}
               >
@@ -322,7 +330,7 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
         onClose={() => setXEmailDialogOpen(false)}
         nfeCabecalhoId={XNfeId}
         empresaId={empresaId}
-        clienteId={dados?.cliente_id} 
+        clienteId={dados?.cliente_id}
       />
     </Dialog>
   );

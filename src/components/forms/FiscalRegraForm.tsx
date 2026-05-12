@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 const db = supabase as any;
 
 // ── Constantes ────────────────────────────────────────────────────────────────
-const UF_LIST = ["*","AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
+const UF_LIST = ["ZZ","AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 const REGIME_MAP: Record<string, string> = { "*": "Todos", S: "Simples Nacional", L: "Lucro Presumido", N: "Lucro Real" };
 const MOD_BC: Record<number, string> = { 0: "0-MVA", 1: "1-Pauta", 2: "2-Preço Max", 3: "3-Valor Op." };
 const MOD_BC_ST: Record<number, string> = { 0: "0-Preço Tab", 1: "1-Pauta", 2: "2-Preço Max", 3: "3-Valor Op.", 4: "4-MVA" };
@@ -142,7 +142,7 @@ const Sel = ({ value, onValueChange, options, readOnly = false, placeholder = "S
 const EMPTY_CFOP = (regraId: number, empresaId: number) => ({
   fiscal_regra_id: regraId,
   cfop_id: null,
-  uf_destino: "*",
+  uf_destino: "ZZ",
   cliente_contribuinte: null,
   cliente_consumidor_final: null,
   ncm_filtro: "99999999",
@@ -155,7 +155,7 @@ const EMPTY_CFOP = (regraId: number, empresaId: number) => ({
 const EMPTY_ITEM = (regraId: number, tipo: string, empresaId: number) => ({
   fiscal_regra_id: regraId,
   tipo_imposto: tipo,
-  uf_destino: "*",
+  uf_destino: "ZZ",
   cliente_contribuinte: null,
   cliente_consumidor_final: null,
   ncm_filtro: "99999999",
@@ -181,7 +181,7 @@ const EMPTY_ITEM = (regraId: number, tipo: string, empresaId: number) => ({
   empresa_id: empresaId,
 });
 
-const UF_OPTIONS = UF_LIST.map(u => ({ value: u, label: u === "*" ? "* (Todos)" : u }));
+const UF_OPTIONS = UF_LIST.map(u => ({ value: u, label: u === "ZZ" ? "ZZ (Todos)" : u }));
 const BOOL_OPTIONS = [{ value: "", label: "(Todos)" }, { value: "true", label: "Sim" }, { value: "false", label: "Não" }];
 const ORIGEM_OPTIONS = [{ value: "", label: "Todos" }, { value: "0", label: "0-Nacional" }, { value: "1", label: "1-Estrangeira Direta" }, { value: "2", label: "2-Estrangeira Mercado" }];
 
@@ -195,7 +195,7 @@ function FiltroRow({ item, isEditing, set, fiscalGrupoList }: {
     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 p-3 border border-border rounded-md bg-secondary/30">
       <Field label="UF Destino">
         <NatSel
-          value={s(item?.uf_destino || "*")}
+          value={s(item?.uf_destino === "*" ? "ZZ" : (item?.uf_destino || "ZZ"))}
           onChange={v => set("uf_destino", v)}
           options={UF_OPTIONS}
           disabled={!isEditing}

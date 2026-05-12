@@ -68,14 +68,14 @@ const CartItemRow: React.FC<ICartItemRowProps> = ({ item, idx, XFonteProd, alter
   };
 
   return (
-    <div className={`px-3 py-2 flex items-center gap-2 border-b border-border ${idx % 2 ? "bg-muted/40" : ""}`}>
+      <div className={`px-3 py-2 flex items-center gap-2 border-b border-border ${idx % 2 ? "bg-muted/40" : ""}`}>
       <div className="flex-1">
         <div className="font-medium truncate text-blue-700 dark:text-blue-400">{item.nm_produto}</div>
         <div className="text-muted-foreground" style={{ fontSize: `${XFonteProd - 1}px` }}>
           {item.qt_item.toLocaleString("pt-BR")} {item.unidade_id || ""} × R$ {item.vl_unitario.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} = <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">R$ {(item.qt_item * item.vl_unitario).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         </div>
       </div>
-      <div className="flex items-center gap-1">
+      <div className="hidden md:flex items-center gap-1">
         <button onClick={() => alterarQt(idx, -1)} className="px-2 py-0.5 border border-border rounded hover:bg-accent">−</button>
         <input 
           type="text" 
@@ -88,6 +88,9 @@ const CartItemRow: React.FC<ICartItemRowProps> = ({ item, idx, XFonteProd, alter
           <Trash2 size={14} />
         </button>
       </div>
+      <button onClick={() => removerItem(idx)} className="md:hidden p-1 text-destructive hover:bg-destructive/10 rounded">
+        <Trash2 size={14} />
+      </button>
     </div>
   );
 };
@@ -123,6 +126,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   const [XCliente, setXCliente] = useState<IClienteRow | null>(null);
   const [XVendedor, setXVendedor] = useState<IVendedorRow | null>(null);
   const [XSearchTerm, setXSearchTerm] = useState("");
+  const [XQtProx, setXQtProx] = useState<number>(1);
   const [XOpenProduto, setXOpenProduto] = useState(false);
   const [XOpenCliente, setXOpenCliente] = useState(false);
   const [XOpenVend, setXOpenVend] = useState(false);
@@ -304,11 +308,12 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
 
   // ===== Venda direta =====
   const adicionarProdutoAoCarrinho = (p: IProdutoRow, depositoId?: number) => {
+    const qt = XQtProx > 0 ? XQtProx : 1;
     setXCart(prev => {
       const idx = prev.findIndex(c => c.produto_id === p.produto_id);
       if (idx >= 0) {
         const cp = [...prev];
-        cp[idx] = { ...cp[idx], qt_item: cp[idx].qt_item + 1 };
+        cp[idx] = { ...cp[idx], qt_item: cp[idx].qt_item + qt };
         return cp;
       }
       const preco = p.st_promo && p.preco_promocional > 0 ? p.preco_promocional : p.preco_venda;
@@ -318,11 +323,12 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         nm_produto: p.nome,
         unidade_id: p.unidade_id,
         vl_unitario: preco,
-        qt_item: 1,
+        qt_item: qt,
         deposito_id: depositoId || XParams?.deposito_estoque_caixa || null,
       }];
     });
     setXSearchTerm("");
+    setXQtProx(1);
     setTimeout(() => searchRef.current?.focus(), 50);
   };
 
@@ -645,8 +651,8 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card">
-        <div className="flex items-center gap-4 text-sm">
+      <div className="flex items-center justify-between gap-2 px-2 md:px-4 py-2 border-b border-border bg-card overflow-x-auto">
+        <div className="hidden md:flex items-center gap-4 text-sm">
           <span className="font-semibold text-primary">PDV</span>
           <span className="text-muted-foreground">Caixa: <strong className="text-blue-600 dark:text-blue-400">{caixa.nome}</strong></span>
           <span className="text-muted-foreground">Data: <strong className="text-foreground">{new Date(dtMovimento + "T00:00:00").toLocaleDateString("pt-BR")}</strong></span>
@@ -658,26 +664,44 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
             <span className="text-muted-foreground whitespace-nowrap">NFC-e: <strong className="text-amber-600 dark:text-amber-400">{caixa.nfce_nome}</strong></span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        {/* Quantidade próximo lançamento (apenas mobile) */}
+        <div className="flex md:hidden items-center gap-1 shrink-0">
+          <span className="text-[10px] text-muted-foreground uppercase font-semibold mr-1">Qt</span>
+          <button onClick={() => setXQtProx(q => Math.max(0.001, +(q - 1).toFixed(3)))}
+            className="w-8 h-8 border border-border rounded text-lg font-bold hover:bg-accent leading-none">−</button>
+          <input
+            type="text"
+            value={XQtProx.toString().replace(".", ",")}
+            onChange={(e) => {
+              const n = parseFloat(e.target.value.replace(",", "."));
+              if (!isNaN(n) && n > 0) setXQtProx(n);
+              else if (e.target.value === "") setXQtProx(0);
+            }}
+            className="w-14 h-8 text-center border border-border rounded text-sm bg-white text-black font-bold"
+          />
+          <button onClick={() => setXQtProx(q => +(q + 1).toFixed(3))}
+            className="w-8 h-8 border border-border rounded text-lg font-bold hover:bg-accent leading-none">+</button>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
           <button onClick={() => setXOpenFuncoes(true)}
             className="text-sm px-3 py-1 rounded border border-amber-400 text-amber-700 dark:text-amber-400 flex items-center gap-1 hover:bg-amber-50 dark:hover:bg-amber-950/30">
-            <Wrench size={14} /> Funções
+            <Wrench size={14} /> <span className="hidden sm:inline">Funções</span>
           </button>
           <button onClick={() => setXOpenConfig(true)}
             className="text-sm px-3 py-1 rounded border border-border flex items-center gap-1 hover:bg-accent">
-            <Settings size={14} /> Configurar
+            <Settings size={14} /> <span className="hidden sm:inline">Configurar</span>
           </button>
           <button onClick={onSair}
             className="text-sm px-3 py-1 rounded border border-rose-300 text-rose-700 dark:text-rose-400 flex items-center gap-1 hover:bg-rose-50 dark:hover:bg-rose-950/30">
-            <LogOut size={14} /> Sair
+            <LogOut size={14} /> <span className="hidden sm:inline">Sair</span>
           </button>
         </div>
       </div>
 
       {/* Body */}
-      <div className="flex-1 grid grid-cols-12 gap-3 p-3 overflow-hidden">
-        {/* Coluna esquerda (col-span-8): Venda direta OU detalhes do pedido */}
-        <div className={`col-span-8 flex flex-col border border-border rounded ${painelBg} overflow-hidden`}>
+      <div className="flex-1 flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory scroll-smooth gap-0 p-0 md:grid md:grid-cols-12 md:gap-3 md:p-3 md:overflow-hidden">
+        {/* Coluna esquerda: Venda direta OU detalhes do pedido (mobile = 100vw, desktop = col-span-8) */}
+        <div className={`w-screen shrink-0 snap-start p-3 md:p-0 md:w-auto md:shrink md:col-span-8 flex flex-col border border-border rounded ${painelBg} overflow-hidden`}>
           <div className="relative px-3 py-2 border-b border-border flex items-center justify-center bg-topbar">
             <span className="text-sm font-bold text-topbar-foreground opacity-70 uppercase tracking-wider">
               {XPedidoSel ? `Itens do Pedido Nº ${XPedidoSel.nr_movimento || XPedidoSel.movimento_id}` : "Venda Direta"}
@@ -751,8 +775,8 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
           </div>
         </div>
 
-        {/* Coluna direita (col-span-4): Pedidos a Receber (topo) + Resumo (rodapé) */}
-        <div className="col-span-4 flex flex-col gap-3 overflow-hidden">
+        {/* Coluna direita: Pedidos a Receber (topo) + Resumo (rodapé) — mobile = 100vw, desktop = col-span-4 */}
+        <div className="w-screen shrink-0 snap-start p-3 md:p-0 md:w-auto md:shrink md:col-span-4 flex flex-col gap-3 overflow-hidden">
           {/* Pedidos a Receber */}
           <div className={`flex-1 flex flex-col border border-border rounded ${painelBg} overflow-hidden min-h-0`}>
             <div className="relative px-3 py-2 border-b border-border flex items-center justify-center bg-topbar">
@@ -885,22 +909,37 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         </div>
       </div>
 
-      {/* Barra de atalhos */}
-      <div className="flex-shrink-0 border-t border-border bg-card/80 px-3 py-1 flex items-center gap-4 text-[11px] text-muted-foreground flex-wrap">
-        {[
-          { key: 'F1', label: 'Ajuda', color: 'bg-primary/10 border-primary/20 text-primary' },
-          { key: 'F2', label: 'Buscar Produto', color: 'bg-primary/10 border-primary/20 text-primary' },
-          { key: 'F3', label: 'Cliente', color: 'bg-primary/10 border-primary/20 text-primary' },
-          ...(XPodeInfVend ? [{ key: 'F4', label: 'Vendedor', color: 'bg-primary/10 border-primary/20 text-primary' }] : []),
-          { key: 'F5', label: 'Atualizar', color: 'bg-primary/10 border-primary/20 text-primary' },
-          { key: 'F6', label: 'Desconto', color: 'bg-primary/10 border-primary/20 text-primary' },
-          { key: 'F9', label: 'Finalizar', color: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400' },
-          { key: 'Esc', label: 'Limpar seleção', color: 'bg-rose-500/10 border-rose-500/20 text-rose-600' },
-        ].map(a => (
-          <span key={a.key} className="flex items-center gap-1">
+      {/* Barra de atalhos (clicáveis) */}
+      <div className="flex-shrink-0 border-t border-border bg-card/80 px-3 py-1 flex items-center gap-2 text-[11px] text-muted-foreground overflow-x-auto">
+        {([
+          { key: 'F1', label: 'Ajuda', color: 'bg-primary/10 border-primary/20 text-primary', enabled: true,
+            action: () => setXShowAtalhos(p => !p) },
+          { key: 'F2', label: 'Buscar Produto', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel,
+            action: () => { searchRef.current?.focus(); searchRef.current?.select(); } },
+          { key: 'F3', label: 'Cliente', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel,
+            action: () => setXOpenCliente(true) },
+          ...(XPodeInfVend ? [{ key: 'F4', label: 'Vendedor', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel,
+            action: () => setXOpenVend(true) }] : []),
+          { key: 'F5', label: 'Atualizar', color: 'bg-primary/10 border-primary/20 text-primary', enabled: true,
+            action: () => { carregarPedidos(); toast.info('Lista de pedidos atualizada.'); } },
+          { key: 'F6', label: 'Desconto', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel && XCart.length > 0,
+            action: () => setXOpenDesc(true) },
+          { key: 'F9', label: 'Finalizar', color: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400', enabled: podeReceber,
+            action: () => finalizarVenda() },
+          { key: 'Esc', label: 'Limpar seleção', color: 'bg-rose-500/10 border-rose-500/20 text-rose-600', enabled: !!XPedidoSel,
+            action: () => setXPedidoSel(null) },
+        ] as const).map(a => (
+          <button
+            key={a.key}
+            type="button"
+            onClick={a.action}
+            disabled={!a.enabled}
+            className="flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title={a.label}
+          >
             <kbd className={`px-1.5 py-0.5 rounded border font-mono font-bold shadow-sm ${a.color}`}>{a.key}</kbd>
             <span>{a.label}</span>
-          </span>
+          </button>
         ))}
       </div>
 

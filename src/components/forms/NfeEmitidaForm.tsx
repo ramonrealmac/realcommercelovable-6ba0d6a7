@@ -180,6 +180,31 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                   <label className="text-xs text-muted-foreground">Observações da NF-e</label>
                   <textarea readOnly={ro} value={record.obs_nf ?? ""} onChange={e => setField("obs_nf" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-2 text-sm min-h-[100px]" />
                 </div>
+
+                {/* Cancelamento */}
+                <div className="border border-border rounded p-3 bg-card">
+                  <p className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">Cancelamento</p>
+                  <div className="grid grid-cols-12 gap-3">
+                    <div className="col-span-3">
+                      <label className="text-xs text-muted-foreground">Dt. Cancelamento</label>
+                      <input readOnly value={(record as any).dt_cancelamento ? new Date((record as any).dt_cancelamento).toLocaleString("pt-BR") : ""} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary" />
+                    </div>
+                    <div className="col-span-3">
+                      <label className="text-xs text-muted-foreground">Protocolo Cancel.</label>
+                      <input readOnly value={(record as any).protocolo_cancelamento ?? ""} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary font-mono" />
+                    </div>
+                    <div className="col-span-6">
+                      <label className="text-xs text-muted-foreground">Motivo Cancelamento</label>
+                      <input readOnly={ro} value={(record as any).motivo_cancelamento ?? ""} onChange={e => setField("motivo_cancelamento" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* XML */}
+                <div>
+                  <label className="text-xs text-muted-foreground">XML da NF-e</label>
+                  <textarea readOnly value={record.xml_nf ?? ""} className="w-full border border-border rounded px-2 py-2 text-[10px] font-mono min-h-[120px] bg-secondary/50" />
+                </div>
               </div>
             );
           },
@@ -231,7 +256,11 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                 <label className="text-xs text-muted-foreground">Dt. Saída</label>
                 <input type="date" readOnly={ro} value={(record.dt_saida || "").toString().substring(0, 10)} onChange={e => setField("dt_saida" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-1">
+                <label className="text-xs text-muted-foreground">Dt. Entrada</label>
+                <input type="date" readOnly={ro} value={((record as any).dt_entrada || "").toString().substring(0, 10)} onChange={e => setField("dt_entrada" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
+              </div>
+              <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Status</label>
                 <input readOnly value={NFE_ST_LABELS[stAtual] || stAtual} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary" />
               </div>
@@ -325,10 +354,17 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                   { label: "Frete",    key: "vl_frete"    },
                   { label: "Seguro",   key: "vl_seguro"   },
                   { label: "Despesa",  key: "vl_despesa"  },
+                  { label: "Outros",   key: "vl_outro"    },
                   { label: "Base Cálc.", key: "vl_bc"     },
                   { label: "ICMS",     key: "vl_icms"     },
+                  { label: "ICMS Deson.", key: "vl_icms_deson" },
                   { label: "ICMS-ST",  key: "vl_icms_st"  },
+                  { label: "FCP",      key: "vl_fcp"      },
+                  { label: "FCP-ST",   key: "vl_fcp_st"   },
+                  { label: "FCP-ST Ret.", key: "vl_fcp_st_ret" },
                   { label: "IPI",      key: "vl_ipi"      },
+                  { label: "IPI Devol.", key: "vl_ipi_devol" },
+                  { label: "II",       key: "vl_ii"       },
                   { label: "PIS",      key: "vl_pis"      },
                   { label: "COFINS",   key: "vl_cofins"   },
                   { label: "IBS",      key: "vl_ibs"      },
