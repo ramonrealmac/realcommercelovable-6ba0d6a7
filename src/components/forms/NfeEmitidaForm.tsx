@@ -17,6 +17,7 @@ interface IClienteInfo { id: number; cnpj: string; razao: string; }
 
 const XGridCols: IGridColumn[] = [
   { key: "nfe_cabecalho_id", label: "ID",      width: "60px",  align: "right" },
+  { key: "pedido_id",        label: "Pedido",  width: "80px",  align: "right", render: r => r.pedido_id || r.movimento_id || "" },
   { key: "tp_nf",            label: "Tipo",    width: "70px",  render: r => r.tp_nf === 0 ? "Entrada" : "Saída" },
   { key: "nr_nota",          label: "Nota",    width: "90px" },
   { key: "serie",            label: "Série",   width: "50px",  align: "center" },
