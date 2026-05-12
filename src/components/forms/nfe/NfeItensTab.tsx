@@ -8,6 +8,7 @@ import type { INfeItem } from "./types";
 
 const db = supabase;
 type XFieldValue = string | number | null | undefined;
+type XFieldValue = string | number | boolean | null | undefined;
 type XFormItem = Partial<INfeItem> & Record<string, XFieldValue>;
 type XItemRow = XFormItem & { nfe_item_id?: number; produto_id?: number | null; _produto_nome?: string | null };
 type XPayload = Record<string, string | number | null>;
