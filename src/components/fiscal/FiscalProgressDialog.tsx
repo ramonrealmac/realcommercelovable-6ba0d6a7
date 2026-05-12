@@ -11,8 +11,14 @@ interface IProps {
   descricao?: string;
   /** Tempo total (segundos) configurado para a operação. */
   segundosTotais: number;
-  /** Tempo restante (segundos) — atualizado pelo onTick do serviço. */
-  segundosRestantes: number;
+  /**
+   * Tempo restante (segundos). Quando informado pelo caller (via onTick do
+   * `aguardarEvento`), tem prioridade. Se omitido e `selfTick=true`, o dialog
+   * decrementa internamente a cada 1s.
+   */
+  segundosRestantes?: number;
+  /** Quando true, decrementa internamente a cada 1s a partir de `segundosTotais`. */
+  selfTick?: boolean;
 }
 
 /**
