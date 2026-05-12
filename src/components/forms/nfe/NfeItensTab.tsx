@@ -77,7 +77,7 @@ const decimalsFor = (XKey: string) => {
   return 2;
 };
 
-const fmtInput = (XValue: any, XKey: string) => {
+const fmtInput = (XValue: unknown, XKey: string) => {
   if (XValue === undefined || XValue === null || XValue === "") return "";
   if (XIntKeys.has(XKey)) return String(parseInt(String(XValue), 10) || 0);
   return parseNum(XValue).toFixed(decimalsFor(XKey)).replace(".", ",");
@@ -88,7 +88,7 @@ const onlyDigits = (XValue: string, XMax?: number) => {
   return XMax ? XDigits.slice(0, XMax) : XDigits;
 };
 
-const emptyItem = (): Partial<INfeItem> => ({
+const emptyItem = (): XFormItem => ({
   nr_item: 0,
   cd_prod_fornec: "",
   nm_produto: "",
@@ -152,12 +152,12 @@ const emptyItem = (): Partial<INfeItem> => ({
   produto_id: undefined,
 });
 
-const formatItemForEdit = (XItem: Partial<INfeItem>) => {
-  const XFormatted: any = { ...XItem };
+const formatItemForEdit = (XItem: XFormItem) => {
+  const XFormatted: XFormItem = { ...XItem };
   [...XNumericKeys, ...XIntKeys].forEach((XKey) => {
     if (XFormatted[XKey] !== undefined && XFormatted[XKey] !== null) XFormatted[XKey] = fmtInput(XFormatted[XKey], XKey);
   });
-  return XFormatted as Partial<INfeItem>;
+  return XFormatted;
 };
 
 const NfeItensTab: React.FC<NfeItensTabProps> = ({
