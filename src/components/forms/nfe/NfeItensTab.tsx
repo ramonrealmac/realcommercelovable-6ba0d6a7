@@ -172,7 +172,7 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
   const [XItens, setXItens] = useState<XItemRow[]>([]);
   const [XCurrentIdx, setXCurrentIdx] = useState<number | null>(null);
   const [XMode, setXMode] = useState<"view" | "edit" | "insert">("view");
-  const [XF, setXF] = useState<Partial<INfeItem>>(formatItemForEdit(emptyItem()));
+  const [XF, setXF] = useState<XFormItem>(formatItemForEdit(emptyItem()));
   const [XProdutos, setXProdutos] = useState<{ produto_id: number; nome: string; referencia?: string }[]>([]);
 
   const loadItens = useCallback(async () => {
