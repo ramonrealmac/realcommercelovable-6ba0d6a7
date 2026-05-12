@@ -124,6 +124,51 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
     if (!dados?.movimento_id) return;
 
     try {
+      // 0. Verifica se já existe NF para este pedido/modelo
+      const modeloChk = tipo === "NFE" ? "55" : "65";
+      const { data: existente } = await supabase
+        .from("fiscal_nfe_cabecalho")
+        .select("nfe_cabecalho_id, c_stat, x_motivo, modelo")
+        .eq("movimento_id", dados.movimento_id)
+        .eq("modelo", modeloChk)
+        .eq("excluido", false)
+        .order("nfe_cabecalho_id", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existente?.nfe_cabecalho_id) {
+        const cStat = Number(existente.c_stat || 0);
+        const autorizada = cStat === 100 || cStat === 150;
+        if (autorizada) {
+          setXSalvando(true);
+          setXStatus("Reemitindo DANFE da nota já autorizada...");
+          setXNfeId(existente.nfe_cabecalho_id);
+          const impRes = await fiscalEmissaoService.imprimirDocumento(existente.nfe_cabecalho_id, empresaId);
+          setXSalvando(false);
+          setXStatus("");
+          if (impRes.success && impRes.pdf_base64) {
+            setXLastPdf(impRes.pdf_base64);
+            try {
+              const bc = atob(impRes.pdf_base64);
+              const arr = new Uint8Array(bc.length);
+              for (let i = 0; i < bc.length; i++) arr[i] = bc.charCodeAt(i);
+              const url = URL.createObjectURL(new Blob([arr], { type: "application/pdf" }));
+              window.open(url, "danfe_view", "_blank");
+            } catch {}
+            toast.success("DANFE reemitido (nota já autorizada).");
+          } else {
+            toast.error("Falha ao reemitir DANFE: " + (impRes.message || "erro"));
+          }
+          return;
+        } else {
+          toast.error(
+            `Já existe ${tipo} para este pedido (status ${cStat || "—"}: ${existente.x_motivo || "pendente"}). Corrija pelo Gerenciador de NF-e.`,
+            { duration: 8000 }
+          );
+          return;
+        }
+      }
+
       setXSalvando(true);
       setXStatus(`Gerando ${tipo} e enviando ao Fiscal Worker...`);
       const res = await fiscalEmissaoService.gerarDocumentoFiscalFromMovimento(
@@ -226,22 +271,41 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
 
   const cards = [
     {
-      key: "nfe", label: "NFe", desc: "Nota Fiscal Eletrônica", icon: <FileCode2 size={28} />, color: "text-amber-600",
-      action: () => handleGerarFiscal("NFE"), enabled: true
-    },
-    {
-      key: "nfce", label: "NFCe", desc: "Nota de Consumidor", icon: <ScanLine size={28} />, color: "text-emerald-600",
-      action: () => handleGerarFiscal("NFCE"), enabled: true
-    },
-    {
-      key: "bobina", label: "Bobina", desc: "Impressão Térmica", icon: <Printer size={28} />, color: "text-slate-600",
+      key: "bobina", shortcut: "1", label: "Bobina", desc: "Impressão Térmica", icon: <Printer size={28} />, color: "text-slate-600",
       action: () => imprimir(dados, "bobina"), enabled: true
     },
     {
-      key: "a4", label: "A4 / PDF", desc: "Relatório de Pedido", icon: <FileText size={28} />, color: "text-blue-600",
+      key: "a4", shortcut: "2", label: "A4 / PDF", desc: "Relatório de Pedido", icon: <FileText size={28} />, color: "text-blue-600",
       action: () => imprimir(dados, "a4"), enabled: true
     },
+    {
+      key: "nfce", shortcut: "3", label: "NFCe", desc: "Nota de Consumidor", icon: <ScanLine size={28} />, color: "text-emerald-600",
+      action: () => handleGerarFiscal("NFCE"), enabled: true
+    },
+    {
+      key: "nfe", shortcut: "4", label: "NFe", desc: "Nota Fiscal Eletrônica", icon: <FileCode2 size={28} />, color: "text-amber-600",
+      action: () => handleGerarFiscal("NFE"), enabled: true
+    },
   ];
+
+  // Atalhos de teclado: 1=Bobina, 2=A4, 3=NFCe, 4=NFe, 5=Concluir
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (XSalvando) return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      const k = e.key;
+      if (k === "1") { e.preventDefault(); cards[0].action(); }
+      else if (k === "2") { e.preventDefault(); cards[1].action(); }
+      else if (k === "3") { e.preventDefault(); cards[2].action(); }
+      else if (k === "4") { e.preventDefault(); cards[3].action(); }
+      else if (k === "5") { e.preventDefault(); onConcluir(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, XSalvando, dados, empresaId, funcionarioId]);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !XSalvando && onClose()}>
