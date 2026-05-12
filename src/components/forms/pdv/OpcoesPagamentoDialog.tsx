@@ -342,6 +342,14 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
         empresaId={empresaId}
         clienteId={dados?.cliente_id}
       />
+
+      <FiscalProgressDialog
+        open={XProg.open}
+        titulo={XProg.titulo}
+        descricao="Aguardando resposta do Fiscal Worker / SEFAZ."
+        segundosTotais={XProg.total}
+        segundosRestantes={XProg.restante}
+      />
     </Dialog>
   );
 };
