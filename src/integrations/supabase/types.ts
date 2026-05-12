@@ -2021,6 +2021,7 @@ export type Database = {
           nome_fantasia: string
           pc_fcp_empresa: number | null
           pc_icms_interestadual: number | null
+          pdv_pesquisa_campos: string | null
           qt_saida_qt_decimais: number | null
           qt_venda_qt_decimais: number | null
           razao_social: string
@@ -2088,6 +2089,7 @@ export type Database = {
           nome_fantasia?: string
           pc_fcp_empresa?: number | null
           pc_icms_interestadual?: number | null
+          pdv_pesquisa_campos?: string | null
           qt_saida_qt_decimais?: number | null
           qt_venda_qt_decimais?: number | null
           razao_social?: string
@@ -2155,6 +2157,7 @@ export type Database = {
           nome_fantasia?: string
           pc_fcp_empresa?: number | null
           pc_icms_interestadual?: number | null
+          pdv_pesquisa_campos?: string | null
           qt_saida_qt_decimais?: number | null
           qt_venda_qt_decimais?: number | null
           razao_social?: string
