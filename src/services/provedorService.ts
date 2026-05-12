@@ -95,10 +95,24 @@ export const provedorService = {
       if (error) throw error;
       const eventoId = data.id;
 
+      // Lê o timeout configurado em fiscal_config.nr_timeout_nfe (segundos).
+      let timeoutSeg = 60;
+      if (empresaId) {
+        try {
+          const { data: cfg } = await supabase
+            .from("fiscal_config")
+            .select("nr_timeout_nfe")
+            .eq("empresa_id", Number(empresaId))
+            .maybeSingle();
+          if (cfg && (cfg as any).nr_timeout_nfe) {
+            timeoutSeg = Math.max(10, Math.min(600, Number((cfg as any).nr_timeout_nfe)));
+          }
+        } catch { /* fallback 60s */ }
+      }
+      const timeoutMs = timeoutSeg * 1000;
+
       // 2. Aguarda a resposta via Realtime
       return new Promise((resolve, reject) => {
-        const timeoutMs = 25000; // 25 segundos
-        
         const channel = supabase
           .channel(`provedor_res_${eventoId}`)
           .on(
@@ -136,7 +150,13 @@ export const provedorService = {
 
         setTimeout(() => {
           channel.unsubscribe();
-          reject(new Error("O Worker Fiscal não respondeu no tempo limite (Timeout). Verifique se o serviço está rodando."));
+          // Marca o evento como TIMEOUT (best effort)
+          (supabase as any).from("fiscal_evento")
+            .update({ status: "TIMEOUT", mensagem_erro: `Tempo limite excedido (${timeoutSeg}s) aguardando o Fiscal Worker.` })
+            .eq("id", eventoId)
+            .in("status", ["PENDENTE", "PROCESSANDO"])
+            .then(() => {}, () => {});
+          reject(new Error(`Tempo limite excedido (${timeoutSeg}s) aguardando o Fiscal Worker. Verifique se o serviço está rodando.`));
         }, timeoutMs);
       });
     } catch (error: any) {
