@@ -69,7 +69,7 @@ function calculateScore(item: any): number {
   let score = 0;
   if (!isWildcard(item.ncm_filtro)) score += 40;
   if (!isWildcard(item.cest_filtro)) score += 20;
-  if (item.uf_destino && item.uf_destino !== "*") score += 10;
+  if (item.uf_destino && item.uf_destino !== "*" && item.uf_destino !== "ZZ") score += 10;
   if (item.cliente_contribuinte !== null) score += 5;
   if (item.cliente_consumidor_final !== null) score += 5;
   if (item.origem_produto !== null && item.origem_produto !== undefined) score += 2;
@@ -96,7 +96,7 @@ async function getBestMatch(table: string, regraId: number, produto: any, uf_des
   // Filtro manual para garantir match exato ou wildcard
   const eligible = items.filter((it: any) => {
     // UF match
-    if (it.uf_destino !== "*" && it.uf_destino !== uf_destino) return false;
+    if (it.uf_destino !== "*" && it.uf_destino !== "ZZ" && it.uf_destino !== uf_destino) return false;
     // NCM match (se não for wildcard)
     if (!isWildcard(it.ncm_filtro) && it.ncm_filtro !== produto.ncm) return false;
     // CEST match

@@ -52,7 +52,7 @@ export interface ResultadoTributos {
  */
 function calcularScore(row: any): number {
   let score = 0;
-  if (row.uf_destino && row.uf_destino !== '*') score += 8;
+  if (row.uf_destino && row.uf_destino !== '*' && row.uf_destino !== 'ZZ') score += 8;
   if (row.fiscal_grupo_produto_id || row.grupo_icms_id) score += 4;
   if (row.ncm_filtro && row.ncm_filtro !== '99999999') score += 2;
   if (row.cest_filtro && row.cest_filtro !== '9999999') score += 2;
@@ -65,7 +65,7 @@ function calcularScore(row: any): number {
  * Verifica se um item de regra bate com os filtros do produto.
  */
 function bateComFiltro(regra: any, filtro: FiltroItem): boolean {
-  const ufOk = !regra.uf_destino || regra.uf_destino === '*' || regra.uf_destino === filtro.uf_destino;
+  const ufOk = !regra.uf_destino || regra.uf_destino === '*' || regra.uf_destino === 'ZZ' || regra.uf_destino === filtro.uf_destino;
   const grupoOk = !regra.fiscal_grupo_produto_id || regra.fiscal_grupo_produto_id === filtro.fiscal_grupo_produto_id;
   const ncmOk = !regra.ncm_filtro || regra.ncm_filtro === '99999999' || regra.ncm_filtro === filtro.ncm;
   const cestOk = !regra.cest_filtro || regra.cest_filtro === '9999999' || regra.cest_filtro === filtro.cest;
