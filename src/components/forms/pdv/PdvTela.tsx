@@ -68,14 +68,14 @@ const CartItemRow: React.FC<ICartItemRowProps> = ({ item, idx, XFonteProd, alter
   };
 
   return (
-    <div className={`px-3 py-2 flex items-center gap-2 border-b border-border ${idx % 2 ? "bg-muted/40" : ""}`}>
+      <div className={`px-3 py-2 flex items-center gap-2 border-b border-border ${idx % 2 ? "bg-muted/40" : ""}`}>
       <div className="flex-1">
         <div className="font-medium truncate text-blue-700 dark:text-blue-400">{item.nm_produto}</div>
         <div className="text-muted-foreground" style={{ fontSize: `${XFonteProd - 1}px` }}>
           {item.qt_item.toLocaleString("pt-BR")} {item.unidade_id || ""} × R$ {item.vl_unitario.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} = <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">R$ {(item.qt_item * item.vl_unitario).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         </div>
       </div>
-      <div className="flex items-center gap-1">
+      <div className="hidden md:flex items-center gap-1">
         <button onClick={() => alterarQt(idx, -1)} className="px-2 py-0.5 border border-border rounded hover:bg-accent">−</button>
         <input 
           type="text" 
@@ -88,6 +88,9 @@ const CartItemRow: React.FC<ICartItemRowProps> = ({ item, idx, XFonteProd, alter
           <Trash2 size={14} />
         </button>
       </div>
+      <button onClick={() => removerItem(idx)} className="md:hidden p-1 text-destructive hover:bg-destructive/10 rounded">
+        <Trash2 size={14} />
+      </button>
     </div>
   );
 };
