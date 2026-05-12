@@ -128,7 +128,7 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
       const { data: existente } = await supabase
         .from("fiscal_nfe_cabecalho")
         .select("nfe_cabecalho_id, c_stat, x_motivo, modelo")
-        .or(`movimento_id.eq.${dados.movimento_id},pedido_id.eq.${dados.movimento_id}`)
+        .eq("movimento_id", dados.movimento_id)
         .eq("excluido", false)
         .order("nfe_cabecalho_id", { ascending: false })
         .limit(1)
