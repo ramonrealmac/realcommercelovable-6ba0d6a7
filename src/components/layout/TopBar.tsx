@@ -1,14 +1,16 @@
 import { useState, useEffect, useRef } from "react";
-import { Menu, LogOut, KeyRound, Shield, Users, UserCog, Bot, BotOff } from "lucide-react";
+import { Menu, LogOut, KeyRound, Shield, Users, UserCog, Bot, BotOff, Search } from "lucide-react";
 import { useAppContext } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import ShortcutsBar from "./ShortcutsBar";
 import ChatInternoTopBarButton from "@/components/chat-interno/ChatInternoTopBarButton";
+import ProdutoSearchDialog from "@/components/forms/pedido/ProdutoSearchDialog";
 
 const TopBar = () => {
   const { XEmpresaId, setXEmpresaId, setXEmpresaMatrizId, XEmpresas, toggleSidebar, openTab, XChatBotVisible, toggleChatBot } = useAppContext();
 
   const [XMenuOpen, setXMenuOpen] = useState(false);
+  const [XSearchOpen, setXSearchOpen] = useState(false);
   const [XUserEmail, setXUserEmail] = useState("");
   const [XUserLogin, setXUserLogin] = useState("");
   const [XUserNome, setXUserNome] = useState("");
@@ -85,6 +87,15 @@ const TopBar = () => {
 
       <div className="hidden md:block flex-1" />
 
+      <button
+        onClick={() => setXSearchOpen(true)}
+        className="p-1.5 hover:bg-foreground/10 rounded flex items-center gap-1.5"
+        title="Pesquisa de Produtos (Global)"
+      >
+        <Search size={20} />
+        <span className="text-xs hidden lg:inline font-medium">Produtos</span>
+      </button>
+
       <ChatInternoTopBarButton />
 
       <button
@@ -94,6 +105,16 @@ const TopBar = () => {
       >
         {XChatBotVisible ? <Bot size={20} /> : <BotOff size={20} className="opacity-60" />}
       </button>
+
+      <ProdutoSearchDialog 
+        open={XSearchOpen} 
+        onClose={() => setXSearchOpen(false)} 
+        onSelect={(p) => {
+          openTab({ title: "Produtos", component: "ProdutoForm" });
+          // Note: ideally we'd pass p.produto_id to ProdutoForm to auto-select it.
+          // For now, opening the form is the standard behavior for global actions.
+        }}
+      />
 
       {/* User avatar + dropdown */}
       <div className="relative" ref={XMenuRef}>

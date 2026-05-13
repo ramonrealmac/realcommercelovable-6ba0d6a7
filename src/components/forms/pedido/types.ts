@@ -72,10 +72,12 @@ export interface IMovimentoPagamento {
 }
 
 export const ST_PEDIDO_LABELS: Record<string, string> = {
-  O: "Orçamento",
-  P: "Pedido",
-  V: "Venda",
-  C: "Cancelado",
+  O: "ORCAMENTO",
+  P: "ORCAMENTO",
+  F: "PRE-VENDA(CAIXA)",
+  V: "ORCAMENTO (RESERVADO)",
+  C: "CANCELADO",
+  R: "VENDA (RECEBIDA)",
 };
 
 export const TP_DESCONTO_LABELS: Record<string, string> = {

@@ -93,9 +93,29 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
   const [XNfeId, setXNfeId] = React.useState<number | null>(null);
   const [XLastPdf, setXLastPdf] = React.useState<string | null>(null);
   const [XEmailDialogOpen, setXEmailDialogOpen] = React.useState(false);
+  const [XEmitido, setXEmitido] = React.useState(false);
   const [XProg, setXProg] = React.useState<{ open: boolean; titulo: string; total: number; restante: number }>({
     open: false, titulo: "", total: 60, restante: 60
   });
+
+  // Verifica se já existe documento para bloquear botões ao abrir
+  React.useEffect(() => {
+    if (open && dados?.movimento_id) {
+      setXEmitido(false);
+      (async () => {
+        const { data: existente } = await supabase
+          .from("fiscal_nfe_cabecalho")
+          .select("nfe_cabecalho_id")
+          .eq("movimento_id", dados.movimento_id)
+          .eq("excluido", false)
+          .limit(1)
+          .maybeSingle();
+        if (existente?.nfe_cabecalho_id) {
+          setXEmitido(true);
+        }
+      })();
+    }
+  }, [open, dados?.movimento_id]);
 
   const handleVisualizarFiscal = () => {
     if (!XLastPdf) {
@@ -122,6 +142,9 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
 
   const handleGerarFiscal = async (tipo: "NFE" | "NFCE") => {
     if (!dados?.movimento_id) return;
+    if (XSalvando || XEmitido) return;
+
+    setXSalvando(true);
 
     try {
       // 0. Verifica se já existe QUALQUER documento fiscal vinculado a este pedido
@@ -135,11 +158,11 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
         .maybeSingle();
 
       if (existente?.nfe_cabecalho_id) {
+        setXEmitido(true);
         const cStat = Number(existente.c_stat || 0);
         const autorizada = cStat === 100 || cStat === 150;
         const mesmoModelo = String(existente.modelo) === (tipo === "NFE" ? "55" : "65");
         if (autorizada && mesmoModelo) {
-          setXSalvando(true);
           setXStatus("Reemitindo DANFE da nota já autorizada...");
           setXNfeId(existente.nfe_cabecalho_id);
           const impRes = await fiscalEmissaoService.imprimirDocumento(existente.nfe_cabecalho_id, empresaId);
@@ -167,11 +190,11 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
               : `Já existe ${modLbl} para este pedido (status ${cStat || "—"}: ${existente.x_motivo || "pendente"}). Corrija pelo Gerenciador de NF-e.`,
             { duration: 8000 }
           );
+          setXSalvando(false);
           return;
         }
       }
 
-      setXSalvando(true);
       setXStatus(`Gerando ${tipo} e enviando ao Fiscal Worker...`);
       const res = await fiscalEmissaoService.gerarDocumentoFiscalFromMovimento(
         dados.movimento_id,
@@ -198,6 +221,7 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
 
       if (ret.success) {
         toast.success(`${tipo} autorizada!`);
+        setXEmitido(true);
 
         // Abre o PDF se retornado pelo worker
         let pdfBase64 = ret.resposta?.pdf_base64 || ret.resposta?.impressao?.pdf_base64;
@@ -282,11 +306,11 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
     },
     {
       key: "nfce", shortcut: "3", label: "3. NFCe", desc: "Nota de Consumidor", icon: <ScanLine size={28} />, color: "text-emerald-600",
-      action: () => handleGerarFiscal("NFCE"), enabled: true
+      action: () => handleGerarFiscal("NFCE"), enabled: !XEmitido
     },
     {
       key: "nfe", shortcut: "4", label: "4. NFe", desc: "Nota Fiscal Eletrônica", icon: <FileCode2 size={28} />, color: "text-amber-600",
-      action: () => handleGerarFiscal("NFE"), enabled: true
+      action: () => handleGerarFiscal("NFE"), enabled: !XEmitido
     },
   ];
 

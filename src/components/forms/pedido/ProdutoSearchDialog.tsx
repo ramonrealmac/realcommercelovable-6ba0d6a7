@@ -76,14 +76,27 @@ export async function buscarProdutoPorCodigo(
   if (!t) return null;
   const ids = XGroupEmpresaIds.length > 0 ? XGroupEmpresaIds : [XEmpresaId];
 
+  // 1. Tentar encontrar pelo cod_barra na tabela produto_codbarra
+  const { data: codBarraData } = await db.from("produto_codbarra")
+    .select("produto_id")
+    .eq("cod_barra", t)
+    .in("empresa_id", ids)
+    .eq("excluido", false)
+    .limit(1)
+    .maybeSingle();
+
   let q = db.from("produto")
     .select("produto_id, nome, unidade_id, preco_venda, preco_promocional, st_promo, referencia, gtin")
     .in("empresa_id", ids).eq("excluido", false).limit(5);
-  if (/^\d+$/.test(t)) {
+    
+  if (codBarraData?.produto_id) {
+    q = q.eq("produto_id", codBarraData.produto_id);
+  } else if (/^\d+$/.test(t)) {
     q = q.or(`produto_id.eq.${t},referencia.eq.${t},gtin.eq.${t}`);
   } else {
     q = q.or(`referencia.eq.${t},gtin.eq.${t}`);
   }
+  
   const { data: prods } = await q;
   if (!prods || prods.length === 0) return null;
   const p: any = prods[0];
@@ -188,10 +201,22 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
 
     const t = termo.trim();
     if (t) {
+      let codBarraProdIds: number[] = [];
+      const { data: cbData } = await db.from("produto_codbarra")
+        .select("produto_id")
+        .ilike("cod_barra", `%${t}%`)
+        .in("empresa_id", ids)
+        .eq("excluido", false)
+        .limit(20);
+      if (cbData) {
+        codBarraProdIds = cbData.map((x: any) => x.produto_id);
+      }
+      
+      const cbFilter = codBarraProdIds.length > 0 ? `,produto_id.in.(${codBarraProdIds.join(",")})` : "";
       if (/^\d+$/.test(t)) {
-        q = q.or(`produto_id.eq.${t},referencia.ilike.%${t}%,gtin.ilike.%${t}%,nome.ilike.%${t}%`);
+        q = q.or(`produto_id.eq.${t},referencia.ilike.%${t}%,gtin.ilike.%${t}%,nome.ilike.%${t}%${cbFilter}`);
       } else {
-        q = q.or(`nome.ilike.%${t}%,referencia.ilike.%${t}%,gtin.ilike.%${t}%`);
+        q = q.or(`nome.ilike.%${t}%,referencia.ilike.%${t}%,gtin.ilike.%${t}%${cbFilter}`);
       }
     }
     if (XSoPromo) q = q.eq("st_promo", "S");

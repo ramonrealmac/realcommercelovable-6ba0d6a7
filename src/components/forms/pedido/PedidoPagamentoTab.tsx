@@ -17,6 +17,7 @@ interface IProps {
   totalPedido?: number;
   refreshToken?: number;
   onMudarStatus?: (novo: string) => void;
+  onRetornar?: () => void;
 }
 
 const fmt = (v: number) => (v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -154,19 +155,31 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
         />
       )}
 
-      <div className="flex items-start justify-between gap-4 pt-2 border-t border-border">
-        <div className="flex flex-col gap-2">
+      <div className="flex items-start justify-between gap-4 pt-4 border-t border-border mt-4">
+        <div className="flex flex-wrap gap-2">
+          {onRetornar && (
+            <button 
+              onClick={onRetornar} 
+              className="text-sm px-4 py-2 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 font-semibold transition-all flex items-center gap-2"
+            >
+              ↩ Retornar
+            </button>
+          )}
           {stAtual === "O" && (
-            <button onClick={() => setXShowPagamento(true)} className="text-sm px-6 py-2 rounded bg-emerald-600 text-white font-bold shadow-md hover:bg-emerald-700 transition-all">💰 PAGAMENTO / CAIXA</button>
+            <button 
+              onClick={() => setXShowPagamento(true)} 
+              className="text-sm px-6 py-2 rounded bg-emerald-600 text-white font-bold shadow-md hover:bg-emerald-700 transition-all flex items-center gap-2"
+            >
+              💰 Gravar Forma de Pagamento
+            </button>
           )}
           {stAtual === "O" && onMudarStatus && (
-            <button onClick={() => { if (confirm("Confirma o envio deste pedido para o Caixa?")) onMudarStatus("P"); }} className="text-xs px-4 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors">→ Enviar p/ Caixa</button>
-          )}
-          {(stAtual === "O" || stAtual === "P") && onMudarStatus && (
-            <button
-              onClick={() => { if (confirm("Cancelar este pedido?")) onMudarStatus("C"); }}
-              className="text-xs px-4 py-1 rounded border border-destructive/30 text-destructive/70 hover:bg-destructive/5 transition-colors"
-            >Cancelar Pedido</button>
+            <button 
+              onClick={() => { if (confirm("Confirma o envio deste pedido para o Caixa?")) onMudarStatus("F"); }} 
+              className="text-sm px-4 py-2 rounded bg-primary text-primary-foreground font-bold shadow-md hover:opacity-90 transition-all flex items-center gap-2"
+            >
+              🔒 Enviar para o Caixa
+            </button>
           )}
         </div>
 

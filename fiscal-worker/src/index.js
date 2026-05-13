@@ -104,6 +104,7 @@ const montarPayloadEmissaoNfe = async (evento, payloadAtual) => {
             tipo_certificado: fiscalConfig.tipo_certificado || payloadAtual.config?.tipo_certificado || 'ARQUIVO',
             csc: configItem.csc || payloadAtual.config?.csc || '',
             id_csc: configItem.id_csc || payloadAtual.config?.id_csc || '',
+            pasta_arquivos: fiscalConfig.pasta_arquivos_fiscais || payloadAtual.config?.pasta_arquivos || '',
         },
         print_config: payloadAtual.print_config || {
             tp_imp: isNfce ? (configItem.tp_imp_nfce || 'PDF') : (configItem.tp_imp_nfe || 'PDF'),
@@ -148,7 +149,8 @@ const processarEvento = async (evento) => {
                     certificadoSenha: configDb.senha_certificado ? Buffer.from(configDb.senha_certificado, 'base64').toString('ascii') : "",
                     ambiente: parseInt(configDb.ambiente_nfe || "2"),
                     uf: "SP", // Fallback, mas o ideal é vir no comando
-                    modelo: 55
+                    modelo: 55,
+                    pasta_arquivos: configDb.pasta_arquivos_fiscais || ""
                 };
                 logger.info(`Configurações carregadas: Tipo=${payload.config.tipo_certificado}`);
                 

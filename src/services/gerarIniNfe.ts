@@ -142,6 +142,7 @@ export function gerarIniNfe(params: GerarIniParams): string {
     const qt = Number(it.qt_entrada || it.qt_movimento || 0);
     const vUnit = Number(it.vl_unit || 0);
     const vTot = Number(it.vl_total || 0);
+    const vProdItem = arred(qt * vUnit);
 
     linhas.push(`[Produto${nr}]`);
     const gtinFiscal = normalizarGtinFiscal(it.gtin);
@@ -155,7 +156,7 @@ export function gerarIniNfe(params: GerarIniParams): string {
     linhas.push(`uCom=${it.unidade || 'UN'}`);
     linhas.push(`qCom=${qt.toFixed(4)}`);
     linhas.push(`vUnCom=${vUnit.toFixed(10)}`);
-    linhas.push(`vProd=${vTot.toFixed(2)}`);
+    linhas.push(`vProd=${vProdItem.toFixed(2)}`);
     linhas.push(`uTrib=${it.unidade || 'UN'}`);
     linhas.push(`qTrib=${qt.toFixed(4)}`);
     linhas.push(`vUnTrib=${vUnit.toFixed(10)}`);
@@ -231,7 +232,11 @@ export function gerarIniNfe(params: GerarIniParams): string {
   // ──────────────────────────────────────────────
   // [Total]
   // ──────────────────────────────────────────────
-  const vProd = arred(itens.reduce((s, it) => s + Number(it.vl_total || 0), 0));
+  const vProd = arred(itens.reduce((s, it) => {
+    const qt = Number(it.qt_entrada || it.qt_movimento || 0);
+    const vUnit = Number(it.vl_unit || 0);
+    return s + arred(qt * vUnit);
+  }, 0));
   const vDesc = arred(itens.reduce((s, it) => s + Number(it.vl_desconto || 0), 0));
   const vIPI  = arred(itens.reduce((s, it) => s + Number(it.vl_ipi || 0), 0));
   const vST   = arred(itens.reduce((s, it) => s + Number(it.vl_icms_st || 0), 0));

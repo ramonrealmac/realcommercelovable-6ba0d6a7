@@ -253,7 +253,8 @@ export const fiscalEmissaoService = {
             certificadoSenha: fConfig.senha_certificado || "",
             tipo_certificado: fConfig.tipo_certificado || "ARQUIVO",
             csc: fConfigItem.csc || "",
-            id_csc: fConfigItem.id_csc || ""
+            id_csc: fConfigItem.id_csc || "",
+            pasta_arquivos: (fConfig as any).pasta_arquivos_fiscais || ""
           }
         }
       }).select("id").single();
@@ -350,7 +351,8 @@ export const fiscalEmissaoService = {
             certificadoSenha: fConfig.senha_certificado || "",
             tipo_certificado: fConfig.tipo_certificado || "ARQUIVO",
             csc: fConfigItem.csc || "",
-            id_csc: fConfigItem.id_csc || ""
+            id_csc: fConfigItem.id_csc || "",
+            pasta_arquivos: (fConfig as any).pasta_arquivos_fiscais || ""
           }
         }
       }).select("id").single();
@@ -561,7 +563,8 @@ export const fiscalEmissaoService = {
             ambiente: fConfig.ambiente_nfe,
             certificadoPath: fConfig.certificado,
             certificadoSenha: fConfig.senha_certificado || "",
-            tipo_certificado: fConfig.tipo_certificado || "ARQUIVO"
+            tipo_certificado: fConfig.tipo_certificado || "ARQUIVO",
+            pasta_arquivos: (fConfig as any).pasta_arquivos_fiscais || ""
           }
         }
       }).select("id").single();
@@ -705,7 +708,8 @@ export const fiscalEmissaoService = {
             ambiente: fConfig.ambiente_nfe,
             certificadoPath: fConfig.certificado,
             certificadoSenha: fConfig.senha_certificado,
-            tipo_certificado: fConfig.tipo_certificado
+            tipo_certificado: fConfig.tipo_certificado,
+            pasta_arquivos: (fConfig as any).pasta_arquivos_fiscais || ""
           }
         }
       }).select("id").single();

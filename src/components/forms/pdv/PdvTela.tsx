@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
-import { LogOut, Search, Trash2, Plus, Receipt, RefreshCw, Settings, Wrench, Percent, ShoppingCart, Tag, CircleDollarSign } from "lucide-react";
+import { LogOut, Search, Trash2, Plus, Receipt, RefreshCw, Settings, Wrench, Percent, ShoppingCart, Tag, CircleDollarSign, Package, CornerDownLeft } from "lucide-react";
 import ProdutoSearchDialog, { buscarProdutoPorCodigo, IProdutoRow } from "../pedido/ProdutoSearchDialog";
 import ClienteSearchDialog, { IClienteRow } from "../pedido/ClienteSearchDialog";
 import VendedorSearchDialog, { IVendedorRow } from "./VendedorSearchDialog";
@@ -209,6 +209,32 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     setXOpenPagto(true);
   }, [podeReceber, XParams, XPedidoSel]);
 
+  // ===== Salvar como Pre-venda (apenas para venda direta) =====
+  const salvarPreVenda = useCallback(async () => {
+    if (XCart.length === 0) { toast.error("Adicione itens ao carrinho."); return; }
+    if (!XParams) { toast.error("Parâmetros da empresa não carregados."); return; }
+
+    const tid = toast.loading("Salvando pré-venda...");
+    try {
+      // 1. Cria o movimento como 'O'
+      const { movimento_id, nr } = await criarMovimentoVendaDireta();
+      
+      // 2. Muda o status para 'F' via RPC (isso reserva o estoque)
+      const { data, error } = await db.rpc("fu_mudar_status_pedido_pdv", {
+        _movimento_id: movimento_id,
+        _novo_status: "F"
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success(`Pré-venda #${nr} salva com sucesso.`, { id: tid });
+      concluirVenda();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao salvar pré-venda.", { id: tid });
+    }
+  }, [XCart, XParams, XCliente, XVendedor, XEmpresaId, caixa.funcionario_id]);
+
   // ===== Atalhos de teclado =====
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -237,6 +263,10 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         case 'F6':
           e.preventDefault();
           if (!XPedidoSel && XCart.length > 0) setXOpenDesc(true);
+          break;
+        case 'F7':
+          e.preventDefault();
+          if (!XPedidoSel && XCart.length > 0) salvarPreVenda();
           break;
         case 'F9':
           e.preventDefault();
@@ -310,6 +340,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   // ===== Venda direta =====
   const adicionarProdutoAoCarrinho = (p: IProdutoRow, depositoId?: number) => {
     const qt = XQtProx > 0 ? XQtProx : 1;
+    if (XVlDesc > 0 || XPcDesc > 0) { setXVlDesc(0); setXPcDesc(0); }
     setXCart(prev => {
       const idx = prev.findIndex(c => c.produto_id === p.produto_id);
       if (idx >= 0) {
@@ -345,6 +376,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   };
 
   const alterarQt = (idx: number, delta: number) => {
+    if (XVlDesc > 0 || XPcDesc > 0) { setXVlDesc(0); setXPcDesc(0); }
     setXCart(prev => prev.map((c, i) => i === idx ? { ...c, qt_item: Math.max(0.001, c.qt_item + delta) } : c));
   };
 
@@ -352,10 +384,14 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     const s = val.replace(",", ".");
     const n = parseFloat(s);
     if (isNaN(n)) return;
+    if (XVlDesc > 0 || XPcDesc > 0) { setXVlDesc(0); setXPcDesc(0); }
     setXCart(prev => prev.map((c, i) => i === idx ? { ...c, qt_item: n } : c));
   };
 
-  const removerItem = (idx: number) => setXCart(prev => prev.filter((_, i) => i !== idx));
+  const removerItem = (idx: number) => {
+    if (XVlDesc > 0 || XPcDesc > 0) { setXVlDesc(0); setXPcDesc(0); }
+    setXCart(prev => prev.filter((_, i) => i !== idx));
+  };
 
   // Carrega parametros da empresa
   useEffect(() => {
@@ -392,41 +428,34 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
 
   /** Cria movimento (st_pedido='F') quando for venda direta. */
   const criarMovimentoVendaDireta = async (): Promise<{ movimento_id: number; nr: number; total: number; }> => {
-    const { data: maxMov } = await db.from("movimento")
-      .select("movimento_id").order("movimento_id", { ascending: false }).limit(1);
-    const movId = ((maxMov && maxMov[0]?.movimento_id) || 0) + 1;
     const { data: maxNr } = await db.from("movimento")
       .select("nr_movimento").eq("empresa_id", XEmpresaId).order("nr_movimento", { ascending: false }).limit(1);
     const nr = ((maxNr && maxNr[0]?.nr_movimento) || 0) + 1;
     const total = totalReceber;
 
     const mov = {
-      movimento_id: movId,
       empresa_id: XEmpresaId,
       cadastro_id: XCliente?.cadastro_id || null,
       funcionario_id: XVendedor?.cadastro_id || caixa.funcionario_id,
       nr_movimento: nr,
       tp_movimento: "S",
       tp_origem: "PDV",
-      st_pedido: "F",
+      st_pedido: "O",
       faturado: "N",
       dt_emissao: new Date().toISOString(),
       dt_finalizacao: new Date().toISOString(),
       tp_operacao_id: XParams!.tp_operacao_caixa,
-      tp_desconto: vlDescAplicado > 0 ? "V" : "N",
+      tp_desconto: vlDescAplicado > 0 ? "P" : "N",
       vl_desconto: vlDescAplicado,
       pc_desconto: XPcDesc,
       deposito_id: XParams!.deposito_estoque_caixa,
       excluido: false,
     };
-    const { error } = await db.from("movimento").insert(mov);
+    const { data: insertedMov, error } = await db.from("movimento").insert(mov).select("movimento_id").single();
     if (error) throw new Error("Falha ao criar venda: " + error.message);
+    const movId = insertedMov.movimento_id;
 
-    const { data: maxIt } = await db.from("movimento_item")
-      .select("movimento_item_id").order("movimento_item_id", { ascending: false }).limit(1);
-    let nextItId = ((maxIt && maxIt[0]?.movimento_item_id) || 0) + 1;
     const itens = XCart.map(c => ({
-      movimento_item_id: nextItId++,
       empresa_id: XEmpresaId,
       movimento_id: movId,
       produto_id: c.produto_id,
@@ -510,12 +539,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         };
       }
 
-      const { data: maxCx } = await db.from("caixa_movimento")
-        .select("caixa_movimento_id").order("caixa_movimento_id", { ascending: false }).limit(1);
-      const cxId = ((maxCx && maxCx[0]?.caixa_movimento_id) || 0) + 1;
-
       const cm = {
-        caixa_movimento_id: cxId,
         empresa_id: XEmpresaId,
         caixa_abertura_id: abertura.caixa_abertura_id,
         funcionario_id: caixa.funcionario_id,
@@ -531,14 +555,11 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         movimento_id: movimentoId,
         excluido: false,
       };
-      const { error: e1 } = await db.from("caixa_movimento").insert(cm);
+      const { data: insertedCm, error: e1 } = await db.from("caixa_movimento").insert(cm).select("caixa_movimento_id").single();
       if (e1) throw new Error("Falha ao gravar caixa_movimento: " + e1.message);
+      const cxId = insertedCm.caixa_movimento_id;
 
-      const { data: maxCxIt } = await db.from("caixa_movimento_item")
-        .select("caixa_movimento_item_id").order("caixa_movimento_item_id", { ascending: false }).limit(1);
-      let nextCxIt = ((maxCxIt && maxCxIt[0]?.caixa_movimento_item_id) || 0) + 1;
       const itensCx = linhasAjustadas.map(l => ({
-        caixa_movimento_item_id: nextCxIt++,
         caixa_movimento_id: cxId,
         empresa_id: XEmpresaId,
         condicao_id: l.condicao_id,
@@ -590,10 +611,15 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         toast.error("Aviso: falha ao atualizar valor de fechamento do caixa: " + (errCx.message || errCx));
       }
 
-      const { error: e3 } = await db.from("movimento")
-        .update({ st_pedido: "R", dt_pagamento: new Date().toISOString() })
-        .eq("movimento_id", movimentoId);
-      if (e3) throw new Error("Falha ao baixar pedido: " + e3.message);
+      // ===== CENTRALIZED STATUS TRANSITION VIA RPC =====
+      // Isso garante que o estoque seja baixado corretamente (físico e reserva)
+      const { data: rpcRes, error: e3 } = await db.rpc("fu_mudar_status_pedido_pdv", {
+        _movimento_id: movimentoId,
+        _novo_status: "R"
+      });
+      
+      if (e3) throw new Error("Falha ao baixar pedido (RPC): " + e3.message);
+      if (rpcRes?.error) throw new Error("Falha ao baixar pedido: " + rpcRes.error);
 
 
       // Monta dados de impressão para o próximo dialog
@@ -713,19 +739,22 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
               </button>
             )}
           </div>
-
           {!XPedidoSel && (
-            <div className="px-3 py-2 border-b border-border flex gap-2 bg-card">
+            <div className="px-3 py-2 border-b border-border flex gap-1.5 bg-card items-center">
               <div className="relative flex-1">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input ref={searchRef} value={XSearchTerm} onChange={e => setXSearchTerm(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter") buscarTermo(); }}
-                  placeholder="Código, GTIN ou nome do produto... (Enter)"
+                  placeholder="Código ou nome... (Enter)"
                   className="w-full pl-8 pr-2 py-1.5 border border-border rounded text-sm bg-white text-black" />
               </div>
+              <button onClick={buscarTermo} tabIndex={-1} title="Confirmar Produto (Enter)"
+                className="h-9 px-3 rounded bg-emerald-500 text-white flex items-center justify-center hover:bg-emerald-600 transition-colors">
+                <CornerDownLeft size={18} />
+              </button>
               <button onClick={() => setXOpenProduto(true)}
-                className="text-sm px-3 py-1.5 rounded border border-blue-400 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 flex items-center gap-1">
-                <Plus size={14} /> Pesquisar
+                className="h-9 px-3 rounded border border-blue-400 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 flex items-center gap-1">
+                <Plus size={14} /> <span className="max-md:hidden">Pesquisar</span><span className="md:hidden text-xs">F2</span>
               </button>
             </div>
           )}
@@ -901,10 +930,18 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
                 className="flex-[0.4] text-sm px-3 py-2 rounded border border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 disabled:opacity-50 flex items-center justify-center gap-1 font-medium">
                 <Percent size={16} /> Desconto
               </button>
-              <button onClick={finalizarVenda} disabled={!podeReceber}
-                className="flex-[0.6] text-sm px-3 py-2 rounded bg-primary text-primary-foreground disabled:opacity-50 flex items-center justify-center gap-1 font-bold">
-                <Receipt size={18} /> Finalizar Venda
-              </button>
+                <div className="flex-1 flex gap-2">
+                  {!XPedidoSel && (
+                    <button onClick={salvarPreVenda} disabled={XCart.length === 0}
+                      className="flex-1 text-sm px-3 py-2 rounded border border-primary text-primary hover:bg-primary/5 disabled:opacity-50 flex items-center justify-center gap-1 font-semibold">
+                      <Package size={18} /> Salvar (F7)
+                    </button>
+                  )}
+                  <button onClick={finalizarVenda} disabled={!podeReceber}
+                    className="flex-[2] text-sm px-3 py-2 rounded bg-primary text-primary-foreground disabled:opacity-50 flex items-center justify-center gap-1 font-bold">
+                    <Receipt size={18} /> Finalizar Venda (F9)
+                  </button>
+                </div>
             </div>
           </div>
         </div>
@@ -925,6 +962,8 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
             action: () => { carregarPedidos(); toast.info('Lista de pedidos atualizada.'); } },
           { key: 'F6', label: 'Desconto', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel && XCart.length > 0,
             action: () => setXOpenDesc(true) },
+          { key: 'F7', label: 'Pré-venda', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel && XCart.length > 0,
+            action: () => salvarPreVenda() },
           { key: 'F9', label: 'Finalizar', color: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400', enabled: podeReceber,
             action: () => finalizarVenda() },
           { key: 'Esc', label: 'Limpar seleção', color: 'bg-rose-500/10 border-rose-500/20 text-rose-600', enabled: !!XPedidoSel,
@@ -958,6 +997,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
                 { key: 'F4', label: 'Pesquisar vendedor' },
                 { key: 'F5', label: 'Atualizar lista de pedidos' },
                 { key: 'F6', label: 'Abrir desconto' },
+                { key: 'F7', label: 'Salvar como Pré-venda' },
                 { key: 'F9', label: 'Finalizar / receber venda' },
                 { key: 'Esc', label: 'Deselecionar pedido' },
                 { key: 'Del', label: 'Remover último item do carrinho' },

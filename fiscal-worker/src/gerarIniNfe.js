@@ -105,6 +105,7 @@ export function gerarIniNfe(params) {
     const qt = Number(it.qt_entrada || it.qt_movimento || 0);
     const vUnit = Number(it.vl_unit || 0);
     const vTot = Number(it.vl_total || 0);
+    const vProdItem = arred(qt * vUnit); // Valor bruto do produto (exigência da SEFAZ para vProd)
 
     // Regra SEFAZ: em homologação, o xProd do PRIMEIRO item deve ser a frase mágica
     const ehPrimeiroItemHomolog = (i === 0 && ambiente === '2');
@@ -124,7 +125,7 @@ export function gerarIniNfe(params) {
     linhas.push(`uCom=${it.unidade || 'UN'}`);
     linhas.push(`qCom=${qt.toFixed(4)}`);
     linhas.push(`vUnCom=${vUnit.toFixed(10)}`);
-    linhas.push(`vProd=${vTot.toFixed(2)}`);
+    linhas.push(`vProd=${vProdItem.toFixed(2)}`);
     linhas.push(`uTrib=${it.unidade || 'UN'}`);
     linhas.push(`qTrib=${qt.toFixed(4)}`);
     linhas.push(`vUnTrib=${vUnit.toFixed(10)}`);
@@ -228,8 +229,11 @@ export function gerarIniNfe(params) {
     }
     linhas.push('');
   }
-
-  const vProd = arred(itens.reduce((s, it) => s + Number(it.vl_total || 0), 0));
+  const vProd = arred(itens.reduce((s, it) => {
+    const qt = Number(it.qt_entrada || it.qt_movimento || 0);
+    const vUnit = Number(it.vl_unit || 0);
+    return s + arred(qt * vUnit);
+  }, 0));
   const vDesc = arred(itens.reduce((s, it) => s + Number(it.vl_desconto || 0), 0));
   const vIPI = arred(itens.reduce((s, it) => s + Number(it.vl_ipi || 0), 0));
   const vST = arred(itens.reduce((s, it) => s + Number(it.vl_icms_st || 0), 0));

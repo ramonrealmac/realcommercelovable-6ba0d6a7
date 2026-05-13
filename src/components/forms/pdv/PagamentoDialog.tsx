@@ -352,7 +352,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
   };
 
   const colsAll: IGridColumn[] = [
-    { key: "condicao_descricao", label: "Condição", width: "1fr" },
+    { key: "condicao_descricao", label: "Condição", width: isMobile ? "120px" : "1fr" },
     { key: "qt_parcela", label: "Parc.", width: "60px", align: "right" },
     { key: "vl_parcela", label: "Vlr Parcela", width: "100px", align: "right", render: r => fmt(r.vl_parcela) },
     { key: "vl_recebido", label: "Valor", width: "100px", align: "right", render: r => fmt(r.vl_recebido) },
@@ -435,18 +435,18 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
           <h2 className="text-sm font-semibold">Meios de Pagamento e Prazos</h2>
         </div>
 
-        <div className="md:p-3 overflow-hidden flex-1 min-h-0">
-          <div className="h-full grid grid-cols-[repeat(2,100vw)] auto-rows-min overflow-x-auto overflow-y-auto snap-x snap-mandatory scroll-smooth md:h-auto md:grid-cols-12 md:gap-x-10 md:gap-y-2 md:items-end md:overflow-visible md:auto-rows-auto">
+        <div className="md:p-3 overflow-hidden flex-1 min-h-0 bg-background">
+          <div className="h-full grid grid-cols-[repeat(2,100vw)] auto-rows-min gap-y-5 overflow-x-auto overflow-y-auto snap-x snap-mandatory scroll-smooth md:h-auto md:grid-cols-12 md:gap-x-10 md:gap-y-2 md:items-end md:overflow-visible md:auto-rows-auto">
             {/* Row 1: Condição vs Total Pedido */}
-            <div className="col-span-7 max-md:col-span-1 max-md:col-start-1 max-md:snap-start max-md:px-3">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase leading-none mb-1 block">Condição</label>
+            <div className="col-span-7 max-md:col-span-1 max-md:col-start-1 max-md:snap-start max-md:px-3 max-md:pt-2">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase leading-tight mb-1.5 block">Condição</label>
               <select ref={condicaoRef} value={XCondicaoId} onChange={e => setCondicao(Number(e.target.value))}
                 className={`w-full border border-border rounded px-2 py-1 text-sm h-9 ${brancoCls}`}>
                 <option value={0}>--</option>
                 {XCondicoes.map(c => <option key={c.condicao_id} value={c.condicao_id}>{c.descricao}</option>)}
               </select>
             </div>
-            <div className="col-span-5 max-md:col-span-1 max-md:col-start-2 max-md:snap-start max-md:px-3">
+            <div className="col-span-5 max-md:col-span-1 max-md:col-start-2 max-md:snap-start max-md:px-3 max-md:pt-4">
               <div 
                 onClick={() => setXCalcDisplay(totalPedido.toFixed(2).replace(".", ","))}
                 className="border border-amber-300 rounded px-3 py-1 bg-amber-50 dark:bg-amber-950/30 flex justify-between items-center h-9 cursor-pointer hover:bg-amber-100 transition-colors">
@@ -459,8 +459,8 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
             </div>
 
             {/* Row 2: Bandeira vs Valor Pago */}
-            <div className="col-span-7 max-md:col-span-1 max-md:col-start-1 max-md:snap-start max-md:px-3">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase leading-none mb-1 block">Bandeira</label>
+            <div className="col-span-7 max-md:col-span-1 max-md:col-start-1 max-md:snap-start max-md:px-3 max-md:pt-4">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase leading-tight mb-1.5 block">Bandeira</label>
               <select
                 ref={bandeiraRef}
                 value={XBandeiraId}
@@ -472,7 +472,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
                 {XBandeiras.map(b => <option key={b.bandeira_id} value={b.bandeira_id}>{b.descricao}</option>)}
               </select>
             </div>
-            <div className="col-span-5 max-md:col-span-1 max-md:col-start-2 max-md:snap-start max-md:px-3">
+            <div className="col-span-5 max-md:col-span-1 max-md:col-start-2 max-md:snap-start max-md:px-3 max-md:pt-4">
               <div 
                 onClick={() => setXCalcDisplay(totalPago.toFixed(2).replace(".", ","))}
                 className="border border-emerald-200 rounded px-3 py-1 bg-emerald-50/60 dark:bg-emerald-950/20 flex justify-between items-center h-9 cursor-pointer hover:bg-emerald-100/50 transition-colors">
@@ -485,10 +485,10 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
             </div>
 
             {/* Row 3: Operadora/Autoriz vs Valor a Pagar */}
-            <div className="col-span-7 max-md:col-span-1 max-md:col-start-1 max-md:snap-start max-md:px-3">
+            <div className="col-span-7 max-md:col-span-1 max-md:col-start-1 max-md:snap-start max-md:px-3 max-md:pt-2">
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase leading-none mb-1 block">Operadora</label>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase leading-tight mb-1.5 block">Operadora</label>
                   <select value={XOperadoraId} onChange={e => setXOperadoraId(Number(e.target.value))}
                     disabled={!camposCartaoEditaveis}
                     tabIndex={camposCartaoEditaveis ? 0 : -1}
@@ -498,7 +498,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase leading-none mb-1 block">Nº Autorização</label>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase leading-tight mb-1.5 block">Nº Autorização</label>
                   <input value={XNrAutoriz} onChange={e => setXNrAutoriz(e.target.value)}
                     disabled={!camposCartaoEditaveis}
                     tabIndex={camposCartaoEditaveis ? 0 : -1}
@@ -506,7 +506,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
                 </div>
               </div>
             </div>
-            <div className="col-span-5 max-md:col-span-1 max-md:col-start-2 max-md:snap-start max-md:px-3">
+            <div className="col-span-5 max-md:col-span-1 max-md:col-start-2 max-md:snap-start max-md:px-3 max-md:pt-4">
               <div 
                 onClick={() => setXCalcDisplay(valorAPagar.toFixed(2).replace(".", ","))}
                 className={`border rounded px-3 py-1 flex justify-between items-center h-9 cursor-pointer transition-colors border-rose-200 bg-rose-50/60 dark:bg-rose-950/20 hover:bg-rose-100/50`}>
@@ -519,10 +519,10 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
             </div>
 
             {/* Row 4: Valores vs Troco */}
-            <div className="col-span-7 max-md:col-span-1 max-md:col-start-1 max-md:snap-start max-md:px-3">
+            <div className="col-span-7 max-md:col-span-1 max-md:col-start-1 max-md:snap-start max-md:px-3 max-md:pt-2">
               <div className="grid grid-cols-8 max-md:grid-cols-5 gap-2 items-end">
                 <div className="col-span-2">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase leading-none mb-1 block">Vlr a Pagar</label>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase leading-tight mb-1.5 block">Vlr a Pagar</label>
                   <input
                     type="text"
                     value={XVlPagar}
@@ -557,7 +557,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
                 </div>
               </div>
             </div>
-            <div className="col-span-5 max-md:col-span-1 max-md:col-start-2 max-md:snap-start max-md:px-3">
+            <div className="col-span-5 max-md:col-span-1 max-md:col-start-2 max-md:snap-start max-md:px-3 max-md:pt-4">
               <div 
                 onClick={() => setXCalcDisplay(troco.toFixed(2).replace(".", ","))}
                 className={`border rounded px-3 py-1 flex justify-between items-center h-9 cursor-pointer transition-colors border-blue-400 bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100`}>

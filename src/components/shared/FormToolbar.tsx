@@ -95,10 +95,6 @@ const FormToolbar: React.FC<FormToolbarProps> = ({
           <ToolbarBtn icon={<RefreshCw size={18} />} label="Atualizar (F5)" onClick={onRefresh} color="info" />
           <ToolbarBtn icon={<Search size={18} />} label="Localizar (F3)" onClick={onLocalizar} color="info" />
           {onLog && <ToolbarBtn icon={<FileText size={18} />} label="Log de Operações" onClick={onLog} color="log" />}
-          <ToolbarSeparator />
-          {extras}
-          <ToolbarBtn icon={<HelpCircle size={18} />} label="Ajuda (F1)" onClick={onHelp || (() => {})} color="help" />
-          <ToolbarBtn icon={<LogOut size={18} />} label="Sair (Esc)" onClick={onSair} color="destructive" />
         </>
       ) : (
         <>
@@ -106,6 +102,11 @@ const FormToolbar: React.FC<FormToolbarProps> = ({
           <ToolbarBtn icon={<X size={18} />} label="Cancelar (Esc)" onClick={onCancelar} color="destructive" />
         </>
       )}
+      <ToolbarSeparator />
+      {extras}
+      <ToolbarSeparator />
+      <ToolbarBtn icon={<HelpCircle size={18} />} label="Ajuda (F1)" onClick={onHelp || (() => {})} color="help" />
+      <ToolbarBtn icon={<LogOut size={18} />} label="Sair (Esc)" onClick={onSair} color="destructive" />
     </div>
   );
 };

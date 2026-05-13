@@ -158,7 +158,37 @@ const DataGrid: React.FC<DataGridProps> = ({
 
   const XSortedData = useMemo(() => applySorting(data, XSorts, columns), [data, XSorts, columns]);
 
-  const gridTemplate = XVisibleCols.map(c => c.width || "1fr").join(" ");
+  const [XColWidths, setXColWidths] = useState<Record<string, string>>({});
+  const headerRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const gridTemplate = XVisibleCols.map(c => XColWidths[c.key] || c.width || "1fr").join(" ");
+
+  const handleResizeStart = (e: React.MouseEvent, key: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startX = e.clientX;
+    const headerEl = headerRefs.current[key];
+    if (!headerEl) return;
+    
+    const initialWidth = headerEl.getBoundingClientRect().width;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const newWidth = Math.max(40, initialWidth + deltaX);
+      setXColWidths(prev => ({ ...prev, [key]: `${newWidth}px` }));
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = '';
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    document.body.style.cursor = 'col-resize';
+  };
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -172,6 +202,43 @@ const DataGrid: React.FC<DataGridProps> = ({
       else if (XVisibleCols.length > 1) next.add(key); // keep at least 1
       return next;
     });
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (XSortedData.length === 0) return;
+    
+    let nextIdx = selectedIdx;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (selectedIdx === null || selectedIdx === undefined) {
+        nextIdx = 0;
+      } else if (selectedIdx < XSortedData.length - 1) {
+        nextIdx = selectedIdx + 1;
+      }
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (selectedIdx === null || selectedIdx === undefined) {
+        nextIdx = XSortedData.length - 1;
+      } else if (selectedIdx > 0) {
+        nextIdx = selectedIdx - 1;
+      }
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (selectedIdx !== null && selectedIdx !== undefined && onRowDoubleClick) {
+        onRowDoubleClick(XSortedData[selectedIdx], selectedIdx);
+      }
+      return;
+    } else {
+      return;
+    }
+
+    if (nextIdx !== null && nextIdx !== undefined && nextIdx !== selectedIdx) {
+      if (onRowClick) onRowClick(XSortedData[nextIdx], nextIdx);
+      requestAnimationFrame(() => {
+        document.getElementById(`grid-row-${nextIdx}`)?.scrollIntoView({ block: "nearest" });
+      });
+    }
   };
 
   const getSortIcon = (key: string) => {
@@ -234,7 +301,15 @@ const DataGrid: React.FC<DataGridProps> = ({
       )}
 
       {/* Grid */}
-      <div className="border border-border rounded overflow-hidden overflow-x-auto" onContextMenu={handleContextMenu}>
+      <div 
+        className="border border-border rounded overflow-hidden overflow-x-auto outline-none focus-within:ring-1 focus-within:ring-ring" 
+        onContextMenu={handleContextMenu}
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'BUTTON') return;
+          handleKeyDown(e);
+        }}
+      >
         <div className="min-w-[500px] overflow-y-auto" style={{ maxHeight }}>
         {/* Filters */}
         {showFilters && filterValues && onFilterChange && (
@@ -260,12 +335,19 @@ const DataGrid: React.FC<DataGridProps> = ({
           {XVisibleCols.map(c => (
             <div
               key={c.key}
-              className={`px-2 py-1.5 border-r last:border-r-0 cursor-pointer select-none flex items-center min-w-0 truncate ${headerClassName ? 'border-current/10' : 'border-primary-foreground/20'}`}
+              ref={(el) => { headerRefs.current[c.key] = el; }}
+              className={`relative px-2 py-1.5 border-r last:border-r-0 cursor-pointer select-none flex items-center min-w-0 truncate ${headerClassName ? 'border-current/10' : 'border-primary-foreground/20'}`}
               style={{ justifyContent: c.align === "right" ? "flex-end" : c.align === "center" ? "center" : "flex-start" }}
               onClick={() => handleSort(c.key)}
             >
               <span className="truncate">{c.label}</span>
               {getSortIcon(c.key)}
+              <div
+                className="absolute right-0 top-0 h-full w-2 cursor-col-resize hover:bg-primary/50 opacity-0 hover:opacity-100 z-20"
+                onMouseDown={(e) => handleResizeStart(e, c.key)}
+                onClick={(e) => e.stopPropagation()}
+                title="Redimensionar"
+              />
             </div>
           ))}
         </div>
@@ -280,6 +362,7 @@ const DataGrid: React.FC<DataGridProps> = ({
           {!loading && !isLoading && XSortedData.map((row, i) => (
             <div
               key={i}
+              id={`grid-row-${i}`}
               className={`text-xs cursor-pointer transition-colors ${
                 selectedIdx === i
                   ? "bg-grid-selected text-grid-selected-foreground"
