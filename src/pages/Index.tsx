@@ -116,6 +116,8 @@ const AppContent = () => {
         return <NotaFiscalEntradaForm />;
       case "nfe-recebidas":
         return <NfeRecebidasForm />;
+      case "devolucao-nfe-entrada":
+        return <DevolucaoNfeEntradaForm />;
       case "nfe-emitidas":
         return <ListaNfeEmitidaForm initialFilterId={params?.nfe_cabecalho_id} />;
       case "nfe-form":
