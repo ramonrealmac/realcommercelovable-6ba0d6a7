@@ -253,7 +253,11 @@ const DevolucaoNfeEntradaForm: React.FC = () => {
 
       setXNovoNfeId(novoId);
       setXStep(3);
-      toast.success(`NF-e de devolução gerada (ID #${novoId}).`);
+      toast.success(`NF-e de devolução gerada (ID #${novoId}). Abrindo formulário...`);
+      // Abre automaticamente a NF-e gerada já populada, pronta para transmissão
+      setTimeout(() => {
+        openTab({ title: `Devolução NF-e #${novoId}`, component: "nfe-form", params: { nfe_cabecalho_id: novoId } });
+      }, 300);
     } catch (e: any) {
       toast.error("Falha ao gerar devolução: " + e.message);
     } finally {
