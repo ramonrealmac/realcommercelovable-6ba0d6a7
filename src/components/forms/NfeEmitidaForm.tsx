@@ -8,8 +8,9 @@ import NfeItensTab from "./nfe/NfeItensTab";
 import NfePagamentoTab from "./nfe/NfePagamentoTab";
 import type { INfeCabecalho, TNfeSt } from "./nfe/types";
 import { NFE_ST_LABELS } from "./nfe/types";
-import { Search } from "lucide-react";
+import { Search, Send } from "lucide-react";
 import { formatCPFCNPJ } from "@/lib/validators";
+import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
 
 const db = supabase as any;
 
@@ -126,6 +127,42 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
       XAfterInsertTab="itens"
       XRefreshRef={XRefreshRef}
       XInitialId={initialId}
+      XToolbarExtras={({ currentRecord, isEditing, refresh }) => {
+        if (!currentRecord || isEditing) return null;
+        const st = String(currentRecord.st_nf || "");
+        // Permite enviar quando: Aberta (A), Rejeitada (R/3) ou em re-tentativa
+        const podeEnviar = ["A", "R", "3", "P"].includes(st) && Number(currentRecord.tp_nf) === 1;
+        if (!podeEnviar) return null;
+        return (
+          <button
+            type="button"
+            onClick={async () => {
+              if (!confirm(`Enviar NF-e #${currentRecord.nfe_cabecalho_id} para a SEFAZ via fiscal-worker?`)) return;
+              const tid = toast.loading("Enviando para fila do fiscal-worker...");
+              try {
+                const res = await fiscalEmissaoService.retransmitirDocumento(
+                  currentRecord.nfe_cabecalho_id,
+                  XEmpresaId
+                );
+                toast.dismiss(tid);
+                if (res.success) {
+                  toast.success(`Evento #${res.fiscal_evento_id} enfileirado. Aguarde o fiscal-worker processar.`);
+                  await refresh();
+                } else {
+                  toast.error("Falha: " + (res.message || "Erro desconhecido"));
+                }
+              } catch (e: any) {
+                toast.dismiss(tid);
+                toast.error("Erro: " + e.message);
+              }
+            }}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-primary text-primary-foreground rounded-md hover:opacity-90 shadow-sm"
+            title="Cria evento PENDENTE no fiscal_evento para que o fiscal-worker transmita a NF-e à SEFAZ"
+          >
+            <Send className="w-3.5 h-3.5" /> ENVIAR SEFAZ
+          </button>
+        );
+      }}
       XExtraTabs={[
         {
           key: "itens", label: "Itens da NF-e",

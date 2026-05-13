@@ -253,7 +253,11 @@ const DevolucaoNfeEntradaForm: React.FC = () => {
 
       setXNovoNfeId(novoId);
       setXStep(3);
-      toast.success(`NF-e de devolução gerada (ID #${novoId}).`);
+      toast.success(`NF-e de devolução gerada (ID #${novoId}). Abrindo formulário...`);
+      // Abre automaticamente a NF-e gerada já populada, pronta para transmissão
+      setTimeout(() => {
+        openTab({ title: `Devolução NF-e #${novoId}`, component: "nfe-form", params: { nfe_cabecalho_id: novoId } });
+      }, 300);
     } catch (e: any) {
       toast.error("Falha ao gerar devolução: " + e.message);
     } finally {
@@ -456,7 +460,7 @@ const DevolucaoNfeEntradaForm: React.FC = () => {
             </div>
             <h3 className="text-xl font-bold">NF-e de devolução criada com sucesso</h3>
             <p className="text-sm text-muted-foreground max-w-md">
-              A nota foi gerada como rascunho (status <span className="font-bold">Aberto</span>). Abra o formulário de notas emitidas para conferir destinatário, impostos e enviar à SEFAZ.
+              A nota foi aberta em uma nova aba, pronta para conferência e <span className="font-bold">envio à SEFAZ</span> através do botão <span className="font-bold">"Enviar SEFAZ"</span> na barra de ferramentas.
             </p>
             <div className="flex gap-2 mt-2">
               <button onClick={reiniciar} className="px-4 py-2 text-xs font-bold bg-secondary rounded-md hover:bg-secondary/80">
