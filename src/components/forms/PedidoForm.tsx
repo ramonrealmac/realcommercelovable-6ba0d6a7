@@ -73,6 +73,7 @@ const PedidoForm: React.FC = () => {
   // Ref estável para XClientesCache — evita dependência instável em useCallback
   const XClientesCacheRef = useRef<Record<number, IClienteInfo>>(XClientesCache);
   useEffect(() => { XClientesCacheRef.current = XClientesCache; }, [XClientesCache]);
+  const XCurrentRecordRef = useRef<IMovimento | null>(null);
 
   // Lookups independentes — falha em um não bloqueia os outros
   useEffect(() => {
@@ -161,6 +162,21 @@ const PedidoForm: React.FC = () => {
     }
   }, []);
 
+  // Keyboard shortcut F7 for Pre-venda
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "F7" && XCurrentRecordRef.current?.movimento_id) {
+        const st = XCurrentRecordRef.current.st_pedido;
+        if (st === "O" || st === "V") {
+          e.preventDefault();
+          mudarStatus(XCurrentRecordRef.current.movimento_id, "F", "Confirma o envio deste pedido para o Caixa (Pré-venda)? O estoque será reservado.");
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [mudarStatus]);
+
   const fetchItensCadastro = useCallback(async (movimento_id: number) => {
     const { data } = await db.from("movimento_item")
       .select("*").eq("movimento_id", movimento_id).eq("excluido", false)
@@ -208,6 +224,7 @@ const PedidoForm: React.FC = () => {
     <>
       <StandardCrudForm<IMovimento>
         XToolbarExtras={({ currentRecord, refresh, setInnerTab, isEditing }) => {
+        XCurrentRecordRef.current = currentRecord;
         if (!currentRecord?.movimento_id || isEditing) return null;
         const stAtual = currentRecord.st_pedido;
         return (
@@ -227,9 +244,9 @@ const PedidoForm: React.FC = () => {
             {/* 2. Enviar / Retirar do Caixa */}
             {(stAtual === "O" || stAtual === "V") && (
               <ToolbarBtn 
-                icon={<Lock size={18} />} 
-                label="Enviar para o Caixa" 
-                onClick={() => mudarStatus(currentRecord.movimento_id, "F", "Confirma o envio deste pedido para o Caixa? O estoque será reservado.")} 
+                icon={<Package size={18} />} 
+                label="Salvar como Pré-venda (F7)" 
+                onClick={() => mudarStatus(currentRecord.movimento_id, "F", "Confirma o envio deste pedido para o Caixa (Pré-venda)? O estoque será reservado.")} 
                 color="success" 
               />
             )}
