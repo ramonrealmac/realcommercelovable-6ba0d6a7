@@ -30,6 +30,7 @@ interface StandardCrudFormProps<T extends Record<string, any>> {
     mode: TFormMode;
     isEditing: boolean;
     currentRecord: any | null;
+    setInnerTab: (tab: string) => void;
   }) => React.ReactNode;
   XExtraTabs?: IExtraTab[];
   XExportTitle?: string;
