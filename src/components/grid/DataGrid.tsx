@@ -3,7 +3,8 @@ import { ArrowUp, ArrowDown, Download, FileText, FileSpreadsheet, File } from "l
 
 export interface IGridColumn {
   key: string;
-  label: string;
+  label: React.ReactNode;
+  exportLabel?: string; // Usado para exportação de texto/excel
   width?: string;
   align?: "left" | "right" | "center";
   render?: (row: any, idx?: number) => React.ReactNode;
@@ -58,8 +59,14 @@ function applySorting<T>(data: T[], sorts: ISortItem[], columns: IGridColumn[]):
 // --- Export helpers ---
 function exportAsText(columns: IGridColumn[], data: any[], title: string) {
   const visibleCols = columns;
-  const widths = visibleCols.map(c => Math.max(c.label.length, ...data.map(r => String(c.getValue ? c.getValue(r) : (r as any)[c.key] ?? "").length)));
-  const header = visibleCols.map((c, i) => c.label.padEnd(widths[i])).join(" | ");
+  const widths = visibleCols.map(c => {
+    const labelStr = c.exportLabel || (typeof c.label === "string" ? c.label : "");
+    return Math.max(labelStr.length, ...data.map(r => String(c.getValue ? c.getValue(r) : (r as any)[c.key] ?? "").length));
+  });
+  const header = visibleCols.map((c, i) => {
+    const labelStr = c.exportLabel || (typeof c.label === "string" ? c.label : "");
+    return labelStr.padEnd(widths[i]);
+  }).join(" | ");
   const sep = widths.map(w => "-".repeat(w)).join("-+-");
   const rows = data.map(r => visibleCols.map((c, i) => String(c.getValue ? c.getValue(r) : (r as any)[c.key] ?? "").padEnd(widths[i])).join(" | "));
   const text = [title, "", header, sep, ...rows, "", `Total: ${data.length} registro(s)`].join("\n");
@@ -68,7 +75,7 @@ function exportAsText(columns: IGridColumn[], data: any[], title: string) {
 
 function exportAsCsv(columns: IGridColumn[], data: any[], title: string) {
   const visibleCols = columns;
-  const header = visibleCols.map(c => `"${c.label}"`).join(";");
+  const header = visibleCols.map(c => `"${c.exportLabel || (typeof c.label === "string" ? c.label : "")}"`).join(";");
   const rows = data.map(r => visibleCols.map(c => `"${String(c.getValue ? c.getValue(r) : (r as any)[c.key] ?? "")}"`).join(";"));
   const csv = [header, ...rows].join("\n");
   // BOM for Excel to detect UTF-8
@@ -89,7 +96,7 @@ function exportAsPdf(columns: IGridColumn[], data: any[], title: string) {
     .footer{margin-top:8px;font-size:11px;color:#666}
     @media print{button{display:none}}</style></head><body>
     <h2>${title}</h2>
-    <table><thead><tr>${visibleCols.map(c => `<th>${c.label}</th>`).join("")}</tr></thead>
+    <table><thead><tr>${visibleCols.map(c => `<th>${c.exportLabel || (typeof c.label === "string" ? c.label : "")}</th>`).join("")}</tr></thead>
     <tbody>${data.map(r => `<tr>${visibleCols.map(c => `<td style="text-align:${c.align || "left"}">${c.getValue ? c.getValue(r) : (r as any)[c.key] ?? ""}</td>`).join("")}</tr>`).join("")}</tbody></table>
     <div class="footer">Total: ${data.length} registro(s)</div>
     <br><button onclick="window.print()">Imprimir / Salvar PDF</button>
@@ -318,7 +325,7 @@ const DataGrid: React.FC<DataGridProps> = ({
               <input
                 key={c.key}
                 type="text"
-                placeholder={c.label}
+                placeholder={typeof c.label === "string" ? c.label : ""}
                 value={filterValues[c.key] || ""}
                 onChange={e => onFilterChange(c.key, e.target.value)}
                 className="px-2 py-1 text-xs border-r border-border outline-none last:border-r-0 bg-card min-w-0"
@@ -338,10 +345,10 @@ const DataGrid: React.FC<DataGridProps> = ({
               ref={(el) => { headerRefs.current[c.key] = el; }}
               className={`relative px-2 py-1.5 border-r last:border-r-0 cursor-pointer select-none flex items-center min-w-0 truncate ${headerClassName ? 'border-current/10' : 'border-primary-foreground/20'}`}
               style={{ justifyContent: c.align === "right" ? "flex-end" : c.align === "center" ? "center" : "flex-start" }}
-              onClick={() => handleSort(c.key)}
+              onClick={() => typeof c.label === "string" ? handleSort(c.key) : null}
             >
-              <span className="truncate">{c.label}</span>
-              {getSortIcon(c.key)}
+              <div className="truncate">{c.label}</div>
+              {typeof c.label === "string" && getSortIcon(c.key)}
               <div
                 className="absolute right-0 top-0 h-full w-2 cursor-col-resize hover:bg-primary/50 opacity-0 hover:opacity-100 z-20"
                 onMouseDown={(e) => handleResizeStart(e, c.key)}
@@ -429,7 +436,7 @@ const DataGrid: React.FC<DataGridProps> = ({
               }`}>
                 {!XHiddenCols.has(c.key) && "✓"}
               </span>
-              {c.label}
+              {typeof c.label === "string" ? c.label : c.exportLabel || c.key}
             </button>
           ))}
         </div>

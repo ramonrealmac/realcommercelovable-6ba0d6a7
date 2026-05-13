@@ -56,6 +56,8 @@ const XGridCols: IGridColumn[] = [
         "C": "Cancelada",
         "D": "Denegada",
         "P": "Pendente",
+        "A": "Aguardando",
+        "R": "Rejeitada",
         "1": "Autorizada",
         "2": "Denegada"
       };
@@ -64,7 +66,9 @@ const XGridCols: IGridColumn[] = [
         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
           r.st_nf === "E" || r.st_nf === "1" ? "bg-green-100 text-green-700" :
           r.st_nf === "C" ? "bg-red-100 text-red-700" :
-          r.st_nf === "D" || r.st_nf === "2" ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600"
+          r.st_nf === "D" || r.st_nf === "2" ? "bg-orange-100 text-orange-700" : 
+          r.st_nf === "R" ? "bg-red-100 text-red-700" :
+          r.st_nf === "A" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"
         }`}>
           {label}
         </span>
@@ -97,6 +101,26 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
   const [XCancelJustificativa, setXCancelJustificativa] = useState("");
   const [XCancelando, setXCancelando] = useState(false);
   const [XProg, setXProg] = useState<{ open: boolean; titulo: string; total: number }>({ open: false, titulo: "", total: 60 });
+
+  // Multi-selection
+  const [XSelectedIds, setXSelectedIds] = useState<Set<number>>(new Set());
+
+  const toggleSelect = (id: number) => {
+    setXSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (filteredData: any[]) => {
+    if (XSelectedIds.size === filteredData.length && filteredData.length > 0) {
+      setXSelectedIds(new Set());
+    } else {
+      setXSelectedIds(new Set(filteredData.map(r => r.nfe_cabecalho_id)));
+    }
+  };
 
   useEffect(() => {
     if (initialFilterId) {
@@ -202,6 +226,40 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadXmlsSelecionados = () => {
+    const selecionados = XFilteredData.filter(r => XSelectedIds.has(r.nfe_cabecalho_id));
+    if (selecionados.length === 0) {
+      toast.error("Nenhuma nota selecionada.");
+      return;
+    }
+    
+    const comXml = selecionados.filter(r => r.xml_nf);
+    if (comXml.length === 0) {
+      toast.error("Nenhum XML disponível para as notas selecionadas.");
+      return;
+    }
+
+    if (comXml.length < selecionados.length) {
+      toast.warning(`${selecionados.length - comXml.length} nota(s) sem XML foram ignoradas.`);
+    }
+
+    toast.info(`Iniciando download de ${comXml.length} XML(s)...`);
+
+    comXml.forEach((row, index) => {
+      setTimeout(() => {
+        const blob = new Blob([row.xml_nf], { type: "text/xml" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `NFe_${row.chave_nfe || row.nr_nota}.xml`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, index * 300);
+    });
+  };
+
   const handleOpenEmailDialog = async (row: any) => {
     setXEmailTarget(row);
     setXEmailDestino("");
@@ -294,20 +352,35 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button 
-            onClick={loadData}
-            disabled={XLoading}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-secondary rounded-md hover:bg-secondary/80 transition-colors"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${XLoading ? "animate-spin" : ""}`} />
-            ATUALIZAR
-          </button>
+          {/* O botão de atualizar foi movido para o toolbar do grid conforme solicitado */}
         </div>
       </div>
 
       <div className="flex-1 bg-card rounded-xl border border-border shadow-sm overflow-hidden p-4 flex flex-col">
         <DataGrid 
           columns={[
+            {
+              key: "selecao",
+              label: (
+                <input 
+                  type="checkbox" 
+                  className="w-4 h-4 cursor-pointer"
+                  checked={XSelectedIds.size === XFilteredData.length && XFilteredData.length > 0}
+                  onChange={() => toggleSelectAll(XFilteredData)}
+                />
+              ),
+              exportLabel: "Sel",
+              width: "40px",
+              align: "center",
+              render: r => (
+                <input 
+                  type="checkbox" 
+                  className="w-4 h-4 cursor-pointer"
+                  checked={XSelectedIds.has(r.nfe_cabecalho_id)}
+                  onChange={() => toggleSelect(r.nfe_cabecalho_id)}
+                />
+              )
+            },
             ...XGridCols,
             {
               key: "acoes",
@@ -364,6 +437,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
           onFilterChange={(k, v) => setXSearchFilters(prev => ({ ...prev, [k]: v }))}
           onRowDoubleClick={(row) => { setXLogNfeId(row.nfe_cabecalho_id); setXLogDialogOpen(true); }}
           toolbarLeft={
+            <>
             <div className="flex items-center gap-2 bg-secondary/30 p-1 rounded-lg border border-border mr-4">
                <div className="flex flex-col px-2">
                 <span className="text-[9px] text-muted-foreground uppercase font-bold">Início</span>
@@ -375,6 +449,27 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
                 <input type="date" value={XDtFim} onChange={e => setXDtFim(e.target.value)} className="bg-transparent border-none text-xs p-0 focus:ring-0 w-24" />
               </div>
             </div>
+            
+            <button 
+              onClick={loadData}
+              disabled={XLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-secondary/50 rounded-md hover:bg-secondary transition-colors"
+              title="Atualizar dados"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${XLoading ? "animate-spin" : ""}`} />
+              ATUALIZAR
+            </button>
+
+            {XSelectedIds.size > 0 && (
+              <button 
+                onClick={handleDownloadXmlsSelecionados}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm animate-in fade-in slide-in-from-left-2 duration-300"
+              >
+                <Download className="w-3.5 h-3.5" />
+                BAIXAR XMLS ({XSelectedIds.size})
+              </button>
+            )}
+            </>
           }
         />
       </div>

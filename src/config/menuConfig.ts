@@ -184,6 +184,7 @@ export const MENU_CONFIG: MenuItem[] = [
           { id: "nfe-recebidas", title: "NF-e Recebidas (DFe)", icon: FileDown },
         ],
       },
+      { id: "consulta-estoque", title: "Consulta de Estoque", icon: ClipboardList },
     ],
   },
   {

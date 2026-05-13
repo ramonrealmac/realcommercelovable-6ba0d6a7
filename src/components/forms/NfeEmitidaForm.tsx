@@ -24,7 +24,28 @@ const XGridCols: IGridColumn[] = [
   { key: "modelo",           label: "Mod.",    width: "50px",  align: "center" },
   { key: "dt_emissao",       label: "Emissão", width: "100px", render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
   { key: "_dest",            label: "Destinatário", width: "2fr", getValue: (r: any) => r._dest_razao || "", render: (r: any) => r._dest_razao || (r.cadastro_id ? `#${r.cadastro_id}` : "") },
-  { key: "st_nf",            label: "Status",  width: "100px", render: r => NFE_ST_LABELS[r.st_nf as TNfeSt] || r.st_nf },
+  { 
+    key: "st_nf", 
+    label: "Status", 
+    width: "100px", 
+    render: r => {
+      const label = NFE_ST_LABELS[r.st_nf as TNfeSt] || r.st_nf;
+      const colors: any = {
+        "E": "bg-green-100 text-green-700",
+        "C": "bg-red-100 text-red-700",
+        "D": "bg-orange-100 text-orange-700",
+        "R": "bg-red-100 text-red-700",
+        "A": "bg-blue-100 text-blue-700",
+        "1": "bg-green-100 text-green-700",
+        "2": "bg-orange-100 text-orange-700",
+      };
+      return (
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${colors[r.st_nf] || "bg-gray-100 text-gray-600"}`}>
+          {label}
+        </span>
+      );
+    }
+  },
   { key: "vl_total_nf",      label: "Total",   width: "110px", align: "right", render: r => Number(r.vl_total_nf || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) },
   { key: "chave_nfe",        label: "Chave de Acesso", width: "300px", render: r => <span className="font-mono text-[10px]">{r.chave_nfe}</span> },
 ];

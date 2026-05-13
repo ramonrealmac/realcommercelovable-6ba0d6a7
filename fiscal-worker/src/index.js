@@ -203,11 +203,11 @@ const processarEvento = async (evento) => {
         // 3. Chama a biblioteca nativa passando o JSON payload atualizado
         const resultado = await executarComandoFiscal(evento.comando, payload);
 
+        const isEmissao = ['EMITIR_NFE', 'EMITIR_NFCE'].includes(evento.comando);
+        const isCancelamento = ['CANCELAR_NFE', 'CANCELAR_NFCE'].includes(evento.comando);
+
         // 4. PRIMEIRO: atualizar fiscal_nfe_cabecalho se foi emissão ou cancelamento
         if (nfeCabecalhoId) {
-            const isEmissao = ['EMITIR_NFE', 'EMITIR_NFCE'].includes(evento.comando);
-            const isCancelamento = ['CANCELAR_NFE', 'CANCELAR_NFCE'].includes(evento.comando);
-
             if (isEmissao) {
                 const isDenegada = ['110', '301', '302', '303'].includes(String(resultado.c_stat));
                 const updateNfe = {
@@ -284,6 +284,23 @@ const processarEvento = async (evento) => {
     } catch (error) {
         logger.error(`Falha crítica ao processar evento #${evento.id}: ${error.message}`);
         
+        // Se falhou e era uma emissão, atualiza o status para R (Rejeitada) para não ficar "Aguardando"
+        const nfeCabecalhoId = evento.nfe_cabecalho_id || evento.referencia_id;
+        const isEmissao = ['EMITIR_NFE', 'EMITIR_NFCE'].includes(evento.comando);
+
+        if (nfeCabecalhoId && isEmissao) {
+            try {
+                await supabase.from('fiscal_nfe_cabecalho').update({
+                    st_nf: 'R',
+                    x_motivo: error.message.substring(0, 250),
+                    updated_at: new Date().toISOString()
+                }).eq('nfe_cabecalho_id', nfeCabecalhoId);
+                logger.info(`NF-e #${nfeCabecalhoId} marcada como Rejeitada (R) devido a falha crítica.`);
+            } catch (updateErr) {
+                logger.error(`Não foi possível atualizar cabeçalho da NF-e após falha: ${updateErr.message}`);
+            }
+        }
+
         await supabase
             .from('fiscal_evento')
             .update({ 

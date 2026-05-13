@@ -41,6 +41,7 @@ import ControleAcessoForm from "@/components/forms/ControleAcessoForm";
 import UsuarioForm from "@/components/forms/UsuarioForm";
 import TrocaSenhaForm from "@/components/forms/TrocaSenhaForm";
 import ProvedorTestForm from "@/components/forms/ProvedorTestForm";
+import ConsultaEstoqueForm from "@/components/forms/ConsultaEstoqueForm";
 import AuthGate from "@/components/auth/AuthGate";
 import { useThemeColors } from "@/hooks/useThemeColors";
 import RbReportExecutor from "@/rbuilder/components/rb_ReportExecutor";
@@ -143,6 +144,8 @@ const AppContent = () => {
         return <ProvedorTestForm />;
       case "rpb-relatorios":
         return <RpbManager />;
+      case "consulta-estoque":
+        return <ConsultaEstoqueForm />;
 
       // PDV cases
       case "pdv":

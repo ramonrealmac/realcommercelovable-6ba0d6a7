@@ -45,10 +45,13 @@ const ListaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialFi
             width: "150px",
             render: r => {
                 const statusMap: any = {
-                    "A": { label: "Aberta / Pendente", color: "bg-gray-100 text-gray-600", icon: Clock },
-                    "E": { label: "Transmitida", color: "bg-green-100 text-green-700", icon: CheckCircle2 },
+                    "A": { label: "Aguardando", color: "bg-blue-100 text-blue-700", icon: Clock },
+                    "E": { label: "Autorizada", color: "bg-green-100 text-green-700", icon: CheckCircle2 },
                     "C": { label: "Cancelada", color: "bg-red-100 text-red-700", icon: XCircle },
-                    "3": { label: "Erro SEFAZ", color: "bg-amber-100 text-amber-700", icon: AlertCircle },
+                    "D": { label: "Denegada", color: "bg-orange-100 text-orange-700", icon: AlertCircle },
+                    "R": { label: "Rejeitada", color: "bg-red-100 text-red-700", icon: AlertCircle },
+                    "1": { label: "Autorizada", color: "bg-green-100 text-green-700", icon: CheckCircle2 },
+                    "2": { label: "Denegada", color: "bg-orange-100 text-orange-700", icon: AlertCircle },
                 };
                 const s = statusMap[r.st_nf] || { label: r.st_nf, color: "bg-gray-100 text-gray-600", icon: Clock };
                 const Icon = s.icon;
