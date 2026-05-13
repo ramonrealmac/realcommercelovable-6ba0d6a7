@@ -2021,6 +2021,8 @@ export type Database = {
           nome_fantasia: string
           pc_fcp_empresa: number | null
           pc_icms_interestadual: number | null
+          pdv_pesquisa_campos: string | null
+          pdv_pesquisa_campos_cliente: string | null
           qt_saida_qt_decimais: number | null
           qt_venda_qt_decimais: number | null
           razao_social: string
@@ -2088,6 +2090,8 @@ export type Database = {
           nome_fantasia?: string
           pc_fcp_empresa?: number | null
           pc_icms_interestadual?: number | null
+          pdv_pesquisa_campos?: string | null
+          pdv_pesquisa_campos_cliente?: string | null
           qt_saida_qt_decimais?: number | null
           qt_venda_qt_decimais?: number | null
           razao_social?: string
@@ -2155,6 +2159,8 @@ export type Database = {
           nome_fantasia?: string
           pc_fcp_empresa?: number | null
           pc_icms_interestadual?: number | null
+          pdv_pesquisa_campos?: string | null
+          pdv_pesquisa_campos_cliente?: string | null
           qt_saida_qt_decimais?: number | null
           qt_venda_qt_decimais?: number | null
           razao_social?: string
@@ -4187,6 +4193,7 @@ export type Database = {
           pc_comissao_prz: number | null
           tamanho_fonte_pedidos: number
           tamanho_fonte_produtos: number
+          tamanho_fonte_totais: number | null
           tempo_refresh_pdv: number
           tp_comissao: string | null
           usr_id: number | null
@@ -4210,6 +4217,7 @@ export type Database = {
           pc_comissao_prz?: number | null
           tamanho_fonte_pedidos?: number
           tamanho_fonte_produtos?: number
+          tamanho_fonte_totais?: number | null
           tempo_refresh_pdv?: number
           tp_comissao?: string | null
           usr_id?: number | null
@@ -4233,6 +4241,7 @@ export type Database = {
           pc_comissao_prz?: number | null
           tamanho_fonte_pedidos?: number
           tamanho_fonte_produtos?: number
+          tamanho_fonte_totais?: number | null
           tempo_refresh_pdv?: number
           tp_comissao?: string | null
           usr_id?: number | null

@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search, X } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Search, X, Settings2 } from "lucide-react";
 import { useAppContext } from "@/contexts/AppContext";
 
 const db = supabase as any;
@@ -15,7 +16,9 @@ export interface IProdutoRow {
   st_promo: boolean;
   estoque_disponivel: number;
   estoque_reservado: number;
-  estoque_na_empresa: number; // estoque do depósito da empresa atual
+  estoque_na_empresa: number;
+  referencia?: string;
+  gtin?: string;
 }
 
 export interface IEstoqueDepositoRow {
@@ -37,6 +40,32 @@ interface IProps {
 
 const fmtNum = (v: number, dec = 2) =>
   (v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+
+// ── Configuração de campos ────────────────────────────────────
+type CampoKey = "codigo" | "referencia" | "gtin" | "nome" | "unidade" | "preco" | "preco_promo" | "estoque_disp" | "estoque_emp" | "reservado";
+
+const CAMPOS_DISPONIVEIS: { key: CampoKey; label: string; obrigatorio?: boolean }[] = [
+  { key: "codigo", label: "Código" },
+  { key: "nome", label: "Nome", obrigatorio: true },
+  { key: "referencia", label: "Referência" },
+  { key: "gtin", label: "GTIN" },
+  { key: "unidade", label: "Unidade" },
+  { key: "preco", label: "Preço" },
+  { key: "preco_promo", label: "Preço promocional" },
+  { key: "estoque_disp", label: "Estoque disponível" },
+  { key: "estoque_emp", label: "Estoque na empresa" },
+  { key: "reservado", label: "Reservado" },
+];
+
+const CAMPOS_DEFAULT: CampoKey[] = ["codigo", "nome", "unidade", "preco", "estoque_disp", "reservado"];
+
+const parseCampos = (raw: any): CampoKey[] => {
+  try {
+    const arr = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (Array.isArray(arr) && arr.length) return arr as CampoKey[];
+  } catch { /* ignore */ }
+  return CAMPOS_DEFAULT;
+};
 
 export async function buscarProdutoPorCodigo(
   termo: string,
@@ -92,6 +121,8 @@ export async function buscarProdutoPorCodigo(
     estoque_disponivel: disp,
     estoque_reservado: res,
     estoque_na_empresa: naEmpresa,
+    referencia: p.referencia,
+    gtin: p.gtin,
   };
 }
 
@@ -105,6 +136,8 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
   const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
   const [XEstDeps, setXEstDeps] = useState<IEstoqueDepositoRow[]>([]);
   const [XLoadingEst, setXLoadingEst] = useState(false);
+  const [XCampos, setXCampos] = useState<CampoKey[]>(CAMPOS_DEFAULT);
+  const [XCfgOpen, setXCfgOpen] = useState(false);
 
   const XGroupEmpresaIds = useMemo(() => {
     return XEmpresas
@@ -117,6 +150,33 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
       || XEmpresas.find(e => e.empresa_id === id)?.razao_social
       || `Emp ${id}`;
   }, [XEmpresas]);
+
+  // Carrega configuração de campos da empresa
+  useEffect(() => {
+    if (!open || !XEmpresaId) return;
+    (async () => {
+      const { data } = await db.from("empresa")
+        .select("pdv_pesquisa_campos")
+        .eq("empresa_id", XEmpresaId)
+        .maybeSingle();
+      setXCampos(parseCampos(data?.pdv_pesquisa_campos));
+    })();
+  }, [open, XEmpresaId]);
+
+  const salvarCampos = async (novos: CampoKey[]) => {
+    setXCampos(novos);
+    if (!XEmpresaId) return;
+    await db.from("empresa")
+      .update({ pdv_pesquisa_campos: JSON.stringify(novos) })
+      .eq("empresa_id", XEmpresaId);
+  };
+
+  const toggleCampo = (k: CampoKey) => {
+    const def = CAMPOS_DISPONIVEIS.find(c => c.key === k);
+    if (def?.obrigatorio) return;
+    const novos = XCampos.includes(k) ? XCampos.filter(c => c !== k) : [...XCampos, k];
+    salvarCampos(novos);
+  };
 
   const buscar = useCallback(async (termo: string) => {
     setXLoading(true);
@@ -176,6 +236,8 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
       estoque_disponivel: estMap[p.produto_id]?.disp || 0,
       estoque_reservado: estMap[p.produto_id]?.res || 0,
       estoque_na_empresa: estMap[p.produto_id]?.naEmp || 0,
+      referencia: p.referencia,
+      gtin: p.gtin,
     }));
     if (XSoEstoque) rows = rows.filter(r => r.estoque_na_empresa > 0);
     setXRows(rows);
@@ -206,7 +268,6 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
     for (const e of (ests || []) as any[]) {
       const d = depMap[e.deposito_id];
       if (!d) continue;
-      // Visível: pertence à empresa atual OU não é privado
       const visivel = d.empresa_id === XEmpresaId || d.st_privado === false;
       if (!visivel) continue;
       rows.push({
@@ -245,22 +306,63 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
     carregarEstoqueDoProduto(r.produto_id);
   };
 
-  const corEstoque = (r: IProdutoRow) => {
-    if (r.estoque_na_empresa > 0) return "bg-green-100 dark:bg-green-900/30";
-    if (r.estoque_disponivel > 0) return "bg-yellow-100 dark:bg-yellow-900/30";
-    return "";
-  };
-
   const corEstoqueDep = (r: IEstoqueDepositoRow) => {
     if (r.estoque_disponivel <= 0) return "";
     return r.da_empresa_atual ? "bg-green-100 dark:bg-green-900/30" : "bg-yellow-100 dark:bg-yellow-900/30";
   };
 
+  // ── Renderiza um chip por campo, com cor própria ──
+  const renderChips = (r: IProdutoRow) => {
+    const sep = <span className="text-muted-foreground/40 select-none">·</span>;
+    const chips: React.ReactNode[] = [];
+
+    const push = (key: CampoKey, node: React.ReactNode) => {
+      if (!XCampos.includes(key) || node == null) return;
+      if (chips.length > 0) chips.push(<React.Fragment key={`s-${key}`}>{sep}</React.Fragment>);
+      chips.push(<span key={key}>{node}</span>);
+    };
+
+    push("codigo", <span className="font-mono text-blue-600 dark:text-blue-400">#{r.produto_id}</span>);
+    push("referencia", r.referencia ? <span className="font-mono text-muted-foreground">Ref: {r.referencia}</span> : null);
+    push("gtin", r.gtin ? <span className="font-mono text-muted-foreground">GTIN: {r.gtin}</span> : null);
+    push("nome", <span className="text-blue-800 dark:text-blue-300 font-medium break-words">{r.nome}</span>);
+    push("unidade", r.unidade_id ? <span className="text-muted-foreground">{r.unidade_id}</span> : null);
+
+    const showPromo = r.st_promo && r.preco_promocional > 0;
+    push("preco",
+      showPromo
+        ? <span className="line-through text-muted-foreground font-mono">R$ {fmtNum(r.preco_venda)}</span>
+        : <span className="text-black dark:text-white font-mono">R$ {fmtNum(r.preco_venda)}</span>
+    );
+    push("preco_promo",
+      showPromo
+        ? <span className="text-green-600 dark:text-green-400 font-semibold font-mono">R$ {fmtNum(r.preco_promocional)}</span>
+        : null
+    );
+
+    const corEst = (v: number) =>
+      v > 0 ? "text-blue-600 dark:text-blue-400"
+        : v < 0 ? "text-red-600 dark:text-red-400 font-semibold"
+        : "text-muted-foreground";
+
+    push("estoque_disp",
+      <span className={`font-mono ${corEst(r.estoque_disponivel)}`}>Estq: {fmtNum(r.estoque_disponivel, 3)}</span>
+    );
+    push("estoque_emp",
+      <span className={`font-mono ${corEst(r.estoque_na_empresa)}`}>Emp: {fmtNum(r.estoque_na_empresa, 3)}</span>
+    );
+    push("reservado",
+      <span className="font-mono text-amber-600 dark:text-amber-400">Res: {fmtNum(r.estoque_reservado, 3)}</span>
+    );
+
+    return chips;
+  };
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-5xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             <DialogTitle>Pesquisar Produto</DialogTitle>
             <div className="flex items-center gap-4 text-xs">
               <label className="flex items-center gap-1.5 cursor-pointer">
@@ -271,6 +373,42 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
                 <input type="checkbox" checked={XSoPromo} onChange={e => setXSoPromo(e.target.checked)} />
                 Em promoção
               </label>
+              <Popover open={XCfgOpen} onOpenChange={setXCfgOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    title="Configurar campos exibidos"
+                    className="flex items-center gap-1 px-2 py-1 rounded border border-border hover:bg-accent"
+                  >
+                    <Settings2 className="w-3.5 h-3.5" /> Campos
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-60 p-2" align="end">
+                  <div className="text-xs font-semibold text-muted-foreground mb-2 px-1">
+                    Campos exibidos
+                  </div>
+                  <div className="space-y-1">
+                    {CAMPOS_DISPONIVEIS.map(c => (
+                      <label
+                        key={c.key}
+                        className={`flex items-center gap-2 px-2 py-1 rounded text-sm cursor-pointer hover:bg-accent ${c.obrigatorio ? "opacity-60 cursor-not-allowed" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={XCampos.includes(c.key)}
+                          disabled={c.obrigatorio}
+                          onChange={() => toggleCampo(c.key)}
+                        />
+                        {c.label}
+                        {c.obrigatorio && <span className="text-[10px] text-muted-foreground ml-auto">obrig.</span>}
+                      </label>
+                    ))}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-2 px-1">
+                    Salvo automaticamente na empresa.
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
         </DialogHeader>
@@ -291,17 +429,9 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
             )}
           </div>
 
-          {/* Grade principal */}
+          {/* Lista em coluna única com chips coloridos */}
           <div className="border border-border rounded overflow-hidden">
-            <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-muted text-xs font-semibold text-muted-foreground">
-              <div className="col-span-1 text-right">Código</div>
-              <div className="col-span-5">Nome</div>
-              <div className="col-span-1">Und.</div>
-              <div className="col-span-2 text-right">Preço Venda</div>
-              <div className="col-span-2 text-right">Estoq. Disp.</div>
-              <div className="col-span-1 text-right">Reserv.</div>
-            </div>
-            <div className="max-h-[360px] overflow-y-auto">
+            <div className="max-h-[420px] overflow-y-auto">
               {XLoading && <div className="p-6 text-center text-sm text-muted-foreground">Carregando...</div>}
               {!XLoading && XRows.length === 0 && (
                 <div className="p-6 text-center text-sm text-muted-foreground">Nenhum produto encontrado.</div>
@@ -314,22 +444,11 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
                     key={r.produto_id}
                     onClick={() => selecionarLinha(idx, r)}
                     onDoubleClick={() => { onSelect(r); onClose(); }}
-                    className={`grid grid-cols-12 gap-2 px-3 py-2 text-sm border-t border-border cursor-pointer ${
+                    className={`flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-sm border-t border-border cursor-pointer break-words ${
                       sel ? "bg-primary/15" : `${zebra} hover:bg-accent/50`
                     }`}
                   >
-                    <div className="col-span-1 text-right font-mono">{r.produto_id}</div>
-                    <div className="col-span-5 truncate">{r.nome}</div>
-                    <div className="col-span-1">{r.unidade_id || ""}</div>
-                    <div className={`col-span-2 text-right font-mono rounded px-1 ${r.st_promo ? "bg-green-100 dark:bg-green-900/30" : ""}`}>
-                      {fmtNum(r.st_promo && r.preco_promocional > 0 ? r.preco_promocional : r.preco_venda)}
-                    </div>
-                    <div className={`col-span-2 text-right font-mono rounded px-1 ${corEstoque(r)}`}>
-                      {fmtNum(r.estoque_disponivel, 3)}
-                    </div>
-                    <div className="col-span-1 text-right font-mono text-muted-foreground">
-                      {fmtNum(r.estoque_reservado, 3)}
-                    </div>
+                    {renderChips(r)}
                   </div>
                 );
               })}
@@ -342,11 +461,9 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
               Estoque por depósito {XSelectedIdx != null ? `— ${XRows[XSelectedIdx]?.nome}` : ""}
             </div>
             <div className="grid grid-cols-12 gap-2 px-3 py-1.5 bg-muted text-[11px] font-semibold text-muted-foreground">
-              <div className="col-span-1 text-right">Cód.</div>
-              <div className="col-span-3">Depósito</div>
-              <div className="col-span-3">Empresa</div>
+              <div className="col-span-6">Depósito</div>
               <div className="col-span-2 text-right">Físico</div>
-              <div className="col-span-1 text-right">Reserv.</div>
+              <div className="col-span-2 text-right">Reserv.</div>
               <div className="col-span-2 text-right">Disponível</div>
             </div>
             <div className="overflow-y-auto" style={{ maxHeight: "126px" }}>
@@ -372,11 +489,9 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
                     className={`grid grid-cols-12 gap-2 px-3 py-1 text-[11px] border-t border-border cursor-pointer hover:bg-accent/50 ${zebra}`}
                     title="Duplo clique: seleciona produto e depósito"
                   >
-                    <div className="col-span-1 text-right font-mono">{d.deposito_id}</div>
-                    <div className="col-span-3 truncate">{d.deposito_nome}</div>
-                    <div className="col-span-3 truncate">{d.empresa_nome}</div>
+                    <div className="col-span-6 truncate">{d.deposito_nome}</div>
                     <div className="col-span-2 text-right font-mono">{fmtNum(d.estoque_fisico, 3)}</div>
-                    <div className="col-span-1 text-right font-mono text-muted-foreground">{fmtNum(d.estoque_reservado, 3)}</div>
+                    <div className="col-span-2 text-right font-mono text-muted-foreground">{fmtNum(d.estoque_reservado, 3)}</div>
                     <div className={`col-span-2 text-right font-mono rounded px-1 ${corEstoqueDep(d)}`}>
                       {fmtNum(d.estoque_disponivel, 3)}
                     </div>

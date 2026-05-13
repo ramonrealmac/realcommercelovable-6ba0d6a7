@@ -70,7 +70,7 @@ const CartItemRow: React.FC<ICartItemRowProps> = ({ item, idx, XFonteProd, alter
   return (
       <div className={`px-3 py-2 flex items-center gap-2 border-b border-border ${idx % 2 ? "bg-muted/40" : ""}`}>
       <div className="flex-1">
-        <div className="font-medium truncate text-blue-700 dark:text-blue-400">{item.nm_produto}</div>
+        <div className="font-medium break-words text-blue-700 dark:text-blue-400">{item.nm_produto}</div>
         <div className="text-muted-foreground" style={{ fontSize: `${XFonteProd - 1}px` }}>
           {item.qt_item.toLocaleString("pt-BR")} {item.unidade_id || ""} × R$ {item.vl_unitario.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} = <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">R$ {(item.qt_item * item.vl_unitario).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         </div>
@@ -106,6 +106,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   // Configurações por funcionário
   const [XFontePed, setXFontePed] = useState<number>(caixa.tamanho_fonte_pedidos || 12);
   const [XFonteProd, setXFonteProd] = useState<number>(caixa.tamanho_fonte_produtos || 12);
+  const [XFonteTot, setXFonteTot] = useState<number>(caixa.tamanho_fonte_totais || 12);
   const [XRefreshSeg, setXRefreshSeg] = useState<number>(caixa.tempo_refresh_pdv || 30);
   const [XOpenConfig, setXOpenConfig] = useState(false);
   const [XOpenFuncoes, setXOpenFuncoes] = useState(false);
@@ -736,7 +737,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
                   <div key={it.movimento_item_id}
                     className={`px-3 py-2 border-b border-border ${idx % 2 ? "bg-muted/40" : ""}`}>
                     <div className="flex-1">
-                      <div className="font-medium truncate text-blue-700 dark:text-blue-400">{it.nm_produto}</div>
+                      <div className="font-medium break-words text-blue-700 dark:text-blue-400">{it.nm_produto}</div>
                       <div className="text-muted-foreground" style={{ fontSize: `${XFonteProd - 1}px` }}>
                         {fmt(Number(it.qt_movimento))} {it.unidade_id || ""} × R$ {fmt(Number(it.vl_und_produto))} = <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">R$ {fmt(Number(it.vl_movimento || it.qt_movimento * it.vl_und_produto))}</span>
                       </div>
@@ -814,7 +815,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
                     {/* Linha 1: Nº + Cliente */}
                     <div className="flex justify-between items-baseline gap-2">
                       <span className="font-bold text-foreground shrink-0">#{p.nr_movimento || p.movimento_id}</span>
-                      <span className="text-blue-600 dark:text-blue-400 font-semibold truncate flex-1">{p.cliente_nome}</span>
+                      <span className="text-blue-600 dark:text-blue-400 font-semibold break-words flex-1 min-w-0">{p.cliente_nome}</span>
                     </div>
                     {/* Linha 2: Vendedor + total */}
                     <div className="flex justify-between items-baseline gap-2" style={{ fontSize: `${Math.max(10, XFontePed - 1)}px` }}>
@@ -876,22 +877,22 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
               {/* Badges de totais */}
               <div className="grid grid-cols-3 gap-1.5 mt-2">
                 <div className="border border-blue-300 bg-blue-50 dark:bg-blue-950/30 rounded px-2 py-1 flex flex-col">
-                  <div className="flex items-center gap-1 text-[10px] text-blue-900 dark:text-blue-200 font-bold uppercase w-full justify-start">
-                    <ShoppingCart size={10} /> Subtotal
+                  <div className="flex items-center gap-1 text-blue-900 dark:text-blue-200 font-bold uppercase w-full justify-start" style={{ fontSize: `${XFonteTot * 0.83}px` }}>
+                    <ShoppingCart size={Math.max(8, Math.round(XFonteTot * 0.83))} /> Subtotal
                   </div>
-                  <div className="font-bold text-lg text-blue-900 dark:text-blue-200 leading-none w-full text-right mt-0.5">{fmt(baseSubtotal)}</div>
+                  <div className="font-bold text-blue-900 dark:text-blue-200 leading-none w-full text-right mt-0.5" style={{ fontSize: `${XFonteTot * 1.5}px` }}>{fmt(baseSubtotal)}</div>
                 </div>
                 <div className="border border-amber-300 bg-amber-50 dark:bg-amber-950/30 rounded px-2 py-1 flex flex-col">
-                  <div className="flex items-center gap-1 text-[10px] text-amber-900 dark:text-amber-200 font-bold uppercase w-full justify-start">
-                    <Tag size={10} /> Desc.{XPcDesc > 0 ? ` ${XPcDesc.toFixed(1)}%` : ""}
+                  <div className="flex items-center gap-1 text-amber-900 dark:text-amber-200 font-bold uppercase w-full justify-start" style={{ fontSize: `${XFonteTot * 0.83}px` }}>
+                    <Tag size={Math.max(8, Math.round(XFonteTot * 0.83))} /> Desc.{XPcDesc > 0 ? ` ${XPcDesc.toFixed(1)}%` : ""}
                   </div>
-                  <div className="font-bold text-lg text-amber-900 dark:text-amber-200 leading-none w-full text-right mt-0.5">{fmt(vlDescAplicado)}</div>
+                  <div className="font-bold text-amber-900 dark:text-amber-200 leading-none w-full text-right mt-0.5" style={{ fontSize: `${XFonteTot * 1.5}px` }}>{fmt(vlDescAplicado)}</div>
                 </div>
                 <div className="border border-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 rounded px-2 py-1 flex flex-col">
-                  <div className="flex items-center gap-1 text-[10px] text-emerald-900 dark:text-emerald-200 font-bold uppercase w-full justify-start">
-                    <CircleDollarSign size={10} /> Total
+                  <div className="flex items-center gap-1 text-emerald-900 dark:text-emerald-200 font-bold uppercase w-full justify-start" style={{ fontSize: `${XFonteTot * 0.83}px` }}>
+                    <CircleDollarSign size={Math.max(8, Math.round(XFonteTot * 0.83))} /> Total
                   </div>
-                  <div className="font-bold text-2xl text-emerald-900 dark:text-emerald-200 leading-none w-full text-right mt-0.5">{fmt(totalReceber)}</div>
+                  <div className="font-bold text-emerald-900 dark:text-emerald-200 leading-none w-full text-right mt-0.5" style={{ fontSize: `${XFonteTot * 2}px` }}>{fmt(totalReceber)}</div>
                 </div>
               </div>
             </div>
@@ -1087,11 +1088,13 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         funcionarioId={caixa.funcionario_id}
         fontePedidos={XFontePed}
         fonteProdutos={XFonteProd}
+        fonteTotais={XFonteTot}
         tempoRefresh={XRefreshSeg}
         onClose={() => setXOpenConfig(false)}
         onSalvar={(v) => {
           setXFontePed(v.fontePedidos);
           setXFonteProd(v.fonteProdutos);
+          setXFonteTot(v.fonteTotais);
           setXRefreshSeg(v.tempoRefresh);
         }}
       />
