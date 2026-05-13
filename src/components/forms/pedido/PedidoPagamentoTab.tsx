@@ -35,7 +35,7 @@ const parseNum = (v: any) => {
   return isNaN(n) ? 0 : n;
 };
 
-const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido: totalPedidoProp, refreshToken, onMudarStatus }) => {
+const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido: totalPedidoProp, refreshToken, onMudarStatus, onRetornar }) => {
   const { XEmpresaId } = useAppContext();
   const [XPagtos, setXPagtos] = useState<IMovimentoPagamento[]>([]);
   const [XCondicoes, setXCondicoes] = useState<ICondicao[]>([]);
