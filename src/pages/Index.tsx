@@ -29,6 +29,7 @@ import FiscalRegraForm from "@/components/forms/FiscalRegraForm";
 import PedidoForm from "@/components/forms/PedidoForm";
 import NotaFiscalEntradaForm from "@/components/forms/NotaFiscalEntradaForm";
 import NfeRecebidasForm from "@/components/forms/NfeRecebidasForm";
+import DevolucaoNfeEntradaForm from "@/components/forms/DevolucaoNfeEntradaForm";
 import ListaNfeEmitidaForm from "@/components/forms/ListaNfeEmitidaForm";
 import NfeEmitidaForm from "@/components/forms/NfeEmitidaForm";
 import ConsultaTitulosReceberForm from "@/components/forms/ConsultaTitulosReceberForm";
