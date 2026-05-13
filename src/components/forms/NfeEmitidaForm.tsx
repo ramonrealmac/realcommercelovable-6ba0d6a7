@@ -8,8 +8,9 @@ import NfeItensTab from "./nfe/NfeItensTab";
 import NfePagamentoTab from "./nfe/NfePagamentoTab";
 import type { INfeCabecalho, TNfeSt } from "./nfe/types";
 import { NFE_ST_LABELS } from "./nfe/types";
-import { Search } from "lucide-react";
+import { Search, Send } from "lucide-react";
 import { formatCPFCNPJ } from "@/lib/validators";
+import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
 
 const db = supabase as any;
 
