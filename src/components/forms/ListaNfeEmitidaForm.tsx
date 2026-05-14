@@ -15,7 +15,8 @@ import {
   XCircle, 
   Eye, 
   Terminal,
-  MoreHorizontal
+  MoreHorizontal,
+  FileX
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -40,10 +41,11 @@ interface IProps {
 const db = supabase as any;
 
 const XGridCols: IGridColumn[] = [
+  { key: "movimento_id", label: "ID Mov", width: "80px", align: "center" },
   { key: "nr_nota", label: "Nota", width: "100px" },
   { key: "serie", label: "Série", width: "60px", align: "center" },
   { key: "dt_emissao", label: "Emissão", width: "110px", render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
-  { key: "nm_destinatario", label: "Destinatário", width: "2fr" },
+  { key: "nm_destinatario", label: "Destinatário", width: "250px" },
   { key: "cnpj_destinatario", label: "CNPJ/CPF", width: "150px", render: r => formatCPFCNPJ(r.cnpj_destinatario) },
   { key: "vl_total_nf", label: "Valor", width: "120px", align: "right", render: r => Number(r.vl_total_nf || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) },
   { 
@@ -413,6 +415,18 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => openTab({ title: `CCe NF-e ${r.nr_nota || r.nfe_cabecalho_id}`, component: "cce", params: { nfe_cabecalho_id: r.nfe_cabecalho_id } })}>
                         <FileText className="w-4 h-4 mr-2 text-amber-500" /> Carta de Correção
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openTab({ 
+                        title: `Inutilizar ${r.nr_nota || r.nfe_cabecalho_id}`, 
+                        component: "nfe-inutilizacao", 
+                        params: { 
+                          modelo: String(r.modelo || "55"), 
+                          serie: r.serie, 
+                          nr_ini: r.nr_nota, 
+                          nr_fin: r.nr_nota 
+                        } 
+                      })}>
+                        <FileX className="w-4 h-4 mr-2 text-rose-500" /> Inutilizar Numeração
                       </DropdownMenuItem>
                       <DropdownMenuItem 
                         className="text-destructive"

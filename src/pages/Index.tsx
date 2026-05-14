@@ -43,6 +43,7 @@ import UsuarioForm from "@/components/forms/UsuarioForm";
 import TrocaSenhaForm from "@/components/forms/TrocaSenhaForm";
 import ProvedorTestForm from "@/components/forms/ProvedorTestForm";
 import ConsultaEstoqueForm from "@/components/forms/ConsultaEstoqueForm";
+import NfeInutilizacaoForm from "@/components/forms/NfeInutilizacaoForm";
 import AuthGate from "@/components/auth/AuthGate";
 import { useThemeColors } from "@/hooks/useThemeColors";
 import RbReportExecutor from "@/rbuilder/components/rb_ReportExecutor";
@@ -141,6 +142,8 @@ const AppContent = () => {
         return <UsuarioForm />;
       case "cce":
         return <CartaCorrecaoForm initialNfeId={params?.nfe_cabecalho_id} />;
+      case "nfe-inutilizacao":
+        return <NfeInutilizacaoForm initialData={params} />;
       case "TrocaSenhaForm":
         return <TrocaSenhaForm />;
       case "provedor-test":

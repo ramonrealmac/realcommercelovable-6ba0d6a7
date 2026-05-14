@@ -67,6 +67,7 @@ const PedidoForm: React.FC = () => {
   const [XAutoNovoItem, setXAutoNovoItem] = useState(0);
   const [XPagamentoRefreshToken, setXPagamentoRefreshToken] = useState(0);
   const [XPedidoTotalCtx, setXPedidoTotalCtx] = useState<{ movimentoId: number | null; total: number; itens: IMovimentoItem[] }>({ movimentoId: null, total: 0, itens: [] });
+  const [XOpenPagtoDialog, setXOpenPagtoDialog] = useState(false);
   const XFetchingItensRef = useRef<Set<number>>(new Set());
   // Ref para acionar refresh do CRUD sem window.location.reload()
   const XCrudRefreshRef = useRef<(() => Promise<void>) | null>(null);
@@ -169,7 +170,7 @@ const PedidoForm: React.FC = () => {
         const st = XCurrentRecordRef.current.st_pedido;
         if (st === "O" || st === "V") {
           e.preventDefault();
-          mudarStatus(XCurrentRecordRef.current.movimento_id, "F", "Confirma o envio deste pedido para o Caixa (Pré-venda)? O estoque será reservado.");
+          mudarStatus(XCurrentRecordRef.current.movimento_id, "F", "Confirma o envio deste pedido para o Caixa? O estoque será reservado.");
         }
       }
     };
@@ -244,9 +245,9 @@ const PedidoForm: React.FC = () => {
             {/* 2. Enviar / Retirar do Caixa */}
             {(stAtual === "O" || stAtual === "V") && (
               <ToolbarBtn 
-                icon={<Package size={18} />} 
-                label="Salvar como Pré-venda (F7)" 
-                onClick={() => mudarStatus(currentRecord.movimento_id, "F", "Confirma o envio deste pedido para o Caixa (Pré-venda)? O estoque será reservado.")} 
+                icon={<Lock size={18} />} 
+                label="Enviar p Caixa" 
+                onClick={() => mudarStatus(currentRecord.movimento_id, "F", "Confirma o envio deste pedido para o Caixa? O estoque será reservado.")} 
                 color="success" 
               />
             )}
@@ -282,14 +283,14 @@ const PedidoForm: React.FC = () => {
               <ToolbarBtn 
                 icon={<CircleDollarSign size={18} />} 
                 label="Financeiro / Pagamento" 
-                onClick={() => setInnerTab("pagamento")} 
+                onClick={() => { setInnerTab("pagamento"); setXOpenPagtoDialog(true); }} 
                 color="success" 
               />
             )}
           </>
         );
       }}
-      XHiddenTabs={["pagamento"]}
+      XHiddenTabs={[]}
       config={{
           XTableName: "movimento",
           XPrimaryKey: "movimento_id",
@@ -449,6 +450,8 @@ const PedidoForm: React.FC = () => {
                   podeEditar={ped?.st_pedido === "O"}
                   totalPedido={XPedidoTotalCtx.movimentoId === ped?.movimento_id ? XPedidoTotalCtx.total : Number(ped?.vl_movimento || 0)}
                   refreshToken={XPagamentoRefreshToken}
+                  openDialog={XOpenPagtoDialog}
+                  setOpenDialog={setXOpenPagtoDialog}
                   onMudarStatus={(novo) => {
                     if (novo === "REFRESH") {
                       if (XCrudRefreshRef.current) XCrudRefreshRef.current();

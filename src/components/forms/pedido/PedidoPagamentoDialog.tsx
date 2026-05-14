@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import GridActionToolbar, { gridActions } from "@/components/grid/GridActionToolbar";
 import { useAppContext } from "@/contexts/AppContext";
-import { CreditCard, ShoppingCart, Wallet, ArrowRightLeft, Calculator, X, Delete, Trash2, Check, Percent } from "lucide-react";
+import { CreditCard, ShoppingCart, Wallet, ArrowRightLeft, Calculator, X, Delete, Trash2, Check, Percent, Send } from "lucide-react";
 
 const db = supabase as any;
 
@@ -33,7 +33,7 @@ interface IProps {
   subtotalPedido: number; // vl_movimento + vl_desconto
   tpDesconto: string;
   onClose: () => void;
-  onConfirmar: (pagtos: any[], vlDesconto: number, pcDesconto: number) => Promise<void>;
+  onConfirmar: (pagtos: any[], vlDesconto: number, pcDesconto: number, enviarAoCaixa?: boolean) => Promise<void>;
 }
 
 const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPedido, tpDesconto, onClose, onConfirmar }) => {
@@ -160,19 +160,19 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
       movimento_id: movimentoId
     };
 
-    setXLinhas(prev => XEditUid ? prev.map(l => l.uid === XEditUid ? linha : l) : [...prev, linha]);
+    setXLinhas([linha]); // Limpa anteriores e adiciona a nova conforme solicitado
     setXSelectedIdx(null);
     const restante = Math.max(0, totalPedido - (totalPago + vPagar));
     resetForm(restante);
   };
 
-  const finalizar = async () => {
+  const finalizar = async (enviarAoCaixa: boolean = false) => {
     if (XLinhas.length === 0) { toast.error("Inclua ao menos um pagamento."); return; }
     if (totalPago + 0.01 < totalPedido) { toast.error("Valor pago é menor que o total do pedido."); return; }
     
     setXSalvando(true);
     try {
-      await onConfirmar(XLinhas, vlDescNum, parseNum(XPcDesconto));
+      await onConfirmar(XLinhas, vlDescNum, parseNum(XPcDesconto), enviarAoCaixa);
       onClose();
     } catch (err: any) {
       toast.error("Erro: " + err.message);
@@ -297,11 +297,28 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
 
             <DataGrid columns={cols} data={XLinhas} maxHeight="200px" showRecordCount={false} showExport={false} onRowClick={(_, idx) => setXSelectedIdx(idx)} selectedIdx={XSelectedIdx} />
 
-            <div className="flex justify-between items-center pt-2">
-              <button onClick={onClose} className="text-xs px-4 py-2 border border-border rounded hover:bg-accent">Cancelar</button>
-              <button ref={finalizarRef} onClick={finalizar} disabled={XSalvando || valorRestante > 0.01} className="text-xs px-8 py-2 rounded bg-primary text-primary-foreground font-bold h-10 disabled:opacity-50">
-                {XSalvando ? "Gravando..." : "Finalizar Pagamento →"}
-              </button>
+            <div className="flex justify-between items-center pt-2 gap-2">
+              <button onClick={onClose} className="text-xs px-4 py-2 border border-border rounded hover:bg-accent whitespace-nowrap">Cancelar</button>
+              
+              <div className="flex gap-2 w-full justify-end">
+                <button 
+                  onClick={() => finalizar(false)} 
+                  disabled={XSalvando || valorRestante > 0.01} 
+                  className="text-xs px-4 py-2 rounded bg-muted border border-border text-muted-foreground font-bold h-10 disabled:opacity-50 hover:bg-accent transition-colors"
+                >
+                  {XSalvando ? "Gravando..." : "Finalizar"}
+                </button>
+
+                <button 
+                  ref={finalizarRef} 
+                  onClick={() => finalizar(true)} 
+                  disabled={XSalvando || valorRestante > 0.01} 
+                  className="text-xs px-6 py-2 rounded bg-primary text-primary-foreground font-bold h-10 disabled:opacity-50 shadow-sm hover:brightness-110 flex items-center gap-2 transition-all active:scale-95 whitespace-nowrap"
+                >
+                  <Send size={14} />
+                  {XSalvando ? "Gravando..." : "Finalizar e Enviar p/ Cx."}
+                </button>
+              </div>
             </div>
           </div>
 

@@ -971,6 +971,100 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 });
             });
 
+        case 'INUTILIZAR_NFE':
+        case 'INUTILIZAR_NFCE': {
+            // NFE_Inutilizar(handle, cUF, ano, CNPJ, mod, serie, nNFIni, nNFFin, xJust, sResposta, esTamanho)
+            config.modelo = comando === 'INUTILIZAR_NFCE' ? 65 : 55;
+            return executarNaDLL(libNFe, config, async (handle) => {
+                // Carrega a função dinamicamente (pode não estar no loadLibrary)
+                let fnInutilizar;
+                try {
+                    const koffi = (await import('koffi')).default;
+                    const rawLib = koffi.load(process.env.FISCAL_LIB_PATH);
+                    fnInutilizar = rawLib.func(
+                        'int __cdecl NFE_Inutilizar(void* handle, const char* cUF, const char* cAno, const char* CNPJ, ' +
+                        'const char* cMod, const char* cSerie, const char* nNFIni, const char* nNFFin, const char* xJust, ' +
+                        '_Out_ char* sResposta, _Out_ int* esTamanho)'
+                    );
+                } catch (e) {
+                    throw new Error('Função NFE_Inutilizar não disponível na DLL: ' + e.message);
+                }
+
+                const { cuf, ano, cnpj, serie, nr_ini, nr_fin, justificativa } = jsonPayload;
+                const mod = String(config.modelo);
+
+                // Ano com 2 dígitos
+                const anoStr = String(ano || new Date().getFullYear()).slice(-2);
+
+                console.log(`[FiscalLib] Inutilizando: UF=${cuf} Ano=${anoStr} CNPJ=${cnpj} Mod=${mod} Série=${serie} NF ${nr_ini}-${nr_fin}`);
+
+                const bufferResposta = Buffer.alloc(TAMANHO_BUFFER);
+                const bufferTamanho = Buffer.alloc(4);
+                bufferTamanho.writeInt32LE(TAMANHO_BUFFER, 0);
+
+                const ret = fnInutilizar(
+                    handle,
+                    String(cuf || ''),
+                    anoStr,
+                    String(cnpj || '').replace(/\D/g, ''),
+                    mod,
+                    String(serie || ''),
+                    String(nr_ini || ''),
+                    String(nr_fin || ''),
+                    String(justificativa || ''),
+                    bufferResposta,
+                    bufferTamanho
+                );
+
+                const ultimoRetorno = lerRetornoACBr(libNFe, handle);
+                const tamanho = bufferTamanho.readInt32LE(0);
+                const xmlRetorno = tamanho > 0 && tamanho <= TAMANHO_BUFFER
+                    ? bufferResposta.toString('utf8', 0, tamanho).replace(/\0/g, '')
+                    : '';
+
+                console.log(`[FiscalLib] Inutilizar ret=${ret} | ${ultimoRetorno.substring(0, 200)}`);
+
+                const retornoFinal = ultimoRetorno || xmlRetorno;
+
+                // Parse do retorno SEFAZ
+                const extrair = (chave) => {
+                    const m = retornoFinal.match(new RegExp(`${chave}[=:]\\s*"?([^\\r\\n",}]+)"?`, 'i'));
+                    return m ? m[1].trim() : null;
+                };
+                const c_stat = extrair('cStat') || extrair('CStat');
+                const x_motivo = extrair('xMotivo') || extrair('XMotivo');
+                const nr_protocolo = extrair('nProt') || extrair('NProt');
+
+                // SEFAZ retorna 102 para inutilização aprovada
+                const sucesso = c_stat === '102';
+
+                // Salva XML de inutilização no disco
+                let xmlPath = null;
+                if (xmlRetorno) {
+                    try {
+                        const inuDir = path.join(resolverBaseArquivos(config), 'Inu');
+                        if (!fs.existsSync(inuDir)) fs.mkdirSync(inuDir, { recursive: true });
+                        xmlPath = path.join(inuDir, `inu_${serie}_${nr_ini}_${nr_fin}_${Date.now()}.xml`);
+                        fs.writeFileSync(xmlPath, xmlRetorno, 'utf8');
+                        console.log(`[FiscalLib] XML de inutilização salvo em: ${xmlPath}`);
+                    } catch (e) {
+                        console.warn('[FiscalLib] Falha ao salvar XML de inutilização:', e.message);
+                    }
+                }
+
+                return {
+                    sucesso,
+                    c_stat,
+                    x_motivo,
+                    nr_protocolo,
+                    xml_retorno: xmlRetorno,
+                    xml_path: xmlPath,
+                    retorno_completo: retornoFinal,
+                    erro: sucesso ? null : (x_motivo || ultimoRetorno)
+                };
+            });
+        }
+
         default:
             throw new Error(`Comando fiscal não reconhecido: ${comando}`);
     }

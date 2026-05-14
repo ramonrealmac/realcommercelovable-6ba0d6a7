@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
-import { LogOut, Search, Trash2, Plus, Receipt, RefreshCw, Settings, Wrench, Percent, ShoppingCart, Tag, CircleDollarSign, Package, CornerDownLeft } from "lucide-react";
+import { LogOut, Search, Trash2, Plus, Receipt, RefreshCw, Settings, Wrench, Percent, ShoppingCart, Tag, CircleDollarSign, Package, CornerDownLeft, Lock } from "lucide-react";
 import ProdutoSearchDialog, { buscarProdutoPorCodigo, IProdutoRow } from "../pedido/ProdutoSearchDialog";
 import ClienteSearchDialog, { IClienteRow } from "../pedido/ClienteSearchDialog";
 import VendedorSearchDialog, { IVendedorRow } from "./VendedorSearchDialog";
@@ -201,39 +201,52 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   const validarEstoqueAntesDeFinalizar = async (): Promise<boolean> => {
     if (!XParams?.lg_valida_estoque_pdv) return true; // validação desativada
 
-    // Monta lista de itens para validar
-    type IItemValidar = { produto_id: number; nm_produto: string; qt_pedido: number; deposito_id: number | null; unidade_id: string | null; };
+    // Monta lista de itens para validar — somente itens SEM entrega pendente
+    // (itens entrega='S' não terão baixa de estoque agora, então não devem bloquear)
+    type IItemValidar = {
+      produto_id: number;
+      nm_produto: string;
+      qt_pedido: number;
+      deposito_id: number | null;
+      unidade_id: string | null;
+      entrega: string;
+    };
     let itensValidar: IItemValidar[] = [];
 
     if (XPedidoSel) {
-      // Pedido fechado: busca itens do banco
+      // Pedido fechado: busca itens do banco incluindo o campo entrega
       const { data: itBanco } = await db.from("movimento_item")
-        .select("produto_id, nm_produto, qt_movimento, deposito_id, unidade_id")
+        .select("produto_id, nm_produto, qt_movimento, deposito_id, unidade_id, entrega")
         .eq("movimento_id", XPedidoSel.movimento_id)
         .eq("excluido", false);
       itensValidar = ((itBanco || []) as any[]).map((it: any) => ({
         produto_id: it.produto_id,
         nm_produto: it.nm_produto || `Produto ${it.produto_id}`,
         qt_pedido: Number(it.qt_movimento || 0),
-        deposito_id: it.deposito_id ?? XParams.deposito_estoque_caixa,
+        deposito_id: it.deposito_id ?? XParams!.deposito_estoque_caixa,
         unidade_id: it.unidade_id,
+        entrega: String(it.entrega || 'N').toUpperCase(),
       }));
     } else {
-      // Venda direta: usa o carrinho
+      // Venda direta: usa o carrinho (entrega sempre 'N' no caixa direto)
       itensValidar = XCart.map(c => ({
         produto_id: c.produto_id,
         nm_produto: c.nm_produto,
         qt_pedido: c.qt_item,
-        deposito_id: c.deposito_id ?? XParams.deposito_estoque_caixa,
+        deposito_id: c.deposito_id ?? XParams!.deposito_estoque_caixa,
         unidade_id: c.unidade_id,
+        entrega: 'N',
       }));
     }
 
-    if (itensValidar.length === 0) return true;
+    // Filtra apenas itens que terão baixa imediata (entrega = 'N')
+    const itensBaixaImediata = itensValidar.filter(i => i.entrega !== 'S');
 
-    // Busca saldo disponível no estoque para cada combinação produto+depósito
-    const prodIds = [...new Set(itensValidar.map(i => i.produto_id))];
-    const deposIds = [...new Set(itensValidar.map(i => i.deposito_id).filter(Boolean))];
+    if (itensBaixaImediata.length === 0) return true;
+
+    // Busca saldo disponível (físico - reservado) para cada produto+depósito
+    const prodIds = [...new Set(itensBaixaImediata.map(i => i.produto_id))];
+    const deposIds = [...new Set(itensBaixaImediata.map(i => i.deposito_id).filter(Boolean))];
 
     const { data: estoques } = await db.from("estoque")
       .select("produto_id, deposito_id, estoque_fisico, estoque_reservado")
@@ -249,7 +262,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     }
 
     const bloqueados: IEstoqueBloqueioItem[] = [];
-    for (const item of itensValidar) {
+    for (const item of itensBaixaImediata) {
       const key = `${item.produto_id}_${item.deposito_id}`;
       const disponivel = estMap[key] ?? 0;
       if (item.qt_pedido > disponivel) {
@@ -297,7 +310,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     if (XCart.length === 0) { toast.error("Adicione itens ao carrinho."); return; }
     if (!XParams) { toast.error("Parâmetros da empresa não carregados."); return; }
 
-    const tid = toast.loading("Salvando pré-venda...");
+    const tid = toast.loading("Enviando para o caixa...");
     try {
       // 1. Cria o movimento como 'O'
       const { movimento_id, nr } = await criarMovimentoVendaDireta();
@@ -311,10 +324,10 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      toast.success(`Pré-venda #${nr} salva com sucesso.`, { id: tid });
+      toast.success(`Pedido #${nr} enviado para o caixa.`, { id: tid });
       concluirVenda();
     } catch (err: any) {
-      toast.error(err.message || "Erro ao salvar pré-venda.", { id: tid });
+      toast.error(err.message || "Erro ao enviar para o caixa.", { id: tid });
     }
   }, [XCart, XParams, XCliente, XVendedor, XEmpresaId, caixa.funcionario_id]);
 
@@ -347,10 +360,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
           e.preventDefault();
           if (!XPedidoSel && XCart.length > 0) setXOpenDesc(true);
           break;
-        case 'F7':
-          e.preventDefault();
-          if (!XPedidoSel && XCart.length > 0) salvarPreVenda();
-          break;
+
         case 'F9':
           e.preventDefault();
           finalizarVenda();
@@ -1014,12 +1024,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
                 <Percent size={16} /> Desconto
               </button>
                 <div className="flex-1 flex gap-2">
-                  {!XPedidoSel && (
-                    <button onClick={salvarPreVenda} disabled={XCart.length === 0}
-                      className="flex-1 text-sm px-3 py-2 rounded border border-primary text-primary hover:bg-primary/5 disabled:opacity-50 flex items-center justify-center gap-1 font-semibold">
-                      <Package size={18} /> Salvar (F7)
-                    </button>
-                  )}
+
                   <button onClick={finalizarVenda} disabled={!podeReceber}
                     className="flex-[2] text-sm px-3 py-2 rounded bg-primary text-primary-foreground disabled:opacity-50 flex items-center justify-center gap-1 font-bold">
                     <Receipt size={18} /> Finalizar Venda (F9)
@@ -1045,8 +1050,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
             action: () => { carregarPedidos(); toast.info('Lista de pedidos atualizada.'); } },
           { key: 'F6', label: 'Desconto', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel && XCart.length > 0,
             action: () => setXOpenDesc(true) },
-          { key: 'F7', label: 'Pré-venda', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel && XCart.length > 0,
-            action: () => salvarPreVenda() },
+
           { key: 'F9', label: 'Finalizar', color: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400', enabled: podeReceber,
             action: () => finalizarVenda() },
           { key: 'Esc', label: 'Limpar seleção', color: 'bg-rose-500/10 border-rose-500/20 text-rose-600', enabled: !!XPedidoSel,
@@ -1080,7 +1084,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
                 { key: 'F4', label: 'Pesquisar vendedor' },
                 { key: 'F5', label: 'Atualizar lista de pedidos' },
                 { key: 'F6', label: 'Abrir desconto' },
-                { key: 'F7', label: 'Salvar como Pré-venda' },
+
                 { key: 'F9', label: 'Finalizar / receber venda' },
                 { key: 'Esc', label: 'Deselecionar pedido' },
                 { key: 'Del', label: 'Remover último item do carrinho' },

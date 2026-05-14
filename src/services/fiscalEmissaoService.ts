@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { gerarIniNfe } from "./gerarIniNfe";
+import { validarDadosFiscais } from "./fiscalPreValidacao";
 
 const db = supabase as any;
 
@@ -114,6 +115,22 @@ export const fiscalEmissaoService = {
         throw new Error(`Item de configuração fiscal ${configItemId} não localizado.`);
       }
 
+      // PRÉ-VALIDAÇÃO — verifica dados obrigatórios antes de consumir sequência ou acionar o worker
+      const preVal = validarDadosFiscais({
+        empresa,
+        parceiro,
+        movimento,
+        itens: movimento.movimento_item || [],
+        fConfig,
+        fConfigItem,
+        tipo,
+      });
+
+      if (!preVal.valido) {
+        const linhas = preVal.erros.map(er => `• ${er.campo}: ${er.mensagem}`).join("\n");
+        throw new Error(`Dados incompletos para emissão da ${tipo}:\n\n${linhas}`);
+      }
+
       // 4. Sequência da nota
       const nrNota = Number(fConfigItem.sequencia || 1);
       console.log(`[FiscalService] Utilizando nr_nota: ${nrNota} para ${tipo}`);
@@ -214,7 +231,27 @@ export const fiscalEmissaoService = {
         else console.log("[FiscalService] Pagamento fallback inserido com sucesso.");
       }
 
-      // 9. Gerar INI e Despachar Evento para o Worker
+      // 9. PRÉ-VALIDAÇÃO PÓS-CÁLCULO — valida os dados fiscais gravados antes de acionar o worker
+      console.log(`[FiscalService] Executando pré-validação fiscal (fn_prevalidar_nfe) para cabeçalho ${cabId}...`);
+      const { data: validacaoResult, error: validacaoErr } = await db.rpc("fn_prevalidar_nfe", {
+        p_nfe_cabecalho_id: cabId,
+        p_empresa_id: empresaId,
+      });
+
+      if (validacaoErr) {
+        console.warn("[FiscalService] Falha ao executar pré-validação:", validacaoErr.message);
+        // Não bloqueia — loga o aviso e continua
+      } else if (validacaoResult && !validacaoResult.valido) {
+        const regime: string = validacaoResult.regime || "?";
+        const erros: Array<{ campo: string; mensagem: string }> = validacaoResult.erros || [];
+        const linhas = erros.map((er) => `• ${er.campo}: ${er.mensagem}`).join("\n");
+        console.error(`[FiscalService] Pré-validação falhou (${regime}) — ${erros.length} erro(s):\n${linhas}`);
+        throw new Error(`Dados incompletos para emissão da ${tipo}:\n\n${linhas}`);
+      } else {
+        console.log(`[FiscalService] Pré-validação OK (regime: ${validacaoResult?.regime}).`);
+      }
+
+      // 10. Gerar INI e Despachar Evento para o Worker
       console.log(`[FiscalService] Gerando INI para ${tipo}...`);
 
       // Busca dados dos itens inseridos para garantir integridade no INI
@@ -231,6 +268,7 @@ export const fiscalEmissaoService = {
         configItem: fConfigItem
       });
       validarIniAcbr(iniContent);
+
 
       const ambienteNfe = Number(fConfig?.ambiente_nfe || 2);
       const { data: { user: authUser } } = await supabase.auth.getUser();

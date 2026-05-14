@@ -203,8 +203,8 @@ const processarEvento = async (evento) => {
         // 3. Chama a biblioteca nativa passando o JSON payload atualizado
         const resultado = await executarComandoFiscal(evento.comando, payload);
 
-        const isEmissao = ['EMITIR_NFE', 'EMITIR_NFCE'].includes(evento.comando);
         const isCancelamento = ['CANCELAR_NFE', 'CANCELAR_NFCE'].includes(evento.comando);
+        const isInutilizacao = ['INUTILIZAR_NFE', 'INUTILIZAR_NFCE'].includes(evento.comando);
 
         // 4. PRIMEIRO: atualizar fiscal_nfe_cabecalho se foi emissão ou cancelamento
         if (nfeCabecalhoId) {
@@ -237,6 +237,20 @@ const processarEvento = async (evento) => {
             }
         }
 
+        // 4b. Atualizar fiscal_nfe_inutilizacao se for inutilização
+        if (isInutilizacao && payload.inutilizacao_id) {
+            const stInu = resultado.sucesso ? 'CONCLUIDO' : 'ERRO';
+            await supabase.from('fiscal_nfe_inutilizacao').update({
+                st_inutilizacao: stInu,
+                c_stat: resultado.c_stat ? parseInt(String(resultado.c_stat)) : null,
+                x_motivo: resultado.x_motivo || (resultado.sucesso ? 'Inutilizado' : resultado.erro),
+                nr_protocolo: resultado.nr_protocolo || null,
+                xml_retorno: resultado.xml_retorno || null,
+                updated_at: new Date().toISOString()
+            }).eq('inutilizacao_id', payload.inutilizacao_id);
+            logger.info(`Inutilização #${payload.inutilizacao_id} atualizada: ${stInu} (c_stat=${resultado.c_stat}).`);
+        }
+
         // 5. Impressão pós-processamento: executada antes de marcar o evento como finalizado
         // para que a resposta já contenha o PDF/caminho de impressão se configurado.
         let respostaFinal = { ...resultado };
@@ -265,7 +279,9 @@ const processarEvento = async (evento) => {
         }
 
         // 6. Salva o resultado final (JSON) e marca status final do evento.
-        const statusFinal = resultado.sucesso ? 'EMITIDO' : 'ERRO';
+        const statusFinal = resultado.sucesso
+            ? (isInutilizacao ? 'CONCLUIDO' : 'EMITIDO')
+            : 'ERRO';
         const { error: errEv } = await supabase
             .from('fiscal_evento')
             .update({

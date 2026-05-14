@@ -57,6 +57,7 @@ import {
   Lock,
   Unlock,
   Calculator,
+  FileX,
 } from "lucide-react";
 
 export interface MenuItem {
@@ -232,6 +233,7 @@ export const MENU_CONFIG: MenuItem[] = [
           { id: "nfe-emitidas", title: "Gerenciador Fiscal", icon: FileText },
           { id: "nfe-form", title: "Notas Emitidas", icon: FilePen },
           { id: "cce", title: "Carta de Correção", icon: FilePen },
+          { id: "nfe-inutilizacao", title: "Inutilização de Numeração", icon: FileX },
         ]
       },
       { id: "mdfe", title: "Mdfe", icon: FileText },

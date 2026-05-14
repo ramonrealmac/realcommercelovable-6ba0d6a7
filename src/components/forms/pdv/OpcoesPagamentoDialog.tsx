@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import FiscalEmailDialog from "./FiscalEmailDialog";
 import FiscalProgressDialog from "@/components/fiscal/FiscalProgressDialog";
+import FiscalPreValidacaoDialog from "@/components/forms/FiscalPreValidacaoDialog";
+import type { IFiscalValidacaoErro } from "@/services/fiscalPreValidacao";
 import { supabase } from "@/integrations/supabase/client";
 
 
@@ -97,6 +99,10 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
   const [XProg, setXProg] = React.useState<{ open: boolean; titulo: string; total: number; restante: number }>({
     open: false, titulo: "", total: 60, restante: 60
   });
+  // Diálogo de pré-validação
+  const [XPreValOpen, setXPreValOpen] = React.useState(false);
+  const [XPreValErros, setXPreValErros] = React.useState<IFiscalValidacaoErro[]>([]);
+  const [XPreValTipo, setXPreValTipo] = React.useState<"NFE" | "NFCE">("NFE");
 
   // Verifica se já existe documento para bloquear botões ao abrir
   React.useEffect(() => {
@@ -291,7 +297,26 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
       console.error(`[OpcoesPagamentoDialog] Erro fatal em handleGerarFiscal:`, err);
       setXSalvando(false);
       setXStatus("");
-      toast.error("Ocorreu um erro inesperado: " + (err.message || "Erro interno"));
+      setXProg(p => ({ ...p, open: false }));
+
+      // Verifica se é erro de pré-validação (mensagem estruturada com marcadores)
+      const msg: string = err.message || "Erro interno";
+      if (msg.includes("Dados incompletos para emissão")) {
+        // Extrai os erros da mensagem para exibir no diálogo estruturado
+        const linhas = msg.split("\n").filter(l => l.startsWith("•"));
+        const errosExtraidos: IFiscalValidacaoErro[] = linhas.map(l => {
+          const sem = l.replace("• ", "");
+          const sep = sem.indexOf(": ");
+          return sep > -1
+            ? { campo: sem.substring(0, sep), mensagem: sem.substring(sep + 2) }
+            : { campo: "Dado obrigatório", mensagem: sem };
+        });
+        setXPreValErros(errosExtraidos.length > 0 ? errosExtraidos : [{ campo: "Validação", mensagem: msg }]);
+        setXPreValTipo(tipo);
+        setXPreValOpen(true);
+      } else {
+        toast.error("Ocorreu um erro inesperado: " + msg);
+      }
     }
   };
 
@@ -440,6 +465,13 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
         descricao="Aguardando resposta do Fiscal Worker / SEFAZ."
         segundosTotais={XProg.total}
         segundosRestantes={XProg.restante}
+      />
+
+      <FiscalPreValidacaoDialog
+        open={XPreValOpen}
+        tipo={XPreValTipo}
+        erros={XPreValErros}
+        onClose={() => setXPreValOpen(false)}
       />
     </Dialog>
   );
