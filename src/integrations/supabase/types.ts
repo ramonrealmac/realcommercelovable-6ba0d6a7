@@ -1245,7 +1245,7 @@ export type Database = {
         Insert: {
           bandeira_id: number
           caixa_movimento_id?: number
-          caixa_movimento_item_id: number
+          caixa_movimento_item_id?: number
           condicao_id: number
           dt_alteracao?: string | null
           dt_cadastro?: string | null
@@ -2355,6 +2355,73 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "empresa"
             referencedColumns: ["empresa_id"]
+          },
+        ]
+      }
+      estoque_log: {
+        Row: {
+          deposito_id: number | null
+          dt_hs_log: string | null
+          empresa_id: number | null
+          estoque_log_id: number
+          nr_doc: string | null
+          operacao: string | null
+          origem: string | null
+          produto_id: number | null
+          qt_estoque_deposito: number | null
+          qt_estoque_geral: number | null
+          qt_movimento: number | null
+          usuario: string | null
+        }
+        Insert: {
+          deposito_id?: number | null
+          dt_hs_log?: string | null
+          empresa_id?: number | null
+          estoque_log_id?: number
+          nr_doc?: string | null
+          operacao?: string | null
+          origem?: string | null
+          produto_id?: number | null
+          qt_estoque_deposito?: number | null
+          qt_estoque_geral?: number | null
+          qt_movimento?: number | null
+          usuario?: string | null
+        }
+        Update: {
+          deposito_id?: number | null
+          dt_hs_log?: string | null
+          empresa_id?: number | null
+          estoque_log_id?: number
+          nr_doc?: string | null
+          operacao?: string | null
+          origem?: string | null
+          produto_id?: number | null
+          qt_estoque_deposito?: number | null
+          qt_estoque_geral?: number | null
+          qt_movimento?: number | null
+          usuario?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estoque_log_deposito_id_fkey"
+            columns: ["deposito_id"]
+            isOneToOne: false
+            referencedRelation: "deposito"
+            referencedColumns: ["deposito_id"]
+          },
+          {
+            foreignKeyName: "estoque_log_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresa"
+            referencedColumns: ["empresa_id"]
+          },
+          {
+            foreignKeyName: "estoque_log_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "produto"
+            referencedColumns: ["produto_id"]
           },
         ]
       }
@@ -6636,6 +6703,29 @@ export type Database = {
       }
     }
     Functions: {
+      finalizar_venda_caixa: {
+        Args: {
+          p_cadastro_id?: number
+          p_caixa_abertura_id: number
+          p_centro_custo_id: number
+          p_condicao_id?: number
+          p_conta_gerencial_id: number
+          p_documento: string
+          p_empresa_id: number
+          p_funcionario_id: number
+          p_gerar_financeiro?: boolean
+          p_historico: string
+          p_movimento_id: number
+          p_pagamentos: Json
+          p_planoconta_id?: number
+          p_portador_id?: number
+          p_tp_operacao: string
+          p_usuario?: string
+          p_vl_total: number
+          p_vl_troco: number
+        }
+        Returns: Json
+      }
       fu_baixar_titulos_cliente: {
         Args: {
           p_cadastro_id: number
@@ -6734,6 +6824,14 @@ export type Database = {
       fu_menu_visivel: {
         Args: { _empresa_id: number; _nm_menu: string; _user_id: string }
         Returns: boolean
+      }
+      fu_mudar_status_pedido_pdv: {
+        Args: {
+          _movimento_id: number
+          _novo_status: string
+          _usuario_id?: string
+        }
+        Returns: Json
       }
       fu_recalcular_pedido: {
         Args: { _movimento_id: number }
