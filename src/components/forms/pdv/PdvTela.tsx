@@ -316,9 +316,13 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       const { movimento_id, nr } = await criarMovimentoVendaDireta();
       
       // 2. Muda o status para 'F' via RPC (isso reserva o estoque)
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+
       const { data, error } = await db.rpc("fu_mudar_status_pedido_pdv", {
         _movimento_id: movimento_id,
-        _novo_status: "F"
+        _novo_status: "F",
+        _usuario_id: userId
       });
 
       if (error) throw error;
@@ -706,9 +710,13 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
 
       // ===== CENTRALIZED STATUS TRANSITION VIA RPC =====
       // Isso garante que o estoque seja baixado corretamente (físico e reserva)
+      const { data: userDataRpc } = await supabase.auth.getUser();
+      const userIdRpc = userDataRpc.user?.id;
+
       const { data: rpcRes, error: e3 } = await db.rpc("fu_mudar_status_pedido_pdv", {
         _movimento_id: movimentoId,
-        _novo_status: "R"
+        _novo_status: "R",
+        _usuario_id: userIdRpc
       });
       
       if (e3) throw new Error("Falha ao baixar pedido (RPC): " + e3.message);

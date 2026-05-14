@@ -142,9 +142,13 @@ const PedidoForm: React.FC = () => {
     if (!movimento_id) { toast.error("Salve o pedido primeiro."); return; }
     if (confirmMsg && !confirm(confirmMsg)) return;
 
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+
     const { data, error } = await db.rpc("fu_mudar_status_pedido_pdv", {
       _movimento_id: movimento_id,
-      _novo_status: novo
+      _novo_status: novo,
+      _usuario_id: userId
     });
 
     if (error) {
