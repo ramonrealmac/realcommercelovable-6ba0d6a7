@@ -12,6 +12,7 @@ import OpcoesPagamentoDialog, { IImpressaoDados } from "./OpcoesPagamentoDialog"
 import DescontoDialog from "./DescontoDialog";
 import FuncoesDialog from "./FuncoesDialog";
 import CancelamentoDialog from "./CancelamentoDialog";
+import EstoqueBloqueioDialog, { IEstoqueBloqueioItem } from "./EstoqueBloqueioDialog";
 import FechamentoCaixaForm from "./FechamentoCaixaForm";
 import AberturaCaixaForm from "./AberturaCaixaForm";
 import SuprimentoSangriaForm from "./SuprimentoSangriaForm";
@@ -143,6 +144,10 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   const [XPagtosPedido, setXPagtosPedido] = useState<IMovimentoPagamento[]>([]);
   const [XImpressaoDados, setXImpressaoDados] = useState<IImpressaoDados | null>(null);
 
+  // Bloqueio de estoque insuficiente
+  const [XOpenEstoqueBloq, setXOpenEstoqueBloq] = useState(false);
+  const [XEstoqueBloqItens, setXEstoqueBloqItens] = useState<IEstoqueBloqueioItem[]>([]);
+
   const searchRef = useRef<HTMLInputElement>(null);
   const pedidoSearchRef = useRef<HTMLInputElement>(null);
   const [XShowAtalhos, setXShowAtalhos] = useState(false);
@@ -192,10 +197,88 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   const totalReceber = Number(Math.max(0, baseSubtotal - vlDescAplicado).toFixed(2));
   const podeReceber = (XPedidoSel != null) || (XCart.length > 0);
 
+  // ===== Validação de estoque antes de finalizar =====
+  const validarEstoqueAntesDeFinalizar = async (): Promise<boolean> => {
+    if (!XParams?.lg_valida_estoque_pdv) return true; // validação desativada
+
+    // Monta lista de itens para validar
+    type IItemValidar = { produto_id: number; nm_produto: string; qt_pedido: number; deposito_id: number | null; unidade_id: string | null; };
+    let itensValidar: IItemValidar[] = [];
+
+    if (XPedidoSel) {
+      // Pedido fechado: busca itens do banco
+      const { data: itBanco } = await db.from("movimento_item")
+        .select("produto_id, nm_produto, qt_movimento, deposito_id, unidade_id")
+        .eq("movimento_id", XPedidoSel.movimento_id)
+        .eq("excluido", false);
+      itensValidar = ((itBanco || []) as any[]).map((it: any) => ({
+        produto_id: it.produto_id,
+        nm_produto: it.nm_produto || `Produto ${it.produto_id}`,
+        qt_pedido: Number(it.qt_movimento || 0),
+        deposito_id: it.deposito_id ?? XParams.deposito_estoque_caixa,
+        unidade_id: it.unidade_id,
+      }));
+    } else {
+      // Venda direta: usa o carrinho
+      itensValidar = XCart.map(c => ({
+        produto_id: c.produto_id,
+        nm_produto: c.nm_produto,
+        qt_pedido: c.qt_item,
+        deposito_id: c.deposito_id ?? XParams.deposito_estoque_caixa,
+        unidade_id: c.unidade_id,
+      }));
+    }
+
+    if (itensValidar.length === 0) return true;
+
+    // Busca saldo disponível no estoque para cada combinação produto+depósito
+    const prodIds = [...new Set(itensValidar.map(i => i.produto_id))];
+    const deposIds = [...new Set(itensValidar.map(i => i.deposito_id).filter(Boolean))];
+
+    const { data: estoques } = await db.from("estoque")
+      .select("produto_id, deposito_id, estoque_fisico, estoque_reservado")
+      .eq("empresa_id", XEmpresaId)
+      .in("produto_id", prodIds)
+      .in("deposito_id", deposIds);
+
+    const estMap: Record<string, number> = {};
+    for (const e of (estoques || []) as any[]) {
+      const key = `${e.produto_id}_${e.deposito_id}`;
+      const disponivel = Number(e.estoque_fisico || 0) - Number(e.estoque_reservado || 0);
+      estMap[key] = disponivel;
+    }
+
+    const bloqueados: IEstoqueBloqueioItem[] = [];
+    for (const item of itensValidar) {
+      const key = `${item.produto_id}_${item.deposito_id}`;
+      const disponivel = estMap[key] ?? 0;
+      if (item.qt_pedido > disponivel) {
+        bloqueados.push({
+          produto_id: item.produto_id,
+          nm_produto: item.nm_produto,
+          qt_pedido: item.qt_pedido,
+          qt_disponivel: disponivel,
+          unidade_id: item.unidade_id,
+        });
+      }
+    }
+
+    if (bloqueados.length > 0) {
+      setXEstoqueBloqItens(bloqueados);
+      setXOpenEstoqueBloq(true);
+      return false;
+    }
+    return true;
+  };
+
   // ===== Finalizar venda =====
   const finalizarVenda = useCallback(async () => {
     if (!podeReceber) { toast.error("Selecione um pedido ou adicione itens à venda direta."); return; }
     if (!XParams) { toast.error("Parâmetros da empresa não carregados."); return; }
+
+    // Valida estoque antes de abrir pagamento
+    const estoqueOk = await validarEstoqueAntesDeFinalizar();
+    if (!estoqueOk) return;
 
     let pagtos: IMovimentoPagamento[] = [];
     if (XPedidoSel) {
@@ -207,7 +290,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     }
     setXPagtosPedido(pagtos);
     setXOpenPagto(true);
-  }, [podeReceber, XParams, XPedidoSel]);
+  }, [podeReceber, XParams, XPedidoSel, XCart, XPedidoSelItens, XEmpresaId]);
 
   // ===== Salvar como Pre-venda (apenas para venda direta) =====
   const salvarPreVenda = useCallback(async () => {
@@ -398,7 +481,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     if (!XEmpresaId) return;
     (async () => {
       const { data, error } = await db.from("empresa")
-        .select("tp_operacao_caixa, conta_gerencial_caixa, centro_custo_caixa, deposito_estoque_caixa, imagem_caixa")
+        .select("tp_operacao_caixa, conta_gerencial_caixa, centro_custo_caixa, deposito_estoque_caixa, imagem_caixa, lg_valida_estoque_pdv")
         .eq("empresa_id", XEmpresaId).maybeSingle();
       if (error) { toast.error(error.message); return; }
       setXParams(data as IPdvParamsEmpresa);
@@ -1137,6 +1220,12 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
           setXFonteTot(v.fonteTotais);
           setXRefreshSeg(v.tempoRefresh);
         }}
+      />
+
+      <EstoqueBloqueioDialog
+        open={XOpenEstoqueBloq}
+        itens={XEstoqueBloqItens}
+        onClose={() => setXOpenEstoqueBloq(false)}
       />
     </div>
   );

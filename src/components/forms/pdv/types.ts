@@ -33,6 +33,7 @@ export interface IPdvParamsEmpresa {
   centro_custo_caixa: number;
   deposito_estoque_caixa: number;
   imagem_caixa?: string | null;
+  lg_valida_estoque_pdv?: boolean | null;
 }
 
 export interface IPdvPedidoFechado {
