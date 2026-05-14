@@ -392,6 +392,33 @@ const ProdutoForm: React.FC = () => {
     const toNum = (v: string) => parseNum(v);
     const toInt = (v: string) => { const n = parseInt(v); return isNaN(n) ? null : n; };
 
+    if (XFormMode === "insert" || XFormMode === "edit") {
+      if (!XF.ncm.trim() || XF.ncm.replace(/\D/g, "").length !== 8) {
+        toast.error("O NCM é obrigatório e deve ter exatamente 8 dígitos.");
+        return;
+      }
+      if (XF.cest.trim() && XF.cest.replace(/\D/g, "").length !== 7) {
+        toast.error("O CEST deve estar vazio ou ter exatamente 7 dígitos.");
+        return;
+      }
+      if (!XF.tb_a_origem) {
+        toast.error("A Origem do produto é obrigatória.");
+        return;
+      }
+      if (!XF.grupo_icms_id) {
+        toast.error("O Grupo de ICMS é obrigatório.");
+        return;
+      }
+      if (!XF.grupo_pis_cofins_id) {
+        toast.error("O Grupo de PIS/COFINS é obrigatório.");
+        return;
+      }
+      if (!XF.grupo_ibscbs_id) {
+        toast.error("O Grupo de IBS/CBS é obrigatório.");
+        return;
+      }
+    }
+
     const XPayload: any = {
       empresa_id: XEmpresaMatrizId,
       nome: XF.nome.trim(),
@@ -408,8 +435,8 @@ const ProdutoForm: React.FC = () => {
       nm_ecommerce: XF.nm_ecommerce.trim(),
       ds_ecommerce: XF.ds_ecommerce.trim(),
       url_foto: XF.url_foto.trim(),
-      ncm: XF.ncm.trim(),
-      cest: XF.cest.trim(),
+      ncm: XF.ncm.replace(/\D/g, ""),
+      cest: XF.cest.replace(/\D/g, ""),
       mva: toNum(XF.mva),
       tb_a_origem: XF.tb_a_origem,
       grupo_icms_id: toInt(XF.grupo_icms_id),
@@ -656,12 +683,14 @@ const ProdutoForm: React.FC = () => {
     return renderReadField(label, val, opts?.className);
   };
 
-  const renderNumField = (label: string, key: string, opts?: { readOnly?: boolean; className?: string; decimals?: number }) => {
+  const renderNumField = (label: string, key: string, opts?: { required?: boolean; readOnly?: boolean; className?: string; decimals?: number }) => {
     const dec = opts?.decimals ?? 2;
     if (XIsEditing) {
       return (
         <div className={opts?.className}>
-          <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">
+            {label} {opts?.required && <span className="text-destructive">*</span>}
+          </label>
           <input
             type="text"
             value={XF[key] || "0,00"}
@@ -678,14 +707,16 @@ const ProdutoForm: React.FC = () => {
     return renderReadField(label, dec === 4 ? fmt4(val) : fmt2(val), opts?.className);
   };
 
-  const renderSelect = (label: string, key: string, items: { v: string; l: string }[]) => {
+  const renderSelect = (label: string, key: string, items: { v: string; l: string }[], opts?: { required?: boolean }) => {
     if (!XIsEditing) {
       const d = items.find(i => i.v === (XCurrentRecord as any)?.[key])?.l || (XCurrentRecord as any)?.[key] || "";
       return renderReadField(label, d);
     }
     return (
       <div>
-        <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
+        <label className="block text-xs font-medium text-muted-foreground mb-1">
+          {label} {opts?.required && <span className="text-destructive">*</span>}
+        </label>
         <Select value={XF[key] || ""} onValueChange={(v) => set(key, v)}>
           <SelectTrigger className={`h-[34px] text-sm ${XBgEdit}`}><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -696,7 +727,7 @@ const ProdutoForm: React.FC = () => {
     );
   };
 
-  const renderLookup = (label: string, key: string, items: any[], valueKey: string, labelKey: string) => {
+  const renderLookup = (label: string, key: string, items: any[], valueKey: string, labelKey: string, opts?: { required?: boolean }) => {
     if (!XIsEditing) {
       const id = XCurrentRecord ? (XCurrentRecord as any)[key] : null;
       const item = items.find((i: any) => i[valueKey] === id);
@@ -704,7 +735,9 @@ const ProdutoForm: React.FC = () => {
     }
     return (
       <div>
-        <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
+        <label className="block text-xs font-medium text-muted-foreground mb-1">
+          {label} {opts?.required && <span className="text-destructive">*</span>}
+        </label>
         <Select value={XF[key] || "__none__"} onValueChange={(v) => set(key, v === "__none__" ? "" : v)}>
           <SelectTrigger className={`h-[34px] text-sm ${XBgEdit}`}><SelectValue placeholder="Selecione..." /></SelectTrigger>
           <SelectContent>
@@ -1025,19 +1058,19 @@ const ProdutoForm: React.FC = () => {
                     { v: "4", l: "Nacional - Processos Básicos" }, { v: "5", l: "Nacional - Conteúdo <40%" },
                     { v: "6", l: "Estrangeira - Importação S/Similar" }, { v: "7", l: "Estrangeira - Adq. S/Similar" },
                     { v: "8", l: "Nacional - Conteúdo >70%" },
-                  ])}
+                  ], { required: true })}
                   {renderField("GTIN", "gtin")}
-                  {renderField("NCM", "ncm")}
+                  {renderField("NCM", "ncm", { required: true })}
                   {renderField("CEST", "cest")}
                   {renderField("MVA (%)", "mva", { align: "right" })}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {renderLookup("Grupo ICMS", "grupo_icms_id", XGrupoIcms, "fiscal_grupo_produto_id", "nome")}
+                  {renderLookup("Grupo ICMS", "grupo_icms_id", XGrupoIcms, "fiscal_grupo_produto_id", "nome", { required: true })}
                   {renderLookup("Grupo IPI", "grupo_ipi_id", XGrupoIpi, "fiscal_grupo_produto_id", "nome")}
-                  {renderLookup("Grupo PIS/COFINS", "grupo_pis_cofins_id", XGrupoPisCofins, "fiscal_grupo_produto_id", "nome")}
+                  {renderLookup("Grupo PIS/COFINS", "grupo_pis_cofins_id", XGrupoPisCofins, "fiscal_grupo_produto_id", "nome", { required: true })}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {renderLookup("Grupo IBS/CBS", "grupo_ibscbs_id", XGrupoIbsCbs, "fiscal_grupo_produto_id", "nome")}
+                  {renderLookup("Grupo IBS/CBS", "grupo_ibscbs_id", XGrupoIbsCbs, "fiscal_grupo_produto_id", "nome", { required: true })}
                 </div>
               </div>
             )}

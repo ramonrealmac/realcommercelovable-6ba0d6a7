@@ -425,6 +425,34 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
       toast.error("A Razão Social é obrigatória.");
       return;
     }
+
+    // Campos obrigatórios conforme solicitação do usuário (especialmente para clientes)
+    if (XF.st_cliente === "S") {
+      if (!XF.endereco_cep || XF.endereco_cep.replace(/\D/g, "").length < 8) {
+        toast.error("O CEP é obrigatório.");
+        return;
+      }
+      if (!XF.endereco_cidade_id) {
+        toast.error("A Cidade/Município é obrigatória.");
+        return;
+      }
+      if (!XF.endereco_logradouro?.trim()) {
+        toast.error("O Logradouro é obrigatório.");
+        return;
+      }
+      if (!XF.endereco_numero?.trim()) {
+        toast.error("O Número do endereço é obrigatório.");
+        return;
+      }
+      if (!XF.endereco_bairro?.trim()) {
+        toast.error("O Bairro é obrigatório.");
+        return;
+      }
+      if (!XF.fone_geral?.trim()) {
+        toast.error("O Telefone Geral é obrigatório.");
+        return;
+      }
+    }
     const XCpfCnpj = XF.cnpj.replace(/\D/g, "");
     if (XCpfCnpj && !validateCPFOrCNPJ(XCpfCnpj)) {
       toast.error("CPF/CNPJ inválido.");
@@ -842,7 +870,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {/* CEP with search button */}
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">CEP</label>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">CEP <span className="text-destructive">*</span></label>
                     <div className="flex gap-1">
                       {XIsEditing ? (
                         <input
@@ -876,7 +904,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
                   </div>
                   {/* Cidade — campo com pesquisa */}
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">Cidade</label>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">Cidade <span className="text-destructive">*</span></label>
                     <div className="flex gap-1">
                       <input
                         type="text"
@@ -919,9 +947,9 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  {renderField("Logradouro", "endereco_logradouro", { className: "md:col-span-2" })}
-                  {renderField("Número", "endereco_numero")}
-                  {renderField("Bairro", "endereco_bairro")}
+                  {renderField("Logradouro", "endereco_logradouro", { className: "md:col-span-2", required: true })}
+                  {renderField("Número", "endereco_numero", { required: true })}
+                  {renderField("Bairro", "endereco_bairro", { required: true })}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {renderField("Complemento", "endereco_compl")}
@@ -930,7 +958,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
 
                 <h3 className="text-sm font-semibold text-muted-foreground pt-2">Telefones</h3>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  {renderField("Fone Geral", "fone_geral", { placeholder: "(00) 00000-0000" })}
+                  {renderField("Fone Geral", "fone_geral", { placeholder: "(00) 00000-0000", required: true })}
                   {renderField("Fone Comercial", "fone_comercial")}
                   {renderField("Fone Financeiro", "fone_financeiro")}
                   {renderField("Fone Faturamento", "fone_faturamento")}
