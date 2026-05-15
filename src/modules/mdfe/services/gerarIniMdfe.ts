@@ -1,6 +1,10 @@
 /**
  * Gerador de arquivo INI para MDF-e (Modelo 58) compatível com ACBrLib.
  */
+const UF_MAP: Record<string, string> = {
+  AC: "12", AL: "27", AM: "13", AP: "16", BA: "29", CE: "23", DF: "53", ES: "32", GO: "52", MA: "21", MG: "31", MS: "50", MT: "51", PA: "15", PB: "25", PE: "26", PI: "22", PR: "41", RJ: "33", RN: "24", RO: "11", RR: "14", RS: "43", SC: "42", SE: "28", SP: "35", TO: "17"
+};
+
 export const gerarIniMdfe = (params: any): string => {
   const { manifesto, carrega, descarrega, condutores, documentos, veiculos, percurso, fConfig } = params;
 
@@ -11,7 +15,7 @@ export const gerarIniMdfe = (params: any): string => {
   ini += "versao=3.00\n\n";
 
   ini += "[ide]\n";
-  ini += `cUF=${manifesto.ufini_cod || '35'}\n`; // Idealmente buscar o código do estado
+  ini += `cUF=${UF_MAP[manifesto.ufini] || '35'}\n`;
   ini += `tpAmb=${fConfig?.ambiente_mdfe || 2}\n`;
   ini += `tpEmit=${manifesto.tp_emitente || '1'}\n`;
   ini += `tpTransp=${manifesto.tp_transportador || '1'}\n`;
@@ -31,10 +35,10 @@ export const gerarIniMdfe = (params: any): string => {
     ini += "versaoModal=3.00\n\n";
     
     ini += "[rodo]\n";
-    ini += `RNTRC=${manifesto.rntrc || '00000000'}\n\n`;
+    ini += `RNTRC=${manifesto.rntrc || 'ISENTO'}\n\n`;
 
     // Veículos
-    const vTracao = veiculos.find((v: any) => v.tipo === 'TRACAO');
+    const vTracao = veiculos.find((v: any) => v.tp_veiculo === 'TRACAO');
     if (vTracao) {
       ini += "[veicTracao]\n";
       ini += `cInt=${vTracao.veiculo_id}\n`;
@@ -42,12 +46,12 @@ export const gerarIniMdfe = (params: any): string => {
       ini += `RENAVAM=${vTracao.renavam || ''}\n`;
       ini += `tara=${vTracao.tara || 0}\n`;
       ini += `capKG=${vTracao.capacidade_kg || 0}\n`;
-      ini += `tpRod=${vTracao.tp_rodado || '01'}\n`;
-      ini += `tpCar=${vTracao.tp_carroceria || '00'}\n`;
+      ini += `tpRod=${String(vTracao.tp_rodado || '01').padStart(2, '0')}\n`;
+      ini += `tpCar=${String(vTracao.tp_carroceria || '00').padStart(2, '0')}\n`;
       ini += `UF=${vTracao.uf || manifesto.ufini}\n\n`;
     }
 
-    const reboques = veiculos.filter((v: any) => v.tipo === 'REBOQUE');
+    const reboques = veiculos.filter((v: any) => v.tp_veiculo === 'REBOQUE');
     reboques.forEach((v: any, i: number) => {
       const idx = String(i + 1).padStart(3, '0');
       ini += `[veicReboque${idx}]\n`;
@@ -56,7 +60,7 @@ export const gerarIniMdfe = (params: any): string => {
       ini += `RENAVAM=${v.renavam || ''}\n`;
       ini += `tara=${v.tara || 0}\n`;
       ini += `capKG=${v.capacidade_kg || 0}\n`;
-      ini += `tpCar=${v.tp_carroceria || '00'}\n`;
+      ini += `tpCar=${String(v.tp_carroceria || '00').padStart(2, '0')}\n`;
       ini += `UF=${v.uf || manifesto.ufini}\n\n`;
     });
 
@@ -86,8 +90,6 @@ export const gerarIniMdfe = (params: any): string => {
   });
 
   // Localidades de Descarregamento e Documentos
-  // O ACBr MDF-e organiza por Município de Descarregamento -> Documentos vinculados a ele
-  // Aqui vamos simplificar agrupando por cidade de descarregamento
   const cidadesDesc = Array.from(new Set(documentos.map((d: any) => d.cidade_id)));
   
   cidadesDesc.forEach((cidId, i) => {
@@ -115,3 +117,4 @@ export const gerarIniMdfe = (params: any): string => {
 
   return ini;
 };
+

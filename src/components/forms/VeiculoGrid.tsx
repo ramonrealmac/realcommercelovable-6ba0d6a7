@@ -13,6 +13,13 @@ interface IVeiculo {
   descricao: string;
   marca: string;
   modelo: string;
+  renavam: string;
+  tara: number;
+  capacidade_kg: number;
+  tp_rodado: string;
+  tp_carroceria: string;
+  uf: string;
+  tp_veiculo: string;
   ativo: boolean;
   cadastro_id: number;
   empresa_id: number;
@@ -25,11 +32,11 @@ interface VeiculoGridProps {
 
 const XVeiculoColumns: IGridColumn[] = [
   { key: "veiculo_id", label: "Código", width: "80px", align: "right" },
-  { key: "placa", label: "Placa", width: "120px" },
+  { key: "placa", label: "Placa", width: "100px" },
+  { key: "tp_veiculo", label: "Tipo", width: "90px" },
   { key: "descricao", label: "Descrição", width: "1fr" },
-  { key: "marca", label: "Marca", width: "120px" },
-  { key: "modelo", label: "Modelo", width: "120px" },
-  { key: "ativo", label: "Ativo", width: "80px", align: "center", render: (r: IVeiculo) => r.ativo ? "Sim" : "Não" },
+  { key: "uf", label: "UF", width: "50px", align: "center" },
+  { key: "ativo", label: "Ativo", width: "70px", align: "center", render: (r: IVeiculo) => r.ativo ? "Sim" : "Não" },
 ];
 
 const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) => {
@@ -44,11 +51,18 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) =>
   const [XEditDescricao, setXEditDescricao] = useState("");
   const [XEditMarca, setXEditMarca] = useState("");
   const [XEditModelo, setXEditModelo] = useState("");
+  const [XEditRenavam, setXEditRenavam] = useState("");
+  const [XEditTara, setXEditTara] = useState("0");
+  const [XEditCapacidade, setXEditCapacidade] = useState("0");
+  const [XEditTpRodado, setXEditTpRodado] = useState("01");
+  const [XEditTpCarroceria, setXEditTpCarroceria] = useState("00");
+  const [XEditUf, setXEditUf] = useState("");
+  const [XEditTpVeiculo, setXEditTpVeiculo] = useState("TRACAO");
   const [XEditAtivo, setXEditAtivo] = useState(true);
 
   const loadData = useCallback(async () => {
     const { data } = await db
-      .from("veiculo")
+      .from("cadastro_veiculo")
       .select("*")
       .eq("cadastro_id", XCadastroId)
       .eq("empresa_id", XEmpresaId)
@@ -67,14 +81,10 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) =>
     const fc = XFilterValues["veiculo_id"] || "";
     const fp = XFilterValues["placa"] || "";
     const fd = XFilterValues["descricao"] || "";
-    const fm = XFilterValues["marca"] || "";
-    const fmo = XFilterValues["modelo"] || "";
     const fa = XFilterValues["ativo"] || "";
     if (fc && !String(v.veiculo_id).includes(fc)) return false;
     if (fp && !v.placa.toLowerCase().includes(fp.toLowerCase())) return false;
     if (fd && !v.descricao.toLowerCase().includes(fd.toLowerCase())) return false;
-    if (fm && !v.marca.toLowerCase().includes(fm.toLowerCase())) return false;
-    if (fmo && !v.modelo.toLowerCase().includes(fmo.toLowerCase())) return false;
     if (fa) {
       const XAtivoStr = v.ativo ? "sim" : "não";
       if (!XAtivoStr.includes(fa.toLowerCase())) return false;
@@ -90,6 +100,13 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) =>
     setXEditDescricao("");
     setXEditMarca("");
     setXEditModelo("");
+    setXEditRenavam("");
+    setXEditTara("0");
+    setXEditCapacidade("0");
+    setXEditTpRodado("01");
+    setXEditTpCarroceria("00");
+    setXEditUf("");
+    setXEditTpVeiculo("TRACAO");
     setXEditAtivo(true);
   };
 
@@ -98,8 +115,15 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) =>
     setXEditMode("edit");
     setXEditPlaca(XSelectedVeiculo.placa);
     setXEditDescricao(XSelectedVeiculo.descricao);
-    setXEditMarca(XSelectedVeiculo.marca);
-    setXEditModelo(XSelectedVeiculo.modelo);
+    setXEditMarca(XSelectedVeiculo.marca || "");
+    setXEditModelo(XSelectedVeiculo.modelo || "");
+    setXEditRenavam(XSelectedVeiculo.renavam || "");
+    setXEditTara(String(XSelectedVeiculo.tara || 0));
+    setXEditCapacidade(String(XSelectedVeiculo.capacidade_kg || 0));
+    setXEditTpRodado(XSelectedVeiculo.tp_rodado || "01");
+    setXEditTpCarroceria(XSelectedVeiculo.tp_carroceria || "00");
+    setXEditUf(XSelectedVeiculo.uf || "");
+    setXEditTpVeiculo(XSelectedVeiculo.tp_veiculo || "TRACAO");
     setXEditAtivo(XSelectedVeiculo.ativo);
   };
 
@@ -114,18 +138,25 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) =>
       descricao: XEditDescricao.toUpperCase().trim(),
       marca: XEditMarca.toUpperCase().trim(),
       modelo: XEditModelo.toUpperCase().trim(),
+      renavam: XEditRenavam.trim(),
+      tara: parseInt(XEditTara) || 0,
+      capacidade_kg: parseInt(XEditCapacidade) || 0,
+      tp_rodado: XEditTpRodado,
+      tp_carroceria: XEditTpCarroceria,
+      uf: XEditUf.toUpperCase().trim(),
+      tp_veiculo: XEditTpVeiculo,
       ativo: XEditAtivo,
       cadastro_id: XCadastroId,
       empresa_id: XEmpresaId,
     };
 
     if (XEditMode === "insert") {
-      const { error } = await db.from("veiculo").insert({ ...XPayload, dt_cadastro: new Date().toISOString() });
-      if (error) { toast.error("Erro ao incluir veículo."); return; }
+      const { error } = await db.from("cadastro_veiculo").insert({ ...XPayload, dt_cadastro: new Date().toISOString() });
+      if (error) { toast.error("Erro ao incluir veículo: " + error.message); return; }
       toast.success("Veículo incluído com sucesso.");
     } else if (XEditMode === "edit" && XSelectedVeiculo) {
-      const { error } = await db.from("veiculo").update({ ...XPayload, dt_alteracao: new Date().toISOString() }).eq("veiculo_id", XSelectedVeiculo.veiculo_id);
-      if (error) { toast.error("Erro ao alterar veículo."); return; }
+      const { error } = await db.from("cadastro_veiculo").update({ ...XPayload, dt_alteracao: new Date().toISOString() }).eq("veiculo_id", XSelectedVeiculo.veiculo_id);
+      if (error) { toast.error("Erro ao alterar veículo: " + error.message); return; }
       toast.success("Veículo alterado com sucesso.");
     }
     setXEditMode("none");
@@ -135,7 +166,7 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) =>
   const handleExcluir = async () => {
     if (!XSelectedVeiculo) return;
     if (confirm(`Excluir veículo "${XSelectedVeiculo.placa}"?`)) {
-      await db.from("veiculo").update({ excluido: true }).eq("veiculo_id", XSelectedVeiculo.veiculo_id);
+      await db.from("cadastro_veiculo").update({ excluido: true }).eq("veiculo_id", XSelectedVeiculo.veiculo_id);
       toast.success("Veículo excluído.");
       setXSelectedIdx(null);
       loadData();
@@ -164,72 +195,129 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) =>
     <div className="space-y-2">
       {/* Edit row (inline) */}
       {XEditMode !== "none" && (
-        <div className="flex flex-wrap items-end gap-2 p-2 bg-slate-50/50 dark:bg-slate-900/50 rounded border border-border/60">
-          <span className="text-xs font-medium text-muted-foreground w-16 self-center">
-            {XEditMode === "insert" ? "Novo:" : "Editar:"}
-          </span>
-          <div className="flex flex-col gap-0.5">
-            <label className="text-[10px] text-muted-foreground">Placa</label>
-            <input
-              type="text"
-              placeholder="Placa"
-              value={XEditPlaca}
-              onChange={(e) => setXEditPlaca(e.target.value.toUpperCase())}
-              maxLength={10}
-              className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-28"
-              autoFocus
-              onKeyDown={(e) => { if (e.key === "Enter") handleSalvar(); if (e.key === "Escape") setXEditMode("none"); }}
-            />
+        <div className="space-y-3 p-3 bg-slate-50/50 dark:bg-slate-900/50 rounded border border-border/60">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] text-muted-foreground">Placa *</label>
+              <input
+                type="text"
+                value={XEditPlaca}
+                onChange={(e) => setXEditPlaca(e.target.value.toUpperCase())}
+                maxLength={10}
+                className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-28"
+                autoFocus
+              />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] text-muted-foreground">UF</label>
+              <input
+                type="text"
+                value={XEditUf}
+                onChange={(e) => setXEditUf(e.target.value.toUpperCase())}
+                maxLength={2}
+                className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-12 text-center"
+              />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] text-muted-foreground">Tipo</label>
+              <select 
+                value={XEditTpVeiculo} 
+                onChange={e => setXEditTpVeiculo(e.target.value)}
+                className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-32"
+              >
+                <option value="TRACAO">TRAÇÃO</option>
+                <option value="REBOQUE">REBOQUE</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] text-muted-foreground">RENAVAM</label>
+              <input
+                type="text"
+                value={XEditRenavam}
+                onChange={(e) => setXEditRenavam(e.target.value.replace(/\D/g, ""))}
+                maxLength={11}
+                className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-32"
+              />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] text-muted-foreground">Descrição</label>
+              <input
+                type="text"
+                value={XEditDescricao}
+                onChange={(e) => setXEditDescricao(e.target.value.toUpperCase())}
+                className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-56"
+              />
+            </div>
           </div>
-          <div className="flex flex-col gap-0.5">
-            <label className="text-[10px] text-muted-foreground">Descrição</label>
-            <input
-              type="text"
-              placeholder="Descrição"
-              value={XEditDescricao}
-              onChange={(e) => setXEditDescricao(e.target.value.toUpperCase())}
-              className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-48"
-              onKeyDown={(e) => { if (e.key === "Enter") handleSalvar(); if (e.key === "Escape") setXEditMode("none"); }}
-            />
+
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] text-muted-foreground">Tara (KG)</label>
+              <input
+                type="number"
+                value={XEditTara}
+                onChange={(e) => setXEditTara(e.target.value)}
+                className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-24 text-right"
+              />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] text-muted-foreground">Capac. (KG)</label>
+              <input
+                type="number"
+                value={XEditCapacidade}
+                onChange={(e) => setXEditCapacidade(e.target.value)}
+                className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-24 text-right"
+              />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] text-muted-foreground">Rodado</label>
+              <select 
+                value={XEditTpRodado} 
+                onChange={e => setXEditTpRodado(e.target.value)}
+                className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-36"
+              >
+                <option value="01">01 - TRUCK</option>
+                <option value="02">02 - TOCO</option>
+                <option value="03 - CAVALO MECANICO">03 - CAVALO MECÂNICO</option>
+                <option value="04 - VAN">04 - VAN</option>
+                <option value="05 - UTILITARIO">05 - UTILITÁRIO</option>
+                <option value="06 - OUTROS">06 - OUTROS</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] text-muted-foreground">Carroceria</label>
+              <select 
+                value={XEditTpCarroceria} 
+                onChange={e => setXEditTpCarroceria(e.target.value)}
+                className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-36"
+              >
+                <option value="00">00 - NÃO APLICÁVEL</option>
+                <option value="01">01 - ABERTA</option>
+                <option value="02">02 - FECHADA/BAÚ</option>
+                <option value="03">03 - GRANELERA</option>
+                <option value="04">04 - PORTA CONTAINER</option>
+                <option value="05">05 - SIDER</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-0.5 items-center pb-1">
+              <label className="text-[10px] text-muted-foreground">Ativo</label>
+              <Checkbox checked={XEditAtivo} onCheckedChange={(c) => setXEditAtivo(!!c)} />
+            </div>
+            <div className="flex gap-2 ml-auto">
+              <button
+                onClick={handleSalvar}
+                className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-sm"
+              >
+                Salvar
+              </button>
+              <button
+                onClick={() => setXEditMode("none")}
+                className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium rounded-md border border-border bg-card text-rose-600 hover:bg-accent transition-all"
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
-          <div className="flex flex-col gap-0.5">
-            <label className="text-[10px] text-muted-foreground">Marca</label>
-            <input
-              type="text"
-              placeholder="Marca"
-              value={XEditMarca}
-              onChange={(e) => setXEditMarca(e.target.value.toUpperCase())}
-              className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-28"
-              onKeyDown={(e) => { if (e.key === "Enter") handleSalvar(); if (e.key === "Escape") setXEditMode("none"); }}
-            />
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <label className="text-[10px] text-muted-foreground">Modelo</label>
-            <input
-              type="text"
-              placeholder="Modelo"
-              value={XEditModelo}
-              onChange={(e) => setXEditModelo(e.target.value.toUpperCase())}
-              className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-28"
-              onKeyDown={(e) => { if (e.key === "Enter") handleSalvar(); if (e.key === "Escape") setXEditMode("none"); }}
-            />
-          </div>
-          <div className="flex flex-col gap-0.5 items-center">
-            <label className="text-[10px] text-muted-foreground">Ativo</label>
-            <Checkbox checked={XEditAtivo} onCheckedChange={(c) => setXEditAtivo(!!c)} />
-          </div>
-          <button
-            onClick={handleSalvar}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-transparent text-emerald-600 hover:bg-accent transition-all hover:scale-105"
-          >
-            <span className="w-2 h-2 rounded-full bg-emerald-500" /> Salvar
-          </button>
-          <button
-            onClick={() => setXEditMode("none")}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-transparent text-rose-600 hover:bg-accent transition-all hover:scale-105"
-          >
-            <span className="w-2 h-2 rounded-full bg-rose-500" /> Cancelar
-          </button>
         </div>
       )}
 
@@ -246,8 +334,15 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) =>
             setXEditMode("edit");
             setXEditPlaca(v.placa);
             setXEditDescricao(v.descricao);
-            setXEditMarca(v.marca);
-            setXEditModelo(v.modelo);
+            setXEditMarca(v.marca || "");
+            setXEditModelo(v.modelo || "");
+            setXEditRenavam(v.renavam || "");
+            setXEditTara(String(v.tara || 0));
+            setXEditCapacidade(String(v.capacidade_kg || 0));
+            setXEditTpRodado(v.tp_rodado || "01");
+            setXEditTpCarroceria(v.tp_carroceria || "00");
+            setXEditUf(v.uf || "");
+            setXEditTpVeiculo(v.tp_veiculo || "TRACAO");
             setXEditAtivo(v.ativo);
           }
         }}
@@ -262,5 +357,8 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) =>
     </div>
   );
 };
+
+export default VeiculoGrid;
+
 
 export default VeiculoGrid;

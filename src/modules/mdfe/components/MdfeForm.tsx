@@ -63,6 +63,7 @@ const XDefault = {
   dt_viagem:  new Date().toISOString().substring(0, 10),
   hr_viagem: "00:00:00",
   modalidade: "1", tp_emitente: "1", tp_transportador: "1",
+  rntrc: "",
   ufini: "", uffim: "", unidade: "KG",
   peso_total: 0, valor_total: 0, qtd_nfe: 0, status: "D",
 };
@@ -369,7 +370,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
               </div>
             </div>
 
-            {/* ── Linha 3: Tipo Emitente / Transportador ── */}
+            {/* ── Linha 3: Tipo Emitente / Transportador / RNTRC ── */}
             <div className="grid grid-cols-12 gap-3 items-end">
               <div className="col-span-4">
                 <label className="text-xs text-muted-foreground">Tipo Emitente <span className="text-destructive">*</span></label>
@@ -390,6 +391,12 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
                   <option value="2">2 - TAC</option>
                   <option value="3">3 - CTC</option>
                 </select>
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground">RNTRC</label>
+                <input readOnly={ro} value={record.rntrc ?? ""}
+                  onChange={e => setField("rntrc", e.target.value)}
+                  className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
             </div>
 
