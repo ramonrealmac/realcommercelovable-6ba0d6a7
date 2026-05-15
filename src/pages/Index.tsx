@@ -122,6 +122,8 @@ const AppContent = () => {
         return <NfeRecebidasForm />;
       case "devolucao-nfe-entrada":
         return <DevolucaoNfeEntradaForm />;
+      case "devolucao-nfe-saida":
+        return <DevolucaoNfeSaidaForm />;
       case "nfe-emitidas":
         return <ListaNfeEmitidaForm initialFilterId={params?.nfe_cabecalho_id} />;
       case "nfe-form":
