@@ -120,13 +120,48 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
         XOrderBy: "mdf_manifesto_id",
         XInitialId: initialId,
         XDefaultRecord: { ...XDefault, empresa_id: XEmpresaId } as any,
-        XOnBeforeSave: (rec) => {
+        XOnBeforeSave: async (rec) => {
           if (!rec.ufini?.trim()) throw new Error("UF Inicial é obrigatória.");
           if (!rec.uffim?.trim()) throw new Error("UF Final é obrigatória.");
           if (!rec.dt_emissao)   throw new Error("Data de Emissão é obrigatória.");
           if (!rec.dt_viagem)    throw new Error("Data da Viagem é obrigatória.");
           if (!rec.hr_viagem)    throw new Error("Hora da Viagem é obrigatória.");
           
+          // Lógica de Sequencial Automático (apenas na inclusão)
+          if (!rec.mdf_manifesto_id) {
+            const { data: { user } } = await supabase.auth.getUser();
+            const { data: func } = await supabase.from("funcionario").select("mdf_config_item").eq("usr_id", (user as any)?.usr_id || 0).maybeSingle();
+            
+            let configId = func?.mdf_config_item;
+            if (!configId) {
+              const { data: defCfg } = await supabase.from("fiscal_config_item")
+                .select("fiscal_config_item_id")
+                .eq("empresa_id", XEmpresaId)
+                .eq("modelo", "58")
+                .limit(1).maybeSingle();
+              configId = defCfg?.fiscal_config_item_id;
+            }
+
+            if (!configId) throw new Error("Configuração de série/sequencial de MDF-e não localizada para esta empresa.");
+
+            // Buscar e incrementar o número atomicamente (ou quase)
+            const { data: cfg, error: errCfg } = await supabase.from("fiscal_config_item")
+              .select("sequencia, serie")
+              .eq("fiscal_config_item_id", configId)
+              .single();
+
+            if (errCfg || !cfg) throw new Error("Erro ao obter sequencial: " + errCfg?.message);
+
+            rec.numero = cfg.sequencia;
+            rec.serie = cfg.serie;
+            rec.codigo_numerico = Math.floor(Math.random() * 90000000) + 10000000;
+
+            // Incrementar para o próximo
+            await supabase.from("fiscal_config_item")
+              .update({ sequencia: Number(cfg.sequencia) + 1 })
+              .eq("fiscal_config_item_id", configId);
+          }
+
           return {
             ...rec,
             empresa_id: XEmpresaId,
@@ -268,16 +303,18 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
                   className="w-full border border-border rounded px-2 py-1 text-sm text-center" />
               </div>
               <div className="col-span-2">
-                <label className="text-xs text-muted-foreground">Número <span className="text-destructive">*</span></label>
-                <input readOnly={ro} value={record.numero ?? ""}
-                  onChange={e => setField("numero", e.target.value)}
-                  className="w-full border border-border rounded px-2 py-1 text-sm" />
+                <label className="text-xs text-muted-foreground">Número</label>
+                <input readOnly
+                  value={record.numero ?? ""}
+                  placeholder="Automático"
+                  className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary font-bold text-primary" />
               </div>
               <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Série</label>
-                <input readOnly={ro} value={record.serie ?? "1"}
-                  onChange={e => setField("serie", e.target.value)}
-                  className="w-full border border-border rounded px-2 py-1 text-sm text-center" />
+                <input readOnly
+                  value={record.serie ?? ""}
+                  placeholder="Auto"
+                  className="w-full border border-border rounded px-2 py-1 text-sm text-center bg-secondary" />
               </div>
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Dt. Emissão <span className="text-destructive">*</span></label>
@@ -426,6 +463,24 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
                 </div>
               </div>
             </div>
+            {/* ── Dados Fiscais (SEFAZ) ── */}
+            {(record.chave_acesso || record.numero_protocolo) && (
+              <div className="border border-green-200 rounded p-3 bg-green-50/30">
+                <p className="text-xs font-bold text-green-700 mb-2 uppercase tracking-wide">Dados de Autorização (SEFAZ)</p>
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                  <div className="md:col-span-8">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Chave de Acesso</label>
+                    <input readOnly value={record.chave_acesso || ""} 
+                      className="w-full border border-green-200 rounded px-2 py-1 text-xs font-mono bg-white text-green-800" />
+                  </div>
+                  <div className="md:col-span-4">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Protocolo</label>
+                    <input readOnly value={record.numero_protocolo || ""} 
+                      className="w-full border border-green-200 rounded px-2 py-1 text-xs font-mono bg-white text-green-800" />
+                  </div>
+                </div>
+              </div>
+            )}
 
           </div>
         );

@@ -22,7 +22,7 @@ export const gerarIniMdfe = (params: any): string => {
   ini += `mod=${manifesto.modelo || '58'}\n`;
   ini += `serie=${manifesto.serie || '1'}\n`;
   ini += `nMDF=${manifesto.numero || ''}\n`;
-  ini += `cMDF=${String(manifesto.mdf_manifesto_id).padStart(8, '0')}\n`;
+  ini += `cMDF=${String(manifesto.codigo_numerico || manifesto.mdf_manifesto_id).padStart(8, '0')}\n`;
   ini += `modal=${manifesto.modalidade || '1'}\n`;
   ini += `dhEmi=${formatData(manifesto.dt_emissao)}T${manifesto.hr_viagem || '00:00:00'}-03:00\n`;
   ini += `dhIniViagem=${formatData(manifesto.dt_viagem)}T${manifesto.hr_viagem || '00:00:00'}-03:00\n`;

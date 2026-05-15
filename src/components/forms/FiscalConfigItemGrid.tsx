@@ -211,6 +211,7 @@ const FiscalConfigItemGrid: React.FC<FiscalConfigItemGridProps> = ({ XEmpresaId 
             >
               <option value="55">55 - NFe</option>
               <option value="65">65 - NFCe</option>
+              <option value="58">58 - MDFe</option>
             </select>
           </div>
           <div className="flex flex-col gap-1">

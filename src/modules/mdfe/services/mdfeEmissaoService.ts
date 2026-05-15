@@ -31,7 +31,7 @@ export const mdfeEmissaoService = {
       ] = await Promise.all([
         db.from("fiscal_mdf_carrega").select("*, cidade(*)").eq("mdf_manifesto_id", mdfManifestoId).eq("excluido", false),
         db.from("fiscal_mdf_descarrega").select("*, cidade(*)").eq("mdf_manifesto_id", mdfManifestoId).eq("excluido", false),
-        db.from("fiscal_mdf_condutor").select("*").eq("mdf_manifesto_id", mdfManifestoId).eq("excluido", false),
+        db.from("fiscal_mdf_motorista").select("*, fiscal_mdf_condutor(*)").eq("mdf_manifesto_id", mdfManifestoId).eq("excluido", false),
         db.from("fiscal_mdf_documento").select("*, cidade(*)").eq("mdf_manifesto_id", mdfManifestoId).eq("excluido", false),
         db.from("fiscal_mdf_veiculo").select("*").eq("mdf_manifesto_id", mdfManifestoId).eq("excluido", false),
         db.from("fiscal_mdf_percurso").select("*").eq("mdf_manifesto_id", mdfManifestoId).eq("excluido", false),
@@ -43,7 +43,11 @@ export const mdfeEmissaoService = {
         manifesto,
         carrega: carrega || [],
         descarrega: descarrega || [],
-        condutores: condutores || [],
+        condutores: (condutores || []).map((m: any) => ({
+          ...m,
+          nome: m.fiscal_mdf_condutor?.nome,
+          cpf: m.fiscal_mdf_condutor?.cpf
+        })),
         documentos: documentos || [],
         veiculos: veiculos || [],
         percurso: percurso || [],
