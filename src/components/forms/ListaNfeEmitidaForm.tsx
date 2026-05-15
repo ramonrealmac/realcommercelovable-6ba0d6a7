@@ -16,7 +16,8 @@ import {
   Eye, 
   Terminal,
   MoreHorizontal,
-  FileX
+  FileX,
+  CheckSquare
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -44,6 +45,47 @@ const XGridCols: IGridColumn[] = [
   { key: "movimento_id", label: "ID Mov", width: "80px", align: "center" },
   { key: "nr_nota", label: "Nota", width: "100px" },
   { key: "serie", label: "Série", width: "60px", align: "center" },
+  { 
+    key: "tp_amb", 
+    label: "Ambiente", 
+    width: "100px", 
+    render: r => (
+      <span className={String(r.tp_amb) === "1" ? "text-green-600 font-medium" : "text-orange-600 font-medium"}>
+        {String(r.tp_amb) === "1" ? "Produção" : "Homologação"}
+      </span>
+    )
+  },
+  { key: "modelo", label: "Mod.", width: "50px", align: "center" },
+  { 
+    key: "tp_nf", 
+    label: "Tipo", 
+    width: "70px", 
+    render: r => (
+      <span className={String(r.tp_nf) === "0" ? "text-blue-600 font-medium" : "text-emerald-600 font-medium"}>
+        {String(r.tp_nf) === "0" ? "Entrada" : "Saída"}
+      </span>
+    )
+  },
+  { 
+    key: "fin_nfe", 
+    label: "Finalidade", 
+    width: "110px", 
+    render: r => {
+      const labels: any = { "1": "Normal", "2": "Complementar", "3": "Ajuste", "4": "Devolução" };
+      const colors: any = { 
+        "1": "text-slate-600", 
+        "2": "text-blue-600", 
+        "3": "text-amber-600", 
+        "4": "text-purple-600" 
+      };
+      const label = labels[String(r.fin_nfe)] || r.fin_nfe;
+      return (
+        <span className={`font-bold ${colors[String(r.fin_nfe)] || "text-gray-600"}`}>
+          {label}
+        </span>
+      );
+    }
+  },
   { key: "dt_emissao", label: "Emissão", width: "110px", render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
   { key: "nm_destinatario", label: "Destinatário", width: "250px" },
   { key: "cnpj_destinatario", label: "CNPJ/CPF", width: "150px", render: r => formatCPFCNPJ(r.cnpj_destinatario) },
@@ -185,6 +227,21 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
       loadData();
     } else {
       toast.error("Falha: " + (res.message || "erro desconhecido"));
+    }
+  };
+
+  const handleValidar = async (row: any) => {
+    if (!XEmpresaId) return;
+    const tid = toast.loading("Validando XML contra Schemas (XSD)...");
+    try {
+      const res = await (fiscalEmissaoService as any).validarDocumento(row.nfe_cabecalho_id, XEmpresaId);
+      if (res.success) {
+        toast.success(res.message || "XML Validado com sucesso!", { id: tid });
+      } else {
+        toast.error(res.message || "Erro na validação do XML.", { id: tid, duration: 10000 });
+      }
+    } catch (e: any) {
+      toast.error("Erro: " + e.message, { id: tid });
     }
   };
 
@@ -400,6 +457,9 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
                       <DropdownMenuItem onClick={() => handleTransmitir(r)} disabled={["E", "C", "D", "1", "2"].includes(String(r.st_nf))}>
                         <Send className="w-4 h-4 mr-2 text-blue-500" /> Transmitir SEFAZ
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleValidar(r)} disabled={["E", "C", "D", "1", "2"].includes(String(r.st_nf))}>
+                        <CheckSquare className="w-4 h-4 mr-2 text-emerald-500" /> Validar XML (Schema)
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleImprimir(r)} disabled={!["E", "1"].includes(String(r.st_nf))}>
                         <Printer className="w-4 h-4 mr-2 text-gray-500" /> Imprimir DANFE
                       </DropdownMenuItem>
@@ -446,6 +506,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
             }
           ]}
           data={XFilteredData}
+          maxHeight="calc(100vh - 240px)"
           showFilters
           filterValues={XSearchFilters}
           onFilterChange={(k, v) => setXSearchFilters(prev => ({ ...prev, [k]: v }))}

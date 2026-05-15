@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import GridActionToolbar, { gridActions } from "@/components/grid/GridActionToolbar";
 import { useAppContext } from "@/contexts/AppContext";
-import { CreditCard, ShoppingCart, Wallet, ArrowRightLeft, Calculator, X, Delete, Trash2, Check, Percent, Send } from "lucide-react";
+import { CreditCard, ShoppingCart, Wallet, ArrowRightLeft, Calculator, X, Delete, Trash2, Check, Percent, Send, Lock } from "lucide-react";
 
 const db = supabase as any;
 
@@ -304,8 +304,9 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
                 <button 
                   onClick={() => finalizar(false)} 
                   disabled={XSalvando || valorRestante > 0.01} 
-                  className="text-xs px-4 py-2 rounded bg-muted border border-border text-muted-foreground font-bold h-10 disabled:opacity-50 hover:bg-accent transition-colors"
+                  className="text-xs px-4 py-2 rounded bg-muted/50 border border-border text-blue-600 font-bold h-10 disabled:opacity-50 hover:bg-accent flex items-center gap-2 transition-colors"
                 >
+                  <Check size={16} />
                   {XSalvando ? "Gravando..." : "Finalizar"}
                 </button>
 
@@ -313,9 +314,9 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
                   ref={finalizarRef} 
                   onClick={() => finalizar(true)} 
                   disabled={XSalvando || valorRestante > 0.01} 
-                  className="text-xs px-6 py-2 rounded bg-primary text-primary-foreground font-bold h-10 disabled:opacity-50 shadow-sm hover:brightness-110 flex items-center gap-2 transition-all active:scale-95 whitespace-nowrap"
+                  className="text-xs px-6 py-2 rounded bg-muted/50 border border-border text-emerald-600 font-bold h-10 disabled:opacity-50 hover:bg-accent flex items-center gap-2 transition-all active:scale-95 whitespace-nowrap"
                 >
-                  <Send size={14} />
+                  <Lock size={16} className="fill-emerald-600" />
                   {XSalvando ? "Gravando..." : "Finalizar e Enviar p/ Cx."}
                 </button>
               </div>

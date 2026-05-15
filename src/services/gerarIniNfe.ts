@@ -152,7 +152,7 @@ export function gerarIniNfe(params: GerarIniParams): string {
     linhas.push(`xProd=${it.nm_produto || ''}`);
     linhas.push(`NCM=${it.ncm || ''}`);
     if (it.cest) linhas.push(`CEST=${it.cest}`);
-    linhas.push(`CFOP=${it.cfop || '5102'}`);
+    linhas.push(`CFOP=${it.cfop_id || it.cfop || '5102'}`);
     linhas.push(`uCom=${it.unidade || 'UN'}`);
     linhas.push(`qCom=${qt.toFixed(4)}`);
     linhas.push(`vUnCom=${vUnit.toFixed(10)}`);

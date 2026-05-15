@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { gerarIniNfe } from "./gerarIniNfe";
+import { gerarXmlNfe } from "./gerarXmlNfe";
 import { validarDadosFiscais } from "./fiscalPreValidacao";
 
 const db = supabase as any;
@@ -251,14 +252,17 @@ export const fiscalEmissaoService = {
         console.log(`[FiscalService] Pré-validação OK (regime: ${validacaoResult?.regime}).`);
       }
 
-      // 10. Gerar INI e Despachar Evento para o Worker
-      console.log(`[FiscalService] Gerando INI para ${tipo}...`);
+      // 10. Gerar Documento (INI v1.0 ou XML v2.0) e Despachar Evento para o Worker
+      const versaoMetodo = tipo === "NFE" ? fConfig?.nfe_versao_metodo : fConfig?.nfce_versao_metodo;
+      const isV2 = versaoMetodo === '2.0';
 
-      // Busca dados dos itens inseridos para garantir integridade no INI
+      console.log(`[FiscalService] Gerando ${isV2 ? 'XML (v2.0)' : 'INI (v1.0)'} para ${tipo}...`);
+
+      // Busca dados dos itens inseridos para garantir integridade no conteúdo gerado
       const { data: nfeItens } = await db.from("fiscal_nfe_item").select("*").eq("nfe_cabecalho_id", cabId);
       const { data: nfePagtos } = await db.from("fiscal_nfe_pagamento").select("*").eq("nfe_cabecalho_id", cabId);
 
-      const iniContent = gerarIniNfe({
+      const params = {
         cabecalho: { ...nfeCabecalho, nfe_cabecalho_id: cabId },
         itens: nfeItens || [],
         pagamentos: nfePagtos || [],
@@ -266,9 +270,13 @@ export const fiscalEmissaoService = {
         cadastro: parceiro,
         fiscalConfig: fConfig,
         configItem: fConfigItem
-      });
-      validarIniAcbr(iniContent);
+      };
 
+      const dadosGerados = isV2 ? gerarXmlNfe(params) : gerarIniNfe(params);
+      
+      if (!isV2) {
+        validarIniAcbr(dadosGerados);
+      }
 
       const ambienteNfe = Number(fConfig?.ambiente_nfe || 2);
       const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -277,12 +285,14 @@ export const fiscalEmissaoService = {
         empresa_id: empresaId,
         nfe_cabecalho_id: cabId,
         tipo: tipo,
-        comando: tipo === "NFE" ? "EMITIR_NFE" : "EMITIR_NFCE",
+        comando: isV2 
+          ? (tipo === "NFE" ? "EMITIR_XML_NFE" : "EMITIR_XML_NFCE")
+          : (tipo === "NFE" ? "EMITIR_NFE" : "EMITIR_NFCE"),
         status: "PENDENTE",
         ambiente: ambienteNfe,
         user_id: authUser?.id || null,
         payload: {
-          dados: iniContent,
+          dados: dadosGerados,
           config: {
             uf: empresa.endereco_uf || empresa.cidade?.estado_id || empresa.cidade?.uf || "SP",
             modelo: nfeCabecalho.modelo,
@@ -357,7 +367,10 @@ export const fiscalEmissaoService = {
       const { data: nfeItens } = await db.from("fiscal_nfe_item").select("*").eq("nfe_cabecalho_id", nfeCabecalhoId);
       const { data: nfePagtos } = await db.from("fiscal_nfe_pagamento").select("*").eq("nfe_cabecalho_id", nfeCabecalhoId);
 
-      const iniContent = gerarIniNfe({
+      const versaoMetodo = tipo === "NFE" ? fConfig?.nfe_versao_metodo : fConfig?.nfce_versao_metodo;
+      const isV2 = versaoMetodo === '2.0';
+
+      const params = {
         cabecalho: cab,
         itens: nfeItens || [],
         pagamentos: nfePagtos || [],
@@ -365,8 +378,13 @@ export const fiscalEmissaoService = {
         cadastro: parceiro,
         fiscalConfig: fConfig,
         configItem: fConfigItem
-      });
-      validarIniAcbr(iniContent);
+      };
+
+      const dadosGerados = isV2 ? gerarXmlNfe(params) : gerarIniNfe(params);
+      
+      if (!isV2) {
+        validarIniAcbr(dadosGerados);
+      }
 
       const ambienteNfe = Number(fConfig?.ambiente_nfe || 2);
       const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -375,12 +393,14 @@ export const fiscalEmissaoService = {
         empresa_id: empresaId,
         nfe_cabecalho_id: nfeCabecalhoId,
         tipo: tipo,
-        comando: tipo === "NFE" ? "EMITIR_NFE" : "EMITIR_NFCE",
+        comando: isV2 
+          ? (tipo === "NFE" ? "EMITIR_XML_NFE" : "EMITIR_XML_NFCE")
+          : (tipo === "NFE" ? "EMITIR_NFE" : "EMITIR_NFCE"),
         status: "PENDENTE",
         ambiente: ambienteNfe,
         user_id: authUser?.id || null,
         payload: {
-          dados: iniContent,
+          dados: dadosGerados,
           config: {
             uf: empresa.endereco_uf || empresa.cidade?.estado_id || empresa.cidade?.uf || "SP",
             modelo: cab.modelo,
@@ -405,6 +425,87 @@ export const fiscalEmissaoService = {
       return { success: true, nfe_cabecalho_id: nfeCabecalhoId, fiscal_evento_id: evento?.id };
     } catch (e: any) {
       console.error("[FiscalService] retransmitirDocumento erro:", e);
+      return { success: false, message: e.message };
+    }
+  },
+
+  /**
+   * Gera o XML/INI e solicita ao worker apenas a validação contra os schemas (XSD),
+   * sem transmitir para a SEFAZ. Útil para conferência prévia.
+   */
+  validarDocumento: async (
+    nfeCabecalhoId: number,
+    empresaId: number
+  ): Promise<{ success: boolean; message?: string }> => {
+    try {
+      const { data: cab, error: cabErr } = await db
+        .from("fiscal_nfe_cabecalho")
+        .select("*")
+        .eq("nfe_cabecalho_id", nfeCabecalhoId)
+        .single();
+      if (cabErr || !cab) throw new Error("NF-e não localizada.");
+
+      const tipo: "NFE" | "NFCE" = Number(cab.modelo) === 65 ? "NFCE" : "NFE";
+
+      const { data: empresaRaw } = await db.from("empresa").select("*").eq("empresa_id", empresaId).single();
+      const empresa = await attachCidade(empresaRaw);
+
+      let parceiro: any = null;
+      if (cab.cadastro_id) {
+        const { data: parceiroRaw } = await db.from("cadastro").select("*").eq("cadastro_id", cab.cadastro_id).maybeSingle();
+        parceiro = await attachCidade(parceiroRaw);
+      }
+
+      const { data: fConfig } = await db.from("fiscal_config").select("*").eq("empresa_id", empresaId).single();
+      const { data: fConfigItens } = await db.from("fiscal_config_item").select("*").eq("empresa_id", empresaId).eq("modelo", cab.modelo).eq("serie", cab.serie);
+      const fConfigItem = fConfigItens?.[0];
+
+      const { data: nfeItens } = await db.from("fiscal_nfe_item").select("*").eq("nfe_cabecalho_id", nfeCabecalhoId);
+      const { data: nfePagtos } = await db.from("fiscal_nfe_pagamento").select("*").eq("nfe_cabecalho_id", nfeCabecalhoId);
+
+      const params = {
+        cabecalho: cab,
+        itens: nfeItens || [],
+        pagamentos: nfePagtos || [],
+        empresa,
+        cadastro: parceiro,
+        fiscalConfig: fConfig,
+        configItem: fConfigItem
+      };
+
+      const versaoMetodo = tipo === "NFE" ? fConfig?.nfe_versao_metodo : fConfig?.nfce_versao_metodo;
+      const isV2 = versaoMetodo === '2.0';
+      const dadosGerados = isV2 ? gerarXmlNfe(params) : gerarIniNfe(params);
+
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+
+      const { data: evento, error: evErr } = await db.from("fiscal_evento").insert({
+        empresa_id: empresaId,
+        nfe_cabecalho_id: nfeCabecalhoId,
+        tipo: tipo,
+        comando: tipo === "NFE" ? "VALIDAR_XML_NFE" : "VALIDAR_XML_NFCE",
+        status: "PENDENTE",
+        user_id: authUser?.id || null,
+        payload: {
+          dados: dadosGerados,
+          config: {
+            uf: empresa.endereco_uf || "SP",
+            modelo: cab.modelo,
+            ambiente: fConfig.ambiente_nfe,
+            certificadoPath: fConfig.certificado,
+            certificadoSenha: fConfig.senha_certificado || "",
+            tipo_certificado: fConfig.tipo_certificado || "ARQUIVO",
+            pasta_arquivos: (fConfig as any).pasta_arquivos_fiscais || ""
+          }
+        }
+      }).select("id").single();
+
+      if (evErr) throw evErr;
+
+      const res = await (fiscalEmissaoService as any).aguardarEvento(evento.id, { empresaId });
+      return { success: res.success, message: res.mensagem || res.resposta?.mensagem };
+    } catch (e: any) {
+      console.error("[FiscalService] validarDocumento erro:", e);
       return { success: false, message: e.message };
     }
   },

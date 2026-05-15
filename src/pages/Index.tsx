@@ -35,7 +35,8 @@ import NfeEmitidaForm from "@/components/forms/NfeEmitidaForm";
 import ConsultaTitulosReceberForm from "@/components/forms/ConsultaTitulosReceberForm";
 import BaixaPorClienteForm from "@/components/forms/BaixaPorClienteForm";
 import FiscalConfigForm from "@/components/forms/FiscalConfigForm";
-import MdfeForm from "@/components/forms/mdfe/MdfeForm";
+import MdfeForm from "@/modules/mdfe/components/MdfeForm";
+import ListaMdfeForm from "@/modules/mdfe/components/ListaMdfeForm";
 import EmpresaForm from "@/components/forms/EmpresaForm";
 import PerfilForm from "@/components/forms/PerfilForm";
 import ControleAcessoForm from "@/components/forms/ControleAcessoForm";
@@ -130,8 +131,10 @@ const AppContent = () => {
         return <BaixaPorClienteForm />;
       case "fiscal-config":
         return <FiscalConfigForm />;
-      case "mdfe":
-        return <MdfeForm />;
+      case "mdfe-lista":
+        return <ListaMdfeForm />;
+      case "mdfe-form":
+        return <MdfeForm initialId={params?.mdf_manifesto_id} />;
       case "empresas":
         return <EmpresaForm />;
       case "PerfilForm":

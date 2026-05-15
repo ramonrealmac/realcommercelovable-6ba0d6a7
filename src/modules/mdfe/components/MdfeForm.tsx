@@ -4,8 +4,9 @@ import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
 import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import type { IGridColumn } from "@/components/grid/DataGrid";
-import { Send, Lock, XCircle, Activity } from "lucide-react";
-import { emitirMdfe } from "./mdfeService";
+import { Send, Lock, XCircle } from "lucide-react";
+import { mdfeEmissaoService } from "../services/mdfeEmissaoService";
+
 import MdfCarregaTab from "./tabs/MdfCarregaTab";
 import MdfDescarregaTab from "./tabs/MdfDescarregaTab";
 import MdfDocumentosTab from "./tabs/MdfDocumentosTab";
@@ -66,7 +67,11 @@ const XDefault = {
   peso_total: 0, valor_total: 0, qtd_nfe: 0, status: "D",
 };
 
-const MdfeForm: React.FC = () => {
+interface IProps {
+  initialId?: number;
+}
+
+const MdfeForm: React.FC<IProps> = ({ initialId }) => {
   const { XEmpresaId } = useAppContext();
   const XRefreshRef = useRef<any>(null);
 
@@ -74,9 +79,13 @@ const MdfeForm: React.FC = () => {
     if (!confirm("Confirma a emissão do MDF-e? O documento será enviado ao SEFAZ via ACBr.")) return;
     toast.loading("Transmitindo MDF-e...", { id: "mdf-tx" });
     try {
-      const res = await emitirMdfe(manifestoId, XEmpresaId);
-      toast.success(res.mensagem || "MDF-e transmitido com sucesso!");
-      XRefreshRef.current?.();
+      const res = await mdfeEmissaoService.emitirMdfe(manifestoId, XEmpresaId);
+      if (res.success) {
+        toast.success(res.mensagem || "MDF-e transmitido com sucesso!");
+        XRefreshRef.current?.();
+      } else {
+        toast.error(res.mensagem || "Erro na transmissão");
+      }
     } catch (e: any) {
       toast.error(e.message || "Erro na transmissão");
     } finally {
@@ -85,16 +94,14 @@ const MdfeForm: React.FC = () => {
   }, [XEmpresaId]);
 
   const handleEncerrar = useCallback(async (manifestoId: number) => {
-    if (!confirm("Confirma o encerramento do MDF-e?")) return;
-    const { error } = await supabase.from("fiscal_mdf_manifesto").update({ status: "E" }).eq("mdf_manifesto_id", manifestoId);
-    if (error) { toast.error("Erro ao encerrar: " + error.message); return; }
-    toast.success("MDF-e encerrado!");
-    XRefreshRef.current?.();
+    toast.info("Para encerrar, utilize o Gerenciador Fiscal de MDF-e.");
   }, []);
 
   const handleCancelar = useCallback(async (manifestoId: number) => {
     const just = prompt("Informe a justificativa do cancelamento (mín. 15 caracteres):");
     if (!just || just.length < 15) { toast.warning("Justificativa inválida (mín. 15 caracteres)."); return; }
+    
+    // TODO: Implementar cancelamento via fiscal_evento no service
     const { error } = await supabase.from("fiscal_mdf_manifesto").update({ status: "C" }).eq("mdf_manifesto_id", manifestoId);
     if (error) { toast.error("Erro ao cancelar: " + error.message); return; }
     toast.success("MDF-e cancelado!");
@@ -110,6 +117,7 @@ const MdfeForm: React.FC = () => {
         XEmpresaId,
         XSoftDelete: true,
         XOrderBy: "mdf_manifesto_id",
+        XInitialId: initialId,
         XDefaultRecord: { ...XDefault, empresa_id: XEmpresaId } as any,
         XOnBeforeSave: (rec) => {
           if (!rec.ufini?.trim()) throw new Error("UF Inicial é obrigatória.");
@@ -132,7 +140,6 @@ const MdfeForm: React.FC = () => {
       XRefreshRef={XRefreshRef}
       XAfterInsertTab="carrega"
       XExtraTabs={[
-
         {
           key: "carrega", label: "Carregamento",
           render: ({ currentRecord }) => (
@@ -421,4 +428,3 @@ const MdfeForm: React.FC = () => {
 };
 
 export default MdfeForm;
-

@@ -236,8 +236,16 @@ export const MENU_CONFIG: MenuItem[] = [
           { id: "nfe-inutilizacao", title: "Inutilização de Numeração", icon: FileX },
         ]
       },
-      { id: "mdfe", title: "Mdfe", icon: FileText },
-      { id: "cte", title: "Cte", icon: FileText },
+      {
+        id: "mdfe-group",
+        title: "MDFe",
+        icon: TruckIcon,
+        children: [
+          { id: "mdfe-lista", title: "Gerenciador Fiscal", icon: FileText },
+          { id: "mdfe-form", title: "Cadastramento", icon: FilePen },
+        ]
+      },
+      { id: "cte", title: "CTe", icon: FileText },
     ],
   },
   {

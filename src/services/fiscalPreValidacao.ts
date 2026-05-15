@@ -45,12 +45,12 @@ function validarEmitente(empresa: any): IFiscalValidacaoErro[] {
     e.push({ campo: `${pre} → Bairro`, mensagem: "Bairro do emitente não informado." });
   if (!ok(end?.endereco_cep))
     e.push({ campo: `${pre} → CEP`, mensagem: "CEP do emitente não informado." });
-  if (!ok(end?.endereco_uf))
+  if (!ok(end?.cidade?.estado_id))
     e.push({ campo: `${pre} → UF`, mensagem: "UF do emitente não informada." });
 
   // Município (cidade vinculada)
   const cidade = end?.cidade;
-  if (!ok(cidade?.ibge))
+  if (!ok(cidade?.cd_ibge))
     e.push({ campo: `${pre} → Código IBGE`, mensagem: "Código IBGE do município do emitente não localizado. Verifique o cadastro de cidade." });
   if (!ok(cidade?.descricao || cidade?.nome))
     e.push({ campo: `${pre} → Município`, mensagem: "Município do emitente não localizado." });
@@ -87,11 +87,11 @@ function validarDestinatario(parceiro: any, tipo: "NFE" | "NFCE"): IFiscalValida
     e.push({ campo: `${pre} → Bairro`, mensagem: "Bairro do destinatário não informado." });
   if (!ok(parceiro?.endereco_cep))
     e.push({ campo: `${pre} → CEP`, mensagem: "CEP do destinatário não informado." });
-  if (!ok(parceiro?.endereco_uf))
+  if (!ok(parceiro?.cidade?.estado_id))
     e.push({ campo: `${pre} → UF`, mensagem: "UF do destinatário não informada." });
 
   const cidade = parceiro?.cidade;
-  if (!ok(cidade?.ibge))
+  if (!ok(cidade?.cd_ibge))
     e.push({ campo: `${pre} → Código IBGE`, mensagem: "Código IBGE do município do destinatário não localizado." });
 
   return e;
@@ -123,8 +123,7 @@ function validarItens(itens: any[]): IFiscalValidacaoErro[] {
     if (prod) {
       if (!ok(prod.ncm))
         e.push({ campo: `${pre} → NCM`, mensagem: "NCM do produto não informado." });
-      if (!ok(prod.cfop) && !ok(it.cfop))
-        e.push({ campo: `${pre} → CFOP`, mensagem: "CFOP do produto não informado." });
+      // CFOP é opcional na pré-validação (fallback para 5102 no INI)
       if (!ok(prod.unidade_id))
         e.push({ campo: `${pre} → Unidade`, mensagem: "Unidade de medida do produto não informada." });
     } else {
@@ -146,8 +145,7 @@ function validarConfigFiscal(fConfig: any, fConfigItem: any): IFiscalValidacaoEr
   else {
     if (!ok(fConfig.certificado))
       e.push({ campo: "Config → Certificado Digital", mensagem: "Caminho do certificado digital não informado." });
-    if (!ok(fConfig.senha_certificado))
-      e.push({ campo: "Config → Senha do Certificado", mensagem: "Senha do certificado digital não informada." });
+    // Senha opcional na pré-validação
     if (!ok(fConfig.ambiente_nfe))
       e.push({ campo: "Config → Ambiente", mensagem: "Ambiente NF-e (produção/homologação) não configurado." });
   }

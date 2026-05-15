@@ -39,6 +39,8 @@ interface FiscalConfigFormValues {
   email_corpo_nfe: string;
   pasta_arquivos_fiscais: string;
   nr_timeout_nfe: number;
+  nfe_versao_metodo: string;
+  nfce_versao_metodo: string;
 }
 
 const FiscalConfigForm = () => {
@@ -69,7 +71,9 @@ const FiscalConfigForm = () => {
       email_assunto_nfe: "NF-e emitida: [CHAVE]",
       email_corpo_nfe: "Olá, segue em anexo a NF-e e o DANFE referente à sua compra.",
       pasta_arquivos_fiscais: "",
-      nr_timeout_nfe: 60
+      nr_timeout_nfe: 60,
+      nfe_versao_metodo: "1.0",
+      nfce_versao_metodo: "1.0"
     }
   });
 
@@ -87,7 +91,7 @@ const FiscalConfigForm = () => {
             tipo_certificado, certificado, senha_certificado, ambiente_nfe, cliente_padrao_id,
             email_smtp_host, email_smtp_port, email_smtp_user, email_smtp_pass, 
             email_smtp_ssl, email_smtp_tls, email_assunto_nfe, email_corpo_nfe,
-            pasta_arquivos_fiscais, nr_timeout_nfe
+            pasta_arquivos_fiscais, nr_timeout_nfe, nfe_versao_metodo, nfce_versao_metodo
           `)
           .eq("empresa_id", XEmpresaId)
           .maybeSingle();
@@ -112,7 +116,9 @@ const FiscalConfigForm = () => {
             email_assunto_nfe: data.email_assunto_nfe || "NF-e emitida: [CHAVE]",
             email_corpo_nfe: data.email_corpo_nfe || "Olá, segue em anexo a NF-e e o DANFE referente à sua compra.",
             pasta_arquivos_fiscais: (data as any).pasta_arquivos_fiscais || "",
-            nr_timeout_nfe: Number((data as any).nr_timeout_nfe) || 60
+            nr_timeout_nfe: Number((data as any).nr_timeout_nfe) || 60,
+            nfe_versao_metodo: (data as any).nfe_versao_metodo || "1.0",
+            nfce_versao_metodo: (data as any).nfce_versao_metodo || "1.0"
           });
 
           if (data.cliente_padrao_id) {
@@ -146,7 +152,9 @@ const FiscalConfigForm = () => {
             email_assunto_nfe: "NF-e emitida: [CHAVE]",
             email_corpo_nfe: "Olá, segue em anexo a NF-e e o DANFE referente à sua compra.",
             pasta_arquivos_fiscais: "",
-            nr_timeout_nfe: 60
+            nr_timeout_nfe: 60,
+            nfe_versao_metodo: "1.0",
+            nfce_versao_metodo: "1.0"
           });
         }
       } catch (err: any) {
@@ -185,7 +193,9 @@ const FiscalConfigForm = () => {
         email_assunto_nfe: values.email_assunto_nfe,
         email_corpo_nfe: values.email_corpo_nfe,
         pasta_arquivos_fiscais: values.pasta_arquivos_fiscais || null,
-        nr_timeout_nfe: Math.max(10, Math.min(600, Number(values.nr_timeout_nfe) || 60))
+        nr_timeout_nfe: Math.max(10, Math.min(600, Number(values.nr_timeout_nfe) || 60)),
+        nfe_versao_metodo: values.nfe_versao_metodo,
+        nfce_versao_metodo: values.nfce_versao_metodo
       };
 
       if (existing) {
@@ -403,6 +413,52 @@ const FiscalConfigForm = () => {
                               <SelectContent>
                                 <SelectItem value="1">1 - Produção</SelectItem>
                                 <SelectItem value="2">2 - Homologação</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="nfe_versao_metodo"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Versão Motor NFe</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione a versão" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="1.0">v1.0 (Legado - INI)</SelectItem>
+                                <SelectItem value="2.0">v2.0 (Moderno - XML)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="nfce_versao_metodo"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Versão Motor NFCe</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione a versão" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="1.0">v1.0 (Legado - INI)</SelectItem>
+                                <SelectItem value="2.0">v2.0 (Moderno - XML)</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />

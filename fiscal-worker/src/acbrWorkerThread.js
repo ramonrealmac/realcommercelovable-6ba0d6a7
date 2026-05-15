@@ -50,7 +50,8 @@ const loadLibrary = (path, prefix) => {
                 CarregarEventoINI: lib.func('int __cdecl ' + prefix + '_CarregarEventoINI(void* handle, const char* eArquivoOuINI)'),
                 EnviarEvento: lib.func('int __cdecl ' + prefix + '_EnviarEvento(void* handle, int idLote, _Out_ char* sResposta, _Out_ int* esTamanho)'),
                 Cancelar: lib.func('int __cdecl ' + prefix + '_Cancelar(void* handle, const char* eChave, const char* eJustificativa, const char* eCNPJ, int ALote, _Out_ char* sResposta, _Out_ int* esTamanho)'),
-                StatusServico: lib.func('int __cdecl ' + prefix + '_StatusServico(void* handle, _Out_ char* sResposta, _Out_ int* esTamanho)')
+                StatusServico: lib.func('int __cdecl ' + prefix + '_StatusServico(void* handle, _Out_ char* sResposta, _Out_ int* esTamanho)'),
+                Validar: lib.func('int __cdecl ' + prefix + '_Validar(void* handle)')
             };
 
             // Funções de impressão (apenas NFe/NFCe)
@@ -345,20 +346,25 @@ const resolverBaseArquivos = (configPayload) => {
     return path.resolve(process.cwd(), "AcbrDLL/Arquivos");
 };
 
-const configurarHandle = (lib, handle, configPayload) => {
+const configurarHandle = (lib, handle, configPayload, prefix = 'NFE') => {
     // Configuração dos Schemas XSD (Obrigatório para NFe/MDFe)
-    const schemasPath = path.resolve(process.cwd(), "AcbrDLL/dep/Schemas/NFe");
-    lib.ConfigGravarValor(handle, "NFe", "PathSchemas", schemasPath);
+    const schemasPath = path.resolve(process.cwd(), `AcbrDLL/dep/Schemas/${prefix}`);
+    lib.ConfigGravarValor(handle, prefix, "PathSchemas", schemasPath);
     // Resposta em JSON (TipoResposta=2) — essencial, antes vinha só do INI
     lib.ConfigGravarValor(handle, "Principal", "TipoResposta", "2");      // 0=string, 1=XML, 2=JSON
     lib.ConfigGravarValor(handle, "Principal", "CodificacaoResposta", "0"); // 0=UTF-8
 
     // Caminhos de Arquivos e Logs (parametrizado via configPayload.pasta_arquivos)
     const baseArquivos = resolverBaseArquivos(configPayload);
-    lib.ConfigGravarValor(handle, "NFe", "PathSalvar", baseArquivos);
-    lib.ConfigGravarValor(handle, "NFe", "PathNFe", path.join(baseArquivos, "NFe"));
-    lib.ConfigGravarValor(handle, "NFe", "PathInu", path.join(baseArquivos, "Inu"));
-    lib.ConfigGravarValor(handle, "NFe", "PathEvento", path.join(baseArquivos, "Evento"));
+    lib.ConfigGravarValor(handle, prefix, "PathSalvar", baseArquivos);
+    if (prefix === 'NFE') {
+        lib.ConfigGravarValor(handle, "NFe", "PathNFe", path.join(baseArquivos, "NFe"));
+        lib.ConfigGravarValor(handle, "NFe", "PathInu", path.join(baseArquivos, "Inu"));
+        lib.ConfigGravarValor(handle, "NFe", "PathEvento", path.join(baseArquivos, "Evento"));
+    } else {
+        lib.ConfigGravarValor(handle, prefix, "PathMDFe", path.join(baseArquivos, "MDFe"));
+        lib.ConfigGravarValor(handle, prefix, "PathEvento", path.join(baseArquivos, "Evento"));
+    }
     lib.ConfigGravarValor(handle, "Principal", "LogPath", path.resolve(process.cwd(), "AcbrDLL/log"));
 
     if (!configPayload) return;
@@ -434,7 +440,7 @@ const configurarHandle = (lib, handle, configPayload) => {
 /**
  * Função utilitária para chamar a DLL isolada por requisição (Multi-Thread)
  */
-const executarNaDLL = async (lib, configPayload, callbackExecucao) => {
+const executarNaDLL = async (lib, configPayload, callbackExecucao, prefix = 'NFE') => {
     if (!lib) throw new Error("A DLL nativa não está carregada no ambiente.");
 
     // 1. Instanciar o Handle isolado com um INI único por thread para evitar corrupção de concorrência
@@ -467,7 +473,7 @@ const executarNaDLL = async (lib, configPayload, callbackExecucao) => {
 
     try {
         // 2. Configurar o Emitente dinamicamente
-        configurarHandle(lib, handle, configPayload);
+        configurarHandle(lib, handle, configPayload, prefix);
 
         // 3. Executar o fluxo da nota solicitado
         return await callbackExecucao(handle);
@@ -627,6 +633,120 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 };
             });
 
+        case 'EMITIR_XML_NFE':
+            config.modelo = 55;
+            return executarNaDLL(libNFe, config, async (handle) => {
+                libNFe.LimparLista(handle);
+                console.log(`[FiscalLib] CarregarXML NFe (${dados.length} chars)...`);
+                let ret = libNFe.CarregarXML(handle, dados);
+                if (ret !== 0) throw new Error('[NFE] CarregarXML: ' + lerRetornoACBr(libNFe, handle));
+
+                const bufferResposta = Buffer.alloc(TAMANHO_BUFFER);
+                const bufferTamanho = Buffer.alloc(4);
+                bufferTamanho.writeInt32LE(TAMANHO_BUFFER, 0);
+
+                ret = libNFe.Enviar(handle, 1, false, true, false, bufferResposta, bufferTamanho);
+                const ultimoRetorno = lerRetornoACBr(libNFe, handle);
+                const tamanho = bufferTamanho.readInt32LE(0);
+                const xmlRetorno = tamanho > 0 && tamanho !== TAMANHO_BUFFER ? bufferResposta.toString('utf8', 0, tamanho) : '';
+
+                const parsed = parsearRetornoNfe(ultimoRetorno || xmlRetorno);
+                const sucesso = parsed.c_stat === '100';
+
+                let xml_nfe = '';
+                if (sucesso) {
+                    try {
+                        const bufXml = Buffer.alloc(TAMANHO_BUFFER);
+                        const bufXmlTam = Buffer.alloc(4);
+                        bufXmlTam.writeInt32LE(TAMANHO_BUFFER, 0);
+                        const retXml = libNFe.ObterXml(handle, 0, bufXml, bufXmlTam);
+                        if (retXml === 0) {
+                            const tamXml = bufXmlTam.readInt32LE(0);
+                            if (tamXml > 0) xml_nfe = bufXml.toString('utf8', 0, tamXml).replace(/\0/g, '');
+                        }
+                    } catch (e) { }
+                }
+
+                return {
+                    sucesso,
+                    chave_nfe: parsed.chave_nfe,
+                    nr_protocolo: parsed.nr_protocolo,
+                    c_stat: parsed.c_stat,
+                    x_motivo: parsed.x_motivo,
+                    recibo_sefaz: parsed.recibo_sefaz,
+                    xml_nfe,
+                    xml_retorno: xmlRetorno,
+                    retorno_completo: ultimoRetorno || xmlRetorno,
+                    erro: sucesso ? null : (parsed.x_motivo || ultimoRetorno)
+                };
+            });
+
+        case 'EMITIR_XML_NFCE':
+            config.modelo = 65;
+            return executarNaDLL(libNFe, config, async (handle) => {
+                libNFe.LimparLista(handle);
+                console.log(`[FiscalLib] CarregarXML NFCe (${dados.length} chars)...`);
+                let ret = libNFe.CarregarXML(handle, dados);
+                if (ret !== 0) throw new Error('[NFCe] CarregarXML: ' + lerRetornoACBr(libNFe, handle));
+
+                const bufferResposta = Buffer.alloc(TAMANHO_BUFFER);
+                const bufferTamanho = Buffer.alloc(4);
+                bufferTamanho.writeInt32LE(TAMANHO_BUFFER, 0);
+
+                ret = libNFe.Enviar(handle, 1, false, true, false, bufferResposta, bufferTamanho);
+                const ultimoRetorno = lerRetornoACBr(libNFe, handle);
+                const tamanho = bufferTamanho.readInt32LE(0);
+                const xmlRetorno = tamanho > 0 && tamanho !== TAMANHO_BUFFER ? bufferResposta.toString('utf8', 0, tamanho) : '';
+
+                const parsed = parsearRetornoNfe(ultimoRetorno || xmlRetorno);
+                const sucesso = parsed.c_stat === '100';
+
+                let xml_nfe = '';
+                if (sucesso) {
+                    try {
+                        const bufXml = Buffer.alloc(TAMANHO_BUFFER);
+                        const bufXmlTam = Buffer.alloc(4);
+                        bufXmlTam.writeInt32LE(TAMANHO_BUFFER, 0);
+                        const retXml = libNFe.ObterXml(handle, 0, bufXml, bufXmlTam);
+                        if (retXml === 0) {
+                            const tamXml = bufXmlTam.readInt32LE(0);
+                            if (tamXml > 0) xml_nfe = bufXml.toString('utf8', 0, tamXml).replace(/\0/g, '');
+                        }
+                    } catch (e) { }
+                }
+
+                return {
+                    sucesso,
+                    chave_nfe: parsed.chave_nfe,
+                    nr_protocolo: parsed.nr_protocolo,
+                    c_stat: parsed.c_stat,
+                    x_motivo: parsed.x_motivo,
+                    recibo_sefaz: parsed.recibo_sefaz,
+                    xml_nfe,
+                    xml_retorno: xmlRetorno,
+                    retorno_completo: ultimoRetorno || xmlRetorno,
+                    erro: sucesso ? null : (parsed.x_motivo || ultimoRetorno)
+                };
+            });
+
+        case 'VALIDAR_XML_NFE':
+        case 'VALIDAR_XML_NFCE':
+            config.modelo = comando === 'VALIDAR_XML_NFCE' ? 65 : 55;
+            return executarNaDLL(libNFe, config, async (handle) => {
+                libNFe.LimparLista(handle);
+                console.log(`[FiscalLib] ValidarXML ${config.modelo === 65 ? 'NFCe' : 'NFe'} (${dados.length} chars)...`);
+                let ret = libNFe.CarregarXML(handle, dados);
+                if (ret !== 0) throw new Error('CarregarXML: ' + lerRetornoACBr(libNFe, handle));
+                
+                ret = libNFe.Validar(handle);
+                if (ret !== 0) {
+                    const errMsg = lerRetornoACBr(libNFe, handle);
+                    return { sucesso: false, erro: 'Erro de Validação (Schema/XSD): ' + errMsg };
+                }
+                
+                return { sucesso: true, mensagem: 'XML Validado com sucesso contra os Schemas (XSD).' };
+            });
+
         case 'EMITIR_MDFE':
             return executarNaDLL(libMDFe, config, async (handle) => {
                 libMDFe.LimparLista(handle);
@@ -640,8 +760,24 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 ret = libMDFe.Enviar(handle, 1, false, true, false, bufferResposta, bufferTamanho);
                 if (ret !== 0) throw new Error(lerRetornoACBr(libMDFe, handle));
 
-                return { sucesso: true, xml_retorno: bufferResposta.toString('utf8', 0, bufferTamanho.readInt32LE(0)) };
-            });
+                return { sucesso: true, result: bufferResposta.toString('utf8', 0, bufferTamanho.readInt32LE(0)) };
+            }, 'MDFE');
+
+        case 'ENCERRAR_MDFE':
+            return executarNaDLL(libMDFe, config, async (handle) => {
+                libMDFe.LimparListaEventos(handle);
+                let ret = libMDFe.CarregarEventoINI(handle, dados);
+                if (ret !== 0) throw new Error(lerRetornoACBr(libMDFe, handle));
+
+                const bufferResposta = Buffer.alloc(9999);
+                const bufferTamanho = Buffer.alloc(4);
+                bufferTamanho.writeInt32LE(9999, 0);
+
+                ret = libMDFe.EnviarEvento(handle, 1, bufferResposta, bufferTamanho);
+                if (ret !== 0) throw new Error(lerRetornoACBr(libMDFe, handle));
+
+                return { sucesso: true, result: bufferResposta.toString('utf8', 0, bufferTamanho.readInt32LE(0)) };
+            }, 'MDFE');
 
         case 'IMPRIMIR_NFE':
         case 'IMPRIMIR_NFCE':

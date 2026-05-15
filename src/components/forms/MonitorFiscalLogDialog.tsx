@@ -17,10 +17,11 @@ interface MonitorFiscalLogDialogProps {
   onClose: () => void;
   empresaId: number;
   nfeCabecalhoId?: number;
+  mdfManifestoId?: number;
 }
 
-const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen, onClose, empresaId, nfeCabecalhoId }) => {
-  // Versão de Diagnóstico: 2026-05-06 18:43 (Papai, agora o sync vai fluir!)
+const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen, onClose, empresaId, nfeCabecalhoId, mdfManifestoId }) => {
+  // Versão de Diagnóstico: 2026-05-14 17:17 (MDF-e support added)
   const [XData, setXData] = useState<any[]>([]);
   const [XLoading, setXLoading] = useState(false);
   const [XSelected, setXSelected] = useState<any>(null);
@@ -175,6 +176,9 @@ const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen,
       if (nfeCabecalhoId) {
         query = query.eq("nfe_cabecalho_id", nfeCabecalhoId);
       }
+      if (mdfManifestoId) {
+        query = query.eq("mdf_manifesto_id", mdfManifestoId);
+      }
 
       const { data, error } = await query
         .order("created_at", { ascending: false })
@@ -194,7 +198,7 @@ const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen,
       loadLogs();
       setXFilters({});
     }
-  }, [isOpen, empresaId, nfeCabecalhoId]);
+  }, [isOpen, empresaId, nfeCabecalhoId, mdfManifestoId]);
 
   return (
     <>
