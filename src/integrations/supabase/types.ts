@@ -1122,6 +1122,84 @@ export type Database = {
         }
         Relationships: []
       }
+      cadastro_veiculo: {
+        Row: {
+          ativo: boolean | null
+          cadastro_id: number
+          capacidade_kg: number | null
+          descricao: string | null
+          dt_alteracao: string | null
+          dt_cadastro: string | null
+          empresa_id: number
+          excluido: boolean | null
+          marca: string | null
+          modelo: string | null
+          placa: string
+          renavam: string | null
+          tara: number | null
+          tp_carroceria: string | null
+          tp_rodado: string | null
+          tp_veiculo: string | null
+          uf: string | null
+          veiculo_id: number
+        }
+        Insert: {
+          ativo?: boolean | null
+          cadastro_id: number
+          capacidade_kg?: number | null
+          descricao?: string | null
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id: number
+          excluido?: boolean | null
+          marca?: string | null
+          modelo?: string | null
+          placa: string
+          renavam?: string | null
+          tara?: number | null
+          tp_carroceria?: string | null
+          tp_rodado?: string | null
+          tp_veiculo?: string | null
+          uf?: string | null
+          veiculo_id?: never
+        }
+        Update: {
+          ativo?: boolean | null
+          cadastro_id?: number
+          capacidade_kg?: number | null
+          descricao?: string | null
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          empresa_id?: number
+          excluido?: boolean | null
+          marca?: string | null
+          modelo?: string | null
+          placa?: string
+          renavam?: string | null
+          tara?: number | null
+          tp_carroceria?: string | null
+          tp_rodado?: string | null
+          tp_veiculo?: string | null
+          uf?: string | null
+          veiculo_id?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_cadastro"
+            columns: ["cadastro_id"]
+            isOneToOne: false
+            referencedRelation: "cadastro"
+            referencedColumns: ["cadastro_id"]
+          },
+          {
+            foreignKeyName: "fk_empresa"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresa"
+            referencedColumns: ["empresa_id"]
+          },
+        ]
+      }
       caixa_abertura: {
         Row: {
           caixa_abertura_id: number
@@ -2690,6 +2768,8 @@ export type Database = {
           modelo_mdf: string | null
           modelo_nfce: string | null
           modelo_nfe: string | null
+          nfce_versao_metodo: string | null
+          nfe_versao_metodo: string | null
           nr_timeout_nfe: number
           pasta_arquivos_fiscais: string | null
           senha_certificado: string | null
@@ -2738,6 +2818,8 @@ export type Database = {
           modelo_mdf?: string | null
           modelo_nfce?: string | null
           modelo_nfe?: string | null
+          nfce_versao_metodo?: string | null
+          nfe_versao_metodo?: string | null
           nr_timeout_nfe?: number
           pasta_arquivos_fiscais?: string | null
           senha_certificado?: string | null
@@ -2786,6 +2868,8 @@ export type Database = {
           modelo_mdf?: string | null
           modelo_nfce?: string | null
           modelo_nfe?: string | null
+          nfce_versao_metodo?: string | null
+          nfe_versao_metodo?: string | null
           nr_timeout_nfe?: number
           pasta_arquivos_fiscais?: string | null
           senha_certificado?: string | null
@@ -2858,6 +2942,7 @@ export type Database = {
           created_at: string
           empresa_id: number
           id: number
+          mdf_manifesto_id: number | null
           mensagem_erro: string | null
           nfe_cabecalho_id: number | null
           payload: Json | null
@@ -2874,6 +2959,7 @@ export type Database = {
           created_at?: string
           empresa_id: number
           id?: never
+          mdf_manifesto_id?: number | null
           mensagem_erro?: string | null
           nfe_cabecalho_id?: number | null
           payload?: Json | null
@@ -2890,6 +2976,7 @@ export type Database = {
           created_at?: string
           empresa_id?: number
           id?: never
+          mdf_manifesto_id?: number | null
           mensagem_erro?: string | null
           nfe_cabecalho_id?: number | null
           payload?: Json | null
@@ -3171,6 +3258,9 @@ export type Database = {
       }
       fiscal_mdf_manifesto: {
         Row: {
+          chave_acesso: string | null
+          codigo_numerico: number | null
+          digito_verificador: number | null
           dt_alteracao: string | null
           dt_cadastro: string | null
           dt_emissao: string | null
@@ -3182,8 +3272,10 @@ export type Database = {
           modalidade: string | null
           modelo: string
           numero: number
+          numero_protocolo: string | null
           peso_total: number | null
           qtd_nfe: number | null
+          rntrc: string | null
           serie: string
           status: string | null
           tp_emitente: string | null
@@ -3194,6 +3286,9 @@ export type Database = {
           valor_total: number | null
         }
         Insert: {
+          chave_acesso?: string | null
+          codigo_numerico?: number | null
+          digito_verificador?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           dt_emissao?: string | null
@@ -3205,8 +3300,10 @@ export type Database = {
           modalidade?: string | null
           modelo: string
           numero: number
+          numero_protocolo?: string | null
           peso_total?: number | null
           qtd_nfe?: number | null
+          rntrc?: string | null
           serie: string
           status?: string | null
           tp_emitente?: string | null
@@ -3217,6 +3314,9 @@ export type Database = {
           valor_total?: number | null
         }
         Update: {
+          chave_acesso?: string | null
+          codigo_numerico?: number | null
+          digito_verificador?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           dt_emissao?: string | null
@@ -3228,8 +3328,10 @@ export type Database = {
           modalidade?: string | null
           modelo?: string
           numero?: number
+          numero_protocolo?: string | null
           peso_total?: number | null
           qtd_nfe?: number | null
+          rntrc?: string | null
           serie?: string
           status?: string | null
           tp_emitente?: string | null
@@ -3369,30 +3471,54 @@ export type Database = {
       }
       fiscal_mdf_veiculo: {
         Row: {
+          capacidade_kg: number | null
           dt_alteracao: string | null
           dt_cadastro: string | null
           empresa_id: number
           excluido: boolean | null
           mdf_manifesto_id: number
           mdf_veiculo_id: number
+          placa: string | null
+          renavam: string | null
+          tara: number | null
+          tp_carroceria: string | null
+          tp_rodado: string | null
+          tp_veiculo: string | null
+          uf: string | null
           veiculo_id: number
         }
         Insert: {
+          capacidade_kg?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id: number
           excluido?: boolean | null
           mdf_manifesto_id: number
           mdf_veiculo_id?: number
+          placa?: string | null
+          renavam?: string | null
+          tara?: number | null
+          tp_carroceria?: string | null
+          tp_rodado?: string | null
+          tp_veiculo?: string | null
+          uf?: string | null
           veiculo_id: number
         }
         Update: {
+          capacidade_kg?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
           excluido?: boolean | null
           mdf_manifesto_id?: number
           mdf_veiculo_id?: number
+          placa?: string | null
+          renavam?: string | null
+          tara?: number | null
+          tp_carroceria?: string | null
+          tp_rodado?: string | null
+          tp_veiculo?: string | null
+          uf?: string | null
           veiculo_id?: number
         }
         Relationships: []
@@ -3649,6 +3775,77 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "fiscal_nfe_cabecalho"
             referencedColumns: ["nfe_cabecalho_id"]
+          },
+        ]
+      }
+      fiscal_nfe_inutilizacao: {
+        Row: {
+          ambiente: number
+          c_stat: number | null
+          cnpj: string | null
+          created_at: string
+          empresa_id: number
+          fiscal_evento_id: number | null
+          inutilizacao_id: number
+          justificativa: string
+          modelo: string
+          nr_fin: number
+          nr_ini: number
+          nr_protocolo: string | null
+          serie: string
+          st_inutilizacao: string
+          updated_at: string | null
+          usuario_id: string | null
+          x_motivo: string | null
+          xml_retorno: string | null
+        }
+        Insert: {
+          ambiente?: number
+          c_stat?: number | null
+          cnpj?: string | null
+          created_at?: string
+          empresa_id: number
+          fiscal_evento_id?: number | null
+          inutilizacao_id?: number
+          justificativa: string
+          modelo?: string
+          nr_fin: number
+          nr_ini: number
+          nr_protocolo?: string | null
+          serie: string
+          st_inutilizacao?: string
+          updated_at?: string | null
+          usuario_id?: string | null
+          x_motivo?: string | null
+          xml_retorno?: string | null
+        }
+        Update: {
+          ambiente?: number
+          c_stat?: number | null
+          cnpj?: string | null
+          created_at?: string
+          empresa_id?: number
+          fiscal_evento_id?: number | null
+          inutilizacao_id?: number
+          justificativa?: string
+          modelo?: string
+          nr_fin?: number
+          nr_ini?: number
+          nr_protocolo?: string | null
+          serie?: string
+          st_inutilizacao?: string
+          updated_at?: string | null
+          usuario_id?: string | null
+          x_motivo?: string | null
+          xml_retorno?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_nfe_inutilizacao_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresa"
+            referencedColumns: ["empresa_id"]
           },
         ]
       }
@@ -4252,6 +4449,7 @@ export type Database = {
           entregador: string | null
           funcionario_id: number
           gerente: string | null
+          mdf_config_item: number | null
           motorista: string | null
           nfce_config_item: number | null
           nfe_config_item: number | null
@@ -4276,6 +4474,7 @@ export type Database = {
           entregador?: string | null
           funcionario_id?: number
           gerente?: string | null
+          mdf_config_item?: number | null
           motorista?: string | null
           nfce_config_item?: number | null
           nfe_config_item?: number | null
@@ -4300,6 +4499,7 @@ export type Database = {
           entregador?: string | null
           funcionario_id?: number
           gerente?: string | null
+          mdf_config_item?: number | null
           motorista?: string | null
           nfce_config_item?: number | null
           nfe_config_item?: number | null
@@ -4846,7 +5046,9 @@ export type Database = {
           pc_red_icmsst: number | null
           pedido_origem_id: number | null
           produto_id: number | null
+          qt_entregue: number | null
           qt_movimento: number | null
+          qt_reservada: number | null
           tp_desconto: string | null
           tp_movimento: string | null
           unidade_id: string | null
@@ -4909,7 +5111,9 @@ export type Database = {
           pc_red_icmsst?: number | null
           pedido_origem_id?: number | null
           produto_id?: number | null
+          qt_entregue?: number | null
           qt_movimento?: number | null
+          qt_reservada?: number | null
           tp_desconto?: string | null
           tp_movimento?: string | null
           unidade_id?: string | null
@@ -4972,7 +5176,9 @@ export type Database = {
           pc_red_icmsst?: number | null
           pedido_origem_id?: number | null
           produto_id?: number | null
+          qt_entregue?: number | null
           qt_movimento?: number | null
+          qt_reservada?: number | null
           tp_desconto?: string | null
           tp_movimento?: string | null
           unidade_id?: string | null
@@ -6724,6 +6930,10 @@ export type Database = {
           p_vl_total: number
           p_vl_troco: number
         }
+        Returns: Json
+      }
+      fn_prevalidar_nfe: {
+        Args: { p_empresa_id: number; p_nfe_cabecalho_id: number }
         Returns: Json
       }
       fu_baixar_titulos_cliente: {
