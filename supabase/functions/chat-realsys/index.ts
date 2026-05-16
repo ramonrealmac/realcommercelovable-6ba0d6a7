@@ -397,7 +397,7 @@ async function executeTool(
 
       case "finalizar_venda_pdv": {
         const { error } = await supabase.rpc("fu_mudar_status_pedido_pdv", {
-          p_movimento_id: args.movimento_id,
+          p_movimento_id: Number(args.movimento_id),
           p_novo_status: "R",
         });
         if (error) throw error;
@@ -405,25 +405,36 @@ async function executeTool(
       }
 
       case "emitir_documento_fiscal": {
-        // Calcular impostos
-        const { error: eTax } = await supabase.rpc("fu_calcular_impostos_movimento", {
-          p_movimento_id: args.movimento_id,
-        });
-        if (eTax) throw eTax;
+        const movId = Number(args.movimento_id);
+        const modelo = Number(args.modelo);
 
-        // Pré-validar
-        const { error: eVal } = await supabase.rpc("fn_prevalidar_nfe", {
-          p_movimento_id: args.movimento_id,
+        // Calcular impostos - retorna nfe_cabecalho_id
+        const { data: nfeId, error: eTax } = await supabase.rpc("fu_calcular_impostos_movimento", {
+          p_movimento_id: movId,
+          p_modelo: String(modelo),
         });
-        if (eVal) throw eVal;
+        if (eTax) {
+          console.error("fu_calcular_impostos_movimento error", eTax);
+          throw eTax;
+        }
+
+        // Pré-validar usando o ID do cabeçalho retornado
+        const { error: eVal } = await supabase.rpc("fn_prevalidar_nfe", {
+          p_nfe_cabecalho_id: nfeId,
+          p_empresa_id: empresaId,
+        });
+        if (eVal) {
+          console.error("fn_prevalidar_nfe error", eVal);
+          throw eVal;
+        }
 
         // Inserir evento fiscal para o worker
         const { data, error } = await supabase.from("fiscal_evento").insert({
           empresa_id: empresaId,
-          comando: args.modelo === 55 ? "NFE.CriarEnviarNFe" : "NFE.CriarEnviarNFCe",
-          payload: { movimento_id: args.movimento_id, modelo: args.modelo },
+          comando: modelo === 55 ? "NFE.CriarEnviarNFe" : "NFE.CriarEnviarNFCe",
+          payload: { movimento_id: movId, modelo: modelo, nfe_cabecalho_id: nfeId },
           status: "PENDENTE",
-          tipo: args.modelo === 55 ? "NFE" : "NFCE",
+          tipo: modelo === 55 ? "NFE" : "NFCE",
         }).select("id").single();
 
         if (error) throw error;
@@ -477,17 +488,25 @@ Deno.serve(async (req) => {
     }
     const userId = userData.user.id;
 
-    const { messages, empresaId } = await req.json();
+    let payload;
+    try {
+      payload = await req.json();
+    } catch (e) {
+      return new Response(JSON.stringify({ error: "Corpo da requisição inválido" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const { messages, empresaId } = payload;
 
     // Buscar configurações dinâmicas da empresa
     let iaInstructions = "";
+    let iaModel = "gpt-4o-mini"; 
     if (empresaId) {
       const { data: emp } = await supabase
         .from("empresa")
-        .select("ia_instrucoes")
+        .select("ia_instrucoes, ia_modelo")
         .eq("empresa_id", empresaId)
         .maybeSingle();
       if (emp?.ia_instrucoes) iaInstructions = emp.ia_instrucoes;
+      if (emp?.ia_modelo) iaModel = emp.ia_modelo;
     }
 
     const conversation: any[] = [
@@ -507,7 +526,7 @@ Deno.serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
+          model: iaModel,
           messages: conversation,
           tools: TOOLS,
           tool_choice: "auto",
@@ -518,9 +537,7 @@ Deno.serve(async (req) => {
         const status = aiResp.status;
         const txt = await aiResp.text();
         console.error("AI gateway error", status, txt);
-        if (status === 429) return new Response(JSON.stringify({ error: "Limite de requisições atingido. Tente em instantes." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        if (status === 402) return new Response(JSON.stringify({ error: "Créditos esgotados. Adicione fundos em Settings → Workspace → Usage." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        return new Response(JSON.stringify({ error: "Falha no provedor de IA" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: `Erro no provedor ${iaModel} (Status ${status}): ${txt.substring(0, 300)}` }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
       const aiJson = await aiResp.json();
@@ -558,6 +575,6 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ content: "Processamento interrompido (muitas iterações).", ui_actions, tool_results: tool_results_log }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e: any) {
     console.error("chat-realsys error", e);
-    return new Response(JSON.stringify({ error: e?.message || "Erro interno" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: `Erro interno RealSys: ${e?.message || String(e)}` }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
