@@ -585,9 +585,6 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         movimentoId = XPedidoSel.movimento_id;
         nrMov = XPedidoSel.nr_movimento || movimentoId;
         total = XPedidoSel.vl_movimento;
-        console.log("[PdvTela] Deletando pagamentos antigos de movimento:", movimentoId);
-        const { error: eDel } = await db.from("movimento_pagamento").delete().eq("movimento_id", movimentoId);
-        if (eDel) console.warn("[PdvTela] Aviso: Erro ao deletar pagamentos antigos:", eDel.message);
       } else {
         console.log("[PdvTela] Criando nova venda direta...");
         const novo = await criarMovimentoVendaDireta();
@@ -598,130 +595,30 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         console.log("[PdvTela] Venda direta criada. ID:", movimentoId, "NR:", nrMov, "Total:", total);
       }
 
-      console.log("[PdvTela] Inserindo novos pagamentos de movimento...");
-      const pagtos = linhas.map(l => ({
-        empresa_id: XEmpresaId,
-        movimento_id: movimentoId,
-        condicao_id: l.condicao_id,
-        tp_pagamento: l.condicao_descricao,
-        vl_pagamento: l.vl_recebido,
-        nr_autorizacao: l.numero_autoriza || "",
-        bandeira_id: l.bandeira_id,
-        operadora_id: l.operadora_id,
-        n_parcelas: l.qt_parcela,
-        dt_pagamento: new Date().toISOString()
-      }));
-      const { error: ePag } = await db.from("movimento_pagamento").insert(pagtos);
-      if (ePag) throw new Error("Falha ao gravar pagamentos: " + ePag.message);
-
-      const totalRecebidoSomado = Number(linhas.reduce((acc, l) => acc + Number(l.vl_recebido || 0), 0).toFixed(2));
-      const valorTroco = Math.max(0, totalRecebidoSomado - total);
-      console.log("[PdvTela] Total:", total, "Recebido:", totalRecebidoSomado, "Troco:", valorTroco);
-      
-      let linhasAjustadas = [...linhas];
-      if (valorTroco > 0) {
-        const idxDinheiro = linhasAjustadas.findIndex(l => l.meio_pagamento_id === 1);
-        if (idxDinheiro === -1) {
-          throw new Error("Para haver troco, é necessário um pagamento em Dinheiro.");
-        }
-        const vlrAtu = Number(linhasAjustadas[idxDinheiro].vl_recebido || 0);
-        const novoVlr = Number((vlrAtu - valorTroco).toFixed(2));
-        if (novoVlr < 0) {
-          throw new Error("Valor em dinheiro insuficiente para o troco.");
-        }
-        linhasAjustadas[idxDinheiro] = {
-          ...linhasAjustadas[idxDinheiro],
-          vl_recebido: novoVlr,
-          vl_parcela: Number((novoVlr / (linhasAjustadas[idxDinheiro].qt_parcela || 1)).toFixed(2))
-        };
-      }
-
-      const cm = {
-        empresa_id: XEmpresaId,
-        caixa_abertura_id: abertura.caixa_abertura_id,
-        funcionario_id: caixa.funcionario_id,
-        colaborador_id: caixa.funcionario_id,
-        dt_movimento: dtMovimento,
-        tp_movimento: "E",
-        tp_operacao: String(XParams!.tp_operacao_caixa),
-        centro_custo_id: XParams!.centro_custo_caixa,
-        historico: `Recebimento Pedido ${nrMov}`,
-        documento: String(nrMov),
-        vl_movimento: total,
-        vl_troco: valorTroco,
-        movimento_id: movimentoId,
-        excluido: false,
-      };
-      const { data: insertedCm, error: e1 } = await db.from("caixa_movimento").insert(cm).select("caixa_movimento_id").single();
-      if (e1) throw new Error("Falha ao gravar caixa_movimento: " + e1.message);
-      const cxId = insertedCm.caixa_movimento_id;
-
-      const itensCx = linhasAjustadas.map(l => ({
-        caixa_movimento_id: cxId,
-        empresa_id: XEmpresaId,
-        condicao_id: l.condicao_id,
-        prazo_pagamento_id: 0,
-        bandeira_id: l.bandeira_id || 0,
-        operadora_id: l.operadora_id || 0,
-        numero_autoriza: l.numero_autoriza || "",
-        qt_parcela: l.qt_parcela,
-        vl_parcela: l.vl_parcela,
-        vl_recebido: l.vl_recebido,
-        plano_conta_id: (l as any).plano_conta_id || null,
-        meio_pagamento_id: (l as any).meio_pagamento_id ?? null,
-        excluido: false,
-      }));
-      console.log("[PdvTela] Gravando", itensCx.length, "itens no caixa_movimento_item...");
-      const { error: e2 } = await db.from("caixa_movimento_item").insert(itensCx);
-      if (e2) throw new Error("Falha ao gravar formas de pagamento no caixa: " + e2.message);
-
-      // ===== Atualiza vl_fechamento da caixa_abertura com os meios que somam ao caixa =====
-      try {
-        const meioIds = Array.from(new Set(
-          itensCx.map(i => i.meio_pagamento_id).filter((v): v is number => v != null)
-        ));
-        if (meioIds.length > 0) {
-          const { data: meios } = await db.from("meio_pagamento")
-            .select("meio_pagamento_id, soma_vl_caixa")
-            .in("meio_pagamento_id", meioIds);
-          const somamSet = new Set(
-            ((meios || []) as any[])
-              .filter(m => String(m.soma_vl_caixa || "").toUpperCase() === "S")
-              .map(m => m.meio_pagamento_id)
-          );
-          const vlSomar = itensCx.reduce(
-            (acc, i) => acc + (i.meio_pagamento_id != null && somamSet.has(i.meio_pagamento_id) ? Number(i.vl_recebido || 0) : 0),
-            0
-          );
-          if (vlSomar > 0) {
-            const novoVlFechamento = Number(abertura.vl_fechamento || 0) + vlSomar;
-            const { error: eAb } = await db.from("caixa_abertura")
-              .update({ vl_fechamento: novoVlFechamento })
-              .eq("empresa_id", abertura.empresa_id)
-              .eq("funcionario_id", abertura.funcionario_id)
-              .eq("dt_abertura", abertura.dt_abertura);
-            if (eAb) throw new Error(eAb.message);
-            abertura.vl_fechamento = novoVlFechamento;
-          }
-        }
-      } catch (errCx: any) {
-        toast.error("Aviso: falha ao atualizar valor de fechamento do caixa: " + (errCx.message || errCx));
-      }
-
-      // ===== CENTRALIZED STATUS TRANSITION VIA RPC =====
-      // Isso garante que o estoque seja baixado corretamente (físico e reserva)
+      // ===== TRANSAÇÃO ATÔMICA VIA RPC =====
       const { data: userDataRpc } = await supabase.auth.getUser();
       const userIdRpc = userDataRpc.user?.id;
 
-      const { data: rpcRes, error: e3 } = await db.rpc("fu_mudar_status_pedido_pdv", {
+      console.log("[PdvTela] Enviando recebimento para o banco (RPC)...");
+      const { data: rpcRes, error: rpcErr } = await db.rpc("fu_pdv_registrar_recebimento_venda", {
+        _empresa_id: XEmpresaId,
         _movimento_id: movimentoId,
-        _novo_status: "R",
+        _caixa_abertura_id: abertura.caixa_abertura_id,
+        _funcionario_caixa_id: caixa.funcionario_id,
+        _dt_movimento: dtMovimento,
+        _tp_operacao_caixa: String(XParams!.tp_operacao_caixa),
+        _centro_custo_caixa: XParams!.centro_custo_caixa,
+        _pagamentos: linhas,
         _usuario_id: userIdRpc
       });
-      
-      if (e3) throw new Error("Falha ao baixar pedido (RPC): " + e3.message);
-      if (rpcRes?.error) throw new Error("Falha ao baixar pedido: " + rpcRes.error);
 
+      if (rpcErr) throw new Error("Erro de conexão ao registrar venda: " + rpcErr.message);
+      if (rpcRes?.error) throw new Error("Falha no banco de dados: " + rpcRes.error);
+
+      // Atualiza o state local do caixa abertura apenas para reflexo na UI, se o RPC somou algo
+      if (rpcRes?.vl_somado_caixa > 0) {
+        abertura.vl_fechamento = Number(abertura.vl_fechamento || 0) + Number(rpcRes.vl_somado_caixa);
+      }
 
       // Monta dados de impressão para o próximo dialog
       const itensImp = XPedidoSel
@@ -739,6 +636,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
             vl_und_produto: c.vl_unitario,
             vl_movimento: c.qt_item * c.vl_unitario,
           }));
+          
       setXImpressaoDados({
         movimento_id: movimentoId,
         nr_movimento: nrMov,
