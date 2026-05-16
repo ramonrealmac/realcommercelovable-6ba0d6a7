@@ -582,10 +582,20 @@ async function executeTool(
           itensResolvidos.push({ produto_id: prod.produto_id, nm_produto: prod.nome, unidade_id: prod.unidade_id, qt, vlu });
         }
 
+        // Resolver funcionário vinculado ao usuário logado (vendedor)
+        const { data: funcUser } = await supabase.from("funcionario")
+          .select("funcionario_id, nome")
+          .eq("usr_id", userId)
+          .eq("empresa_id", empresaId)
+          .maybeSingle();
+        const funcionarioId = funcUser?.funcionario_id || null;
+
+        const dtEmissao = new Date().toISOString();
         const { data: movRow2, error: eMov2 } = await supabase.from("movimento").insert({
           empresa_id: empresaId, cadastro_id: cadastroId,
           condicao_id: condId, tp_movimento: "PD", tp_origem: "ASSISTENTE",
-          st_pedido: "O", faturado: "N", dt_emissao: new Date().toISOString(),
+          funcionario_id: funcionarioId,
+          st_pedido: "O", faturado: "N", dt_emissao: dtEmissao,
           dt_entrega: args.dt_entrega || new Date().toISOString().substring(0, 10),
           obs_pedido: String(args.obs || ""),
           vl_produto: vlTotal, vl_movimento: vlTotal, vl_desconto: 0, pc_desconto: 0, tp_desconto: "N", excluido: false,
