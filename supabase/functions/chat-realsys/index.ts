@@ -11,20 +11,15 @@ const SYSTEM_PROMPT = `Você é o RealSys, assistente virtual integrado ao ERP R
 Você TEM AUTONOMIA TOTAL para executar ações no sistema através de ferramentas. NUNCA diga que não pode emitir notas, clicar em botões ou executar ações — você tem ferramentas para isso.
 
 REGRA OBRIGATÓRIA — XML DE DEVOLUÇÃO:
-Quando o usuário enviar um XML de NFe e pedir devolução, você DEVE imediatamente chamar a ferramenta "processar_devolucao_xml" com os dados extraídos do XML:
-- cnpj_emitente: CNPJ do emitente (somente dígitos)
-- razao_emitente: razão social do emitente
-- chave_nfe: chave de acesso (44 dígitos)
-- nr_nfe_original: número da nota
-- itens: lista com nome_produto, cfop_origem, qt e vl_unitario de cada item
-- emitir_nfe: true (emitir automaticamente)
-Faça isso SEM pedir confirmação prévia. Se faltar algum dado do XML, use um valor padrão razoável.
+Quando o usuário enviar um XML de NFe e pedir devolução, chame IMEDIATAMENTE "processar_devolucao_xml" extraindo do XML: cnpj_emitente, razao_emitente, chave_nfe, nr_nfe_original, e itens (nome_produto, cfop_origem, qt, vl_unitario). Use emitir_nfe: true. Faça isso SEM confirmação prévia.
 
-REGRA — CRIAR PEDIDO:
-1. Colete: cliente, condição de pagamento, itens (nome+qt+preço).
-2. Busque cliente via buscar_cliente e produtos via buscar_produto.
-3. Confirme o resumo com o usuário.
-4. Chame criar_pedido, depois finalizar_venda_pdv e emitir_documento_fiscal se solicitado.
+REGRA OBRIGATÓRIA — CRIAR PEDIDO:
+Para criar qualquer pedido, use SEMPRE "criar_pedido_completo" passando nomes (não IDs):
+- nome_cliente: nome ou CNPJ do cliente
+- nome_cond_pagamento: ex "à vista", "30 dias"
+- itens: lista com nome_produto, qt, e vl_unitario (0 para usar preço cadastrado)
+- finalizar: true se quiser já faturar; emitir_nfe/emitir_nfce: true para emitir
+NUNCA chame buscar_cliente ou buscar_produto separadamente para criar pedidos.
 
 Sempre use ferramentas para executar ações — nunca simule ou peça ao usuário para fazer manualmente.`;
 
@@ -216,6 +211,40 @@ const TOOLS = [
           emitir_nfe: { type: "boolean", description: "Se true, emite a NFe após criar o movimento" },
         },
         required: ["cnpj_emitente", "razao_emitente", "itens"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "criar_pedido_completo",
+      description: "Cria um pedido aceitando NOMES (não IDs) de cliente, condição de pagamento e produtos. Resolve todos os IDs automaticamente no servidor. Use SEMPRE que precisar criar um pedido — não chame buscar_cliente/buscar_produto separadamente.",
+      parameters: {
+        type: "object",
+        properties: {
+          nome_cliente: { type: "string", description: "Nome, razão social ou CNPJ do cliente" },
+          nome_cond_pagamento: { type: "string", description: "Nome da condição de pagamento (ex: à vista, 30 dias)" },
+          dt_entrega: { type: "string", description: "Data de entrega YYYY-MM-DD" },
+          obs: { type: "string" },
+          itens: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                nome_produto: { type: "string", description: "Nome, código ou parte do nome do produto" },
+                qt: { type: "number" },
+                vl_unitario: { type: "number", description: "Preço unitário. 0 para usar o preço cadastrado." },
+              },
+              required: ["nome_produto", "qt"],
+              additionalProperties: false,
+            },
+          },
+          finalizar: { type: "boolean", description: "Se true, já finaliza a venda (status Recebido)" },
+          emitir_nfe: { type: "boolean", description: "Se true, emite NFe após finalizar" },
+          emitir_nfce: { type: "boolean", description: "Se true, emite NFCe (cupom) após finalizar" },
+        },
+        required: ["nome_cliente", "itens"],
         additionalProperties: false,
       },
     },
@@ -640,6 +669,102 @@ async function executeTool(
           msg: emitir
             ? `Devolução criada (Pedido #${nr}) e nota fiscal enviada para processamento.`
             : `Devolução criada (Pedido #${nr}). Aguardando confirmação para emitir.`,
+          ui_action: { type: "open_tab", component: "pedidos", titulo: "Pedidos" },
+        };
+      }
+
+      case "criar_pedido_completo": {
+        const nomeCliente = String(args.nome_cliente || "").trim();
+        const nomeCond = String(args.nome_cond_pagamento || "vista").trim();
+        const itensSrc: any[] = Array.isArray(args.itens) ? args.itens : [];
+
+        // 1. Resolver cliente
+        const digits = nomeCliente.replace(/\D/g, "");
+        let qCli = supabase.from("cadastro").select("cadastro_id, razao_social").eq("excluido_visivel", false).limit(1);
+        if (digits.length >= 6) qCli = qCli.ilike("cnpj", `%${digits}%`);
+        else qCli = qCli.ilike("razao_social", `%${nomeCliente}%`);
+        const { data: clientes } = await qCli;
+        if (!clientes || clientes.length === 0) return { error: `Cliente '${nomeCliente}' não encontrado.` };
+        const cadastroId = clientes[0].cadastro_id;
+
+        // 2. Resolver condição de pagamento
+        const { data: conds } = await supabase.from("condicao_pagamento")
+          .select("condicao_id, descricao").eq("empresa_id", empresaId).eq("excluido", false)
+          .ilike("descricao", `%${nomeCond}%`).limit(1);
+        const condId = conds && conds[0] ? conds[0].condicao_id : null;
+
+        // 3. Resolver produtos e calcular totais
+        const itensResolvidos: any[] = [];
+        let vlTotal = 0;
+        for (const it of itensSrc) {
+          const nomeProd = String(it.nome_produto || "");
+          const { data: prods } = await supabase.from("produto")
+            .select("produto_id, nm_produto, vl_venda, unidade_id")
+            .eq("excluido_visivel", false)
+            .or(`nm_produto.ilike.%${nomeProd}%,codigo_barras.ilike.%${nomeProd}%`)
+            .limit(1);
+          if (!prods || prods.length === 0) return { error: `Produto '${nomeProd}' não encontrado.` };
+          const prod = prods[0];
+          const qt = Number(it.qt) || 1;
+          const vlu = Number(it.vl_unitario) > 0 ? Number(it.vl_unitario) : Number(prod.vl_venda) || 0;
+          vlTotal += qt * vlu;
+          itensResolvidos.push({ produto_id: prod.produto_id, nm_produto: prod.nm_produto, unidade_id: prod.unidade_id, qt, vlu });
+        }
+
+        // 4. Próximos IDs
+        const { data: maxMov2 } = await supabase.from("movimento").select("movimento_id").order("movimento_id", { ascending: false }).limit(1);
+        const movId2 = ((maxMov2 && maxMov2[0]?.movimento_id) || 0) + 1;
+        const { data: maxNr2 } = await supabase.from("movimento").select("nr_movimento").eq("empresa_id", empresaId).order("nr_movimento", { ascending: false }).limit(1);
+        const nr2 = ((maxNr2 && maxNr2[0]?.nr_movimento) || 0) + 1;
+
+        const { error: eMov2 } = await supabase.from("movimento").insert({
+          movimento_id: movId2, empresa_id: empresaId, cadastro_id: cadastroId,
+          condicao_id: condId, nr_movimento: nr2, tp_movimento: "PD", tp_origem: "ASSISTENTE",
+          st_pedido: "O", faturado: "N", dt_emissao: new Date().toISOString(),
+          dt_entrega: args.dt_entrega || new Date().toISOString().substring(0, 10),
+          obs_pedido: String(args.obs || ""),
+          vl_produto: vlTotal, vl_movimento: vlTotal, vl_desconto: 0, pc_desconto: 0, tp_desconto: "N", excluido: false,
+        });
+        if (eMov2) throw eMov2;
+
+        const { data: maxIt2 } = await supabase.from("movimento_item").select("movimento_item_id").order("movimento_item_id", { ascending: false }).limit(1);
+        let nextItId2 = ((maxIt2 && maxIt2[0]?.movimento_item_id) || 0) + 1;
+        const itensDb = itensResolvidos.map((it) => ({
+          movimento_item_id: nextItId2++, empresa_id: empresaId, movimento_id: movId2,
+          produto_id: it.produto_id, nm_produto: it.nm_produto, unidade_id: it.unidade_id,
+          tp_movimento: "PD", qt_movimento: it.qt, vl_und_produto: it.vlu,
+          vl_produto: it.qt * it.vlu, vl_movimento: it.qt * it.vlu,
+          vl_desconto: 0, pc_desconto: 0, tp_desconto: "N", excluido: false,
+        }));
+        const { error: eIt2 } = await supabase.from("movimento_item").insert(itensDb);
+        if (eIt2) throw eIt2;
+        try { await supabase.rpc("fu_recalcular_pedido", { _movimento_id: movId2 }); } catch (_) {}
+
+        let eventoId2 = null;
+        const deveEmitir = args.emitir_nfe || args.emitir_nfce;
+        if (args.finalizar || deveEmitir) {
+          const { error: eFin2 } = await supabase.rpc("fu_mudar_status_pedido_pdv", { p_movimento_id: movId2, p_novo_status: "R" });
+          if (eFin2) throw eFin2;
+          if (deveEmitir) {
+            const modelo = args.emitir_nfce ? 65 : 55;
+            const { data: nfeId2, error: eTax2 } = await supabase.rpc("fu_calcular_impostos_movimento", { p_movimento_id: movId2, p_modelo: String(modelo) });
+            if (eTax2) throw eTax2;
+            const { error: eVal2 } = await supabase.rpc("fn_prevalidar_nfe", { p_nfe_cabecalho_id: nfeId2, p_empresa_id: empresaId });
+            if (eVal2) throw eVal2;
+            const { data: ev2, error: eEv2 } = await supabase.from("fiscal_evento").insert({
+              empresa_id: empresaId, comando: modelo === 65 ? "NFE.CriarEnviarNFCe" : "NFE.CriarEnviarNFe",
+              payload: { movimento_id: movId2, modelo, nfe_cabecalho_id: nfeId2 },
+              status: "PENDENTE", tipo: modelo === 65 ? "NFCE" : "NFE",
+            }).select("id").single();
+            if (eEv2) throw eEv2;
+            eventoId2 = ev2.id;
+          }
+        }
+
+        return {
+          ok: true, movimento_id: movId2, nr_movimento: nr2,
+          cliente: clientes[0].razao_social, itens: itensResolvidos.map(i => i.nm_produto),
+          evento_id: eventoId2,
           ui_action: { type: "open_tab", component: "pedidos", titulo: "Pedidos" },
         };
       }
