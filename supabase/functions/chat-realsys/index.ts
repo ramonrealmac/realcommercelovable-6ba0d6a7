@@ -104,37 +104,7 @@ const TOOLS = [
       },
     },
   },
-  {
-    type: "function",
-    function: {
-      name: "criar_pedido",
-      description: "Cria um PEDIDO em modo Orçamento (st_pedido='O', tp_movimento='PD'). Não fatura nem registra caixa. O vendedor (funcionario_id) é o usuário logado e é resolvido automaticamente. Confirme TODOS os dados com o usuário antes de chamar.",
-      parameters: {
-        type: "object",
-        properties: {
-          cadastro_id: { type: "number", description: "ID do cliente (obtido via buscar_cliente)" },
-          condpagto_id: { type: "number", description: "ID da condição de pagamento (obtido via buscar_cond_pagamento)" },
-          dt_entrega: { type: "string", description: "Data de entrega no formato YYYY-MM-DD" },
-          obs: { type: "string", description: "Observação opcional do pedido" },
-          itens: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                produto_id: { type: "number" },
-                qt: { type: "number" },
-                vl_unitario: { type: "number" },
-              },
-              required: ["produto_id", "qt", "vl_unitario"],
-              additionalProperties: false,
-            },
-          },
-        },
-        required: ["cadastro_id", "condpagto_id", "dt_entrega", "itens"],
-        additionalProperties: false,
-      },
-    },
-  },
+
   {
     type: "function",
     function: {
@@ -341,118 +311,6 @@ async function executeTool(
         return { ok: true, cliente: data, ui_action: { type: "open_tab", component: "cadastro-completo", titulo: "Clientes" } };
       }
 
-      case "criar_pedido": {
-        // Resolve funcionario (vendedor) — tenta achar um vendedor da empresa.
-        let funcionarioId: number | null = null;
-        const { data: funcs } = await supabase
-          .from("funcionario")
-          .select("funcionario_id, nome, vendedor")
-          .eq("empresa_id", empresaId)
-          .eq("vendedor", "S")
-          .limit(2);
-        if (funcs && funcs.length === 1) funcionarioId = funcs[0].funcionario_id;
-
-        // Próximos IDs/Nº (mesmo padrão usado no PdvTela / PedidoForm)
-        const { data: maxMov } = await supabase
-          .from("movimento").select("movimento_id")
-          .order("movimento_id", { ascending: false }).limit(1);
-        const movId = ((maxMov && maxMov[0]?.movimento_id) || 0) + 1;
-
-        const { data: maxNr } = await supabase
-          .from("movimento").select("nr_movimento")
-          .eq("empresa_id", empresaId)
-          .order("nr_movimento", { ascending: false }).limit(1);
-        const nr = ((maxNr && maxNr[0]?.nr_movimento) || 0) + 1;
-
-        const itensSrc = Array.isArray(args.itens) ? args.itens : [];
-        const vlProduto = itensSrc.reduce(
-          (s: number, it: any) => s + (Number(it.qt) || 0) * (Number(it.vl_unitario) || 0),
-          0,
-        );
-
-        const movPayload: any = {
-          movimento_id: movId,
-          empresa_id: empresaId,
-          cadastro_id: args.cadastro_id,
-          funcionario_id: funcionarioId,
-          condicao_id: args.condpagto_id || null,
-          nr_movimento: nr,
-          tp_movimento: "PD",
-          tp_origem: "ASSISTENTE",
-          st_pedido: "O",
-          faturado: "N",
-          dt_emissao: new Date().toISOString(),
-          dt_entrega: args.dt_entrega || new Date().toISOString().substring(0, 10),
-          obs_pedido: String(args.obs || ""),
-          vl_produto: vlProduto,
-          vl_movimento: vlProduto,
-          vl_desconto: 0,
-          pc_desconto: 0,
-          tp_desconto: "N",
-          excluido: false,
-        };
-
-        const { error: e1 } = await supabase.from("movimento").insert(movPayload);
-        if (e1) {
-          console.error("criar_pedido movimento error", e1, movPayload);
-          throw e1;
-        }
-
-        // Próximo movimento_item_id
-        const { data: maxIt } = await supabase
-          .from("movimento_item").select("movimento_item_id")
-          .order("movimento_item_id", { ascending: false }).limit(1);
-        let nextItId = ((maxIt && maxIt[0]?.movimento_item_id) || 0) + 1;
-
-        // Busca nm_produto / unidade dos produtos referenciados
-        const prodIds = itensSrc.map((it: any) => Number(it.produto_id)).filter(Boolean);
-        const { data: prods } = await supabase
-          .from("produto").select("produto_id, nm_produto, unidade_id")
-          .in("produto_id", prodIds.length ? prodIds : [-1]);
-        const prodMap = new Map<number, any>((prods || []).map((p: any) => [p.produto_id, p]));
-
-        const itens = itensSrc.map((it: any) => {
-          const p = prodMap.get(Number(it.produto_id));
-          const qt = Number(it.qt) || 0;
-          const vlu = Number(it.vl_unitario) || 0;
-          return {
-            movimento_item_id: nextItId++,
-            empresa_id: empresaId,
-            movimento_id: movId,
-            produto_id: it.produto_id,
-            nm_produto: p?.nm_produto || "",
-            unidade_id: p?.unidade_id || null,
-            tp_movimento: "PD",
-            qt_movimento: qt,
-            vl_und_produto: vlu,
-            vl_produto: qt * vlu,
-            vl_movimento: qt * vlu,
-            vl_desconto: 0,
-            pc_desconto: 0,
-            tp_desconto: "N",
-            excluido: false,
-          };
-        });
-
-        if (itens.length) {
-          const { error: e2 } = await supabase.from("movimento_item").insert(itens);
-          if (e2) {
-            console.error("criar_pedido movimento_item error", e2, itens);
-            throw e2;
-          }
-        }
-
-        // Recalcula totais
-        try { await supabase.rpc("fu_recalcular_pedido", { _movimento_id: movId }); } catch (_) {}
-
-        return {
-          ok: true,
-          movimento_id: movId,
-          nr_movimento: nr,
-          vendedor_resolvido: funcionarioId,
-          ui_action: { type: "open_tab", component: "pedidos", titulo: "Pedidos" },
-        };
-      }
 
       case "finalizar_venda_pdv": {
         const { error } = await supabase.rpc("fu_mudar_status_pedido_pdv", {
@@ -681,8 +539,11 @@ async function executeTool(
         // 1. Resolver cliente
         const digits = nomeCliente.replace(/\D/g, "");
         let qCli = supabase.from("cadastro").select("cadastro_id, razao_social").eq("excluido_visivel", false).limit(1);
-        if (digits.length >= 6) qCli = qCli.ilike("cnpj", `%${digits}%`);
-        else qCli = qCli.ilike("razao_social", `%${nomeCliente}%`);
+        if (digits.length >= 11) {
+          qCli = qCli.ilike("cnpj", `%${digits}%`);
+        } else {
+          qCli = qCli.or(`razao_social.ilike.%${nomeCliente}%,nome_fantasia.ilike.%${nomeCliente}%`);
+        }
         const { data: clientes } = await qCli;
         if (!clientes || clientes.length === 0) return { error: `Cliente '${nomeCliente}' não encontrado.` };
         const cadastroId = clientes[0].cadastro_id;
@@ -697,18 +558,23 @@ async function executeTool(
         const itensResolvidos: any[] = [];
         let vlTotal = 0;
         for (const it of itensSrc) {
-          const nomeProd = String(it.nome_produto || "");
-          const { data: prods } = await supabase.from("produto")
-            .select("produto_id, nm_produto, vl_venda, unidade_id")
-            .eq("excluido_visivel", false)
-            .or(`nm_produto.ilike.%${nomeProd}%,codigo_barras.ilike.%${nomeProd}%`)
+          const nomeProd = String(it.nome_produto || "").trim();
+          let orQuery = `nome.ilike.%${nomeProd}%,gtin.ilike.%${nomeProd}%`;
+          if (!isNaN(Number(nomeProd)) && nomeProd !== "") {
+            orQuery += `,produto_id.eq.${Number(nomeProd)}`;
+          }
+          const { data: prods, error: prodsErr } = await supabase.from("produto")
+            .select("produto_id, nome, preco_venda, unidade_id")
+            .eq("excluido", false)
+            .or(orQuery)
             .limit(1);
+          if (prodsErr) return { error: `Erro SQL buscando produto: ${prodsErr.message}` };
           if (!prods || prods.length === 0) return { error: `Produto '${nomeProd}' não encontrado.` };
           const prod = prods[0];
           const qt = Number(it.qt) || 1;
-          const vlu = Number(it.vl_unitario) > 0 ? Number(it.vl_unitario) : Number(prod.vl_venda) || 0;
+          const vlu = Number(it.vl_unitario) > 0 ? Number(it.vl_unitario) : Number(prod.preco_venda) || 0;
           vlTotal += qt * vlu;
-          itensResolvidos.push({ produto_id: prod.produto_id, nm_produto: prod.nm_produto, unidade_id: prod.unidade_id, qt, vlu });
+          itensResolvidos.push({ produto_id: prod.produto_id, nm_produto: prod.nome, unidade_id: prod.unidade_id, qt, vlu });
         }
 
         // 4. Próximos IDs
