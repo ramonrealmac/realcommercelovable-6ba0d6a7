@@ -10,22 +10,29 @@ const SYSTEM_PROMPT = `Você é o RealSys, assistente virtual integrado ao ERP R
 
 Você pode ajudar o usuário a:
 - Abrir formulários do sistema (clientes, produtos, pedidos, PDV, NFe, etc.)
-- Cadastrar clientes
+- Cadastrar clientes e buscar dados via CNPJ (consulta externa)
 - Consultar clientes, produtos e condições de pagamento cadastrados
-- Criar pedidos (orçamentos) — NÃO faturam e NÃO registram caixa, apenas geram o pedido em modo Orçamento (st_pedido='O')
-- Extrair dados de documentos enviados pelo usuário (anexos)
+- Criar pedidos (orçamentos) e FINALIZAR VENDAS (faturar/baixar estoque)
+- EMITIR DOCUMENTOS FISCAIS (NFe e NFCe) — você tem autonomia para isso após conferência
+- Extrair dados de documentos enviados pelo usuário (anexos XML, PDF, Imagens)
+- Sugerir CFOPs de devolução para notas fiscais
 
-Fluxo OBRIGATÓRIO para CRIAR PEDIDO:
+Fluxo OBRIGATÓRIO para CRIAR PEDIDO/VENDA:
 1. Pergunte ao vendedor: cliente, condição de pagamento, data de entrega, e a lista de produtos (nome, quantidade, preço).
 2. Identifique o cliente via buscar_cliente. Se houver mais de um resultado, peça para escolher.
 3. Identifique a condição de pagamento via buscar_cond_pagamento. Se ambígua, peça para escolher.
 4. Para CADA produto informado por nome, chame buscar_produto e CONFIRME com o vendedor mostrando: código (produto_id), nome do produto e valor sugerido (vl_venda). Se o vendedor informar preço diferente, use o preço informado.
 5. Resuma TUDO (cliente, vendedor=usuário logado, cond. pagamento, data entrega, itens com qt e preço, total) e peça confirmação final.
-6. Só após o "ok" do vendedor, chame criar_pedido. O vendedor (funcionario_id) é o usuário logado e será resolvido automaticamente — NÃO peça.
+6. Só após o "ok" do vendedor, chame criar_pedido.
+7. Se o usuário quiser FINALIZAR ou EMITIR, chame finalizar_venda_pdv e depois emitir_documento_fiscal.
 
 Sempre que o usuário pedir uma ação que tenha uma ferramenta correspondente, USE a ferramenta — não simule. Antes de cadastrar/criar algo definitivo, confirme com o usuário os dados principais.
 
-Quando o usuário enviar um anexo (imagem/PDF/áudio), o conteúdo extraído virá como mensagem do sistema/tool. Use esse conteúdo para propor ações.`;
+Quando o usuário enviar um anexo XML de NFe, você deve:
+1. Ler o conteúdo (virá no contexto).
+2. Identificar se é uma nota de compra ou venda.
+3. Se for de devolução, sugerir os CFOPs invertidos usando sugerir_cfop_devolucao para cada item.
+4. Oferecer para cadastrar o cliente/fornecedor se ele não existir.`;
 
 const TOOLS = [
   {
@@ -134,6 +141,52 @@ const TOOLS = [
           },
         },
         required: ["cadastro_id", "condpagto_id", "dt_entrega", "itens"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "finalizar_venda_pdv",
+      description: "Finaliza uma venda no PDV, alterando o status do movimento para 'Recebido'.",
+      parameters: {
+        type: "object",
+        properties: {
+          movimento_id: { type: "number" }
+        },
+        required: ["movimento_id"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "emitir_documento_fiscal",
+      description: "Emite um documento fiscal (NFe ou NFCe) para um movimento já finalizado.",
+      parameters: {
+        type: "object",
+        properties: {
+          movimento_id: { type: "number" },
+          modelo: { type: "number", enum: [55, 65], description: "55 para NFe, 65 para NFCe" }
+        },
+        required: ["movimento_id", "modelo"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "sugerir_cfop_devolucao",
+      description: "Sugere o CFOP de devolução invertendo o CFOP de origem.",
+      parameters: {
+        type: "object",
+        properties: {
+          cfop_origem: { type: "string" }
+        },
+        required: ["cfop_origem"],
         additionalProperties: false,
       },
     },
@@ -342,6 +395,60 @@ async function executeTool(
         };
       }
 
+      case "finalizar_venda_pdv": {
+        const { error } = await supabase.rpc("fu_mudar_status_pedido_pdv", {
+          p_movimento_id: args.movimento_id,
+          p_novo_status: "R",
+        });
+        if (error) throw error;
+        return { ok: true, movimento_id: args.movimento_id, status: "R" };
+      }
+
+      case "emitir_documento_fiscal": {
+        // Calcular impostos
+        const { error: eTax } = await supabase.rpc("fu_calcular_impostos_movimento", {
+          p_movimento_id: args.movimento_id,
+        });
+        if (eTax) throw eTax;
+
+        // Pré-validar
+        const { error: eVal } = await supabase.rpc("fn_prevalidar_nfe", {
+          p_movimento_id: args.movimento_id,
+        });
+        if (eVal) throw eVal;
+
+        // Inserir evento fiscal para o worker
+        const { data, error } = await supabase.from("fiscal_evento").insert({
+          empresa_id: empresaId,
+          comando: args.modelo === 55 ? "NFE.CriarEnviarNFe" : "NFE.CriarEnviarNFCe",
+          payload: { movimento_id: args.movimento_id, modelo: args.modelo },
+          status: "PENDENTE",
+          tipo: args.modelo === 55 ? "NFE" : "NFCE",
+        }).select("id").single();
+
+        if (error) throw error;
+        return { ok: true, evento_id: data.id, msg: "Solicitação de emissão enviada para processamento." };
+      }
+
+      case "sugerir_cfop_devolucao": {
+        const cf = String(args.cfop_origem || "");
+        const MAP: Record<string, string> = {
+          "5101": "1201", "5102": "1202", "5202": "1202", "5411": "1411", "5556": "1556",
+          "6101": "2201", "6102": "2202", "6202": "2202", "6411": "2411", "6556": "2556",
+          "1101": "5201", "1102": "5202", "1411": "5411", "1556": "5556",
+          "2101": "6201", "2102": "6202", "2411": "6411", "2556": "6556",
+        };
+        let sug = MAP[cf];
+        if (!sug) {
+          const f = cf[0];
+          if (f === "5") sug = "1" + cf.substring(1);
+          else if (f === "6") sug = "2" + cf.substring(1);
+          else if (f === "1") sug = "5" + cf.substring(1);
+          else if (f === "2") sug = "6" + cf.substring(1);
+        }
+        return { sugerido: sug || "1202" };
+      }
+
       default:
         return { error: `Ferramenta desconhecida: ${name}` };
     }
@@ -372,8 +479,19 @@ Deno.serve(async (req) => {
 
     const { messages, empresaId } = await req.json();
 
+    // Buscar configurações dinâmicas da empresa
+    let iaInstructions = "";
+    if (empresaId) {
+      const { data: emp } = await supabase
+        .from("empresa")
+        .select("ia_instrucoes")
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      if (emp?.ia_instrucoes) iaInstructions = emp.ia_instrucoes;
+    }
+
     const conversation: any[] = [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: SYSTEM_PROMPT + (iaInstructions ? `\n\nINSTRUÇÕES ADICIONAIS DA EMPRESA:\n${iaInstructions}` : "") },
       ...(messages || []),
     ];
 
