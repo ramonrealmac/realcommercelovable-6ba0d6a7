@@ -21,6 +21,9 @@ Para criar qualquer pedido, use SEMPRE "criar_pedido_completo" passando nomes (n
 - finalizar: true se quiser já faturar; emitir_nfe/emitir_nfce: true para emitir
 NUNCA chame buscar_cliente ou buscar_produto separadamente para criar pedidos.
 
+REGRA OBRIGATÓRIA — RESUMO APÓS CRIAR PEDIDO:
+Após "criar_pedido_completo" retornar com sucesso, SEMPRE apresente ao usuário um resumo formatado contendo: número do pedido, data de emissão, cliente, vendedor, condição de pagamento, lista de produtos (nome, qtde, preço unitário, desconto, total), subtotal, desconto e total geral. Use os dados do campo "resumo" retornado pela ferramenta.
+
 Sempre use ferramentas para executar ações — nunca simule ou peça ao usuário para fazer manualmente.`;
 
 
@@ -582,10 +585,20 @@ async function executeTool(
           itensResolvidos.push({ produto_id: prod.produto_id, nm_produto: prod.nome, unidade_id: prod.unidade_id, qt, vlu });
         }
 
+        // Resolver funcionário vinculado ao usuário logado (vendedor)
+        const { data: funcUser } = await supabase.from("funcionario")
+          .select("funcionario_id, nome")
+          .eq("usr_id", userId)
+          .eq("empresa_id", empresaId)
+          .maybeSingle();
+        const funcionarioId = funcUser?.funcionario_id || null;
+
+        const dtEmissao = new Date().toISOString();
         const { data: movRow2, error: eMov2 } = await supabase.from("movimento").insert({
           empresa_id: empresaId, cadastro_id: cadastroId,
           condicao_id: condId, tp_movimento: "PD", tp_origem: "ASSISTENTE",
-          st_pedido: "O", faturado: "N", dt_emissao: new Date().toISOString(),
+          funcionario_id: funcionarioId,
+          st_pedido: "O", faturado: "N", dt_emissao: dtEmissao,
           dt_entrega: args.dt_entrega || new Date().toISOString().substring(0, 10),
           obs_pedido: String(args.obs || ""),
           vl_produto: vlTotal, vl_movimento: vlTotal, vl_desconto: 0, pc_desconto: 0, tp_desconto: "N", excluido: false,
@@ -645,11 +658,37 @@ async function executeTool(
           }
         }
 
+        // Reler totais consolidados após recalculo
+        const { data: movFinal } = await supabase.from("movimento")
+          .select("nr_movimento, dt_emissao, vl_produto, vl_desconto, vl_movimento")
+          .eq("movimento_id", movId2).single();
+
+        const resumo = {
+          numero: movFinal?.nr_movimento ?? nr2,
+          dt_emissao: movFinal?.dt_emissao ?? dtEmissao,
+          cliente: clientes[0].razao_social,
+          vendedor_id: funcionarioId,
+          vendedor_nome: funcUser?.nome || null,
+          condicao_pagamento: conds && conds[0] ? conds[0].descricao : nomeCond,
+          subtotal: Number(movFinal?.vl_produto ?? vlTotal),
+          desconto: Number(movFinal?.vl_desconto ?? 0),
+          total: Number(movFinal?.vl_movimento ?? vlTotal),
+          itens: itensResolvidos.map((i) => ({
+            produto: i.nm_produto,
+            qt: i.qt,
+            vl_unitario: i.vlu,
+            desconto: 0,
+            total: Number((i.qt * i.vlu).toFixed(2)),
+          })),
+        };
+
         return {
           ok: true, movimento_id: movId2, nr_movimento: nr2,
-          cliente: clientes[0].razao_social, itens: itensResolvidos.map(i => i.nm_produto),
+          cliente: clientes[0].razao_social,
+          resumo,
           evento_id: eventoId2,
           ui_action: { type: "open_tab", component: "pedidos", titulo: "Pedidos" },
+          msg: `Pedido #${resumo.numero} criado para ${resumo.cliente}. Total: R$ ${resumo.total.toFixed(2)}.`,
         };
       }
 
