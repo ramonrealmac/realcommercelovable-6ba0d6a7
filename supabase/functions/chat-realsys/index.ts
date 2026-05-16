@@ -6,24 +6,28 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SYSTEM_PROMPT = `Você é o RealSys, assistente virtual integrado ao ERP RealSys. Responde sempre em português do Brasil, de forma cordial e objetiva.
+const SYSTEM_PROMPT = `Você é o RealSys, assistente virtual integrado ao ERP RealSys. Responde sempre em português do Brasil.
 
-Você TEM AUTONOMIA TOTAL para realizar as seguintes ações através de suas ferramentas:
-- Abrir formulários do sistema (clientes, produtos, pedidos, PDV, NFe, etc.)
-- Cadastrar clientes e buscar dados via CNPJ (consulta externa)
-- Consultar clientes, produtos e condições de pagamento cadastrados
-- Criar pedidos (orçamentos) e FINALIZAR VENDAS (faturar/baixar estoque) usando finalizar_venda_pdv.
-- EMITIR DOCUMENTOS FISCAIS (NFe e NFCe) usando emitir_documento_fiscal — você deve fazer isso sempre que solicitado, após confirmar os dados.
+Você TEM AUTONOMIA TOTAL para executar ações no sistema através de ferramentas. NUNCA diga que não pode emitir notas, clicar em botões ou executar ações — você tem ferramentas para isso.
 
-IMPORTANTE:
-- NUNCA diga que não pode clicar em botões ou que não pode emitir notas. Você executa essas ações chamando as ferramentas correspondentes.
-- Se o usuário enviar um XML de devolução, você deve:
-  1. Extrair os dados (Contexto).
-  2. Verificar se o fornecedor/cliente já existe (buscar_cliente). Se não, oferecer cadastrar_cliente.
-  3. Criar o movimento de devolução (criar_pedido com tp_movimento='PD' ou similar).
-  4. Oferecer para faturar (finalizar_venda_pdv) e emitir a nota (emitir_documento_fiscal).
+REGRA OBRIGATÓRIA — XML DE DEVOLUÇÃO:
+Quando o usuário enviar um XML de NFe e pedir devolução, você DEVE imediatamente chamar a ferramenta "processar_devolucao_xml" com os dados extraídos do XML:
+- cnpj_emitente: CNPJ do emitente (somente dígitos)
+- razao_emitente: razão social do emitente
+- chave_nfe: chave de acesso (44 dígitos)
+- nr_nfe_original: número da nota
+- itens: lista com nome_produto, cfop_origem, qt e vl_unitario de cada item
+- emitir_nfe: true (emitir automaticamente)
+Faça isso SEM pedir confirmação prévia. Se faltar algum dado do XML, use um valor padrão razoável.
 
-Sempre que o usuário pedir uma ação que tenha uma ferramenta correspondente, USE a ferramenta — não simule. Antes de cadastrar/criar algo definitivo, confirme com o usuário os dados principais.`;
+REGRA — CRIAR PEDIDO:
+1. Colete: cliente, condição de pagamento, itens (nome+qt+preço).
+2. Busque cliente via buscar_cliente e produtos via buscar_produto.
+3. Confirme o resumo com o usuário.
+4. Chame criar_pedido, depois finalizar_venda_pdv e emitir_documento_fiscal se solicitado.
+
+Sempre use ferramentas para executar ações — nunca simule ou peça ao usuário para fazer manualmente.`;
+
 
 const TOOLS = [
   {
@@ -486,8 +490,163 @@ async function executeTool(
         return { sugerido: sug || "1202" };
       }
 
+      case "processar_devolucao_xml": {
+        const cnpj = String(args.cnpj_emitente || "").replace(/\D/g, "");
+        const razao = String(args.razao_emitente || "").trim();
+        const itensSrc: any[] = Array.isArray(args.itens) ? args.itens : [];
+        const emitir = args.emitir_nfe !== false; // default true
+
+        // 1. Buscar ou criar fornecedor
+        let cadastroId: number | null = null;
+        const { data: fornExist } = await supabase.from("cadastro")
+          .select("cadastro_id").eq("cnpj", cnpj).maybeSingle();
+        if (fornExist) {
+          cadastroId = fornExist.cadastro_id;
+        } else {
+          // Criar fornecedor automaticamente
+          const { data: novoForn, error: eForn } = await supabase.from("cadastro").insert({
+            empresa_id: empresaId,
+            razao_social: razao,
+            nome_fantasia: razao,
+            nome_curto: razao.substring(0, 30),
+            identificacao: "",
+            cnpj,
+            tp_pessoa: cnpj.length === 14 ? "J" : "F",
+            tp_contribuinte: "N",
+            st_cliente: "N",
+            st_fornecedor: "S",
+            st_transportador: "N",
+            st_vendedor: "N",
+            excluido_visivel: false,
+          }).select("cadastro_id").single();
+          if (eForn) throw eForn;
+          cadastroId = novoForn.cadastro_id;
+        }
+
+        // 2. Resolver condição de pagamento padrão (à vista)
+        const { data: condPadrao } = await supabase.from("condicao_pagamento")
+          .select("condicao_id").eq("empresa_id", empresaId).eq("excluido", false)
+          .ilike("descricao", "%vista%").limit(1).maybeSingle();
+
+        // 3. Próximos IDs
+        const { data: maxMov } = await supabase.from("movimento").select("movimento_id").order("movimento_id", { ascending: false }).limit(1);
+        const movId = ((maxMov && maxMov[0]?.movimento_id) || 0) + 1;
+        const { data: maxNr } = await supabase.from("movimento").select("nr_movimento").eq("empresa_id", empresaId).order("nr_movimento", { ascending: false }).limit(1);
+        const nr = ((maxNr && maxNr[0]?.nr_movimento) || 0) + 1;
+
+        const vlTotal = itensSrc.reduce((s: number, it: any) => s + (Number(it.qt) || 0) * (Number(it.vl_unitario) || 0), 0);
+
+        const { error: eMov } = await supabase.from("movimento").insert({
+          movimento_id: movId,
+          empresa_id: empresaId,
+          cadastro_id: cadastroId,
+          condicao_id: condPadrao?.condicao_id || null,
+          nr_movimento: nr,
+          tp_movimento: "PD",
+          tp_origem: "DEVOLUCAO_XML",
+          st_pedido: "O",
+          faturado: "N",
+          dt_emissao: new Date().toISOString(),
+          dt_entrega: new Date().toISOString().substring(0, 10),
+          obs_pedido: `Devolução NFe ${args.nr_nfe_original || ""} | Chave: ${args.chave_nfe || ""}`,
+          vl_produto: vlTotal,
+          vl_movimento: vlTotal,
+          vl_desconto: 0,
+          pc_desconto: 0,
+          tp_desconto: "N",
+          excluido: false,
+        });
+        if (eMov) throw eMov;
+
+        // 4. Mapear itens por nome no banco e inserir
+        const { data: maxIt } = await supabase.from("movimento_item").select("movimento_item_id").order("movimento_item_id", { ascending: false }).limit(1);
+        let nextItId = ((maxIt && maxIt[0]?.movimento_item_id) || 0) + 1;
+
+        const itensInsert = await Promise.all(itensSrc.map(async (it: any) => {
+          const CFOP_MAP: Record<string, string> = {
+            "5101": "1201","5102": "1202","5201": "1201","5202": "1202",
+            "6101": "2201","6102": "2202","6201": "2201","6202": "2202",
+            "5411": "1411","6411": "2411","5556": "1556","6556": "2556",
+          };
+          const cfopDev = CFOP_MAP[String(it.cfop_origem || "")] || "1202";
+          // Tenta achar produto por nome
+          const { data: prod } = await supabase.from("produto")
+            .select("produto_id, nm_produto, unidade_id")
+            .ilike("nm_produto", `%${String(it.nome_produto).split(" ")[0]}%`)
+            .eq("excluido_visivel", false).limit(1).maybeSingle();
+          const qt = Number(it.qt) || 0;
+          const vlu = Number(it.vl_unitario) || 0;
+          return {
+            movimento_item_id: nextItId++,
+            empresa_id: empresaId,
+            movimento_id: movId,
+            produto_id: prod?.produto_id || null,
+            nm_produto: prod?.nm_produto || it.nome_produto,
+            unidade_id: prod?.unidade_id || null,
+            cfop: cfopDev,
+            tp_movimento: "PD",
+            qt_movimento: qt,
+            vl_und_produto: vlu,
+            vl_produto: qt * vlu,
+            vl_movimento: qt * vlu,
+            vl_desconto: 0,
+            pc_desconto: 0,
+            tp_desconto: "N",
+            excluido: false,
+          };
+        }));
+
+        const { error: eIt } = await supabase.from("movimento_item").insert(itensInsert);
+        if (eIt) throw eIt;
+        try { await supabase.rpc("fu_recalcular_pedido", { _movimento_id: movId }); } catch (_) {}
+
+        // 5. Finalizar venda
+        const { error: eFin } = await supabase.rpc("fu_mudar_status_pedido_pdv", {
+          p_movimento_id: movId,
+          p_novo_status: "R",
+        });
+        if (eFin) throw eFin;
+
+        let eventoId = null;
+        if (emitir) {
+          // 6. Calcular impostos e emitir
+          const { data: nfeId, error: eTax } = await supabase.rpc("fu_calcular_impostos_movimento", {
+            p_movimento_id: movId,
+            p_modelo: "55",
+          });
+          if (eTax) throw eTax;
+          const { error: eVal } = await supabase.rpc("fn_prevalidar_nfe", {
+            p_nfe_cabecalho_id: nfeId,
+            p_empresa_id: empresaId,
+          });
+          if (eVal) throw eVal;
+          const { data: ev, error: eEv } = await supabase.from("fiscal_evento").insert({
+            empresa_id: empresaId,
+            comando: "NFE.CriarEnviarNFe",
+            payload: { movimento_id: movId, modelo: 55, nfe_cabecalho_id: nfeId, chave_ref: args.chave_nfe },
+            status: "PENDENTE",
+            tipo: "NFE",
+          }).select("id").single();
+          if (eEv) throw eEv;
+          eventoId = ev.id;
+        }
+
+        return {
+          ok: true,
+          movimento_id: movId,
+          nr_movimento: nr,
+          fornecedor_id: cadastroId,
+          evento_id: eventoId,
+          msg: emitir
+            ? `Devolução criada (Pedido #${nr}) e nota fiscal enviada para processamento.`
+            : `Devolução criada (Pedido #${nr}). Aguardando confirmação para emitir.`,
+          ui_action: { type: "open_tab", component: "pedidos", titulo: "Pedidos" },
+        };
+      }
+
       default:
         return { error: `Ferramenta desconhecida: ${name}` };
+
     }
   } catch (e: any) {
     return { error: e?.message || String(e) };
