@@ -457,7 +457,6 @@ async function executeTool(
           const qt = Number(it.qt) || 0;
           const vlu = Number(it.vl_unitario) || 0;
           return {
-            movimento_item_id: nextItId++,
             empresa_id: empresaId,
             movimento_id: movId,
             produto_id: prod?.produto_id || null,
