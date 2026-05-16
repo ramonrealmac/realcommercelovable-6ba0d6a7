@@ -2,8 +2,8 @@ import React, { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Trash2, Plus } from "lucide-react";
-import type { IMdfVeiculoReboque } from "./types";
-import { TP_CARROCERIA_OPTIONS, UF_OPTIONS } from "./types";
+import type { IMdfVeiculoReboque } from "../types/mdfeTypes";
+import { TP_CARROCERIA_OPTIONS, UF_OPTIONS } from "../types/mdfeTypes";
 
 const db = supabase as any;
 

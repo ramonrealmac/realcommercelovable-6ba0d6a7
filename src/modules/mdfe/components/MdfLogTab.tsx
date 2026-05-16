@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
-import type { IMdfLog } from "./types";
+import type { IMdfLog } from "../types/mdfeTypes";
 
 const db = supabase as any;
 

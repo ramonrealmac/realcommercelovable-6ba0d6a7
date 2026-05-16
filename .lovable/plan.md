@@ -1,48 +1,43 @@
 ## Objetivo
-Tornar a **Devolução de NF-e de Saída** acessível a partir de:
-1. **Menu de comandos (dropdown "Ações")** do Gerenciador Fiscal (`ListaNfeEmitidaForm`) — somente quando a nota for de **Saída** (`tp_nf = 1`) e estiver autorizada (`st_nf` em `E`/`1`).
-2. **Menu lateral → 2. Movimentações → Saídas**, ao lado de "Meus Pedidos".
 
-Mantém também o item já existente em **5. Fiscal → NFe/NFCe** (não duplicar comportamento, apenas garantir presença nos novos pontos).
+Corrigir os nomes de coluna errados em `supabase/functions/chat-realsys/index.ts` para que as ferramentas do RealSys Chat (buscar cliente/produto, criar pedido, lançar no caixa, emitir NFe/NFCe e processar devolução por XML) voltem a funcionar.
 
-## Alterações
+## Causa raiz
 
-### 1. `src/config/menuConfig.ts`
-Adicionar dentro de `mov-saidas.children` (após "Meus Pedidos"):
-```ts
-{ id: "devolucao-nfe-saida", title: "Devolução de NF-e de Saída", icon: ArrowUpFromLine },
-```
-(O item permanece também em "5. Fiscal → NFe/NFCe", como já está hoje.)
+A edge function referencia colunas/condições que não existem no schema atual, então a IA recebe `{error: "column ... does not exist"}` e responde "não consegui". O fluxo de emissão fiscal em si está correto — nunca é alcançado porque o pedido não chega a ser criado.
 
-### 2. `src/components/forms/ListaNfeEmitidaForm.tsx`
-No `DropdownMenuContent` de cada linha (após "Carta de Correção" e antes de "Inutilizar Numeração"), adicionar:
-```tsx
-<DropdownMenuItem
-  onClick={() => openTab({
-    title: `Devolução NF-e ${r.nr_nota || r.nfe_cabecalho_id}`,
-    component: "devolucao-nfe-saida",
-    params: { nfe_cabecalho_id: r.nfe_cabecalho_id },
-  })}
-  disabled={String(r.tp_nf) !== "1" || !["E", "1"].includes(String(r.st_nf))}
->
-  <ArrowUpFromLine className="w-4 h-4 mr-2 text-orange-500" /> Devolver Nota
-</DropdownMenuItem>
-```
-Importar o ícone `ArrowUpFromLine` de `lucide-react`.
+### Schema real (verificado)
 
-### 3. `src/components/forms/DevolucaoNfeSaidaForm.tsx`
-Aceitar prop opcional `initialNfeId?: number`. Quando informada:
-- Pular a Etapa 1 (busca).
-- Carregar diretamente a nota (`fiscal_nfe_cabecalho` + `fiscal_nfe_item`) pelo `nfe_cabecalho_id` e ir para Etapa 2 com os itens já preenchidos (qt = qt original, CFOP invertido, depósito padrão).
+- `cadastro`: usa `excluido` (não `excluido_visivel`).
+- `produto`: colunas reais são `nome`, `preco_venda`, `excluido` (não `nm_produto`, `vl_venda`, `excluido_visivel`).
+- `condicao_pagamento`: `excluido`.
+- `movimento_item`: `nm_produto` existe aqui (essa parte está OK no insert).
 
-### 4. `src/pages/Index.tsx`
-Atualizar o case existente para repassar o parâmetro:
-```ts
-case "devolucao-nfe-saida":
-  return <DevolucaoNfeSaidaForm initialNfeId={params?.nfe_cabecalho_id} />;
-```
+## Mudanças (apenas em `supabase/functions/chat-realsys/index.ts`)
 
-## Resultado
-- Operador clica nos 3 pontinhos de uma nota de saída autorizada → **Devolver Nota** → abre o expert já na Etapa 2 com itens carregados.
-- Operador também pode entrar pelo menu **Saídas → Devolução de NF-e de Saída** (busca padrão da Etapa 1).
-- Permanece o acesso por **Fiscal → NFe/NFCe**.
+1. **`buscar_cliente`** — trocar `.eq("excluido_visivel", false)` por `.eq("excluido", false)` e adicionar `.eq("empresa_id", empresaId)` quando `empresaId` existir.
+
+2. **`buscar_produto`** — reescrever:
+   ```ts
+   supabase.from("produto")
+     .select("produto_id, nome, preco_venda")
+     .ilike("nome", `%${termo}%`)
+     .eq("excluido", false)
+     .limit(10)
+   ```
+   Retornar `{ resultados }` mapeando `nome`/`preco_venda` (a IA já entende pelo schema do tool).
+
+3. **`processar_devolucao_xml`**:
+   - Busca de fornecedor por CNPJ: adicionar `.eq("empresa_id", empresaId)`.
+   - Insert em `cadastro`: remover o campo `excluido_visivel: false` (coluna inexistente).
+   - Busca de produto por nome no mapeamento de itens: trocar `nm_produto`/`excluido_visivel` por `nome`/`excluido`. Continuar mapeando o resultado para `nm_produto` no insert de `movimento_item` (lá a coluna existe).
+
+4. **`criar_pedido_completo`** — na busca de cliente: trocar `.eq("excluido_visivel", false)` por `.eq("excluido", false)`.
+
+Nenhuma mudança de schema, nenhuma mudança de UI, nenhuma mudança no `realcommerce-mcp/` (esse fica como utilitário externo opcional, como combinado).
+
+## Verificação após o deploy automático
+
+- Pedir no chat: "criar pedido para <cliente> com 2 unidades de <produto> à vista, finalizar e emitir NFe".
+- Conferir que `tool_results` traz `ok: true` com `movimento_id`, `nr_movimento` e `evento_id`.
+- Conferir em `fiscal_evento` que entrou um registro `PENDENTE` com `comando: NFE.CriarEnviarNFe`.
