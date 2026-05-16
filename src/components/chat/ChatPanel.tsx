@@ -33,6 +33,7 @@ const ChatPanel: React.FC<Props> = ({ open, onOpenChange }) => {
   const [XInput, setXInput] = useState("");
   const [XSending, setXSending] = useState(false);
   const [XRecording, setXRecording] = useState(false);
+  const [XIsDragging, setXIsDragging] = useState(false);
   const XMediaRecorderRef = useRef<MediaRecorder | null>(null);
   const XAudioChunksRef = useRef<Blob[]>([]);
   const XScrollRef = useRef<HTMLDivElement>(null);
@@ -140,20 +141,23 @@ const ChatPanel: React.FC<Props> = ({ open, onOpenChange }) => {
     setXSending(true);
     try {
       const { signedUrl } = await uploadAttachment(XUserId, file, file.name);
+      
+      const isXml = file.name.toLowerCase().endsWith(".xml") || file.type === "text/xml" || file.type === "application/xml";
+      
       const userMsg = await insertMessage({
         chat_conversa_id: XConversaId,
         user_id: XUserId,
         tp_remetente: "user",
         ds_conteudo: `Enviei um anexo: ${file.name}`,
         ds_anexo_url: signedUrl,
-        ds_anexo_tipo: file.type,
+        ds_anexo_tipo: isXml ? "text/xml" : file.type,
         ds_audio_url: null,
         tp_acao: null,
         dados_acao: null,
       });
       setXMessages((p) => [...p, userMsg]);
 
-      // Try extraction (image/pdf only)
+      // Try extraction (image/pdf/xml)
       let extracted = "";
       if (file.type.startsWith("image/") || file.type === "application/pdf") {
         try {
@@ -161,11 +165,45 @@ const ChatPanel: React.FC<Props> = ({ open, onOpenChange }) => {
         } catch (e) {
           console.warn("extração falhou", e);
         }
+      } else if (isXml) {
+        try {
+          extracted = await file.text();
+        } catch (e) {
+          console.warn("leitura xml falhou", e);
+        }
       }
       await sendToAssistant(extracted || undefined);
     } catch (e: any) {
       toast.error("Erro no anexo: " + (e?.message || ""));
       setXSending(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setXIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setXIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setXIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      handleAttachment(files[0]);
     }
   };
 
@@ -220,7 +258,25 @@ const ChatPanel: React.FC<Props> = ({ open, onOpenChange }) => {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+      <SheetContent 
+        side="right" 
+        className="w-full sm:max-w-md p-0 flex flex-col outline-none"
+        onDragOver={handleDragOver}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {XIsDragging && (
+          <div className="absolute inset-0 z-50 bg-primary/20 backdrop-blur-[2px] flex items-center justify-center pointer-events-none border-4 border-dashed border-primary m-2 rounded-xl">
+            <div className="bg-background/90 p-6 rounded-2xl shadow-2xl flex flex-col items-center gap-3 animate-in zoom-in-95 duration-200">
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                <Send size={32} className="-rotate-45" />
+              </div>
+              <p className="text-sm font-bold text-primary uppercase tracking-widest">Solte para enviar</p>
+              <p className="text-xs text-muted-foreground italic">XML, PDF, Imagens ou Áudios</p>
+            </div>
+          </div>
+        )}
         <SheetHeader className="px-4 py-3 border-b border-border bg-muted/40">
           <SheetTitle className="flex items-center gap-2">
             <img src={realsysBot} alt="RealSys" className="w-8 h-8 object-contain" />
@@ -252,7 +308,7 @@ const ChatPanel: React.FC<Props> = ({ open, onOpenChange }) => {
             ref={XFileInputRef}
             type="file"
             className="hidden"
-            accept="image/*,application/pdf,audio/*"
+            accept="image/*,application/pdf,audio/*,text/xml,application/xml,.xml"
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (f) handleAttachment(f);

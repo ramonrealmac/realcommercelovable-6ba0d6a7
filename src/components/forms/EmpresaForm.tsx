@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
-  RotateCcw, Copy, Eye, Palette, Clock, Link2, Upload, Plus, Download, Search,
+  RotateCcw, Copy, Eye, Palette, Clock, Link2, Upload, Plus, Download, Search, Bot
 } from "lucide-react";
 import CidadeSearchDialog from "@/components/shared/CidadeSearchDialog";
 import { useRef } from "react";
@@ -139,6 +139,9 @@ const emptyEmpresa = () => ({
   tp_operacao_caixa: 0,
   imagem_caixa: "",
   valida_estoque: "",
+  ia_ativa: false,
+  ia_instrucoes: "",
+  ia_modelo: "gpt-4o",
 });
 
 type TEmpresa = ReturnType<typeof emptyEmpresa>;
@@ -517,6 +520,7 @@ const EmpresaForm: React.FC = () => {
     { id: "cadastro", label: "Cadastro" },
     { id: "financeiro", label: "Financeiro / Caixa" },
     { id: "integracoes", label: "Integrações" },
+    { id: "ia", label: "IA & Automação" },
     { id: "horario", label: "Horário Loja Virtual" },
     { id: "link", label: "Link de Vendas" },
     { id: "tema", label: "Tema" },
@@ -794,6 +798,75 @@ const EmpresaForm: React.FC = () => {
                   {field("abacatepay_webhook_secret", "Webhook Secret", { type: "password" })}
                   {field("abacatepay_webhook_url", "Webhook URL")}
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── IA & Automação ── */}
+        {XInnerTab === "ia" && (
+          <div className="space-y-6 max-w-4xl">
+            <div className="flex items-center justify-between p-4 border rounded-lg bg-card shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-full ${XDisplayVal("ia_ativa") ? "bg-green-100 text-green-600" : "bg-muted text-muted-foreground"}`}>
+                  <Bot className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold">Status do Agente IA</h3>
+                  <p className="text-xs text-muted-foreground">Habilita ou desabilita as funções autônomas do Realsys para esta empresa.</p>
+                </div>
+              </div>
+              <Switch
+                checked={!!XDisplayVal("ia_ativa")}
+                onCheckedChange={v => updateEdit("ia_ativa", v)}
+                disabled={!XIsEditing}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Modelo de Inteligência</Label>
+                <select
+                  value={XDisplayVal("ia_modelo") || "gpt-4o"}
+                  disabled={!XIsEditing}
+                  onChange={e => updateEdit("ia_modelo", e.target.value)}
+                  className={`w-full border border-border rounded px-3 py-2 text-sm shadow-sm transition-all ${!XIsEditing ? "bg-secondary" : "bg-card focus:ring-2 focus:ring-primary/20"}`}
+                >
+                  <option value="gpt-4o">GPT-4o (Recomendado)</option>
+                  <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                  <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Mais rápido)</option>
+                  <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
+                </select>
+                <p className="text-[10px] text-muted-foreground">Modelos mais avançados oferecem melhor compreensão de regras de negócio complexas.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Nível de Autonomia</Label>
+                <div className="p-3 border rounded bg-secondary/30 text-xs text-muted-foreground italic">
+                  O Realsys opera via MCP Server dedicado, com acesso direto a cadastros, pedidos e emissão fiscal.
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Instruções do Sistema (System Prompt)</Label>
+                <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded">Markdown Suportado</span>
+              </div>
+              <Textarea
+                value={XDisplayVal("ia_instrucoes")}
+                onChange={e => updateEdit("ia_instrucoes", e.target.value)}
+                rows={12}
+                placeholder="Ex: Você é o Realsys, o assistente virtual da RealCommerce. Sua função é ajudar o cliente a realizar pedidos, consultar estoque e emitir notas fiscais. Seja cordial e direto. Se o cliente informar um CNPJ, use a ferramenta de consulta para obter os dados automaticamente..."
+                className={`font-mono text-sm leading-relaxed shadow-sm transition-all ${!XIsEditing ? "bg-secondary" : "bg-card focus:ring-2 focus:ring-primary/20"}`}
+                disabled={!XIsEditing}
+              />
+              <div className="p-3 bg-blue-50 border border-blue-100 rounded text-xs text-blue-700 flex gap-3">
+                <div className="shrink-0 pt-0.5">💡</div>
+                <p>
+                  <strong>Dica:</strong> Explique detalhadamente como a IA deve se comportar. Defina o tom de voz, regras de desconto permitidas, e como lidar com exceções. 
+                  O prompt de sistema é a "alma" do seu robô.
+                </p>
               </div>
             </div>
           </div>

@@ -359,6 +359,3 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) =>
 };
 
 export default VeiculoGrid;
-
-
-export default VeiculoGrid;
