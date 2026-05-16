@@ -655,11 +655,37 @@ async function executeTool(
           }
         }
 
+        // Reler totais consolidados após recalculo
+        const { data: movFinal } = await supabase.from("movimento")
+          .select("nr_movimento, dt_emissao, vl_produto, vl_desconto, vl_movimento")
+          .eq("movimento_id", movId2).single();
+
+        const resumo = {
+          numero: movFinal?.nr_movimento ?? nr2,
+          dt_emissao: movFinal?.dt_emissao ?? dtEmissao,
+          cliente: clientes[0].razao_social,
+          vendedor_id: funcionarioId,
+          vendedor_nome: funcUser?.nome || null,
+          condicao_pagamento: conds && conds[0] ? conds[0].descricao : nomeCond,
+          subtotal: Number(movFinal?.vl_produto ?? vlTotal),
+          desconto: Number(movFinal?.vl_desconto ?? 0),
+          total: Number(movFinal?.vl_movimento ?? vlTotal),
+          itens: itensResolvidos.map((i) => ({
+            produto: i.nm_produto,
+            qt: i.qt,
+            vl_unitario: i.vlu,
+            desconto: 0,
+            total: Number((i.qt * i.vlu).toFixed(2)),
+          })),
+        };
+
         return {
           ok: true, movimento_id: movId2, nr_movimento: nr2,
-          cliente: clientes[0].razao_social, itens: itensResolvidos.map(i => i.nm_produto),
+          cliente: clientes[0].razao_social,
+          resumo,
           evento_id: eventoId2,
           ui_action: { type: "open_tab", component: "pedidos", titulo: "Pedidos" },
+          msg: `Pedido #${resumo.numero} criado para ${resumo.cliente}. Total: R$ ${resumo.total.toFixed(2)}.`,
         };
       }
 
