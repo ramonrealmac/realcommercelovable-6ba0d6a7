@@ -415,20 +415,12 @@ async function executeTool(
           .select("condicao_id").eq("empresa_id", empresaId).eq("excluido", false)
           .ilike("descricao", "%vista%").limit(1).maybeSingle();
 
-        // 3. Próximos IDs
-        const { data: maxMov } = await supabase.from("movimento").select("movimento_id").order("movimento_id", { ascending: false }).limit(1);
-        const movId = ((maxMov && maxMov[0]?.movimento_id) || 0) + 1;
-        const { data: maxNr } = await supabase.from("movimento").select("nr_movimento").eq("empresa_id", empresaId).order("nr_movimento", { ascending: false }).limit(1);
-        const nr = ((maxNr && maxNr[0]?.nr_movimento) || 0) + 1;
-
         const vlTotal = itensSrc.reduce((s: number, it: any) => s + (Number(it.qt) || 0) * (Number(it.vl_unitario) || 0), 0);
 
-        const { error: eMov } = await supabase.from("movimento").insert({
-          movimento_id: movId,
+        const { data: movRow, error: eMov } = await supabase.from("movimento").insert({
           empresa_id: empresaId,
           cadastro_id: cadastroId,
           condicao_id: condPadrao?.condicao_id || null,
-          nr_movimento: nr,
           tp_movimento: "PD",
           tp_origem: "DEVOLUCAO_XML",
           st_pedido: "O",
@@ -442,12 +434,13 @@ async function executeTool(
           pc_desconto: 0,
           tp_desconto: "N",
           excluido: false,
-        });
+        }).select("movimento_id, nr_movimento").single();
         if (eMov) throw eMov;
+        const movId = movRow!.movimento_id;
+        const nr = movRow!.nr_movimento;
 
         // 4. Mapear itens por nome no banco e inserir
-        const { data: maxIt } = await supabase.from("movimento_item").select("movimento_item_id").order("movimento_item_id", { ascending: false }).limit(1);
-        let nextItId = ((maxIt && maxIt[0]?.movimento_item_id) || 0) + 1;
+
 
         const itensInsert = await Promise.all(itensSrc.map(async (it: any) => {
           const CFOP_MAP: Record<string, string> = {
@@ -464,7 +457,6 @@ async function executeTool(
           const qt = Number(it.qt) || 0;
           const vlu = Number(it.vl_unitario) || 0;
           return {
-            movimento_item_id: nextItId++,
             empresa_id: empresaId,
             movimento_id: movId,
             produto_id: prod?.produto_id || null,
@@ -578,26 +570,20 @@ async function executeTool(
           itensResolvidos.push({ produto_id: prod.produto_id, nm_produto: prod.nome, unidade_id: prod.unidade_id, qt, vlu });
         }
 
-        // 4. Próximos IDs
-        const { data: maxMov2 } = await supabase.from("movimento").select("movimento_id").order("movimento_id", { ascending: false }).limit(1);
-        const movId2 = ((maxMov2 && maxMov2[0]?.movimento_id) || 0) + 1;
-        const { data: maxNr2 } = await supabase.from("movimento").select("nr_movimento").eq("empresa_id", empresaId).order("nr_movimento", { ascending: false }).limit(1);
-        const nr2 = ((maxNr2 && maxNr2[0]?.nr_movimento) || 0) + 1;
-
-        const { error: eMov2 } = await supabase.from("movimento").insert({
-          movimento_id: movId2, empresa_id: empresaId, cadastro_id: cadastroId,
-          condicao_id: condId, nr_movimento: nr2, tp_movimento: "PD", tp_origem: "ASSISTENTE",
+        const { data: movRow2, error: eMov2 } = await supabase.from("movimento").insert({
+          empresa_id: empresaId, cadastro_id: cadastroId,
+          condicao_id: condId, tp_movimento: "PD", tp_origem: "ASSISTENTE",
           st_pedido: "O", faturado: "N", dt_emissao: new Date().toISOString(),
           dt_entrega: args.dt_entrega || new Date().toISOString().substring(0, 10),
           obs_pedido: String(args.obs || ""),
           vl_produto: vlTotal, vl_movimento: vlTotal, vl_desconto: 0, pc_desconto: 0, tp_desconto: "N", excluido: false,
-        });
+        }).select("movimento_id, nr_movimento").single();
         if (eMov2) throw eMov2;
+        const movId2 = movRow2!.movimento_id;
+        const nr2 = movRow2!.nr_movimento;
 
-        const { data: maxIt2 } = await supabase.from("movimento_item").select("movimento_item_id").order("movimento_item_id", { ascending: false }).limit(1);
-        let nextItId2 = ((maxIt2 && maxIt2[0]?.movimento_item_id) || 0) + 1;
         const itensDb = itensResolvidos.map((it) => ({
-          movimento_item_id: nextItId2++, empresa_id: empresaId, movimento_id: movId2,
+          empresa_id: empresaId, movimento_id: movId2,
           produto_id: it.produto_id, nm_produto: it.nm_produto, unidade_id: it.unidade_id,
           tp_movimento: "PD", qt_movimento: it.qt, vl_und_produto: it.vlu,
           vl_produto: it.qt * it.vlu, vl_movimento: it.qt * it.vlu,
