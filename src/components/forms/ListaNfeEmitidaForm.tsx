@@ -17,7 +17,8 @@ import {
   Terminal,
   MoreHorizontal,
   FileX,
-  CheckSquare
+  CheckSquare,
+  ArrowUpFromLine
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -475,6 +476,16 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => openTab({ title: `CCe NF-e ${r.nr_nota || r.nfe_cabecalho_id}`, component: "cce", params: { nfe_cabecalho_id: r.nfe_cabecalho_id } })}>
                         <FileText className="w-4 h-4 mr-2 text-amber-500" /> Carta de Correção
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => openTab({
+                          title: `Devolução NF-e ${r.nr_nota || r.nfe_cabecalho_id}`,
+                          component: "devolucao-nfe-saida",
+                          params: { nfe_cabecalho_id: r.nfe_cabecalho_id },
+                        })}
+                        disabled={String(r.tp_nf) !== "1" || !["E", "1"].includes(String(r.st_nf))}
+                      >
+                        <ArrowUpFromLine className="w-4 h-4 mr-2 text-orange-500" /> Devolver Nota
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => openTab({ 
                         title: `Inutilizar ${r.nr_nota || r.nfe_cabecalho_id}`, 
