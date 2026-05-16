@@ -8,31 +8,22 @@ const corsHeaders = {
 
 const SYSTEM_PROMPT = `Você é o RealSys, assistente virtual integrado ao ERP RealSys. Responde sempre em português do Brasil, de forma cordial e objetiva.
 
-Você pode ajudar o usuário a:
+Você TEM AUTONOMIA TOTAL para realizar as seguintes ações através de suas ferramentas:
 - Abrir formulários do sistema (clientes, produtos, pedidos, PDV, NFe, etc.)
 - Cadastrar clientes e buscar dados via CNPJ (consulta externa)
 - Consultar clientes, produtos e condições de pagamento cadastrados
-- Criar pedidos (orçamentos) e FINALIZAR VENDAS (faturar/baixar estoque)
-- EMITIR DOCUMENTOS FISCAIS (NFe e NFCe) — você tem autonomia para isso após conferência
-- Extrair dados de documentos enviados pelo usuário (anexos XML, PDF, Imagens)
-- Sugerir CFOPs de devolução para notas fiscais
+- Criar pedidos (orçamentos) e FINALIZAR VENDAS (faturar/baixar estoque) usando finalizar_venda_pdv.
+- EMITIR DOCUMENTOS FISCAIS (NFe e NFCe) usando emitir_documento_fiscal — você deve fazer isso sempre que solicitado, após confirmar os dados.
 
-Fluxo OBRIGATÓRIO para CRIAR PEDIDO/VENDA:
-1. Pergunte ao vendedor: cliente, condição de pagamento, data de entrega, e a lista de produtos (nome, quantidade, preço).
-2. Identifique o cliente via buscar_cliente. Se houver mais de um resultado, peça para escolher.
-3. Identifique a condição de pagamento via buscar_cond_pagamento. Se ambígua, peça para escolher.
-4. Para CADA produto informado por nome, chame buscar_produto e CONFIRME com o vendedor mostrando: código (produto_id), nome do produto e valor sugerido (vl_venda). Se o vendedor informar preço diferente, use o preço informado.
-5. Resuma TUDO (cliente, vendedor=usuário logado, cond. pagamento, data entrega, itens com qt e preço, total) e peça confirmação final.
-6. Só após o "ok" do vendedor, chame criar_pedido.
-7. Se o usuário quiser FINALIZAR ou EMITIR, chame finalizar_venda_pdv e depois emitir_documento_fiscal.
+IMPORTANTE:
+- NUNCA diga que não pode clicar em botões ou que não pode emitir notas. Você executa essas ações chamando as ferramentas correspondentes.
+- Se o usuário enviar um XML de devolução, você deve:
+  1. Extrair os dados (Contexto).
+  2. Verificar se o fornecedor/cliente já existe (buscar_cliente). Se não, oferecer cadastrar_cliente.
+  3. Criar o movimento de devolução (criar_pedido com tp_movimento='PD' ou similar).
+  4. Oferecer para faturar (finalizar_venda_pdv) e emitir a nota (emitir_documento_fiscal).
 
-Sempre que o usuário pedir uma ação que tenha uma ferramenta correspondente, USE a ferramenta — não simule. Antes de cadastrar/criar algo definitivo, confirme com o usuário os dados principais.
-
-Quando o usuário enviar um anexo XML de NFe, você deve:
-1. Ler o conteúdo (virá no contexto).
-2. Identificar se é uma nota de compra ou venda.
-3. Se for de devolução, sugerir os CFOPs invertidos usando sugerir_cfop_devolucao para cada item.
-4. Oferecer para cadastrar o cliente/fornecedor se ele não existir.`;
+Sempre que o usuário pedir uma ação que tenha uma ferramenta correspondente, USE a ferramenta — não simule. Antes de cadastrar/criar algo definitivo, confirme com o usuário os dados principais.`;
 
 const TOOLS = [
   {
@@ -191,7 +182,42 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "processar_devolucao_xml",
+      description: "Processa uma nota fiscal de DEVOLUÇÃO a partir de dados extraídos de um XML de NFe. Cria o fornecedor se não existir, gera o movimento de devolução e emite a NFe — tudo automaticamente. Use SEMPRE que o usuário enviar um XML e pedir devolução.",
+      parameters: {
+        type: "object",
+        properties: {
+          cnpj_emitente: { type: "string", description: "CNPJ do emitente da nota original, somente dígitos" },
+          razao_emitente: { type: "string", description: "Razão social do emitente" },
+          chave_nfe: { type: "string", description: "Chave de acesso da NFe original (44 dígitos)" },
+          nr_nfe_original: { type: "string", description: "Número da NFe original" },
+          itens: {
+            type: "array",
+            description: "Itens da nota a serem devolvidos",
+            items: {
+              type: "object",
+              properties: {
+                nome_produto: { type: "string" },
+                cfop_origem: { type: "string" },
+                qt: { type: "number" },
+                vl_unitario: { type: "number" },
+              },
+              required: ["nome_produto", "qt", "vl_unitario"],
+              additionalProperties: false,
+            },
+          },
+          emitir_nfe: { type: "boolean", description: "Se true, emite a NFe após criar o movimento" },
+        },
+        required: ["cnpj_emitente", "razao_emitente", "itens"],
+        additionalProperties: false,
+      },
+    },
+  },
 ];
+
 
 async function executeTool(
   name: string,

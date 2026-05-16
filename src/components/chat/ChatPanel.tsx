@@ -167,7 +167,8 @@ const ChatPanel: React.FC<Props> = ({ open, onOpenChange }) => {
         }
       } else if (isXml) {
         try {
-          extracted = await file.text();
+          const raw = await file.text();
+          extracted = raw.length > 150000 ? raw.substring(0, 150000) + "\n... (truncado por tamanho)" : raw;
         } catch (e) {
           console.warn("leitura xml falhou", e);
         }
