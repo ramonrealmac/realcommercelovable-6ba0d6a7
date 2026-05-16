@@ -434,12 +434,13 @@ async function executeTool(
           pc_desconto: 0,
           tp_desconto: "N",
           excluido: false,
-        });
+        }).select("movimento_id, nr_movimento").single();
         if (eMov) throw eMov;
+        const movId = movRow!.movimento_id;
+        const nr = movRow!.nr_movimento;
 
         // 4. Mapear itens por nome no banco e inserir
-        const { data: maxIt } = await supabase.from("movimento_item").select("movimento_item_id").order("movimento_item_id", { ascending: false }).limit(1);
-        let nextItId = ((maxIt && maxIt[0]?.movimento_item_id) || 0) + 1;
+
 
         const itensInsert = await Promise.all(itensSrc.map(async (it: any) => {
           const CFOP_MAP: Record<string, string> = {
