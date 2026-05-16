@@ -237,7 +237,8 @@ async function executeTool(
       case "buscar_cliente": {
         const termo = String(args.termo || "").trim();
         const digits = termo.replace(/\D/g, "");
-        let q = supabase.from("cadastro").select("cadastro_id, razao_social, nome_fantasia, cnpj, fone_geral").eq("st_cliente", "S").eq("excluido_visivel", false).limit(10);
+        let q = supabase.from("cadastro").select("cadastro_id, razao_social, nome_fantasia, cnpj, fone_geral").eq("st_cliente", "S").eq("excluido", false).limit(10);
+        if (empresaId) q = q.eq("empresa_id", empresaId);
         if (digits.length >= 3) q = q.ilike("cnpj", `%${digits}%`);
         else q = q.ilike("razao_social", `%${termo}%`);
         const { data, error } = await q;
@@ -247,7 +248,7 @@ async function executeTool(
 
       case "buscar_produto": {
         const termo = String(args.termo || "").trim();
-        const { data, error } = await supabase.from("produto").select("produto_id, nm_produto, vl_venda").ilike("nm_produto", `%${termo}%`).eq("excluido_visivel", false).limit(10);
+        const { data, error } = await supabase.from("produto").select("produto_id, nome, preco_venda").ilike("nome", `%${termo}%`).eq("excluido", false).limit(10);
         if (error) throw error;
         return { resultados: data || [] };
       }
@@ -404,7 +405,6 @@ async function executeTool(
             st_fornecedor: "S",
             st_transportador: "N",
             st_vendedor: "N",
-            excluido_visivel: false,
           }).select("cadastro_id").single();
           if (eForn) throw eForn;
           cadastroId = novoForn.cadastro_id;
@@ -458,9 +458,9 @@ async function executeTool(
           const cfopDev = CFOP_MAP[String(it.cfop_origem || "")] || "1202";
           // Tenta achar produto por nome
           const { data: prod } = await supabase.from("produto")
-            .select("produto_id, nm_produto, unidade_id")
-            .ilike("nm_produto", `%${String(it.nome_produto).split(" ")[0]}%`)
-            .eq("excluido_visivel", false).limit(1).maybeSingle();
+            .select("produto_id, nome, unidade_id")
+            .ilike("nome", `%${String(it.nome_produto).split(" ")[0]}%`)
+            .eq("excluido", false).limit(1).maybeSingle();
           const qt = Number(it.qt) || 0;
           const vlu = Number(it.vl_unitario) || 0;
           return {
@@ -468,7 +468,7 @@ async function executeTool(
             empresa_id: empresaId,
             movimento_id: movId,
             produto_id: prod?.produto_id || null,
-            nm_produto: prod?.nm_produto || it.nome_produto,
+            nm_produto: prod?.nome || it.nome_produto,
             unidade_id: prod?.unidade_id || null,
             cfop: cfopDev,
             tp_movimento: "PD",
@@ -538,7 +538,8 @@ async function executeTool(
 
         // 1. Resolver cliente
         const digits = nomeCliente.replace(/\D/g, "");
-        let qCli = supabase.from("cadastro").select("cadastro_id, razao_social").eq("excluido_visivel", false).limit(1);
+        let qCli = supabase.from("cadastro").select("cadastro_id, razao_social").eq("excluido", false).limit(1);
+        if (empresaId) qCli = qCli.eq("empresa_id", empresaId);
         if (digits.length >= 11) {
           qCli = qCli.ilike("cnpj", `%${digits}%`);
         } else {
