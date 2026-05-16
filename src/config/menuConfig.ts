@@ -234,6 +234,7 @@ export const MENU_CONFIG: MenuItem[] = [
           { id: "nfe-form", title: "Notas Emitidas", icon: FilePen },
           { id: "cce", title: "Carta de Correção", icon: FilePen },
           { id: "nfe-inutilizacao", title: "Inutilização de Numeração", icon: FileX },
+          { id: "devolucao-nfe-saida", title: "Devolução de NF-e de Saída", icon: ArrowDownToLine },
         ]
       },
       {
