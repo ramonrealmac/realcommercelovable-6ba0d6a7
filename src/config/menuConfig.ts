@@ -164,6 +164,7 @@ export const MENU_CONFIG: MenuItem[] = [
           { id: "pdv", title: "Novo Pedido", icon: FilePen },
           { id: "finalizar-venda", title: "Finalizar Venda", icon: BadgeDollarSign },
           { id: "pedidos", title: "Meus Pedidos", icon: ClipboardList },
+          { id: "devolucao-nfe-saida", title: "Devolução de NF-e de Saída", icon: ArrowUpFromLine },
           {
             id: "mov-entregas",
             title: "Entregas",
