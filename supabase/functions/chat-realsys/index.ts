@@ -499,6 +499,22 @@ async function executeTool(
             p_empresa_id: empresaId,
           });
           if (eVal) throw eVal;
+
+          // Gravar NF-e referenciada (chave da NFe de origem da devolução)
+          if (args.chave_nfe) {
+            await supabase.from("fiscal_nfe_referenciada").insert({
+              nfe_cabecalho_id: nfeId,
+              chave_ref: String(args.chave_nfe).replace(/\D/g, ""),
+            });
+          }
+
+          // Gravar pagamento (devolução: sem pagamento - código 90)
+          await supabase.from("fiscal_nfe_pagamento").insert({
+            nfe_cabecalho_id: nfeId,
+            t_pag: "90",
+            v_pag: vlTotal,
+          });
+
           const { data: ev, error: eEv } = await supabase.from("fiscal_evento").insert({
             empresa_id: empresaId,
             comando: "NFE.CriarEnviarNFe",
