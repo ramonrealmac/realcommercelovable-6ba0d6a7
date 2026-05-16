@@ -2088,6 +2088,9 @@ export type Database = {
           fone_faturamento: string | null
           fone_financeiro: string | null
           fone_geral: string | null
+          ia_ativa: boolean | null
+          ia_instrucoes: string | null
+          ia_modelo: string | null
           identificacao: string | null
           ie: string | null
           imagem_caixa: string
@@ -2157,6 +2160,9 @@ export type Database = {
           fone_faturamento?: string | null
           fone_financeiro?: string | null
           fone_geral?: string | null
+          ia_ativa?: boolean | null
+          ia_instrucoes?: string | null
+          ia_modelo?: string | null
           identificacao?: string | null
           ie?: string | null
           imagem_caixa?: string
@@ -2226,6 +2232,9 @@ export type Database = {
           fone_faturamento?: string | null
           fone_financeiro?: string | null
           fone_geral?: string | null
+          ia_ativa?: boolean | null
+          ia_instrucoes?: string | null
+          ia_modelo?: string | null
           identificacao?: string | null
           ie?: string | null
           imagem_caixa?: string
