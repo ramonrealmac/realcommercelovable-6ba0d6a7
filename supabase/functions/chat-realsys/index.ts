@@ -318,8 +318,9 @@ async function executeTool(
 
       case "finalizar_venda_pdv": {
         const { error } = await supabase.rpc("fu_mudar_status_pedido_pdv", {
-          p_movimento_id: Number(args.movimento_id),
-          p_novo_status: "R",
+          _movimento_id: Number(args.movimento_id),
+          _novo_status: "R",
+          _usuario_id: userId,
         });
         if (error) throw error;
         return { ok: true, movimento_id: args.movimento_id, status: "R" };
@@ -621,7 +622,7 @@ async function executeTool(
         let eventoId2 = null;
         const deveEmitir = args.emitir_nfe || args.emitir_nfce;
         if (args.finalizar || deveEmitir) {
-          const { error: eFin2 } = await supabase.rpc("fu_mudar_status_pedido_pdv", { p_movimento_id: movId2, p_novo_status: "R" });
+          const { error: eFin2 } = await supabase.rpc("fu_mudar_status_pedido_pdv", { _movimento_id: movId2, _novo_status: "R", _usuario_id: userId });
           if (eFin2) throw eFin2;
           if (deveEmitir) {
             const modelo = args.emitir_nfce ? 65 : 55;
