@@ -479,12 +479,8 @@ async function executeTool(
         if (eIt) throw eIt;
         try { await supabase.rpc("fu_recalcular_pedido", { _movimento_id: movId }); } catch (_) {}
 
-        // 5. Finalizar venda
-        const { error: eFin } = await supabase.rpc("fu_mudar_status_pedido_pdv", {
-          p_movimento_id: movId,
-          p_novo_status: "R",
-        });
-        if (eFin) throw eFin;
+        // Devolução não altera status de pedido (não há pedido vinculado).
+
 
         let eventoId = null;
         if (emitir) {
