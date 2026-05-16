@@ -40,7 +40,11 @@ const cfopDevolucaoSugerido = (cfopSaida: string): string => {
   return "1202";
 };
 
-const DevolucaoNfeSaidaForm: React.FC = () => {
+interface DevolucaoNfeSaidaFormProps {
+  initialNfeId?: number;
+}
+
+const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNfeId }) => {
   const { XEmpresaId, openTab } = useAppContext();
   const [XStep, setXStep] = useState<1 | 2 | 3>(1);
 
