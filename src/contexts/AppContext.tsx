@@ -38,14 +38,40 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | null>(null);
 
-let XTabCounter = 0;
-
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [XEmpresaId, setXEmpresaId] = useState(0);
   const [XEmpresaMatrizId, setXEmpresaMatrizId] = useState(0);
   const [XEmpresas, setXEmpresas] = useState<IEmpresaOption[]>([]);
-  const [XTabs, setXTabs] = useState<AppTab[]>([]);
-  const [XActiveTabId, setXActiveTabId] = useState<string | null>(null);
+
+  const [XTabs, setXTabs] = useState<AppTab[]>(() => {
+    try {
+      const saved = localStorage.getItem("XAppTabs");
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
+  
+  const [XActiveTabId, setXActiveTabId] = useState<string | null>(() => {
+    try {
+      const saved = localStorage.getItem("XActiveTabId");
+      if (saved) return saved;
+    } catch {}
+    return null;
+  });
+
+  // Persiste as abas no localStorage
+  React.useEffect(() => {
+    try {
+      localStorage.setItem("XAppTabs", JSON.stringify(XTabs));
+      if (XActiveTabId) {
+        localStorage.setItem("XActiveTabId", XActiveTabId);
+      } else {
+        localStorage.removeItem("XActiveTabId");
+      }
+    } catch (e) {
+      console.warn("Falha ao salvar abas no localStorage", e);
+    }
+  }, [XTabs, XActiveTabId]);
   const [XSidebarOpen, setXSidebarOpen] = useState(false);
   const [XLogomarca, setXLogomarca] = useState("");
   const [XChatBotVisible, setXChatBotVisible] = useState<boolean>(() => {
@@ -65,7 +91,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setXActiveTabId(XExisting.id);
       return;
     }
-    const XNewId = `tab-${++XTabCounter}`;
+    const XNewId = `tab-${Date.now()}`;
     const XNewTab: AppTab = { ...tab, id: XNewId };
     setXTabs(prev => [...prev, XNewTab]);
     setXActiveTabId(XNewId);

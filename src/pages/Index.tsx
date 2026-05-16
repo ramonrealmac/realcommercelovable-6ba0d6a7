@@ -1,64 +1,73 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, lazy, Suspense } from "react";
 import { useAppContext, AppProvider } from "@/contexts/AppContext";
 import TopBar from "@/components/layout/TopBar";
 import TabBar from "@/components/layout/TabBar";
 import SidebarMenu from "@/components/layout/SidebarMenu";
-import { Palette } from "lucide-react";
+import { Palette, Loader2 } from "lucide-react";
 
-// Imports corrigidos baseados nos arquivos reais
-import CadastroCompletoForm from "@/components/forms/CadastroCompletoForm";
-import CartaCorrecaoForm from "@/components/forms/CartaCorrecaoForm";
-import FornecedorTransportadorForm from "@/components/forms/FornecedorTransportadorForm";
-import FuncionarioForm from "@/components/forms/FuncionarioForm";
-import CadastroGrupoForm from "@/components/forms/CadastroGrupoForm";
-import ProdutoForm from "@/components/forms/ProdutoForm";
-import LinhaProdutoForm from "@/components/forms/LinhaProdutoForm";
-import GrupoProdutosForm from "@/components/forms/GrupoProdutosForm";
-import UnidadeForm from "@/components/forms/UnidadeForm";
-import EstoqueForm from "@/components/forms/EstoqueForm";
-import DepositoForm from "@/components/forms/DepositoForm";
-import EstadoForm from "@/components/forms/EstadoForm";
-import CidadeForm from "@/components/forms/CidadeForm";
-import RotaForm from "@/components/forms/RotaForm";
-import BancoForm from "@/components/forms/BancoForm";
-import CondicaoPagamentoForm from "@/components/forms/CondicaoPagamentoForm";
-import PlanoContaForm from "@/components/forms/PlanoContaForm";
-import CfopForm from "@/components/forms/CfopForm";
-import FiscalGrupoProdutoForm from "@/components/forms/FiscalGrupoProdutoForm";
-import FiscalRegraForm from "@/components/forms/FiscalRegraForm";
-import PedidoForm from "@/components/forms/PedidoForm";
-import NotaFiscalEntradaForm from "@/components/forms/NotaFiscalEntradaForm";
-import NfeRecebidasForm from "@/components/forms/NfeRecebidasForm";
-import DevolucaoNfeEntradaForm from "@/components/forms/DevolucaoNfeEntradaForm";
-import DevolucaoNfeSaidaForm from "@/components/forms/DevolucaoNfeSaidaForm";
-import ListaNfeEmitidaForm from "@/components/forms/ListaNfeEmitidaForm";
-import NfeEmitidaForm from "@/components/forms/NfeEmitidaForm";
-import ConsultaTitulosReceberForm from "@/components/forms/ConsultaTitulosReceberForm";
-import BaixaPorClienteForm from "@/components/forms/BaixaPorClienteForm";
-import FiscalConfigForm from "@/components/forms/FiscalConfigForm";
-import MdfeForm from "@/modules/mdfe/components/MdfeForm";
-import ListaMdfeForm from "@/modules/mdfe/components/ListaMdfeForm";
-import EmpresaForm from "@/components/forms/EmpresaForm";
-import PerfilForm from "@/components/forms/PerfilForm";
-import ControleAcessoForm from "@/components/forms/ControleAcessoForm";
-import UsuarioForm from "@/components/forms/UsuarioForm";
-import TrocaSenhaForm from "@/components/forms/TrocaSenhaForm";
-import ProvedorTestForm from "@/components/forms/ProvedorTestForm";
-import ConsultaEstoqueForm from "@/components/forms/ConsultaEstoqueForm";
-import NfeInutilizacaoForm from "@/components/forms/NfeInutilizacaoForm";
+// --- Lazy Loaded Forms ---
+const CadastroCompletoForm = lazy(() => import("@/components/forms/CadastroCompletoForm"));
+const CartaCorrecaoForm = lazy(() => import("@/components/forms/CartaCorrecaoForm"));
+const FornecedorTransportadorForm = lazy(() => import("@/components/forms/FornecedorTransportadorForm"));
+const FuncionarioForm = lazy(() => import("@/components/forms/FuncionarioForm"));
+const CadastroGrupoForm = lazy(() => import("@/components/forms/CadastroGrupoForm"));
+const ProdutoForm = lazy(() => import("@/components/forms/ProdutoForm"));
+const LinhaProdutoForm = lazy(() => import("@/components/forms/LinhaProdutoForm"));
+const GrupoProdutosForm = lazy(() => import("@/components/forms/GrupoProdutosForm"));
+const UnidadeForm = lazy(() => import("@/components/forms/UnidadeForm"));
+const EstoqueForm = lazy(() => import("@/components/forms/EstoqueForm"));
+const DepositoForm = lazy(() => import("@/components/forms/DepositoForm"));
+const EstadoForm = lazy(() => import("@/components/forms/EstadoForm"));
+const CidadeForm = lazy(() => import("@/components/forms/CidadeForm"));
+const RotaForm = lazy(() => import("@/components/forms/RotaForm"));
+const BancoForm = lazy(() => import("@/components/forms/BancoForm"));
+const CondicaoPagamentoForm = lazy(() => import("@/components/forms/CondicaoPagamentoForm"));
+const PlanoContaForm = lazy(() => import("@/components/forms/PlanoContaForm"));
+const CfopForm = lazy(() => import("@/components/forms/CfopForm"));
+const FiscalGrupoProdutoForm = lazy(() => import("@/components/forms/FiscalGrupoProdutoForm"));
+const FiscalRegraForm = lazy(() => import("@/components/forms/FiscalRegraForm"));
+const PedidoForm = lazy(() => import("@/components/forms/PedidoForm"));
+const NotaFiscalEntradaForm = lazy(() => import("@/components/forms/NotaFiscalEntradaForm"));
+const NfeRecebidasForm = lazy(() => import("@/components/forms/NfeRecebidasForm"));
+const DevolucaoNfeEntradaForm = lazy(() => import("@/components/forms/DevolucaoNfeEntradaForm"));
+const DevolucaoNfeSaidaForm = lazy(() => import("@/components/forms/DevolucaoNfeSaidaForm"));
+const ListaNfeEmitidaForm = lazy(() => import("@/components/forms/ListaNfeEmitidaForm"));
+const NfeEmitidaForm = lazy(() => import("@/components/forms/NfeEmitidaForm"));
+const ConsultaTitulosReceberForm = lazy(() => import("@/components/forms/ConsultaTitulosReceberForm"));
+const BaixaPorClienteForm = lazy(() => import("@/components/forms/BaixaPorClienteForm"));
+const FiscalConfigForm = lazy(() => import("@/components/forms/FiscalConfigForm"));
+const MdfeForm = lazy(() => import("@/modules/mdfe/components/MdfeForm"));
+const ListaMdfeForm = lazy(() => import("@/modules/mdfe/components/ListaMdfeForm"));
+const EmpresaForm = lazy(() => import("@/components/forms/EmpresaForm"));
+const PerfilForm = lazy(() => import("@/components/forms/PerfilForm"));
+const ControleAcessoForm = lazy(() => import("@/components/forms/ControleAcessoForm"));
+const UsuarioForm = lazy(() => import("@/components/forms/UsuarioForm"));
+const TrocaSenhaForm = lazy(() => import("@/components/forms/TrocaSenhaForm"));
+const ProvedorTestForm = lazy(() => import("@/components/forms/ProvedorTestForm"));
+const ConsultaEstoqueForm = lazy(() => import("@/components/forms/ConsultaEstoqueForm"));
+const NfeInutilizacaoForm = lazy(() => import("@/components/forms/NfeInutilizacaoForm"));
+const RbReportExecutor = lazy(() => import("@/rbuilder/components/rb_ReportExecutor"));
+const RpbManager = lazy(() => import("@/report-builder").then(m => ({ default: m.RpbManager })));
+const RpbStandaloneExecutor = lazy(() => import("@/report-builder/components/executor/RpbStandaloneExecutor"));
+
+// --- PDV Lazy Imports ---
+const PdvTela = lazy(() => import("@/components/forms/pdv/PdvTela"));
+const AberturaCaixaForm = lazy(() => import("@/components/forms/pdv/AberturaCaixaForm"));
+const PdvCaixaForm = lazy(() => import("@/components/forms/pdv/PdvCaixaForm"));
+const FechamentoCaixaForm = lazy(() => import("@/components/forms/pdv/FechamentoCaixaForm"));
+const SuprimentoSangriaForm = lazy(() => import("@/components/forms/pdv/SuprimentoSangriaForm"));
+
+// --- Core Eager Imports ---
 import AuthGate from "@/components/auth/AuthGate";
 import { useThemeColors } from "@/hooks/useThemeColors";
-import RbReportExecutor from "@/rbuilder/components/rb_ReportExecutor";
-import { RpbManager } from "@/report-builder";
-import RpbStandaloneExecutor from "@/report-builder/components/executor/RpbStandaloneExecutor";
 import ChatLauncher from "@/components/chat/ChatLauncher";
 
-// PDV Imports
-import PdvTela from "@/components/forms/pdv/PdvTela";
-import AberturaCaixaForm from "@/components/forms/pdv/AberturaCaixaForm";
-import PdvCaixaForm from "@/components/forms/pdv/PdvCaixaForm";
-import FechamentoCaixaForm from "@/components/forms/pdv/FechamentoCaixaForm";
-import SuprimentoSangriaForm from "@/components/forms/pdv/SuprimentoSangriaForm";
+const TabLoadingFallback = () => (
+  <div className="flex flex-col items-center justify-center h-full text-muted-foreground bg-background/50 backdrop-blur-sm">
+    <Loader2 className="w-8 h-8 animate-spin mb-4 text-primary" />
+    <span className="text-sm font-medium">Carregando módulo...</span>
+  </div>
+);
 
 const AppContent = () => {
   const { XTabs, XActiveTabId, openTab, XEmpresaId, setXLogomarca, XLogomarca } = useAppContext();
@@ -209,7 +218,9 @@ const AppContent = () => {
               key={tab.id}
               className={`h-full ${tab.id === XActiveTabId ? "block" : "hidden"}`}
             >
-              {renderTabContent(tab.component, tab.params)}
+              <Suspense fallback={<TabLoadingFallback />}>
+                {renderTabContent(tab.component, tab.params)}
+              </Suspense>
             </div>
           ))}
           {XTabs.length === 0 && (

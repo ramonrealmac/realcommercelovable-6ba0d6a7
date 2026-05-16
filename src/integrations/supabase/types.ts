@@ -7052,6 +7052,20 @@ export type Database = {
         }
         Returns: Json
       }
+      fu_pdv_registrar_recebimento_venda: {
+        Args: {
+          _caixa_abertura_id: number
+          _centro_custo_caixa: number
+          _dt_movimento: string
+          _empresa_id: number
+          _funcionario_caixa_id: number
+          _movimento_id: number
+          _pagamentos: Json
+          _tp_operacao_caixa: string
+          _usuario_id?: string
+        }
+        Returns: Json
+      }
       fu_recalcular_pedido: {
         Args: { _movimento_id: number }
         Returns: undefined
