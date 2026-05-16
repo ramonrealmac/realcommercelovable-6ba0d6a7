@@ -415,20 +415,12 @@ async function executeTool(
           .select("condicao_id").eq("empresa_id", empresaId).eq("excluido", false)
           .ilike("descricao", "%vista%").limit(1).maybeSingle();
 
-        // 3. Próximos IDs
-        const { data: maxMov } = await supabase.from("movimento").select("movimento_id").order("movimento_id", { ascending: false }).limit(1);
-        const movId = ((maxMov && maxMov[0]?.movimento_id) || 0) + 1;
-        const { data: maxNr } = await supabase.from("movimento").select("nr_movimento").eq("empresa_id", empresaId).order("nr_movimento", { ascending: false }).limit(1);
-        const nr = ((maxNr && maxNr[0]?.nr_movimento) || 0) + 1;
-
         const vlTotal = itensSrc.reduce((s: number, it: any) => s + (Number(it.qt) || 0) * (Number(it.vl_unitario) || 0), 0);
 
-        const { error: eMov } = await supabase.from("movimento").insert({
-          movimento_id: movId,
+        const { data: movRow, error: eMov } = await supabase.from("movimento").insert({
           empresa_id: empresaId,
           cadastro_id: cadastroId,
           condicao_id: condPadrao?.condicao_id || null,
-          nr_movimento: nr,
           tp_movimento: "PD",
           tp_origem: "DEVOLUCAO_XML",
           st_pedido: "O",
