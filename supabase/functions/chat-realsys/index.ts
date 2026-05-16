@@ -620,6 +620,25 @@ async function executeTool(
             if (eTax2) throw eTax2;
             const { error: eVal2 } = await supabase.rpc("fn_prevalidar_nfe", { p_nfe_cabecalho_id: nfeId2, p_empresa_id: empresaId });
             if (eVal2) throw eVal2;
+
+            // Gravar pagamentos do movimento em fiscal_nfe_pagamento
+            const { data: pagsMov } = await supabase.from("movimento_pagamento")
+              .select("tp_pagamento, vl_pagamento").eq("movimento_id", movId2).eq("excluido", false);
+            const mapPag: Record<string, string> = {
+              DINHEIRO: "01", CHEQUE: "02", CARTAO_CREDITO: "03", CARTAO_DEBITO: "04",
+              CREDITO_LOJA: "05", VALE_ALIMENTACAO: "10", VALE_REFEICAO: "11",
+              VALE_PRESENTE: "12", VALE_COMBUSTIVEL: "13", BOLETO: "15",
+              PIX: "17", TRANSFERENCIA: "18", SEM_PAGAMENTO: "90", OUTRO: "99",
+            };
+            const pagsNfe = (pagsMov && pagsMov.length > 0)
+              ? pagsMov.map((p: any) => ({
+                  nfe_cabecalho_id: nfeId2,
+                  t_pag: mapPag[String(p.tp_pagamento || "").toUpperCase()] || "01",
+                  v_pag: Number(p.vl_pagamento || 0),
+                }))
+              : [{ nfe_cabecalho_id: nfeId2, t_pag: "01", v_pag: vlTotal }];
+            await supabase.from("fiscal_nfe_pagamento").insert(pagsNfe);
+
             const { data: ev2, error: eEv2 } = await supabase.from("fiscal_evento").insert({
               empresa_id: empresaId, comando: modelo === 65 ? "NFE.CriarEnviarNFCe" : "NFE.CriarEnviarNFe",
               payload: { movimento_id: movId2, modelo, nfe_cabecalho_id: nfeId2 },
