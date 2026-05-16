@@ -21,6 +21,9 @@ Para criar qualquer pedido, use SEMPRE "criar_pedido_completo" passando nomes (n
 - finalizar: true se quiser já faturar; emitir_nfe/emitir_nfce: true para emitir
 NUNCA chame buscar_cliente ou buscar_produto separadamente para criar pedidos.
 
+REGRA OBRIGATÓRIA — RESUMO APÓS CRIAR PEDIDO:
+Após "criar_pedido_completo" retornar com sucesso, SEMPRE apresente ao usuário um resumo formatado contendo: número do pedido, data de emissão, cliente, vendedor, condição de pagamento, lista de produtos (nome, qtde, preço unitário, desconto, total), subtotal, desconto e total geral. Use os dados do campo "resumo" retornado pela ferramenta.
+
 Sempre use ferramentas para executar ações — nunca simule ou peça ao usuário para fazer manualmente.`;
 
 
@@ -314,12 +317,27 @@ async function executeTool(
 
 
       case "finalizar_venda_pdv": {
+        let movId = Number(args.movimento_id);
+        // Resolve: se vier nr_movimento (número visível), traduzir para PK
+        const { data: movRow } = await supabase
+          .from("movimento")
+          .select("movimento_id")
+          .eq("movimento_id", movId)
+          .maybeSingle();
+        if (!movRow) {
+          let qFb = supabase.from("movimento").select("movimento_id").eq("nr_movimento", movId);
+          if (empresaId) qFb = qFb.eq("empresa_id", empresaId);
+          const { data: fb } = await qFb.order("movimento_id", { ascending: false }).limit(1).maybeSingle();
+          if (!fb) throw new Error(`Movimento ${args.movimento_id} não encontrado`);
+          movId = fb.movimento_id;
+        }
         const { error } = await supabase.rpc("fu_mudar_status_pedido_pdv", {
-          p_movimento_id: Number(args.movimento_id),
-          p_novo_status: "R",
+          _movimento_id: movId,
+          _novo_status: "R",
+          _usuario_id: userId,
         });
         if (error) throw error;
-        return { ok: true, movimento_id: args.movimento_id, status: "R" };
+        return { ok: true, movimento_id: movId, status: "R" };
       }
 
       case "emitir_documento_fiscal": {
@@ -462,7 +480,7 @@ async function executeTool(
             produto_id: prod?.produto_id || null,
             nm_produto: prod?.nome || it.nome_produto,
             unidade_id: prod?.unidade_id || null,
-            cfop: cfopDev,
+            cfop_id: cfopDev,
             tp_movimento: "PD",
             qt_movimento: qt,
             vl_und_produto: vlu,
@@ -479,12 +497,8 @@ async function executeTool(
         if (eIt) throw eIt;
         try { await supabase.rpc("fu_recalcular_pedido", { _movimento_id: movId }); } catch (_) {}
 
-        // 5. Finalizar venda
-        const { error: eFin } = await supabase.rpc("fu_mudar_status_pedido_pdv", {
-          p_movimento_id: movId,
-          p_novo_status: "R",
-        });
-        if (eFin) throw eFin;
+        // Devolução não altera status de pedido (não há pedido vinculado).
+
 
         let eventoId = null;
         if (emitir) {
@@ -499,6 +513,22 @@ async function executeTool(
             p_empresa_id: empresaId,
           });
           if (eVal) throw eVal;
+
+          // Gravar NF-e referenciada (chave da NFe de origem da devolução)
+          if (args.chave_nfe) {
+            await supabase.from("fiscal_nfe_referenciada").insert({
+              nfe_cabecalho_id: nfeId,
+              chave_ref: String(args.chave_nfe).replace(/\D/g, ""),
+            });
+          }
+
+          // Gravar pagamento (devolução: sem pagamento - código 90)
+          await supabase.from("fiscal_nfe_pagamento").insert({
+            nfe_cabecalho_id: nfeId,
+            t_pag: "90",
+            v_pag: vlTotal,
+          });
+
           const { data: ev, error: eEv } = await supabase.from("fiscal_evento").insert({
             empresa_id: empresaId,
             comando: "NFE.CriarEnviarNFe",
@@ -570,10 +600,20 @@ async function executeTool(
           itensResolvidos.push({ produto_id: prod.produto_id, nm_produto: prod.nome, unidade_id: prod.unidade_id, qt, vlu });
         }
 
+        // Resolver funcionário vinculado ao usuário logado (vendedor)
+        const { data: funcUser } = await supabase.from("funcionario")
+          .select("funcionario_id, nome")
+          .eq("usr_id", userId)
+          .eq("empresa_id", empresaId)
+          .maybeSingle();
+        const funcionarioId = funcUser?.funcionario_id || null;
+
+        const dtEmissao = new Date().toISOString();
         const { data: movRow2, error: eMov2 } = await supabase.from("movimento").insert({
           empresa_id: empresaId, cadastro_id: cadastroId,
           condicao_id: condId, tp_movimento: "PD", tp_origem: "ASSISTENTE",
-          st_pedido: "O", faturado: "N", dt_emissao: new Date().toISOString(),
+          funcionario_id: funcionarioId,
+          st_pedido: "O", faturado: "N", dt_emissao: dtEmissao,
           dt_entrega: args.dt_entrega || new Date().toISOString().substring(0, 10),
           obs_pedido: String(args.obs || ""),
           vl_produto: vlTotal, vl_movimento: vlTotal, vl_desconto: 0, pc_desconto: 0, tp_desconto: "N", excluido: false,
@@ -596,7 +636,7 @@ async function executeTool(
         let eventoId2 = null;
         const deveEmitir = args.emitir_nfe || args.emitir_nfce;
         if (args.finalizar || deveEmitir) {
-          const { error: eFin2 } = await supabase.rpc("fu_mudar_status_pedido_pdv", { p_movimento_id: movId2, p_novo_status: "R" });
+          const { error: eFin2 } = await supabase.rpc("fu_mudar_status_pedido_pdv", { _movimento_id: movId2, _novo_status: "R", _usuario_id: userId });
           if (eFin2) throw eFin2;
           if (deveEmitir) {
             const modelo = args.emitir_nfce ? 65 : 55;
@@ -604,6 +644,25 @@ async function executeTool(
             if (eTax2) throw eTax2;
             const { error: eVal2 } = await supabase.rpc("fn_prevalidar_nfe", { p_nfe_cabecalho_id: nfeId2, p_empresa_id: empresaId });
             if (eVal2) throw eVal2;
+
+            // Gravar pagamentos do movimento em fiscal_nfe_pagamento
+            const { data: pagsMov } = await supabase.from("movimento_pagamento")
+              .select("tp_pagamento, vl_pagamento").eq("movimento_id", movId2).eq("excluido", false);
+            const mapPag: Record<string, string> = {
+              DINHEIRO: "01", CHEQUE: "02", CARTAO_CREDITO: "03", CARTAO_DEBITO: "04",
+              CREDITO_LOJA: "05", VALE_ALIMENTACAO: "10", VALE_REFEICAO: "11",
+              VALE_PRESENTE: "12", VALE_COMBUSTIVEL: "13", BOLETO: "15",
+              PIX: "17", TRANSFERENCIA: "18", SEM_PAGAMENTO: "90", OUTRO: "99",
+            };
+            const pagsNfe = (pagsMov && pagsMov.length > 0)
+              ? pagsMov.map((p: any) => ({
+                  nfe_cabecalho_id: nfeId2,
+                  t_pag: mapPag[String(p.tp_pagamento || "").toUpperCase()] || "01",
+                  v_pag: Number(p.vl_pagamento || 0),
+                }))
+              : [{ nfe_cabecalho_id: nfeId2, t_pag: "01", v_pag: vlTotal }];
+            await supabase.from("fiscal_nfe_pagamento").insert(pagsNfe);
+
             const { data: ev2, error: eEv2 } = await supabase.from("fiscal_evento").insert({
               empresa_id: empresaId, comando: modelo === 65 ? "NFE.CriarEnviarNFCe" : "NFE.CriarEnviarNFe",
               payload: { movimento_id: movId2, modelo, nfe_cabecalho_id: nfeId2 },
@@ -614,11 +673,37 @@ async function executeTool(
           }
         }
 
+        // Reler totais consolidados após recalculo
+        const { data: movFinal } = await supabase.from("movimento")
+          .select("nr_movimento, dt_emissao, vl_produto, vl_desconto, vl_movimento")
+          .eq("movimento_id", movId2).single();
+
+        const resumo = {
+          numero: movFinal?.nr_movimento ?? nr2,
+          dt_emissao: movFinal?.dt_emissao ?? dtEmissao,
+          cliente: clientes[0].razao_social,
+          vendedor_id: funcionarioId,
+          vendedor_nome: funcUser?.nome || null,
+          condicao_pagamento: conds && conds[0] ? conds[0].descricao : nomeCond,
+          subtotal: Number(movFinal?.vl_produto ?? vlTotal),
+          desconto: Number(movFinal?.vl_desconto ?? 0),
+          total: Number(movFinal?.vl_movimento ?? vlTotal),
+          itens: itensResolvidos.map((i) => ({
+            produto: i.nm_produto,
+            qt: i.qt,
+            vl_unitario: i.vlu,
+            desconto: 0,
+            total: Number((i.qt * i.vlu).toFixed(2)),
+          })),
+        };
+
         return {
           ok: true, movimento_id: movId2, nr_movimento: nr2,
-          cliente: clientes[0].razao_social, itens: itensResolvidos.map(i => i.nm_produto),
+          cliente: clientes[0].razao_social,
+          resumo,
           evento_id: eventoId2,
           ui_action: { type: "open_tab", component: "pedidos", titulo: "Pedidos" },
+          msg: `Pedido #${resumo.numero} criado para ${resumo.cliente}. Total: R$ ${resumo.total.toFixed(2)}.`,
         };
       }
 
