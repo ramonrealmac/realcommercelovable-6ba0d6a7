@@ -17,7 +17,8 @@ import {
   Terminal,
   MoreHorizontal,
   FileX,
-  CheckSquare
+  CheckSquare,
+  ArrowUpFromLine
 } from "lucide-react";
 import { 
   DropdownMenu, 
