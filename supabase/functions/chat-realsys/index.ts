@@ -570,26 +570,20 @@ async function executeTool(
           itensResolvidos.push({ produto_id: prod.produto_id, nm_produto: prod.nome, unidade_id: prod.unidade_id, qt, vlu });
         }
 
-        // 4. Próximos IDs
-        const { data: maxMov2 } = await supabase.from("movimento").select("movimento_id").order("movimento_id", { ascending: false }).limit(1);
-        const movId2 = ((maxMov2 && maxMov2[0]?.movimento_id) || 0) + 1;
-        const { data: maxNr2 } = await supabase.from("movimento").select("nr_movimento").eq("empresa_id", empresaId).order("nr_movimento", { ascending: false }).limit(1);
-        const nr2 = ((maxNr2 && maxNr2[0]?.nr_movimento) || 0) + 1;
-
-        const { error: eMov2 } = await supabase.from("movimento").insert({
-          movimento_id: movId2, empresa_id: empresaId, cadastro_id: cadastroId,
-          condicao_id: condId, nr_movimento: nr2, tp_movimento: "PD", tp_origem: "ASSISTENTE",
+        const { data: movRow2, error: eMov2 } = await supabase.from("movimento").insert({
+          empresa_id: empresaId, cadastro_id: cadastroId,
+          condicao_id: condId, tp_movimento: "PD", tp_origem: "ASSISTENTE",
           st_pedido: "O", faturado: "N", dt_emissao: new Date().toISOString(),
           dt_entrega: args.dt_entrega || new Date().toISOString().substring(0, 10),
           obs_pedido: String(args.obs || ""),
           vl_produto: vlTotal, vl_movimento: vlTotal, vl_desconto: 0, pc_desconto: 0, tp_desconto: "N", excluido: false,
-        });
+        }).select("movimento_id, nr_movimento").single();
         if (eMov2) throw eMov2;
+        const movId2 = movRow2!.movimento_id;
+        const nr2 = movRow2!.nr_movimento;
 
-        const { data: maxIt2 } = await supabase.from("movimento_item").select("movimento_item_id").order("movimento_item_id", { ascending: false }).limit(1);
-        let nextItId2 = ((maxIt2 && maxIt2[0]?.movimento_item_id) || 0) + 1;
         const itensDb = itensResolvidos.map((it) => ({
-          movimento_item_id: nextItId2++, empresa_id: empresaId, movimento_id: movId2,
+          empresa_id: empresaId, movimento_id: movId2,
           produto_id: it.produto_id, nm_produto: it.nm_produto, unidade_id: it.unidade_id,
           tp_movimento: "PD", qt_movimento: it.qt, vl_und_produto: it.vlu,
           vl_produto: it.qt * it.vlu, vl_movimento: it.qt * it.vlu,
