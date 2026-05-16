@@ -462,7 +462,7 @@ async function executeTool(
             produto_id: prod?.produto_id || null,
             nm_produto: prod?.nome || it.nome_produto,
             unidade_id: prod?.unidade_id || null,
-            cfop: cfopDev,
+            cfop_id: cfopDev,
             tp_movimento: "PD",
             qt_movimento: qt,
             vl_und_produto: vlu,
