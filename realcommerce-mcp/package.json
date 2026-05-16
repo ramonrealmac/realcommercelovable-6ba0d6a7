@@ -1,0 +1,28 @@
+{
+  "name": "realcommerce-mcp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc -w"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@supabase/supabase-js": "^2.105.4",
+    "dotenv": "^17.4.2",
+    "xml2js": "^0.6.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.8.0",
+    "@types/xml2js": "^0.4.14",
+    "typescript": "^6.0.3"
+  }
+}
