@@ -21,6 +21,9 @@ Para criar qualquer pedido, use SEMPRE "criar_pedido_completo" passando nomes (n
 - finalizar: true se quiser já faturar; emitir_nfe/emitir_nfce: true para emitir
 NUNCA chame buscar_cliente ou buscar_produto separadamente para criar pedidos.
 
+REGRA OBRIGATÓRIA — RESUMO APÓS CRIAR PEDIDO:
+Após "criar_pedido_completo" retornar com sucesso, SEMPRE apresente ao usuário um resumo formatado contendo: número do pedido, data de emissão, cliente, vendedor, condição de pagamento, lista de produtos (nome, qtde, preço unitário, desconto, total), subtotal, desconto e total geral. Use os dados do campo "resumo" retornado pela ferramenta.
+
 Sempre use ferramentas para executar ações — nunca simule ou peça ao usuário para fazer manualmente.`;
 
 
