@@ -317,13 +317,27 @@ async function executeTool(
 
 
       case "finalizar_venda_pdv": {
+        let movId = Number(args.movimento_id);
+        // Resolve: se vier nr_movimento (número visível), traduzir para PK
+        const { data: movRow } = await supabase
+          .from("movimento")
+          .select("movimento_id")
+          .eq("movimento_id", movId)
+          .maybeSingle();
+        if (!movRow) {
+          let qFb = supabase.from("movimento").select("movimento_id").eq("nr_movimento", movId);
+          if (empresaId) qFb = qFb.eq("empresa_id", empresaId);
+          const { data: fb } = await qFb.order("movimento_id", { ascending: false }).limit(1).maybeSingle();
+          if (!fb) throw new Error(`Movimento ${args.movimento_id} não encontrado`);
+          movId = fb.movimento_id;
+        }
         const { error } = await supabase.rpc("fu_mudar_status_pedido_pdv", {
-          _movimento_id: Number(args.movimento_id),
+          _movimento_id: movId,
           _novo_status: "R",
           _usuario_id: userId,
         });
         if (error) throw error;
-        return { ok: true, movimento_id: args.movimento_id, status: "R" };
+        return { ok: true, movimento_id: movId, status: "R" };
       }
 
       case "emitir_documento_fiscal": {
