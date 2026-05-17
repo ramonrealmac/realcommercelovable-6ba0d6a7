@@ -584,6 +584,7 @@ export type Database = {
           databits: string | null
           delayemerro: number | null
           delaynormal: number | null
+          id: number
           parity: string | null
           stopbits: string | null
           temp_max: number | null
@@ -601,6 +602,7 @@ export type Database = {
           databits?: string | null
           delayemerro?: number | null
           delaynormal?: number | null
+          id?: number
           parity?: string | null
           stopbits?: string | null
           temp_max?: number | null
@@ -618,6 +620,7 @@ export type Database = {
           databits?: string | null
           delayemerro?: number | null
           delaynormal?: number | null
+          id?: number
           parity?: string | null
           stopbits?: string | null
           temp_max?: number | null
@@ -1055,6 +1058,13 @@ export type Database = {
             referencedRelation: "empresa"
             referencedColumns: ["empresa_id"]
           },
+          {
+            foreignKeyName: "fk_cadastro_cidade"
+            columns: ["endereco_cidade_id"]
+            isOneToOne: false
+            referencedRelation: "cidade"
+            referencedColumns: ["cidade_id"]
+          },
         ]
       }
       cadastro_grupo: {
@@ -1303,60 +1313,67 @@ export type Database = {
       }
       caixa_movimento_item: {
         Row: {
-          bandeira_id: number
+          bandeira_id: number | null
           caixa_movimento_id: number
           caixa_movimento_item_id: number
-          condicao_id: number
+          condicao_id: number | null
           dt_alteracao: string | null
           dt_cadastro: string | null
           empresa_id: number
           excluido: boolean | null
           meio_pagamento_id: number | null
           numero_autoriza: string | null
-          operadora_id: number
+          operadora_id: number | null
           plano_conta_id: number | null
-          prazo_pagamento_id: number
-          qt_parcela: number
+          prazo_pagamento_id: number | null
+          qt_parcela: number | null
           vl_parcela: number | null
           vl_recebido: number | null
         }
         Insert: {
-          bandeira_id: number
+          bandeira_id?: number | null
           caixa_movimento_id?: number
           caixa_movimento_item_id?: number
-          condicao_id: number
+          condicao_id?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id: number
           excluido?: boolean | null
           meio_pagamento_id?: number | null
           numero_autoriza?: string | null
-          operadora_id: number
+          operadora_id?: number | null
           plano_conta_id?: number | null
-          prazo_pagamento_id: number
-          qt_parcela: number
+          prazo_pagamento_id?: number | null
+          qt_parcela?: number | null
           vl_parcela?: number | null
           vl_recebido?: number | null
         }
         Update: {
-          bandeira_id?: number
+          bandeira_id?: number | null
           caixa_movimento_id?: number
           caixa_movimento_item_id?: number
-          condicao_id?: number
+          condicao_id?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
           excluido?: boolean | null
           meio_pagamento_id?: number | null
           numero_autoriza?: string | null
-          operadora_id?: number
+          operadora_id?: number | null
           plano_conta_id?: number | null
-          prazo_pagamento_id?: number
-          qt_parcela?: number
+          prazo_pagamento_id?: number | null
+          qt_parcela?: number | null
           vl_parcela?: number | null
           vl_recebido?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_caixa_item_condicao"
+            columns: ["condicao_id"]
+            isOneToOne: false
+            referencedRelation: "condicao_pagamento"
+            referencedColumns: ["condicao_id"]
+          },
           {
             foreignKeyName: "fk_caixa_movimento_item_movimento"
             columns: ["caixa_movimento_id"]
@@ -5007,6 +5024,27 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_movimento_condicao"
+            columns: ["condicao_id"]
+            isOneToOne: false
+            referencedRelation: "condicao_pagamento"
+            referencedColumns: ["condicao_id"]
+          },
+          {
+            foreignKeyName: "fk_movimento_deposito"
+            columns: ["deposito_id"]
+            isOneToOne: false
+            referencedRelation: "deposito"
+            referencedColumns: ["deposito_id"]
+          },
+          {
+            foreignKeyName: "fk_movimento_funcionario"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "funcionario"
+            referencedColumns: ["funcionario_id"]
+          },
+          {
             foreignKeyName: "movimento_cadastro_id_fkey"
             columns: ["cadastro_id"]
             isOneToOne: false
@@ -5259,7 +5297,7 @@ export type Database = {
         }
         Insert: {
           bandeira_id?: number | null
-          condicao_id?: number
+          condicao_id: number
           dt_fim?: string | null
           dt_inicio?: string | null
           dt_pagamento?: string | null
@@ -5300,6 +5338,13 @@ export type Database = {
           vl_total?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_mov_pag_condicao"
+            columns: ["condicao_id"]
+            isOneToOne: false
+            referencedRelation: "condicao_pagamento"
+            referencedColumns: ["condicao_id"]
+          },
           {
             foreignKeyName: "movimento_pagamento_empresa_id_fkey"
             columns: ["empresa_id"]
@@ -6101,7 +6146,22 @@ export type Database = {
           vl_seguro?: number
           vl_st?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_produto_grupo"
+            columns: ["produto_grupo_id"]
+            isOneToOne: false
+            referencedRelation: "produto_grupo"
+            referencedColumns: ["produto_grupo_id"]
+          },
+          {
+            foreignKeyName: "fk_produto_unidade"
+            columns: ["unidade_id"]
+            isOneToOne: false
+            referencedRelation: "unidade"
+            referencedColumns: ["unidade_id"]
+          },
+        ]
       }
       produto_codbarra: {
         Row: {
@@ -6636,6 +6696,39 @@ export type Database = {
           },
         ]
       }
+      sistema_versoes: {
+        Row: {
+          autor: string | null
+          created_at: string | null
+          detalhes: string | null
+          fase: string | null
+          id: string
+          tecnologias: string[] | null
+          titulo: string
+          versao: string
+        }
+        Insert: {
+          autor?: string | null
+          created_at?: string | null
+          detalhes?: string | null
+          fase?: string | null
+          id?: string
+          tecnologias?: string[] | null
+          titulo: string
+          versao: string
+        }
+        Update: {
+          autor?: string | null
+          created_at?: string | null
+          detalhes?: string | null
+          fase?: string | null
+          id?: string
+          tecnologias?: string[] | null
+          titulo?: string
+          versao?: string
+        }
+        Relationships: []
+      }
       sys_sequencial: {
         Row: {
           empresa_id: number
@@ -7100,6 +7193,8 @@ export type Database = {
         Returns: number
       }
       rpb_execute_query: { Args: { p_sql: string }; Returns: Json }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       [_ in never]: never
