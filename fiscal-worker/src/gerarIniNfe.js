@@ -21,7 +21,7 @@ export function gerarIniNfe(params) {
     throw new Error(`Empresa #${empresa?.empresa_id || ''} sem cidade fiscal válida (cMun/UF). Verifique endereco_cidade_id/cd_ibge.`);
   }
   const cUF = cMunEmit.substring(0, 2) || '35';
-  const dhEmi = formatarDhEmi(new Date());
+  const dhEmi = formatarDhEmi(new Date(Date.now() - 60000));
   const cNF = String(Math.floor(10000000 + Math.random() * 89999999));
 
   const linhas = [];

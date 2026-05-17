@@ -164,40 +164,103 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
         .maybeSingle();
 
       if (existente?.nfe_cabecalho_id) {
-        setXEmitido(true);
         const cStat = Number(existente.c_stat || 0);
         const autorizada = cStat === 100 || cStat === 150;
         const mesmoModelo = String(existente.modelo) === (tipo === "NFE" ? "55" : "65");
-        if (autorizada && mesmoModelo) {
-          setXStatus("Reemitindo DANFE da nota já autorizada...");
-          setXNfeId(existente.nfe_cabecalho_id);
-          const impRes = await fiscalEmissaoService.imprimirDocumento(existente.nfe_cabecalho_id, empresaId);
-          setXSalvando(false);
-          setXStatus("");
-          if (impRes.success && impRes.pdf_base64) {
-            setXLastPdf(impRes.pdf_base64);
-            try {
-              const bc = atob(impRes.pdf_base64);
-              const arr = new Uint8Array(bc.length);
-              for (let i = 0; i < bc.length; i++) arr[i] = bc.charCodeAt(i);
-              const url = URL.createObjectURL(new Blob([arr], { type: "application/pdf" }));
-              window.open(url, "danfe_view", "_blank");
-            } catch {}
-            toast.success("DANFE reemitido (nota já autorizada).");
+
+        if (autorizada) {
+          setXEmitido(true);
+          if (mesmoModelo) {
+            setXStatus("Reemitindo DANFE da nota já autorizada...");
+            setXNfeId(existente.nfe_cabecalho_id);
+            const impRes = await fiscalEmissaoService.imprimirDocumento(existente.nfe_cabecalho_id, empresaId);
+            setXSalvando(false);
+            setXStatus("");
+            if (impRes.success && impRes.pdf_base64) {
+              setXLastPdf(impRes.pdf_base64);
+              try {
+                const bc = atob(impRes.pdf_base64);
+                const arr = new Uint8Array(bc.length);
+                for (let i = 0; i < bc.length; i++) arr[i] = bc.charCodeAt(i);
+                const url = URL.createObjectURL(new Blob([arr], { type: "application/pdf" }));
+                window.open(url, "danfe_view", "_blank");
+              } catch {}
+              toast.success("DANFE reemitido (nota já autorizada).");
+            } else {
+              toast.error("Falha ao reemitir DANFE: " + (impRes.message || "erro"));
+            }
+            return;
           } else {
-            toast.error("Falha ao reemitir DANFE: " + (impRes.message || "erro"));
+            const modLbl = String(existente.modelo) === "55" ? "NFe" : "NFCe";
+            toast.error(
+              `Este pedido já possui ${modLbl} autorizada. Não é permitido emitir outro documento fiscal para a mesma venda.`,
+              { duration: 8000 }
+            );
+            setXSalvando(false);
+            return;
           }
-          return;
         } else {
-          const modLbl = String(existente.modelo) === "55" ? "NFe" : "NFCe";
-          toast.error(
-            autorizada
-              ? `Este pedido já possui ${modLbl} autorizada. Não é permitido emitir outro documento fiscal para a mesma venda.`
-              : `Já existe ${modLbl} para este pedido (status ${cStat || "—"}: ${existente.x_motivo || "pendente"}). Corrija pelo Gerenciador de NF-e.`,
-            { duration: 8000 }
-          );
-          setXSalvando(false);
-          return;
+          // A nota existe mas NÃO está autorizada (status pendente, erro ou rejeitada).
+          // Retransmite automaticamente no mesmo modelo!
+          if (mesmoModelo) {
+            setXStatus(`Retransmitindo ${tipo} existente (#${existente.nfe_cabecalho_id}) ao Fiscal Worker...`);
+            const retres = await fiscalEmissaoService.retransmitirDocumento(existente.nfe_cabecalho_id, empresaId);
+            if (!retres.success || !retres.fiscal_evento_id) {
+              setXSalvando(false);
+              setXStatus("");
+              toast.error(`Falha ao tentar retransmitir ${tipo}: ` + retres.message);
+              return;
+            }
+
+            setXStatus(`Aguardando autorização da SEFAZ (Retransmissão)...`);
+            const totalSeg = await fiscalEmissaoService.obterTimeoutFiscalSeg(empresaId);
+            setXProg({ open: true, titulo: `Retransmitindo ${tipo}...`, total: totalSeg, restante: totalSeg });
+            const ret = await fiscalEmissaoService.aguardarEvento(retres.fiscal_evento_id, {
+              empresaId,
+              onTick: (s) => setXProg(p => ({ ...p, restante: s })),
+            });
+            setXProg(p => ({ ...p, open: false }));
+
+            if (ret.success) {
+              toast.success(`${tipo} autorizada com sucesso!`);
+              setXEmitido(true);
+              setXNfeId(existente.nfe_cabecalho_id);
+
+              let pdfBase64 = ret.resposta?.pdf_base64 || ret.resposta?.impressao?.pdf_base64;
+
+              if (!pdfBase64) {
+                setXStatus("Gerando DANFE para visualização...");
+                const impRes = await fiscalEmissaoService.imprimirDocumento(existente.nfe_cabecalho_id, empresaId);
+                if (impRes.success) pdfBase64 = impRes.pdf_base64;
+              }
+
+              if (pdfBase64) {
+                setXLastPdf(pdfBase64);
+                try {
+                  const bc = atob(pdfBase64);
+                  const arr = new Uint8Array(bc.length);
+                  for (let i = 0; i < bc.length; i++) arr[i] = bc.charCodeAt(i);
+                  const url = URL.createObjectURL(new Blob([arr], { type: "application/pdf" }));
+                  window.open(url, "danfe_view", "_blank");
+                } catch {}
+              }
+              setXSalvando(false);
+              setXStatus("");
+            } else {
+              setXSalvando(false);
+              setXStatus("");
+              toast.error(`Falha na ${tipo}: ${ret.mensagem || "verifique o log fiscal"}`);
+            }
+            return;
+          } else {
+            const modLbl = String(existente.modelo) === "55" ? "NFe" : "NFCe";
+            toast.error(
+              `Já existe uma ${modLbl} pendente ou rejeitada para esta venda. Não é permitido emitir uma ${tipo} até que ela seja resolvida.`,
+              { duration: 8000 }
+            );
+            setXSalvando(false);
+            return;
+          }
         }
       }
 

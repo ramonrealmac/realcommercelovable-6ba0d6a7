@@ -131,7 +131,7 @@ BEGIN
     SELECT * INTO v_emp FROM public.empresa WHERE empresa_id = p_empresa_id;
 
     v_simples := UPPER(COALESCE(v_emp.regime_trib::text,'')) IN
-                 ('1','SN','SIMPLES','SIMPLES NACIONAL');
+                 ('1','S','SN','SIMPLES','SIMPLES NACIONAL');
 
     -- ── Cabeçalho ────────────────────────────────────────────────
     IF COALESCE(v_cab.nat_op,'') = '' THEN

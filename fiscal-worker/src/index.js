@@ -173,8 +173,11 @@ const processarEvento = async (evento) => {
             }
         }
 
-        const isEmissao = ['EMITIR_NFE', 'EMITIR_NFCE'].includes(evento.comando);
-        if (isEmissao) {
+        const isEmissaoIni = ['EMITIR_NFE', 'EMITIR_NFCE'].includes(evento.comando);
+        const isEmissaoXml = ['EMITIR_XML_NFE', 'EMITIR_XML_NFCE'].includes(evento.comando);
+        const isEmissao = isEmissaoIni || isEmissaoXml;
+
+        if (isEmissaoIni) {
             payload = await montarPayloadEmissaoNfe(evento, payload);
             logger.info(`Payload de emissão regenerado pelo worker: ${payload.dados.substring(0, 40).replace(/\r?\n/g, ' ')}...`);
             await supabase
@@ -314,7 +317,9 @@ const processarEvento = async (evento) => {
         
         // Se falhou e era uma emissão, atualiza o status para R (Rejeitada) para não ficar "Aguardando"
         const nfeCabecalhoId = evento.nfe_cabecalho_id || evento.referencia_id;
-        const isEmissao = ['EMITIR_NFE', 'EMITIR_NFCE'].includes(evento.comando);
+        const isEmissaoIni = ['EMITIR_NFE', 'EMITIR_NFCE'].includes(evento.comando);
+        const isEmissaoXml = ['EMITIR_XML_NFE', 'EMITIR_XML_NFCE'].includes(evento.comando);
+        const isEmissao = isEmissaoIni || isEmissaoXml;
 
         if (nfeCabecalhoId && isEmissao) {
             try {
