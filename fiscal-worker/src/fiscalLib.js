@@ -7,9 +7,96 @@ import { exec } from 'child_process';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+let persistentWorker = null;
+let currentRequest = null; // { resolve, reject, timeoutId }
+let queuePromise = Promise.resolve();
+
+const destruirWorker = () => {
+    if (persistentWorker) {
+        console.log("[Worker Proxy] 🔌 Encerrando Worker Thread persistente...");
+        try {
+            persistentWorker.terminate();
+        } catch (e) {
+            console.error(`[Worker Proxy] Erro ao terminar worker: ${e.message}`);
+        }
+        persistentWorker = null;
+    }
+};
+
+const obterWorker = () => {
+    if (persistentWorker) return persistentWorker;
+
+    console.log("[Worker Proxy] 🛠️ Inicializando Worker Thread persistente...");
+    const workerPath = path.resolve(__dirname, 'acbrWorkerThread.js');
+    persistentWorker = new Worker(workerPath);
+
+    persistentWorker.on('message', (message) => {
+        if (!currentRequest) return;
+        const { resolve, reject, timeoutId } = currentRequest;
+        clearTimeout(timeoutId);
+        currentRequest = null;
+
+        if (message.sucesso) {
+            resolve(message.result);
+        } else {
+            reject(new Error(message.error || "Erro desconhecido na Worker Thread."));
+        }
+    });
+
+    persistentWorker.on('error', (error) => {
+        console.error(`[Worker Proxy] 💥 CRASH CAPTURADO NA THREAD PERSISTENTE (Access Violation/etc): ${error.message}`);
+        if (currentRequest) {
+            const { reject, timeoutId } = currentRequest;
+            clearTimeout(timeoutId);
+            currentRequest = null;
+            reject(new Error(`Falha Crítica na DLL Nativa (Worker Error): ${error.message}`));
+        }
+        destruirWorker();
+    });
+
+    persistentWorker.on('exit', (code) => {
+        if (code !== 0) {
+            console.error(`[Worker Proxy] Worker thread persistente finalizou com código anormal: ${code}`);
+            if (currentRequest) {
+                const { reject, timeoutId } = currentRequest;
+                clearTimeout(timeoutId);
+                currentRequest = null;
+                reject(new Error(`Worker thread encerrou de forma anormal (código ${code})`));
+            }
+        }
+        destruirWorker();
+    });
+
+    return persistentWorker;
+};
+
+const dispatchToWorker = (comando, jsonPayload) => {
+    return new Promise((resolve, reject) => {
+        console.log(`[Worker Proxy] Despachando comando ${comando} para a Worker Thread...`);
+        
+        try {
+            const worker = obterWorker();
+
+            // Define um timeout de 2 minutos para a thread caso a DLL trave indefinidamente
+            const timeoutId = setTimeout(() => {
+                console.warn(`[Worker Proxy] ⚠️ Timeout de 2 minutos atingido para o comando ${comando}. Reiniciando worker...`);
+                destruirWorker();
+                reject(new Error("Timeout: A thread da ACBrLib travou e não respondeu após 2 minutos. Foi terminada à força."));
+            }, 120000);
+
+            currentRequest = { resolve, reject, timeoutId };
+
+            // Envia o payload para a thread começar o trabalho
+            worker.postMessage({ comando, payload: jsonPayload });
+        } catch (err) {
+            reject(new Error(`Erro ao despachar comando para o worker: ${err.message}`));
+        }
+    });
+};
+
 /**
  * Função principal para invocar comandos. 
- * Para comandos ACBrLib, delega para uma Worker Thread isolada,
+ * Para comandos ACBrLib, delega para uma Worker Thread persistente de forma isolada,
  * prevenindo que Access Violations derrubem o processo principal.
  */
 export const executarComandoFiscal = async (comando, jsonPayload) => {
@@ -68,44 +155,14 @@ export const executarComandoFiscal = async (comando, jsonPayload) => {
         });
     }
 
-    // Para todos os outros comandos, instanciar a Worker Thread
-    return new Promise((resolve, reject) => {
-        console.log(`[Worker Proxy] Despachando comando ${comando} para a Worker Thread...`);
-        
-        const workerPath = path.resolve(__dirname, 'acbrWorkerThread.js');
-        const worker = new Worker(workerPath);
+    // Garante processamento estritamente sequencial na Worker Thread persistente
+    const runDispatch = () => dispatchToWorker(comando, jsonPayload);
 
-        // Define um timeout para a thread caso a DLL trave indefinidamente (opcional, ex: 2 minutos)
-        const timeoutId = setTimeout(() => {
-            worker.terminate();
-            reject(new Error("Timeout: A thread da ACBrLib travou e não respondeu após 2 minutos. Foi terminada à força."));
-        }, 120000);
-
-        worker.on('message', (message) => {
-            clearTimeout(timeoutId);
-            if (message.sucesso) {
-                resolve(message.result);
-            } else {
-                reject(new Error(message.error || "Erro desconhecido na Worker Thread."));
-            }
-        });
-
-        worker.on('error', (error) => {
-            clearTimeout(timeoutId);
-            console.error(`[Worker Proxy] 💥 CRASH CAPTURADO NA THREAD (Access Violation/etc): ${error.message}`);
-            // Apenas rejeita a promise, o index.js vai marcar o evento como erro
-            reject(new Error(`Falha Crítica na DLL Nativa (Worker Error): ${error.message}`));
-        });
-
-        worker.on('exit', (code) => {
-            clearTimeout(timeoutId);
-            if (code !== 0) {
-                console.error(`[Worker Proxy] Worker thread finalizou com código anormal: ${code}`);
-                reject(new Error(`Worker thread encerrou de forma anormal (código ${code})`));
-            }
-        });
-
-        // Envia o payload para a thread começar o trabalho
-        worker.postMessage({ comando, payload: jsonPayload });
+    queuePromise = queuePromise.then(runDispatch).catch((err) => {
+        // Se houver falha em um comando, não impede a execução do próximo na fila
+        console.error(`[Worker Proxy] Falha ao processar comando anterior na fila: ${err.message}`);
+        return runDispatch();
     });
+
+    return queuePromise;
 };

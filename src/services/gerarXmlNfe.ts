@@ -27,7 +27,32 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
   const ufEmit = cidadeEmit.estado_id;
   const cUF = cMunEmit.substring(0, 2) || '35';
 
-  const dhEmi = new Date().toISOString().replace(/\.\d+Z$/, '-03:00'); // Fuso horário fixo BR
+  // Gera a data e hora no fuso horário de Brasília (UTC-3), que é exigido pela SEFAZ
+  const obterDataHoraBrasilia = () => {
+    const agora = new Date();
+    const formatter = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    const partes = formatter.formatToParts(agora);
+    const findPart = (type: string) => partes.find(p => p.type === type)?.value || '';
+    const ano = findPart('year');
+    const mes = findPart('month');
+    const dia = findPart('day');
+    let hora = findPart('hour');
+    const min = findPart('minute');
+    const seg = findPart('second');
+    if (hora === '24') hora = '00';
+    return `${ano}-${mes}-${dia}T${hora}:${min}:${seg}-03:00`;
+  };
+
+  const dhEmi = obterDataHoraBrasilia();
   const cNF = String(Math.floor(10000000 + Math.random() * 89999999));
 
   // Helper para escapar XML

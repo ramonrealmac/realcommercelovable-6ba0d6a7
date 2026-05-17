@@ -85,18 +85,44 @@ const FiscalConfigForm = () => {
       if (!XEmpresaId) return;
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from("fiscal_config")
-          .select(`
-            tipo_certificado, certificado, senha_certificado, ambiente_nfe, cliente_padrao_id,
-            email_smtp_host, email_smtp_port, email_smtp_user, email_smtp_pass, 
-            email_smtp_ssl, email_smtp_tls, email_assunto_nfe, email_corpo_nfe,
-            pasta_arquivos_fiscais, nr_timeout_nfe, nfe_versao_metodo, nfce_versao_metodo
-          `)
-          .eq("empresa_id", XEmpresaId)
-          .maybeSingle();
+        // Busca a configuração fiscal e os dados da empresa (para obter a UF correta)
+        const [{ data, error }, { data: empresa }] = await Promise.all([
+          supabase
+            .from("fiscal_config")
+            .select(`
+              tipo_certificado, certificado, senha_certificado, ambiente_nfe, cliente_padrao_id,
+              email_smtp_host, email_smtp_port, email_smtp_user, email_smtp_pass, 
+              email_smtp_ssl, email_smtp_tls, email_assunto_nfe, email_corpo_nfe,
+              pasta_arquivos_fiscais, nr_timeout_nfe, nfe_versao_metodo, nfce_versao_metodo
+            `)
+            .eq("empresa_id", XEmpresaId)
+            .maybeSingle(),
+          supabase
+            .from("empresa")
+            .select("endereco_uf, endereco_cidade_id")
+            .eq("empresa_id", XEmpresaId)
+            .maybeSingle()
+        ]);
 
         if (error) throw error;
+
+        let companyUf = "SP";
+        if (empresa) {
+          if (empresa.endereco_uf) {
+            companyUf = empresa.endereco_uf;
+          } else if (empresa.endereco_cidade_id) {
+            const { data: cidade } = await supabase
+              .from("cidade")
+              .select("estado_id")
+              .eq("cidade_id", empresa.endereco_cidade_id)
+              .maybeSingle();
+            if (cidade?.estado_id) {
+              companyUf = cidade.estado_id;
+            }
+          }
+        }
+
+        console.log(`[FiscalConfig] Carregado UF da empresa: ${companyUf}`);
 
         if (data) {
           form.reset({
@@ -104,7 +130,7 @@ const FiscalConfigForm = () => {
             certificado: data.certificado || "",
             senha_certificado: data.senha_certificado ? atob(data.senha_certificado) : "",
             ambiente_nfe: data.ambiente_nfe || "2",
-            uf: "SP",
+            uf: companyUf,
             cliente_padrao_id: data.cliente_padrao_id || null,
             cliente_padrao_nome: "Carregando...",
             email_smtp_host: data.email_smtp_host || "",
@@ -140,7 +166,7 @@ const FiscalConfigForm = () => {
             certificado: "",
             senha_certificado: "",
             ambiente_nfe: "2",
-            uf: "SP",
+            uf: companyUf,
             cliente_padrao_id: null,
             cliente_padrao_nome: "Não definido (Consumidor)",
             email_smtp_host: "",
@@ -253,7 +279,7 @@ const FiscalConfigForm = () => {
           },
           (payload) => {
             const row = payload.new as any;
-            if (row.status === "CONCLUIDO") {
+            if (row.status === "CONCLUIDO" || row.status === "EMITIDO") {
               channel.unsubscribe();
               resolve(JSON.parse(row.resposta));
             } else if (row.status === "ERRO") {
@@ -276,9 +302,25 @@ const FiscalConfigForm = () => {
     setSearchingCerts(true);
     try {
       const comando = tipoCertificadoAtual === 'REPOSITORIO' ? "LISTAR_CERTIFICADOS_WINDOWS" : "LISTAR_CERTIFICADOS";
-      const payload = tipoCertificadoAtual === 'REPOSITORIO' ? {} : { diretorio: "C:/Certificados" };
+      
+      let diretorio = "C:/Certificados";
+      if (tipoCertificadoAtual === 'ARQUIVO') {
+        const campoCert = form.getValues("certificado")?.trim();
+        if (campoCert) {
+          if (campoCert.toLowerCase().endsWith('.pfx') || campoCert.toLowerCase().endsWith('.p12')) {
+            const lastSlash = Math.max(campoCert.lastIndexOf('/'), campoCert.lastIndexOf('\\'));
+            if (lastSlash > -1) {
+              diretorio = campoCert.substring(0, lastSlash);
+            }
+          } else {
+            diretorio = campoCert;
+          }
+        }
+      }
 
-      console.log(`[FiscalConfig] Buscando certificados do tipo: ${tipoCertificadoAtual}...`);
+      const payload = tipoCertificadoAtual === 'REPOSITORIO' ? {} : { diretorio };
+
+      console.log(`[FiscalConfig] Buscando certificados do tipo: ${tipoCertificadoAtual} na pasta: ${diretorio}...`);
       const response = await dispatchWorkerCommand(comando, payload);
       console.log(`[FiscalConfig] Resposta do Worker:`, response);
 
@@ -290,7 +332,7 @@ const FiscalConfigForm = () => {
         }
         setModalCertOpen(true);
       } else {
-        toast.error("Falha ao buscar certificados: " + (response.erro || response.mensagem || "Verifique se a pasta C:/Certificados existe no servidor."));
+        toast.error("Falha ao buscar certificados: " + (response.erro || response.mensagem || `Verifique se a pasta "${diretorio}" existe no servidor.`));
       }
     } catch (err: any) {
       toast.error(err.message);
@@ -382,7 +424,12 @@ const FiscalConfigForm = () => {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Tipo de Certificado</FormLabel>
-                            <Select onValueChange={(val) => { field.onChange(val); form.setValue("certificado", ""); form.setValue("senha_certificado", ""); }} defaultValue={field.value}>
+                            <Select onValueChange={(val) => { 
+                              field.onChange(val); 
+                              form.setValue("certificado", ""); 
+                              form.setValue("senha_certificado", ""); 
+                              setCertificadosServidor([]);
+                            }} defaultValue={field.value}>
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Selecione o tipo" />
@@ -806,8 +853,9 @@ const FiscalConfigForm = () => {
                 <div className="flex flex-col gap-2">
                   {certificadosServidor.map((cert, index) => {
                     const isWindows = tipoCertificadoAtual === 'REPOSITORIO';
-                    const label = isWindows ? cert.Subject : cert.split('/').pop()?.split('\\').pop() || cert;
-                    const value = isWindows ? cert.SerialNumber : cert;
+                    const isString = typeof cert === 'string';
+                    const label = isWindows ? (cert?.Subject || "") : (isString ? cert.split('/').pop()?.split('\\').pop() || cert : "");
+                    const value = isWindows ? (cert?.SerialNumber || "") : (isString ? cert : "");
                     return (
                       <Button
                         key={index}
@@ -817,7 +865,7 @@ const FiscalConfigForm = () => {
                       >
                         <span className="font-medium text-sm leading-tight truncate w-full">{label}</span>
                         {isWindows && <span className="text-xs text-muted-foreground font-mono">Série: {value}</span>}
-                        {!isWindows && <span className="text-[10px] text-muted-foreground font-mono truncate w-full">{cert}</span>}
+                        {!isWindows && <span className="text-[10px] text-muted-foreground font-mono truncate w-full">{isString ? cert : ""}</span>}
                       </Button>
                     );
                   })}

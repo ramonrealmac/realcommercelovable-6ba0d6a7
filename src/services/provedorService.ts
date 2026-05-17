@@ -125,7 +125,7 @@ export const provedorService = {
             },
             (payload) => {
               const row = payload.new as any;
-              if (row.status === "CONCLUIDO") {
+              if (row.status === "CONCLUIDO" || row.status === "EMITIDO") {
                 channel.unsubscribe();
                 // O worker retorna um JSON, mas os forms esperam a string "OK: ..." ou similar do padrão ACBr
                 const resObj = JSON.parse(row.resposta || "{}");

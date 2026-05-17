@@ -136,23 +136,35 @@ const processarEvento = async (evento) => {
         let payload = evento.payload || {};
         if (!payload.config || !payload.config.certificadoPath) {
             logger.info(`Buscando configurações fiscais para empresa ${evento.empresa_id}...`);
-            const { data: configDb } = await supabase
-                .from('fiscal_config')
-                .select('*')
-                .eq('empresa_id', evento.empresa_id)
-                .maybeSingle();
+            const [{ data: configDb }, { data: empresaRaw }] = await Promise.all([
+                supabase
+                    .from('fiscal_config')
+                    .select('*')
+                    .eq('empresa_id', evento.empresa_id)
+                    .maybeSingle(),
+                supabase
+                    .from('empresa')
+                    .select('*')
+                    .eq('empresa_id', evento.empresa_id)
+                    .maybeSingle()
+            ]);
             
             if (configDb) {
+                let companyUf = "SP";
+                if (empresaRaw) {
+                    const empresa = await attachCidade(empresaRaw);
+                    companyUf = empresa.endereco_uf || empresa.cidade?.estado_id || "SP";
+                }
                 payload.config = {
                     tipo_certificado: configDb.tipo_certificado || 'ARQUIVO',
                     certificadoPath: configDb.certificado,
-                    certificadoSenha: configDb.senha_certificado ? Buffer.from(configDb.senha_certificado, 'base64').toString('ascii') : "",
+                    certificadoSenha: configDb.senha_certificado ? decodeSenhaCertificado(configDb.senha_certificado) : "",
                     ambiente: parseInt(configDb.ambiente_nfe || "2"),
-                    uf: "SP", // Fallback, mas o ideal é vir no comando
+                    uf: companyUf,
                     modelo: 55,
                     pasta_arquivos: configDb.pasta_arquivos_fiscais || ""
                 };
-                logger.info(`Configurações carregadas: Tipo=${payload.config.tipo_certificado}`);
+                logger.info(`Configurações carregadas: Tipo=${payload.config.tipo_certificado} UF=${payload.config.uf}`);
                 
                 // Atualiza o registro do evento com o ambiente descoberto
                 await supabase.from('fiscal_evento').update({ ambiente: payload.config.ambiente }).eq('id', evento.id);

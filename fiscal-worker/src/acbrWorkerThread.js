@@ -51,7 +51,8 @@ const loadLibrary = (path, prefix) => {
                 EnviarEvento: lib.func('int __cdecl ' + prefix + '_EnviarEvento(void* handle, int idLote, _Out_ char* sResposta, _Out_ int* esTamanho)'),
                 Cancelar: lib.func('int __cdecl ' + prefix + '_Cancelar(void* handle, const char* eChave, const char* eJustificativa, const char* eCNPJ, int ALote, _Out_ char* sResposta, _Out_ int* esTamanho)'),
                 StatusServico: lib.func('int __cdecl ' + prefix + '_StatusServico(void* handle, _Out_ char* sResposta, _Out_ int* esTamanho)'),
-                Validar: lib.func('int __cdecl ' + prefix + '_Validar(void* handle)')
+                Validar: lib.func('int __cdecl ' + prefix + '_Validar(void* handle)'),
+                Assinar: lib.func('int __cdecl ' + prefix + '_Assinar(void* handle)')
             };
 
             // Funções de impressão (apenas NFe/NFCe)
@@ -369,15 +370,20 @@ const configurarHandle = (lib, handle, configPayload, prefix = 'NFE') => {
 
     if (!configPayload) return;
 
-    // Configuração do Certificado (Híbrido: Arquivo vs Repositório)
+    // Configuração do protocolo TLS 1.2 (SSLType = 5) - obrigatório para comunicação com a SEFAZ
+    lib.ConfigGravarValor(handle, "DFe", "SSLType", "5");
+
     const tipoCertificado = configPayload.tipo_certificado || 'ARQUIVO';
 
     if (tipoCertificado === 'REPOSITORIO') {
-        // Usa Repositório do Windows (WinCrypt/WinHttp) - ideal para certificados A3 em HSM/Token
+        // Usa Repositório do Windows (WinCrypt/WinINet) - ideal para certificados A3/A1 instalados no Windows
+        // Nota: Alterado SSLHttpLib de 2 (WinHttp) para 1 (WinINet) para resolver erro 12030 (SSL incompatível).
+        // WinINet usa o motor de rede do Windows com suporte automático a TLS 1.2 atualizado e proxies do usuário.
         lib.ConfigGravarValor(handle, "DFe", "SSLLib", "4");         // 4=libWinCrypt (SChannel/WinCrypt)
         lib.ConfigGravarValor(handle, "DFe", "SSLCryptLib", "3");   // 3=cryWinCrypt
-        lib.ConfigGravarValor(handle, "DFe", "SSLHttpLib", "2");    // 2=httpWinHttp
+        lib.ConfigGravarValor(handle, "DFe", "SSLHttpLib", "1");    // 1=httpWinINet (mais compatível que 2=httpWinHttp)
         lib.ConfigGravarValor(handle, "DFe", "SSLXmlSignLib", "4"); // 4=xsLibXml2 (enum ACBrLib atual: 0=None,1=XmlSec,2=MsXml,3=MsXmlCapicom,4=LibXml2)
+        console.log(`[FiscalLib] Configurado Certificado REPOSITORIO (WinCrypt/WinINet + TLS 1.2) para série ${configPayload.certificadoPath}`);
 
         if (configPayload.certificadoPath) {
             lib.ConfigGravarValor(handle, "DFe", "NumeroSerie", configPayload.certificadoPath);
@@ -385,11 +391,12 @@ const configurarHandle = (lib, handle, configPayload, prefix = 'NFE') => {
             lib.ConfigGravarValor(handle, "DFe", "Senha", "");
         }
     } else {
-        // Usa Arquivo PFX com OpenSSL - motor padrão para certificados A1 em arquivo
-        lib.ConfigGravarValor(handle, "DFe", "SSLLib", "1");        // 1=libOpenSSL
-        lib.ConfigGravarValor(handle, "DFe", "SSLCryptLib", "1");   // 1=cryOpenSSL
-        lib.ConfigGravarValor(handle, "DFe", "SSLHttpLib", "3");    // 3=httpOpenSSL
+        // Usa Arquivo PFX com WinCrypt (nativo do Windows) - resolve incompatibilidade de OpenSSL com PFXs modernos (AES256)
+        lib.ConfigGravarValor(handle, "DFe", "SSLLib", "4");        // 4=libWinCrypt (nativo do Windows)
+        lib.ConfigGravarValor(handle, "DFe", "SSLCryptLib", "3");   // 3=cryWinCrypt (nativo do Windows)
+        lib.ConfigGravarValor(handle, "DFe", "SSLHttpLib", "1");    // 1=httpWinINet (nativo do Windows, mais robusto e estável)
         lib.ConfigGravarValor(handle, "DFe", "SSLXmlSignLib", "4"); // 4=xsLibXml2 (a opção implementada na compilação padrão da ACBrLib)
+        console.log(`[FiscalLib] Configurado Certificado ARQUIVO (WinCrypt + TLS 1.2) para arquivo ${configPayload.certificadoPath}`);
 
         if (configPayload.certificadoPath) {
             lib.ConfigGravarValor(handle, "DFe", "ArquivoPFX", configPayload.certificadoPath);
@@ -734,9 +741,33 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
             config.modelo = comando === 'VALIDAR_XML_NFCE' ? 65 : 55;
             return executarNaDLL(libNFe, config, async (handle) => {
                 libNFe.LimparLista(handle);
-                console.log(`[FiscalLib] ValidarXML ${config.modelo === 65 ? 'NFCe' : 'NFe'} (${dados.length} chars)...`);
-                let ret = libNFe.CarregarXML(handle, dados);
-                if (ret !== 0) throw new Error('CarregarXML: ' + lerRetornoACBr(libNFe, handle));
+                
+                const isIni = String(dados || '').trim().startsWith('[');
+                let ret;
+                if (isIni) {
+                    const iniContent = normalizarIniNFeAntesDaDll(dados);
+                    console.log(`[FiscalLib] ValidarXML via INI ${config.modelo === 65 ? 'NFCe' : 'NFe'} (${iniContent.length} chars)...`);
+                    ret = libNFe.CarregarINI(handle, iniContent);
+                    if (ret !== 0) throw new Error('CarregarINI: ' + lerRetornoACBr(libNFe, handle));
+                } else {
+                    console.log(`[FiscalLib] ValidarXML via XML ${config.modelo === 65 ? 'NFCe' : 'NFe'} (${dados.length} chars)...`);
+                    ret = libNFe.CarregarXML(handle, dados);
+                    if (ret !== 0) throw new Error('CarregarXML: ' + lerRetornoACBr(libNFe, handle));
+                }
+                
+                // Assinar antes de validar para que o XML possua a assinatura digital e,
+                // no caso de NFC-e, a tag infNFeSupl (QR-Code), exigidas pelos schemas XSD.
+                try {
+                    console.log('[FiscalLib] Assinando XML antes de validar contra os Schemas...');
+                    ret = libNFe.Assinar(handle);
+                    if (ret !== 0) {
+                        const signErr = lerRetornoACBr(libNFe, handle);
+                        return { sucesso: false, erro: 'Erro ao assinar XML para validação: ' + signErr };
+                    }
+                } catch (signErrEx) {
+                    console.error('[FiscalLib] Erro crítico ao assinar XML:', signErrEx);
+                    return { sucesso: false, erro: 'Falha crítica na assinatura digital: ' + signErrEx.message };
+                }
                 
                 ret = libNFe.Validar(handle);
                 if (ret !== 0) {
