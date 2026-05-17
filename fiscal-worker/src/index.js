@@ -1,3 +1,9 @@
+// Limpar variáveis de ambiente globais do OpenSSL e apontar OPENSSL_CONF para NUL para evitar conflito de versão e DSO errors
+process.env.OPENSSL_CONF = 'NUL';
+delete process.env.OPENSSL_CONF_RAW;
+delete process.env.OPENSSL_MODULES;
+delete process.env.OPENSSL_ENGINES;
+
 import { supabase } from './db.js';
 import { executarComandoFiscal } from './fiscalLib.js';
 import { gerarIniNfe } from './gerarIniNfe.js';
@@ -105,6 +111,13 @@ const montarPayloadEmissaoNfe = async (evento, payloadAtual) => {
             csc: configItem.csc || payloadAtual.config?.csc || '',
             id_csc: configItem.id_csc || payloadAtual.config?.id_csc || '',
             pasta_arquivos: fiscalConfig.pasta_arquivos_fiscais || payloadAtual.config?.pasta_arquivos || '',
+            // Campos SSL — SEMPRE do banco de dados (fonte confiável)
+            ssl_lib: fiscalConfig.ssl_lib || '',
+            ssl_crypt_lib: fiscalConfig.ssl_crypt_lib || '',
+            ssl_http_lib: fiscalConfig.ssl_http_lib || '',
+            ssl_xml_sign_lib: fiscalConfig.ssl_xml_sign_lib || '',
+            ssl_type: fiscalConfig.ssl_type || '',
+            verificar_validade_cert: fiscalConfig.verificar_validade_cert !== false,
         },
         print_config: payloadAtual.print_config || {
             tp_imp: isNfce ? (configItem.tp_imp_nfce || 'PDF') : (configItem.tp_imp_nfe || 'PDF'),
@@ -132,45 +145,57 @@ const processarEvento = async (evento) => {
 
         const nfeCabecalhoId = evento.nfe_cabecalho_id || evento.referencia_id;
 
-        // 2. Busca configuração fiscal se não vier completa no payload
+        // 2. Busca configuração fiscal do banco de dados (Sempre consulta para garantir parâmetros atualizados em tempo real)
         let payload = evento.payload || {};
-        if (!payload.config || !payload.config.certificadoPath) {
-            logger.info(`Buscando configurações fiscais para empresa ${evento.empresa_id}...`);
-            const [{ data: configDb }, { data: empresaRaw }] = await Promise.all([
-                supabase
-                    .from('fiscal_config')
-                    .select('*')
-                    .eq('empresa_id', evento.empresa_id)
-                    .maybeSingle(),
-                supabase
-                    .from('empresa')
-                    .select('*')
-                    .eq('empresa_id', evento.empresa_id)
-                    .maybeSingle()
-            ]);
-            
-            if (configDb) {
-                let companyUf = "SP";
-                if (empresaRaw) {
-                    const empresa = await attachCidade(empresaRaw);
-                    companyUf = empresa.endereco_uf || empresa.cidade?.estado_id || "SP";
-                }
-                payload.config = {
-                    tipo_certificado: configDb.tipo_certificado || 'ARQUIVO',
-                    certificadoPath: configDb.certificado,
-                    certificadoSenha: configDb.senha_certificado ? decodeSenhaCertificado(configDb.senha_certificado) : "",
-                    ambiente: parseInt(configDb.ambiente_nfe || "2"),
-                    uf: companyUf,
-                    modelo: 55,
-                    pasta_arquivos: configDb.pasta_arquivos_fiscais || ""
-                };
-                logger.info(`Configurações carregadas: Tipo=${payload.config.tipo_certificado} UF=${payload.config.uf}`);
-                
-                // Atualiza o registro do evento com o ambiente descoberto
-                await supabase.from('fiscal_evento').update({ ambiente: payload.config.ambiente }).eq('id', evento.id);
-            } else {
-                logger.warn(`Empresa ${evento.empresa_id} não possui configurações fiscais cadastradas.`);
+        
+        logger.info(`Buscando configurações fiscais para empresa ${evento.empresa_id}...`);
+        const [{ data: configDb }, { data: empresaRaw }] = await Promise.all([
+            supabase
+                .from('fiscal_config')
+                .select('*')
+                .eq('empresa_id', evento.empresa_id)
+                .maybeSingle(),
+            supabase
+                .from('empresa')
+                .select('*')
+                .eq('empresa_id', evento.empresa_id)
+                .maybeSingle()
+        ]);
+        
+        if (configDb) {
+            let companyUf = "SP";
+            if (empresaRaw) {
+                const empresa = await attachCidade(empresaRaw);
+                companyUf = empresa.endereco_uf || empresa.cidade?.estado_id || "SP";
             }
+            
+            // Mescla config do payload com DB, mas campos SSL SEMPRE vêm do banco (fonte confiável)
+            const payloadConfig = payload.config || {};
+            payload.config = {
+                ...payloadConfig,
+                tipo_certificado: configDb.tipo_certificado || payloadConfig.tipo_certificado || 'ARQUIVO',
+                certificadoPath: configDb.certificado || payloadConfig.certificadoPath,
+                ambiente: parseInt(configDb.ambiente_nfe || payloadConfig.ambiente || "2"),
+                uf: companyUf,
+                modelo: payloadConfig.modelo || 55,
+                pasta_arquivos: configDb.pasta_arquivos_fiscais || payloadConfig.pasta_arquivos || "",
+                // Campos SSL — SEMPRE do banco, nunca do payload (evita valores obsoletos/incompatíveis)
+                ssl_lib: configDb.ssl_lib || "",
+                ssl_crypt_lib: configDb.ssl_crypt_lib || "",
+                ssl_http_lib: configDb.ssl_http_lib || "",
+                ssl_xml_sign_lib: configDb.ssl_xml_sign_lib || "",
+                ssl_type: configDb.ssl_type || "",
+                verificar_validade_cert: configDb.verificar_validade_cert !== false,
+                certificadoSenha: decodeSenhaCertificado(
+                    payloadConfig.certificadoSenha || configDb.senha_certificado || ""
+                )
+            };
+            logger.info(`Configurações carregadas: Tipo=${payload.config.tipo_certificado} UF=${payload.config.uf} SSL_Lib=${payload.config.ssl_lib || 'Default'}`);
+            
+            // Atualiza o registro do evento com o ambiente descoberto
+            await supabase.from('fiscal_evento').update({ ambiente: payload.config.ambiente }).eq('id', evento.id);
+        } else {
+            logger.warn(`Empresa ${evento.empresa_id} não possui configurações fiscais cadastradas.`);
         }
 
         const isEmissaoIni = ['EMITIR_NFE', 'EMITIR_NFCE'].includes(evento.comando);

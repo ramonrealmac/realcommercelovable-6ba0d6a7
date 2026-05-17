@@ -1,3 +1,9 @@
+// Limpar variáveis de ambiente globais do OpenSSL e apontar OPENSSL_CONF para NUL para evitar conflito de versão e DSO errors
+process.env.OPENSSL_CONF = 'NUL';
+delete process.env.OPENSSL_CONF_RAW;
+delete process.env.OPENSSL_MODULES;
+delete process.env.OPENSSL_ENGINES;
+
 import koffi from 'koffi';
 import dotenv from 'dotenv';
 import fs from 'fs';
@@ -14,6 +20,16 @@ const depPaths = [
 process.env.PATH = depPaths.join(path.delimiter) + path.delimiter + process.env.PATH;
 
 dotenv.config();
+
+const decodeSenhaCertificado = (senha) => {
+    if (!senha) return '';
+    try {
+        const decoded = Buffer.from(senha, 'base64').toString('utf8');
+        const normalizada = Buffer.from(decoded, 'utf8').toString('base64').replace(/=+$/, '');
+        return normalizada === String(senha).replace(/=+$/, '') ? decoded : senha;
+    }
+    catch { return senha; }
+};
 
 const nfeLibPath = process.env.FISCAL_LIB_PATH;
 const mdfeLibPath = process.env.FISCAL_MDFE_LIB_PATH;
@@ -370,38 +386,80 @@ const configurarHandle = (lib, handle, configPayload, prefix = 'NFE') => {
 
     if (!configPayload) return;
 
-    // Configuração do protocolo TLS 1.2 (SSLType = 5) - obrigatório para comunicação com a SEFAZ
-    lib.ConfigGravarValor(handle, "DFe", "SSLType", "5");
+    // 1. SSLType (Protocolo de Segurança)
+    // Default para TLS 1.2 (SSLType = 5) se não informado
+    const sslType = configPayload.ssl_type !== undefined && configPayload.ssl_type !== null && configPayload.ssl_type !== "" ? String(configPayload.ssl_type) : "5";
+    lib.ConfigGravarValor(handle, "DFe", "SSLType", sslType);
 
     const tipoCertificado = configPayload.tipo_certificado || 'ARQUIVO';
 
-    if (tipoCertificado === 'REPOSITORIO') {
-        // Usa Repositório do Windows (WinCrypt/WinHttp) - ideal para certificados A3/A1 instalados no Windows
-        // SSLHttpLib=2 (WinHttp) corrige erro 12031 (connection reset) do WinINet contra SEFAZ.
-        // WinHttp é a pilha HTTP moderna do Windows, com TLS 1.2 nativo e melhor recuperação de reset/keep-alive.
-        lib.ConfigGravarValor(handle, "DFe", "SSLLib", "4");         // 4=libWinCrypt (SChannel/WinCrypt)
-        lib.ConfigGravarValor(handle, "DFe", "SSLCryptLib", "3");   // 3=cryWinCrypt
-        lib.ConfigGravarValor(handle, "DFe", "SSLHttpLib", "2");    // 2=httpWinHttp (mais estável que WinINet contra SEFAZ)
-        lib.ConfigGravarValor(handle, "DFe", "SSLXmlSignLib", "4"); // 4=xsLibXml2
-        console.log(`[FiscalLib] Configurado Certificado REPOSITORIO (WinCrypt/WinHttp + TLS 1.2) para série ${configPayload.certificadoPath}`);
+    // Determina bibliotecas SSL com fallback para os padrões estáveis do Windows
+    let sslLib = "4"; // 4=libWinCrypt (nativo)
+    let sslCryptLib = "3"; // 3=cryWinCrypt (nativo)
+    let sslHttpLib = "1"; // 1=httpWinINet (nativo, melhor compatibilidade com SEFAZ)
+    let sslXmlSignLib = "4"; // 4=xsLibXml2 (nativo)
 
+    if (configPayload.ssl_lib !== undefined && configPayload.ssl_lib !== null && configPayload.ssl_lib !== "") {
+        sslLib = String(configPayload.ssl_lib);
+    }
+    if (configPayload.ssl_crypt_lib !== undefined && configPayload.ssl_crypt_lib !== null && configPayload.ssl_crypt_lib !== "") {
+        sslCryptLib = String(configPayload.ssl_crypt_lib);
+    }
+    if (configPayload.ssl_http_lib !== undefined && configPayload.ssl_http_lib !== null && configPayload.ssl_http_lib !== "") {
+        sslHttpLib = String(configPayload.ssl_http_lib);
+    }
+    if (configPayload.ssl_xml_sign_lib !== undefined && configPayload.ssl_xml_sign_lib !== null && configPayload.ssl_xml_sign_lib !== "") {
+        sslXmlSignLib = String(configPayload.ssl_xml_sign_lib);
+    }
+
+    // Validação de compatibilidade: detecta combinações conhecidamente quebradas e auto-corrige
+    // Capicom (SSLLib=2 ou SSLLib=3) é legado 32-bit e não funciona em ambientes 64-bit modernos
+    const capicomLibs = ["2", "3"]; // libCapicom, libCapicomDelphiSoap
+    if (capicomLibs.includes(sslLib)) {
+        console.warn(`[FiscalLib] ⚠️ SSLLib=${sslLib} (Capicom) detectada — incompatível com 64-bit. Auto-corrigindo para libWinCrypt (4).`);
+        sslLib = "4";
+    }
+    // xsMsXmlCapicom (XmlSignLib=3) não implementa assinatura em ACBrLib 64-bit
+    if (sslXmlSignLib === "3") {
+        console.warn(`[FiscalLib] ⚠️ SSLXmlSignLib=3 (xsMsXmlCapicom) detectada — "Assinar não implementado". Auto-corrigindo para xsLibXml2 (4).`);
+        sslXmlSignLib = "4";
+    }
+    // Se SSLLib é WinCrypt (4), garante que CryptLib seja compatível (cryWinCrypt=3)
+    if (sslLib === "4" && !["3"].includes(sslCryptLib)) {
+        console.warn(`[FiscalLib] ⚠️ SSLCryptLib=${sslCryptLib} incompatível com libWinCrypt. Auto-corrigindo para cryWinCrypt (3).`);
+        sslCryptLib = "3";
+    }
+
+    // Grava as bibliotecas SSL configuradas no ACBrLib
+    lib.ConfigGravarValor(handle, "DFe", "SSLLib", sslLib);
+    lib.ConfigGravarValor(handle, "DFe", "SSLCryptLib", sslCryptLib);
+    lib.ConfigGravarValor(handle, "DFe", "SSLHttpLib", sslHttpLib);
+    lib.ConfigGravarValor(handle, "DFe", "SSLXmlSignLib", sslXmlSignLib);
+
+    // Controle de Validade do Certificado
+    const verificarValidade = configPayload.verificar_validade_cert !== false ? "1" : "0";
+    lib.ConfigGravarValor(handle, "DFe", "VerificarValidade", verificarValidade);
+
+    console.log(`[FiscalLib] Configurações SSL Aplicadas: SSLLib=${sslLib}, SSLCryptLib=${sslCryptLib}, SSLHttpLib=${sslHttpLib}, SSLXmlSignLib=${sslXmlSignLib}, SSLType=${sslType}, VerificarValidade=${verificarValidade}`);
+
+    if (tipoCertificado === 'REPOSITORIO') {
         if (configPayload.certificadoPath) {
             lib.ConfigGravarValor(handle, "DFe", "NumeroSerie", configPayload.certificadoPath);
             lib.ConfigGravarValor(handle, "DFe", "ArquivoPFX", "");
             lib.ConfigGravarValor(handle, "DFe", "Senha", "");
         }
     } else {
-        // Usa Arquivo PFX com WinCrypt (nativo do Windows) - resolve incompatibilidade de OpenSSL com PFXs modernos (AES256)
-        // SSLHttpLib=2 (WinHttp) corrige erro 12031 (connection reset) do WinINet contra SEFAZ.
-        lib.ConfigGravarValor(handle, "DFe", "SSLLib", "4");        // 4=libWinCrypt (nativo do Windows)
-        lib.ConfigGravarValor(handle, "DFe", "SSLCryptLib", "3");   // 3=cryWinCrypt (nativo do Windows)
-        lib.ConfigGravarValor(handle, "DFe", "SSLHttpLib", "2");    // 2=httpWinHttp (mais estável que WinINet contra SEFAZ)
-        lib.ConfigGravarValor(handle, "DFe", "SSLXmlSignLib", "4"); // 4=xsLibXml2
-        console.log(`[FiscalLib] Configurado Certificado ARQUIVO (WinCrypt/WinHttp + TLS 1.2) para arquivo ${configPayload.certificadoPath}`);
-
         if (configPayload.certificadoPath) {
-            lib.ConfigGravarValor(handle, "DFe", "ArquivoPFX", configPayload.certificadoPath);
-            lib.ConfigGravarValor(handle, "DFe", "Senha", configPayload.certificadoSenha || "");
+            let pfxPath = configPayload.certificadoPath;
+            if (!fs.existsSync(pfxPath) && !path.isAbsolute(pfxPath)) {
+                const possiblePath = path.join(baseArquivos, pfxPath);
+                if (fs.existsSync(possiblePath)) {
+                    pfxPath = possiblePath;
+                    console.log(`[FiscalLib] Certificado resolvido relativo à pasta base fiscal: ${pfxPath}`);
+                }
+            }
+            lib.ConfigGravarValor(handle, "DFe", "ArquivoPFX", pfxPath);
+            lib.ConfigGravarValor(handle, "DFe", "Senha", decodeSenhaCertificado(configPayload.certificadoSenha));
             lib.ConfigGravarValor(handle, "DFe", "NumeroSerie", "");
         }
     }
@@ -428,6 +486,15 @@ const configurarHandle = (lib, handle, configPayload, prefix = 'NFE') => {
 
     // Versão do schema de Distribuição DFe (não sobrescreve SSL definido acima)
     lib.ConfigGravarValor(handle, "DFe", "VersaoDistribuicaoDFe", "1.01");
+
+    // Configurações de timeouts e intervalos do WebService para evitar erro 12031 (redefinida) / 12002 (timeout)
+    // Aumentamos o timeout de 5s para 30s para dar tempo suficiente de resposta à SEFAZ sob lentidão
+    const sectionName = prefix === 'NFE' ? 'NFe' : 'MDFe';
+    lib.ConfigGravarValor(handle, sectionName, "Timeout", "30000"); 
+    lib.ConfigGravarValor(handle, sectionName, "AjustaAguardaConsultaRet", "1"); 
+    lib.ConfigGravarValor(handle, sectionName, "AguardarConsultaRet", "1000"); 
+    lib.ConfigGravarValor(handle, sectionName, "IntervaloTentativas", "1000"); 
+    lib.ConfigGravarValor(handle, sectionName, "Tentativas", "5");
 
     // Ativar logs e salvamento de arquivos (mesma base parametrizada)
     const arquivosDir = baseArquivos;

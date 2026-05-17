@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -41,6 +41,13 @@ interface FiscalConfigFormValues {
   nr_timeout_nfe: number;
   nfe_versao_metodo: string;
   nfce_versao_metodo: string;
+  // Campos para Configuração manual de SSL e Libs (ACBrMonitor)
+  ssl_lib: string;
+  ssl_crypt_lib: string;
+  ssl_http_lib: string;
+  ssl_xml_sign_lib: string;
+  ssl_type: string;
+  verificar_validade_cert: boolean;
 }
 
 const FiscalConfigForm = () => {
@@ -51,6 +58,7 @@ const FiscalConfigForm = () => {
   const [certificadosServidor, setCertificadosServidor] = useState<any[]>([]);
   const [modalCertOpen, setModalCertOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [diretorioBuscado, setDiretorioBuscado] = useState("");
   const [clienteSearchOpen, setClienteSearchOpen] = useState(false);
 
   const form = useForm<FiscalConfigFormValues>({
@@ -73,7 +81,13 @@ const FiscalConfigForm = () => {
       pasta_arquivos_fiscais: "",
       nr_timeout_nfe: 60,
       nfe_versao_metodo: "1.0",
-      nfce_versao_metodo: "1.0"
+      // Valores padrão do ACBr
+      ssl_lib: "AUTO",
+      ssl_crypt_lib: "AUTO",
+      ssl_http_lib: "AUTO",
+      ssl_xml_sign_lib: "AUTO",
+      ssl_type: "AUTO",
+      verificar_validade_cert: true
     }
   });
 
@@ -93,7 +107,8 @@ const FiscalConfigForm = () => {
               tipo_certificado, certificado, senha_certificado, ambiente_nfe, cliente_padrao_id,
               email_smtp_host, email_smtp_port, email_smtp_user, email_smtp_pass, 
               email_smtp_ssl, email_smtp_tls, email_assunto_nfe, email_corpo_nfe,
-              pasta_arquivos_fiscais, nr_timeout_nfe, nfe_versao_metodo, nfce_versao_metodo
+              pasta_arquivos_fiscais, nr_timeout_nfe, nfe_versao_metodo, nfce_versao_metodo,
+              ssl_lib, ssl_crypt_lib, ssl_http_lib, ssl_xml_sign_lib, ssl_type, verificar_validade_cert
             `)
             .eq("empresa_id", XEmpresaId)
             .maybeSingle(),
@@ -144,7 +159,13 @@ const FiscalConfigForm = () => {
             pasta_arquivos_fiscais: (data as any).pasta_arquivos_fiscais || "",
             nr_timeout_nfe: Number((data as any).nr_timeout_nfe) || 60,
             nfe_versao_metodo: (data as any).nfe_versao_metodo || "1.0",
-            nfce_versao_metodo: (data as any).nfce_versao_metodo || "1.0"
+            nfce_versao_metodo: (data as any).nfce_versao_metodo || "1.0",
+            ssl_lib: (data as any).ssl_lib || "AUTO",
+            ssl_crypt_lib: (data as any).ssl_crypt_lib || "AUTO",
+            ssl_http_lib: (data as any).ssl_http_lib || "AUTO",
+            ssl_xml_sign_lib: (data as any).ssl_xml_sign_lib || "AUTO",
+            ssl_type: (data as any).ssl_type || "AUTO",
+            verificar_validade_cert: (data as any).verificar_validade_cert !== false
           });
 
           if (data.cliente_padrao_id) {
@@ -180,7 +201,13 @@ const FiscalConfigForm = () => {
             pasta_arquivos_fiscais: "",
             nr_timeout_nfe: 60,
             nfe_versao_metodo: "1.0",
-            nfce_versao_metodo: "1.0"
+            nfce_versao_metodo: "1.0",
+            ssl_lib: "AUTO",
+            ssl_crypt_lib: "AUTO",
+            ssl_http_lib: "AUTO",
+            ssl_xml_sign_lib: "AUTO",
+            ssl_type: "AUTO",
+            verificar_validade_cert: true
           });
         }
       } catch (err: any) {
@@ -221,7 +248,14 @@ const FiscalConfigForm = () => {
         pasta_arquivos_fiscais: values.pasta_arquivos_fiscais || null,
         nr_timeout_nfe: Math.max(10, Math.min(600, Number(values.nr_timeout_nfe) || 60)),
         nfe_versao_metodo: values.nfe_versao_metodo,
-        nfce_versao_metodo: values.nfce_versao_metodo
+        nfce_versao_metodo: values.nfce_versao_metodo,
+        // Novos campos SSL salvos no banco
+        ssl_lib: values.ssl_lib || "",
+        ssl_crypt_lib: values.ssl_crypt_lib || "",
+        ssl_http_lib: values.ssl_http_lib || "",
+        ssl_xml_sign_lib: values.ssl_xml_sign_lib || "",
+        ssl_type: values.ssl_type || "",
+        verificar_validade_cert: !!values.verificar_validade_cert
       };
 
       if (existing) {
@@ -303,7 +337,10 @@ const FiscalConfigForm = () => {
     try {
       const comando = tipoCertificadoAtual === 'REPOSITORIO' ? "LISTAR_CERTIFICADOS_WINDOWS" : "LISTAR_CERTIFICADOS";
       
-      let diretorio = "C:/Certificados";
+      // Usa a pasta_arquivos_fiscais como diretório base padrão se disponível, senão cai para C:/Certificados
+      let pastaBase = form.getValues("pasta_arquivos_fiscais")?.trim() || "C:/Certificados";
+      let diretorio = pastaBase;
+      
       if (tipoCertificadoAtual === 'ARQUIVO') {
         const campoCert = form.getValues("certificado")?.trim();
         if (campoCert) {
@@ -312,7 +349,7 @@ const FiscalConfigForm = () => {
             if (lastSlash > -1) {
               diretorio = campoCert.substring(0, lastSlash);
             }
-          } else {
+          } else if (campoCert.includes('/') || campoCert.includes('\\')) {
             diretorio = campoCert;
           }
         }
@@ -321,6 +358,7 @@ const FiscalConfigForm = () => {
       const payload = tipoCertificadoAtual === 'REPOSITORIO' ? {} : { diretorio };
 
       console.log(`[FiscalConfig] Buscando certificados do tipo: ${tipoCertificadoAtual} na pasta: ${diretorio}...`);
+      setDiretorioBuscado(diretorio);
       const response = await dispatchWorkerCommand(comando, payload);
       console.log(`[FiscalConfig] Resposta do Worker:`, response);
 
@@ -382,7 +420,23 @@ const FiscalConfigForm = () => {
   };
 
   const selecionarCertificado = (path: string) => {
-    form.setValue("certificado", path);
+    let valorFinal = path;
+    if (tipoCertificadoAtual === 'ARQUIVO') {
+      const pastaBase = form.getValues("pasta_arquivos_fiscais")?.trim();
+      if (pastaBase) {
+        const baseNorm = pastaBase.replace(/\\/g, '/').toLowerCase();
+        const pathNorm = path.replace(/\\/g, '/').toLowerCase();
+        
+        if (pathNorm.startsWith(baseNorm)) {
+          let rel = path.substring(pastaBase.length);
+          if (rel.startsWith('/') || rel.startsWith('\\')) {
+            rel = rel.substring(1);
+          }
+          valorFinal = rel;
+        }
+      }
+    }
+    form.setValue("certificado", valorFinal);
     setModalCertOpen(false);
   };
 
@@ -429,7 +483,13 @@ const FiscalConfigForm = () => {
                               form.setValue("certificado", ""); 
                               form.setValue("senha_certificado", ""); 
                               setCertificadosServidor([]);
-                            }} defaultValue={field.value}>
+                              if (val === 'REPOSITORIO' || val === 'ARQUIVO') {
+                                form.setValue("ssl_lib", "4");
+                                form.setValue("ssl_crypt_lib", "3");
+                                form.setValue("ssl_http_lib", "2");
+                                form.setValue("ssl_xml_sign_lib", "4");
+                              }
+                            }} value={field.value}>
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Selecione o tipo" />
@@ -525,7 +585,11 @@ const FiscalConfigForm = () => {
                                 {tipoCertificadoAtual === 'ARQUIVO' ? "Caminho do Certificado (.pfx)" : "Número de Série do Certificado"}
                               </FormLabel>
                               <FormControl>
-                                <Input placeholder={tipoCertificadoAtual === 'ARQUIVO' ? "Ex: C:\\Certificados\\empresa.pfx" : "Ex: 4A8B9C1029..."} {...field} />
+                                <Input 
+                                  placeholder={tipoCertificadoAtual === 'ARQUIVO' ? "Ex: C:\\Certificados\\empresa.pfx" : "Ex: 4A8B9C1029..."} 
+                                  autoComplete="new-password"
+                                  {...field} 
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -552,7 +616,12 @@ const FiscalConfigForm = () => {
                             <FormItem>
                               <FormLabel>Senha do Certificado</FormLabel>
                               <FormControl>
-                                <Input type="password" placeholder="****" {...field} />
+                                <Input 
+                                  type="password" 
+                                  placeholder="****" 
+                                  autoComplete="new-password"
+                                  {...field} 
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -560,6 +629,179 @@ const FiscalConfigForm = () => {
                         />
                       </div>
                     )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <ShieldCheck className="w-5 h-5 text-primary" />
+                      Configuração SSL e Criptografia
+                    </CardTitle>
+                    <CardDescription>
+                      Configure as bibliotecas de segurança e assinatura XML (padrão ACBr). 
+                      Caso ocorram erros de conexão (como 12030 ou 12031), ajuste estas opções para alinhar com o seu ambiente do Windows ou OpenSSL.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="ssl_lib"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>SSL Lib (Biblioteca SSL)</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || "AUTO"}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Padrão do Sistema (Auto)" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="AUTO">Auto / Padrão</SelectItem>
+                                <SelectItem value="0">libNone (Nenhuma)</SelectItem>
+                                <SelectItem value="1">libOpenSSL (OpenSSL)</SelectItem>
+                                <SelectItem value="2">libCapicom (Windows Capicom - Legado)</SelectItem>
+                                <SelectItem value="3">libCapicomDelphiSoap (Capicom Delphi SOAP)</SelectItem>
+                                <SelectItem value="4">libWinCrypt (Windows Crypto API - Nativo/Recomendado para A3)</SelectItem>
+                                <SelectItem value="5">libCustom (Customizada)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="ssl_crypt_lib"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Crypt Lib (Biblioteca de Criptografia)</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || "AUTO"}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Padrão do Sistema (Auto)" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="AUTO">Auto / Padrão</SelectItem>
+                                <SelectItem value="0">cryNone (Nenhuma)</SelectItem>
+                                <SelectItem value="1">cryOpenSSL (OpenSSL)</SelectItem>
+                                <SelectItem value="2">cryCapicom (Windows Capicom)</SelectItem>
+                                <SelectItem value="3">cryWinCrypt (Windows Crypto API)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="ssl_http_lib"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>HTTP Lib (Biblioteca de Comunicação HTTP)</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || "AUTO"}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Padrão do Sistema (Auto)" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="AUTO">Auto / Padrão</SelectItem>
+                                <SelectItem value="0">httpNone (Nenhuma)</SelectItem>
+                                <SelectItem value="1">httpWinINet (Windows Internet Library)</SelectItem>
+                                <SelectItem value="2">httpWinHttp (Windows HTTP Library)</SelectItem>
+                                <SelectItem value="3">httpOpenSSL (OpenSSL)</SelectItem>
+                                <SelectItem value="4">httpIndy (Indy Library)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="ssl_xml_sign_lib"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>XML Sign Lib (Assinatura XML)</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || "AUTO"}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Padrão do Sistema (Auto)" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="AUTO">Auto / Padrão</SelectItem>
+                                <SelectItem value="0">xsNone (Nenhuma)</SelectItem>
+                                <SelectItem value="1">xsXmlSec (XML Security Library)</SelectItem>
+                                <SelectItem value="2">xsMsXml (Microsoft XML)</SelectItem>
+                                <SelectItem value="3">xsMsXmlCapicom (MSXML com Capicom)</SelectItem>
+                                <SelectItem value="4">xsLibXml2 (LibXml2 Library)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="ssl_type"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>SSL Type (Protocolo TLS)</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || "AUTO"}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Padrão do Sistema (Auto)" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="AUTO">Auto / Padrão</SelectItem>
+                                <SelectItem value="0">LT_all (Negociar Automaticamente)</SelectItem>
+                                <SelectItem value="1">LT_SSLv2</SelectItem>
+                                <SelectItem value="2">LT_SSLv3</SelectItem>
+                                <SelectItem value="3">LT_TLSv1</SelectItem>
+                                <SelectItem value="4">LT_TLSv1_1</SelectItem>
+                                <SelectItem value="5">LT_TLSv1_2 (Recomendado para SEFAZ)</SelectItem>
+                                <SelectItem value="6">LT_TLSv1_3</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="verificar_validade_cert"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm">
+                            <div className="space-y-0.5">
+                              <FormLabel>Validar Certificado</FormLabel>
+                              <FormDescription className="text-xs">
+                                Verificar validade do certificado antes de transmitir.
+                              </FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch
+                                checked={!!field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -605,7 +847,7 @@ const FiscalConfigForm = () => {
                         <FormItem>
                           <FormLabel>Pasta Base</FormLabel>
                           <FormControl>
-                            <Input placeholder="Ex: C:\RealCommerce\Fiscal ou /var/realcommerce/fiscal" {...field} />
+                            <Input placeholder="Ex: C:\RealCommerce\Fiscal ou /var/realcommerce/fiscal" autoComplete="new-password" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -843,7 +1085,7 @@ const FiscalConfigForm = () => {
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>
-                {tipoCertificadoAtual === 'REPOSITORIO' ? "Certificados no Windows" : "Arquivos no Servidor (C:/Certificados)"}
+                {tipoCertificadoAtual === 'REPOSITORIO' ? "Certificados no Windows" : `Arquivos no Servidor (${diretorioBuscado || "C:/Certificados"})`}
               </DialogTitle>
             </DialogHeader>
             <ScrollArea className="max-h-[400px] mt-4">

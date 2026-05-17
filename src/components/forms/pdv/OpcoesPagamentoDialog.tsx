@@ -104,24 +104,37 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
   const [XPreValErros, setXPreValErros] = React.useState<IFiscalValidacaoErro[]>([]);
   const [XPreValTipo, setXPreValTipo] = React.useState<"NFE" | "NFCE">("NFE");
 
-  // Verifica se já existe documento para bloquear botões ao abrir
+  // Verifica se já existe documento para bloquear botões e carregar PDF ao abrir
   React.useEffect(() => {
     if (open && dados?.movimento_id) {
       setXEmitido(false);
+      setXNfeId(null);
+      setXLastPdf(null);
       (async () => {
         const { data: existente } = await supabase
           .from("fiscal_nfe_cabecalho")
-          .select("nfe_cabecalho_id")
+          .select("nfe_cabecalho_id, c_stat")
           .eq("movimento_id", dados.movimento_id)
           .eq("excluido", false)
+          .order("nfe_cabecalho_id", { ascending: false })
           .limit(1)
           .maybeSingle();
         if (existente?.nfe_cabecalho_id) {
-          setXEmitido(true);
+          const cStat = Number(existente.c_stat || 0);
+          const autorizada = cStat === 100 || cStat === 150;
+          if (autorizada) {
+            setXEmitido(true);
+            setXNfeId(existente.nfe_cabecalho_id);
+            // Se já está autorizada, tenta obter o PDF para visualização imediata
+            const impRes = await fiscalEmissaoService.imprimirDocumento(existente.nfe_cabecalho_id, empresaId);
+            if (impRes.success && impRes.pdf_base64) {
+              setXLastPdf(impRes.pdf_base64);
+            }
+          }
         }
       })();
     }
-  }, [open, dados?.movimento_id]);
+  }, [open, dados?.movimento_id, empresaId]);
 
   const handleVisualizarFiscal = () => {
     if (!XLastPdf) {

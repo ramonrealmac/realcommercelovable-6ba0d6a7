@@ -41,7 +41,17 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
   };
 
   const dhEmi = obterDataHoraLocalComFolga();
-  const cNF = String(Math.floor(10000000 + Math.random() * 89999999));
+  
+  // Extrai o cNF da chave_nfe existente (se disponível e válida) para garantir que a chave permaneça idêntica na retransmissão
+  let cNF = "";
+  if (cabecalho && cabecalho.chave_nfe && String(cabecalho.chave_nfe).replace(/\D/g, '').length === 44) {
+    const limpaChave = String(cabecalho.chave_nfe).replace(/\D/g, '');
+    cNF = limpaChave.substring(35, 43); // Posições 36 a 43 da chave (índices 35 a 43, exclusive 43)
+  }
+  
+  if (!cNF) {
+    cNF = String(Math.floor(10000000 + Math.random() * 89999999));
+  }
 
   // Helper para escapar XML
   const esc = (s: any) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
@@ -53,6 +63,14 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
   xml += `<NFe>`;
   xml += `<infNFe versao="4.00" Id="NFe${cUF}${dhEmi.substring(2, 4)}${dhEmi.substring(5, 7)}${empresa.cnpj.replace(/\D/g,'')}${modelo}${serie.padStart(3,'0')}${nNF.padStart(9,'0')}1${cNF}1">`;
   
+  // Determina IE e Indicador do IE do Destinatário
+  const ieDest = limparNumeros(cadastro?.inscricao_estadual || '');
+  const indIEDest = cadastro?.tp_contribuinte === 'S' && ieDest ? '1' : (ieDest ? '2' : '9');
+  
+  // Se for NFC-e OU se for não contribuinte (indIEDest = 9) OU for Pessoa Física (tp_contribuinte = 'F'),
+  // obrigatoriamente a operação é com Consumidor Final (indFinal = 1)
+  const isConsumidorFinal = isNFCe || indIEDest === '9' || cadastro?.tp_contribuinte === 'F' ? '1' : '0';
+
   // <ide>
   xml += `<ide>`;
   xml += `<cUF>${cUF}</cUF>`;
@@ -70,7 +88,7 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
   xml += `<cDV>0</cDV>`; // O ACBr calcula o dígito real
   xml += `<tpAmb>${ambiente}</tpAmb>`;
   xml += `<finNFe>${cabecalho.fin_nfe || '1'}</finNFe>`;
-  xml += `<indFinal>${isNFCe ? '1' : (cadastro?.tp_contribuinte === 'F' ? '1' : '0')}</indFinal>`;
+  xml += `<indFinal>${isConsumidorFinal}</indFinal>`;
   xml += `<indPres>1</indPres>`;
   xml += `<procEmi>0</procEmi>`;
   xml += `<verProc>RealCommerce2.0</verProc>`;
@@ -121,10 +139,8 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
       xml += `</enderDest>`;
     }
 
-    const ie = limparNumeros(cadastro.inscricao_estadual || '');
-    const indIE = cadastro.tp_contribuinte === 'S' && ie ? '1' : (ie ? '2' : '9');
-    xml += `<indIEDest>${indIE}</indIEDest>`;
-    if (ie && indIE === '1') xml += `<IE>${ie}</IE>`;
+    xml += `<indIEDest>${indIEDest}</indIEDest>`;
+    if (ieDest && indIEDest === '1') xml += `<IE>${ieDest}</IE>`;
     if (cadastro.email) xml += `<email>${esc(cadastro.email)}</email>`;
     xml += `</dest>`;
   }

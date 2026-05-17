@@ -103,13 +103,18 @@ export const executarComandoFiscal = async (comando, jsonPayload) => {
     // Comandos locais que não usam a DLL (não precisam de isolamento)
     if (comando === 'LISTAR_CERTIFICADOS') {
         return new Promise((resolve) => {
-            const pfxDir = jsonPayload.diretorio || "C:/Certificados";
-            if (!fs.existsSync(pfxDir)) {
-                resolve({ sucesso: true, arquivos: [] });
-                return;
+            try {
+                let pfxDir = jsonPayload.diretorio || "C:/Certificados";
+                pfxDir = path.normalize(pfxDir).replace(/\\/g, '/');
+                if (!fs.existsSync(pfxDir)) {
+                    resolve({ sucesso: false, erro: `O diretório "${pfxDir}" não foi encontrado no servidor.` });
+                    return;
+                }
+                const arquivos = fs.readdirSync(pfxDir).filter(f => f.toLowerCase().endsWith('.pfx') || f.toLowerCase().endsWith('.p12'));
+                resolve({ sucesso: true, arquivos: arquivos.map(a => `${pfxDir}/${a}`) });
+            } catch (e) {
+                resolve({ sucesso: false, erro: "Erro ao ler certificados: " + e.message });
             }
-            const arquivos = fs.readdirSync(pfxDir).filter(f => f.toLowerCase().endsWith('.pfx'));
-            resolve({ sucesso: true, arquivos: arquivos.map(a => `${pfxDir}/${a}`) });
         });
     }
 
