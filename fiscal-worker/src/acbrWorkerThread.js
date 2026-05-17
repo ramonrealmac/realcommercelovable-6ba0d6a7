@@ -376,14 +376,14 @@ const configurarHandle = (lib, handle, configPayload, prefix = 'NFE') => {
     const tipoCertificado = configPayload.tipo_certificado || 'ARQUIVO';
 
     if (tipoCertificado === 'REPOSITORIO') {
-        // Usa Repositório do Windows (WinCrypt/WinINet) - ideal para certificados A3/A1 instalados no Windows
-        // Nota: Alterado SSLHttpLib de 2 (WinHttp) para 1 (WinINet) para resolver erro 12030 (SSL incompatível).
-        // WinINet usa o motor de rede do Windows com suporte automático a TLS 1.2 atualizado e proxies do usuário.
+        // Usa Repositório do Windows (WinCrypt/WinHttp) - ideal para certificados A3/A1 instalados no Windows
+        // SSLHttpLib=2 (WinHttp) corrige erro 12031 (connection reset) do WinINet contra SEFAZ.
+        // WinHttp é a pilha HTTP moderna do Windows, com TLS 1.2 nativo e melhor recuperação de reset/keep-alive.
         lib.ConfigGravarValor(handle, "DFe", "SSLLib", "4");         // 4=libWinCrypt (SChannel/WinCrypt)
         lib.ConfigGravarValor(handle, "DFe", "SSLCryptLib", "3");   // 3=cryWinCrypt
-        lib.ConfigGravarValor(handle, "DFe", "SSLHttpLib", "1");    // 1=httpWinINet (mais compatível que 2=httpWinHttp)
-        lib.ConfigGravarValor(handle, "DFe", "SSLXmlSignLib", "4"); // 4=xsLibXml2 (enum ACBrLib atual: 0=None,1=XmlSec,2=MsXml,3=MsXmlCapicom,4=LibXml2)
-        console.log(`[FiscalLib] Configurado Certificado REPOSITORIO (WinCrypt/WinINet + TLS 1.2) para série ${configPayload.certificadoPath}`);
+        lib.ConfigGravarValor(handle, "DFe", "SSLHttpLib", "2");    // 2=httpWinHttp (mais estável que WinINet contra SEFAZ)
+        lib.ConfigGravarValor(handle, "DFe", "SSLXmlSignLib", "4"); // 4=xsLibXml2
+        console.log(`[FiscalLib] Configurado Certificado REPOSITORIO (WinCrypt/WinHttp + TLS 1.2) para série ${configPayload.certificadoPath}`);
 
         if (configPayload.certificadoPath) {
             lib.ConfigGravarValor(handle, "DFe", "NumeroSerie", configPayload.certificadoPath);
@@ -392,11 +392,12 @@ const configurarHandle = (lib, handle, configPayload, prefix = 'NFE') => {
         }
     } else {
         // Usa Arquivo PFX com WinCrypt (nativo do Windows) - resolve incompatibilidade de OpenSSL com PFXs modernos (AES256)
+        // SSLHttpLib=2 (WinHttp) corrige erro 12031 (connection reset) do WinINet contra SEFAZ.
         lib.ConfigGravarValor(handle, "DFe", "SSLLib", "4");        // 4=libWinCrypt (nativo do Windows)
         lib.ConfigGravarValor(handle, "DFe", "SSLCryptLib", "3");   // 3=cryWinCrypt (nativo do Windows)
-        lib.ConfigGravarValor(handle, "DFe", "SSLHttpLib", "1");    // 1=httpWinINet (nativo do Windows, mais robusto e estável)
-        lib.ConfigGravarValor(handle, "DFe", "SSLXmlSignLib", "4"); // 4=xsLibXml2 (a opção implementada na compilação padrão da ACBrLib)
-        console.log(`[FiscalLib] Configurado Certificado ARQUIVO (WinCrypt + TLS 1.2) para arquivo ${configPayload.certificadoPath}`);
+        lib.ConfigGravarValor(handle, "DFe", "SSLHttpLib", "2");    // 2=httpWinHttp (mais estável que WinINet contra SEFAZ)
+        lib.ConfigGravarValor(handle, "DFe", "SSLXmlSignLib", "4"); // 4=xsLibXml2
+        console.log(`[FiscalLib] Configurado Certificado ARQUIVO (WinCrypt/WinHttp + TLS 1.2) para arquivo ${configPayload.certificadoPath}`);
 
         if (configPayload.certificadoPath) {
             lib.ConfigGravarValor(handle, "DFe", "ArquivoPFX", configPayload.certificadoPath);
