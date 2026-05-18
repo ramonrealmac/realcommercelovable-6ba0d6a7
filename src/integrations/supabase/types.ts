@@ -5919,7 +5919,7 @@ export type Database = {
           altura: number
           area: number
           ativo: string | null
-          cest: string
+          cest: string | null
           comprimento: number
           controla_estoque: string | null
           descricao: string
@@ -5933,7 +5933,7 @@ export type Database = {
           grupo_icms_id: number | null
           grupo_ipi_id: number | null
           grupo_pis_cofins_id: number | null
-          gtin: string
+          gtin: string | null
           largura: number
           linha_id: number | null
           mva: number
@@ -5996,7 +5996,7 @@ export type Database = {
           altura?: number
           area?: number
           ativo?: string | null
-          cest?: string
+          cest?: string | null
           comprimento?: number
           controla_estoque?: string | null
           descricao?: string
@@ -6010,7 +6010,7 @@ export type Database = {
           grupo_icms_id?: number | null
           grupo_ipi_id?: number | null
           grupo_pis_cofins_id?: number | null
-          gtin?: string
+          gtin?: string | null
           largura?: number
           linha_id?: number | null
           mva?: number
@@ -6073,7 +6073,7 @@ export type Database = {
           altura?: number
           area?: number
           ativo?: string | null
-          cest?: string
+          cest?: string | null
           comprimento?: number
           controla_estoque?: string | null
           descricao?: string
@@ -6087,7 +6087,7 @@ export type Database = {
           grupo_icms_id?: number | null
           grupo_ipi_id?: number | null
           grupo_pis_cofins_id?: number | null
-          gtin?: string
+          gtin?: string | null
           largura?: number
           linha_id?: number | null
           mva?: number

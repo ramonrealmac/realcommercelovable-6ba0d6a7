@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useAppContext } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -93,7 +93,14 @@ const XBarraGridCols: IGridColumn[] = [
 ];
 
 const ProdutoForm: React.FC = () => {
-  const { XEmpresaId, XEmpresaMatrizId, XEmpresas, closeTab, XTabs, XActiveTabId } = useAppContext();
+  const { XEmpresaId, XEmpresaMatrizId, XEmpresas = [], closeTab, XTabs, XActiveTabId } = useAppContext();
+
+  const XCurrentEmpresa = useMemo(() => {
+    return XEmpresas.find((e: any) => e.empresa_id === XEmpresaId) || null;
+  }, [XEmpresas, XEmpresaId]);
+
+  const pesquisaProdMinLetras = XCurrentEmpresa?.pesquisa_prod_min_letras ?? 3;
+  const pesquisaProdLimite = XCurrentEmpresa?.pesquisa_prod_limite ?? 200;
 
   const [XFormMode, setXFormMode] = useState<TFormMode>("view");
   const [XInnerTab, setXInnerTab] = useState<string>("cadastro");
@@ -144,63 +151,110 @@ const ProdutoForm: React.FC = () => {
 
   /* ─── Empresa IDs with same empresa_matriz_id ─── */
   const XGroupEmpresaIds = useMemo(() => {
-    return XEmpresas
-      .filter(e => e.empresa_matriz_id === XEmpresaMatrizId || e.empresa_id === XEmpresaMatrizId)
+    return (XEmpresas || [])
+      .filter(e => e && (e.empresa_matriz_id === XEmpresaMatrizId || e.empresa_id === XEmpresaMatrizId))
       .map(e => e.empresa_id);
   }, [XEmpresas, XEmpresaMatrizId]);
 
   const XEmpresaMap = useMemo(() => {
     const m: Record<number, string> = {};
-    XEmpresas.forEach(e => { m[e.empresa_id] = e.nome_fantasia || e.razao_social; });
+    (XEmpresas || []).forEach(e => {
+      if (e) m[e.empresa_id] = e.nome_fantasia || e.razao_social;
+    });
     return m;
   }, [XEmpresas]);
 
   const loadLookups = useCallback(async () => {
-    const [r1, r2, r3, r4, r5, r6, r7, r8, r9] = await Promise.all([
-      db.from("produto_grupo").select("produto_grupo_id,nome").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("nome"),
-      db.from("produto_subgrupo").select("produto_subgrupo_id,nome,produto_grupo_id").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("nome"),
-      db.from("linha_produto").select("linha_id,nome").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("nome"),
-      db.from("unidade").select("unidade_id,descricao").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("descricao"),
-      db.from("fiscal_grupo_produto").select("fiscal_grupo_produto_id,nome").eq("empresa_id", XEmpresaMatrizId).eq("tp_imposto", "ICMS").eq("excluido", false).order("nome"),
-      db.from("fiscal_grupo_produto").select("fiscal_grupo_produto_id,nome").eq("empresa_id", XEmpresaMatrizId).eq("tp_imposto", "IPI").eq("excluido", false).order("nome"),
-      db.from("fiscal_grupo_produto").select("fiscal_grupo_produto_id,nome").eq("empresa_id", XEmpresaMatrizId).eq("tp_imposto", "PIS/COFINS").eq("excluido", false).order("nome"),
-      XGroupEmpresaIds.length > 0
-        ? db.from("deposito").select("deposito_id,nome,empresa_id,st_privado").eq("excluido", false)
-            .in("empresa_id", XGroupEmpresaIds).order("nome")
-        : Promise.resolve({ data: [] }),
-      db.from("fiscal_grupo_produto").select("fiscal_grupo_produto_id,nome").eq("empresa_id", XEmpresaMatrizId).eq("tp_imposto", "IBS/CBS").eq("excluido", false).order("nome"),
-    ]);
-    setXGrupos(r1.data || []);
-    setXSubgrupos(r2.data || []);
-    setXLinhas(r3.data || []);
-    setXUnidades(r4.data || []);
-    setXGrupoIcms(r5.data || []);
-    setXGrupoIpi(r6.data || []);
-    setXGrupoPisCofins(r7.data || []);
-    setXDepositos(r8.data || []);
-    setXGrupoIbsCbs(r9.data || []);
+    try {
+      const [r1, r2, r3, r4, r5, r6, r7, r8, r9] = await Promise.all([
+        db.from("produto_grupo").select("produto_grupo_id,nome").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("nome"),
+        db.from("produto_subgrupo").select("produto_subgrupo_id,nome,produto_grupo_id").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("nome"),
+        db.from("linha_produto").select("linha_id,nome").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("nome"),
+        db.from("unidade").select("unidade_id,descricao").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("descricao"),
+        db.from("fiscal_grupo_produto").select("fiscal_grupo_produto_id,nome").eq("empresa_id", XEmpresaMatrizId).eq("tp_imposto", "ICMS").eq("excluido", false).order("nome"),
+        db.from("fiscal_grupo_produto").select("fiscal_grupo_produto_id,nome").eq("empresa_id", XEmpresaMatrizId).eq("tp_imposto", "IPI").eq("excluido", false).order("nome"),
+        db.from("fiscal_grupo_produto").select("fiscal_grupo_produto_id,nome").eq("empresa_id", XEmpresaMatrizId).eq("tp_imposto", "PIS/COFINS").eq("excluido", false).order("nome"),
+        XGroupEmpresaIds.length > 0
+          ? db.from("deposito").select("deposito_id,nome,empresa_id,st_privado").eq("excluido", false)
+              .in("empresa_id", XGroupEmpresaIds).order("nome")
+          : Promise.resolve({ data: [] }),
+        db.from("fiscal_grupo_produto").select("fiscal_grupo_produto_id,nome").eq("empresa_id", XEmpresaMatrizId).eq("tp_imposto", "IBS/CBS").eq("excluido", false).order("nome"),
+      ]);
+      setXGrupos(r1?.data || []);
+      setXSubgrupos(r2?.data || []);
+      setXLinhas(r3?.data || []);
+      setXUnidades(r4?.data || []);
+      setXGrupoIcms(r5?.data || []);
+      setXGrupoIpi(r6?.data || []);
+      setXGrupoPisCofins(r7?.data || []);
+      setXDepositos(r8?.data || []);
+      setXGrupoIbsCbs(r9?.data || []);
+    } catch (e) {
+      console.error("[ProdutoForm] Erro ao carregar lookups:", e);
+      toast.error("Erro ao carregar dados auxiliares do formulário.");
+    }
   }, [XEmpresaMatrizId, XEmpresaId, XGroupEmpresaIds]);
 
   /* ─── Grupo/Subgrupo maps for grid display ─── */
   const XGrupoMap = useMemo(() => {
     const m: Record<number, string> = {};
-    XGrupos.forEach((g: any) => { m[g.produto_grupo_id] = g.nome; });
+    XGrupos.forEach((g: any) => { if (g) m[g.produto_grupo_id] = g.nome; });
     return m;
   }, [XGrupos]);
 
   const XSubgrupoMap = useMemo(() => {
     const m: Record<number, string> = {};
-    XSubgrupos.forEach((s: any) => { m[s.produto_subgrupo_id] = s.nome; });
+    XSubgrupos.forEach((s: any) => { if (s) m[s.produto_subgrupo_id] = s.nome; });
     return m;
   }, [XSubgrupos]);
 
   /* ─── Load data with grupo/subgrupo names ─── */
-  const loadData = useCallback(async () => {
-    setXLoading(true);
-    const { data: XRows } = await baseService.listar("produto", XEmpresaMatrizId, "produto_id");
-    setXData(XRows || []);
-    setXLoading(false);
-  }, [XEmpresaMatrizId]);
+  const loadData = useCallback(async (filters?: Record<string, string>) => {
+    try {
+      setXLoading(true);
+      
+      let query = db.from("produto")
+        .select("*")
+        .eq("empresa_id", XEmpresaMatrizId)
+        .eq("excluido", false);
+
+      if (filters && Object.keys(filters).length > 0) {
+        const filterProductId = filters["produto_id"];
+        const filterNome = filters["nome"];
+        const filterNomeReduzido = filters["nome_reduzido"];
+        const filterGtin = filters["gtin"];
+
+        if (filterProductId && filterProductId.trim()) {
+          const num = Number(filterProductId.trim());
+          if (!isNaN(num)) {
+            query = query.eq("produto_id", num);
+          }
+        }
+        if (filterNome && filterNome.trim()) {
+          query = query.ilike("nome", `%${filterNome.trim()}%`);
+        }
+        if (filterNomeReduzido && filterNomeReduzido.trim()) {
+          query = query.ilike("nome_reduzido", `%${filterNomeReduzido.trim()}%`);
+        }
+        if (filterGtin && filterGtin.trim()) {
+          query = query.ilike("gtin", `%${filterGtin.trim()}%`);
+        }
+        
+        query = query.order("nome").limit(pesquisaProdLimite);
+      } else {
+        query = query.order("produto_id", { ascending: false }).limit(1000);
+      }
+
+      const { data: XRows, error } = await query;
+      if (error) throw error;
+      setXData(XRows || []);
+    } catch (e) {
+      console.error("[ProdutoForm] Erro ao carregar produtos:", e);
+      toast.error("Erro ao carregar lista de produtos.");
+    } finally {
+      setXLoading(false);
+    }
+  }, [XEmpresaMatrizId, pesquisaProdLimite]);
 
   /* ─── Enriched data with grupo/subgrupo names ─── */
   const XEnrichedData = useMemo(() => {
@@ -213,29 +267,33 @@ const ProdutoForm: React.FC = () => {
 
   /* ─── Load sub-data for current product ─── */
   const loadSubData = useCallback(async (produtoId: number) => {
-    // Filter deposits: own company = all, sister companies = only public (st_privado=false)
-    const XVisibleDeps = XDepositos.filter((d: any) =>
-      d.empresa_id === XEmpresaId || d.st_privado === false
-    );
-    const XVisibleDepIds = XVisibleDeps.map((d: any) => d.deposito_id);
-    const [rEst, rConv, rBarra] = await Promise.all([
-      XVisibleDepIds.length > 0
-        ? db.from("estoque").select("*").eq("produto_id", produtoId).eq("excluido", false).in("deposito_id", XVisibleDepIds)
-        : Promise.resolve({ data: [] }),
-      db.from("produto_conversao").select("*").eq("empresa_id", XEmpresaMatrizId).eq("produto_id", produtoId).eq("excluido", false).order("conversao_id"),
-      db.from("produto_codbarra").select("*").eq("empresa_id", XEmpresaMatrizId).eq("produto_id", produtoId).eq("excluido", false).order("produto_codbarra_id"),
-    ]);
-    const XDepMap: Record<number, { nome: string; empresa_id: number }> = {};
-    XVisibleDeps.forEach((d: any) => { XDepMap[d.deposito_id] = { nome: d.nome, empresa_id: d.empresa_id }; });
-    setXEstoques((rEst.data || []).map((e: any) => ({
-      ...e,
-      deposito_nome: XDepMap[e.deposito_id]?.nome || String(e.deposito_id),
-      empresa_nome: XEmpresaMap[XDepMap[e.deposito_id]?.empresa_id ?? e.empresa_id] || String(e.empresa_id),
-    })));
-    setXConversoes(rConv.data || []);
-    setXBarras(rBarra.data || []);
-    setXEstIdx(-1);
-    setXBarraIdx(-1);
+    try {
+      // Filter deposits: own company = all, sister companies = only public (st_privado=false)
+      const XVisibleDeps = (XDepositos || []).filter((d: any) =>
+        d && (d.empresa_id === XEmpresaId || d.st_privado === false)
+      );
+      const XVisibleDepIds = XVisibleDeps.map((d: any) => d.deposito_id);
+      const [rEst, rConv, rBarra] = await Promise.all([
+        XVisibleDepIds.length > 0
+          ? db.from("estoque").select("*").eq("produto_id", produtoId).eq("excluido", false).in("deposito_id", XVisibleDepIds)
+          : Promise.resolve({ data: [] }),
+        db.from("produto_conversao").select("*").eq("empresa_id", XEmpresaMatrizId).eq("produto_id", produtoId).eq("excluido", false).order("conversao_id"),
+        db.from("produto_codbarra").select("*").eq("empresa_id", XEmpresaMatrizId).eq("produto_id", produtoId).eq("excluido", false).order("produto_codbarra_id"),
+      ]);
+      const XDepMap: Record<number, { nome: string; empresa_id: number }> = {};
+      XVisibleDeps.forEach((d: any) => { if (d) XDepMap[d.deposito_id] = { nome: d.nome, empresa_id: d.empresa_id }; });
+      setXEstoques((rEst?.data || []).map((e: any) => ({
+        ...e,
+        deposito_nome: XDepMap[e.deposito_id]?.nome || String(e.deposito_id),
+        empresa_nome: XEmpresaMap[XDepMap[e.deposito_id]?.empresa_id ?? e.empresa_id] || String(e.empresa_id),
+      })));
+      setXConversoes(rConv?.data || []);
+      setXBarras(rBarra?.data || []);
+      setXEstIdx(-1);
+      setXBarraIdx(-1);
+    } catch (e) {
+      console.error("[ProdutoForm] Erro ao carregar subdados do produto:", e);
+    }
   }, [XEmpresaId, XEmpresaMatrizId, XDepositos, XEmpresaMap]);
 
   useEffect(() => {
@@ -265,6 +323,39 @@ const ProdutoForm: React.FC = () => {
       setXFormMode("view");
     }
   }, [XEmpresaId]);
+
+  const isFirstRender = useRef(true);
+
+  // Trigger server-side dynamic search with debounce when filters change
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    const hasSearch = Object.entries(XSearchFilters).some(([key, val]) => {
+      if (!val || !val.trim()) return false;
+      if (["produto_id", "nome", "nome_reduzido", "gtin"].includes(key)) {
+        return val.trim().length >= pesquisaProdMinLetras;
+      }
+      return false;
+    });
+
+    const handler = setTimeout(() => {
+      if (hasSearch) {
+        console.log("[ProdutoForm] Executando busca dinâmica no servidor...", XSearchFilters);
+        loadData(XSearchFilters);
+      } else {
+        const hasActiveFiltersInState = Object.values(XSearchFilters).some(val => val && val.trim());
+        if (!hasActiveFiltersInState) {
+          console.log("[ProdutoForm] Filtros limpos. Recarregando lista padrão...");
+          loadData();
+        }
+      }
+    }, 400);
+
+    return () => clearTimeout(handler);
+  }, [XSearchFilters, loadData, pesquisaProdMinLetras]);
 
   useEffect(() => {
     if (XCurrentRecord) loadSubData(XCurrentRecord.produto_id);

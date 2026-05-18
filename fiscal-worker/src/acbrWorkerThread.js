@@ -349,18 +349,34 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave, confi
 };
 
 const resolverBaseArquivos = (configPayload) => {
+    let resolvedPath = '';
     const custom = configPayload && configPayload.pasta_arquivos
         ? String(configPayload.pasta_arquivos).trim()
         : '';
     if (custom) {
         try {
             if (!fs.existsSync(custom)) fs.mkdirSync(custom, { recursive: true });
-            return path.resolve(custom);
+            resolvedPath = path.resolve(custom);
         } catch (e) {
             console.warn(`[FiscalLib] Falha ao usar pasta_arquivos="${custom}": ${e.message}. Caindo para padrão.`);
         }
     }
-    return path.resolve(process.cwd(), "AcbrDLL/Arquivos");
+    if (!resolvedPath) {
+        resolvedPath = path.resolve(process.cwd(), "AcbrDLL/Arquivos");
+    }
+
+    // Como caminho padrão para busca do certificado digital, garante a existência de \certificado
+    try {
+        const certDir = path.join(resolvedPath, 'certificado');
+        if (!fs.existsSync(certDir)) {
+            fs.mkdirSync(certDir, { recursive: true });
+            console.log(`[FiscalLib] Pasta de certificados criada automaticamente no startup: ${certDir}`);
+        }
+    } catch (e) {
+        console.error(`[FiscalLib] Erro ao auto-criar a pasta 'certificado': ${e.message}`);
+    }
+
+    return resolvedPath;
 };
 
 const configurarHandle = (lib, handle, configPayload, prefix = 'NFE') => {
@@ -452,10 +468,31 @@ const configurarHandle = (lib, handle, configPayload, prefix = 'NFE') => {
         if (configPayload.certificadoPath) {
             let pfxPath = configPayload.certificadoPath;
             if (!fs.existsSync(pfxPath) && !path.isAbsolute(pfxPath)) {
-                const possiblePath = path.join(baseArquivos, pfxPath);
-                if (fs.existsSync(possiblePath)) {
-                    pfxPath = possiblePath;
-                    console.log(`[FiscalLib] Certificado resolvido relativo à pasta base fiscal: ${pfxPath}`);
+                // Tenta primeiro sob baseArquivos/certificado (caminhobase\certificado)
+                const certFolder = path.join(baseArquivos, 'certificado');
+                const certFolderStyle = path.join(certFolder, pfxPath);
+                const directBasePath = path.join(baseArquivos, pfxPath);
+                
+                // Garante que o diretório baseArquivos/certificado exista
+                try {
+                    if (!fs.existsSync(certFolder)) {
+                        fs.mkdirSync(certFolder, { recursive: true });
+                        console.log(`[FiscalLib] Pasta padrão de certificados criada/garantida: ${certFolder}`);
+                    }
+                } catch (e) {
+                    console.error(`[FiscalLib] Falha ao criar pasta de certificados padronizada: ${e.message}`);
+                }
+
+                if (fs.existsSync(certFolderStyle)) {
+                    pfxPath = certFolderStyle;
+                    console.log(`[FiscalLib] Certificado resolvido na pasta certificado da base fiscal: ${pfxPath}`);
+                } else if (fs.existsSync(directBasePath)) {
+                    pfxPath = directBasePath;
+                    console.log(`[FiscalLib] Certificado resolvido na pasta base fiscal: ${pfxPath}`);
+                } else {
+                    // Padrão como solicitado: baseArquivos/certificado/pfxPath
+                    pfxPath = certFolderStyle;
+                    console.log(`[FiscalLib] Caminho padrão de certificado adotado (não encontrado fisicamente): ${pfxPath}`);
                 }
             }
             lib.ConfigGravarValor(handle, "DFe", "ArquivoPFX", pfxPath);
@@ -1172,13 +1209,23 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
 
         case 'LISTAR_CERTIFICADOS':
             return new Promise((resolve) => {
-                const pfxDir = jsonPayload.diretorio || "C:/Certificados";
+                const pfxDir = (jsonPayload.diretorio || "C:/Certificados").replace(/\//g, "\\");
+                // Garante que o diretório exista se for a pasta de certificados configurada
+                try {
+                    if (!fs.existsSync(pfxDir)) {
+                        fs.mkdirSync(pfxDir, { recursive: true });
+                        console.log(`[FiscalLib] Diretório de busca criado/garantido: ${pfxDir}`);
+                    }
+                } catch (e) {
+                    console.error(`[FiscalLib] Erro ao criar diretório de certificados para listagem: ${e.message}`);
+                }
                 if (!fs.existsSync(pfxDir)) {
                     resolve({ sucesso: true, arquivos: [] });
                     return;
                 }
-                const arquivos = fs.readdirSync(pfxDir).filter(f => f.toLowerCase().endsWith('.pfx'));
-                resolve({ sucesso: true, arquivos: arquivos.map(a => `${pfxDir}/${a}`) });
+                // Aceita arquivos .pfx e .p12
+                const arquivos = fs.readdirSync(pfxDir).filter(f => f.toLowerCase().endsWith('.pfx') || f.toLowerCase().endsWith('.p12'));
+                resolve({ sucesso: true, arquivos: arquivos.map(a => path.join(pfxDir, a).replace(/\//g, "\\")) });
             });
 
         case 'LISTAR_CERTIFICADOS_WINDOWS':

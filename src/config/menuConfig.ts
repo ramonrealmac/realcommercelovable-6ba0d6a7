@@ -274,6 +274,7 @@ export const MENU_CONFIG: MenuItem[] = [
       { id: "parametros", title: "Parâmetros", icon: Settings2 },
       { id: "licencas", title: "Ativar Licenças", icon: Key },
       { id: "provedor-test", title: "Teste Provedor", icon: Activity },
+      { id: "importacao", title: "Importação", icon: FileUp },
     ],
   },
 ];

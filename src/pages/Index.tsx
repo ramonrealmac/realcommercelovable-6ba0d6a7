@@ -45,6 +45,7 @@ const UsuarioForm = lazy(() => import("@/components/forms/UsuarioForm"));
 const TrocaSenhaForm = lazy(() => import("@/components/forms/TrocaSenhaForm"));
 const ProvedorTestForm = lazy(() => import("@/components/forms/ProvedorTestForm"));
 const ConsultaEstoqueForm = lazy(() => import("@/components/forms/ConsultaEstoqueForm"));
+const ImportacaoForm = lazy(() => import("@/components/forms/ImportacaoForm"));
 const NfeInutilizacaoForm = lazy(() => import("@/components/forms/NfeInutilizacaoForm"));
 const RbReportExecutor = lazy(() => import("@/rbuilder/components/rb_ReportExecutor"));
 const RpbManager = lazy(() => import("@/report-builder").then(m => ({ default: m.RpbManager })));
@@ -164,6 +165,8 @@ const AppContent = () => {
         return <TrocaSenhaForm />;
       case "provedor-test":
         return <ProvedorTestForm />;
+      case "importacao":
+        return <ImportacaoForm />;
       case "rpb-relatorios":
         return <RpbManager />;
       case "consulta-estoque":

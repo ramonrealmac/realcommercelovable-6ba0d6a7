@@ -104,14 +104,23 @@ export const executarComandoFiscal = async (comando, jsonPayload) => {
     if (comando === 'LISTAR_CERTIFICADOS') {
         return new Promise((resolve) => {
             try {
-                let pfxDir = jsonPayload.diretorio || "C:/Certificados";
-                pfxDir = path.normalize(pfxDir).replace(/\\/g, '/');
+                let pfxDir = (jsonPayload.diretorio || "C:\\Certificados").replace(/\//g, '\\');
+                pfxDir = path.normalize(pfxDir).replace(/\//g, '\\');
+                // Tenta criar o diretório recursivamente se ele não existir
+                try {
+                    if (!fs.existsSync(pfxDir)) {
+                        fs.mkdirSync(pfxDir, { recursive: true });
+                        console.log(`[Worker Proxy] Diretório de certificados criado/garantido: ${pfxDir}`);
+                    }
+                } catch (errDir) {
+                    console.error(`[Worker Proxy] Erro ao criar diretório de certificados: ${errDir.message}`);
+                }
                 if (!fs.existsSync(pfxDir)) {
-                    resolve({ sucesso: false, erro: `O diretório "${pfxDir}" não foi encontrado no servidor.` });
+                    resolve({ sucesso: false, erro: `O diretório "${pfxDir}" não pôde ser criado ou encontrado no servidor.` });
                     return;
                 }
                 const arquivos = fs.readdirSync(pfxDir).filter(f => f.toLowerCase().endsWith('.pfx') || f.toLowerCase().endsWith('.p12'));
-                resolve({ sucesso: true, arquivos: arquivos.map(a => `${pfxDir}/${a}`) });
+                resolve({ sucesso: true, arquivos: arquivos.map(a => path.join(pfxDir, a).replace(/\//g, '\\')) });
             } catch (e) {
                 resolve({ sucesso: false, erro: "Erro ao ler certificados: " + e.message });
             }

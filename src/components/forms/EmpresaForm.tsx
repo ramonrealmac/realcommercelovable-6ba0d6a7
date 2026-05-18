@@ -142,6 +142,8 @@ const emptyEmpresa = () => ({
   ia_ativa: false,
   ia_instrucoes: "",
   ia_modelo: "gpt-4o",
+  pesquisa_prod_min_letras: 3,
+  pesquisa_prod_limite: 200,
 });
 
 type TEmpresa = ReturnType<typeof emptyEmpresa>;
@@ -781,8 +783,19 @@ const EmpresaForm: React.FC = () => {
                     disabled={!XIsEditing}
                   />
                   <Label className="text-xs">Validar Estoque no PDV</Label>
-                </div>
               </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-foreground mb-4 border-b pb-2">Parâmetros de Busca de Produtos</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {field("pesquisa_prod_min_letras", "Mínimo Letras para Busca", { type: "number" })}
+                {field("pesquisa_prod_limite", "Limite de Resultados", { type: "number" })}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Configura a quantidade mínima de letras digitadas para iniciar a busca dinâmica de produtos no banco de dados e o limite máximo de registros retornados.
+              </p>
             </div>
           </div>
         )}

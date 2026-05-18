@@ -337,23 +337,35 @@ const FiscalConfigForm = () => {
     try {
       const comando = tipoCertificadoAtual === 'REPOSITORIO' ? "LISTAR_CERTIFICADOS_WINDOWS" : "LISTAR_CERTIFICADOS";
       
-      // Usa a pasta_arquivos_fiscais como diretório base padrão se disponível, senão cai para C:/Certificados
-      let pastaBase = form.getValues("pasta_arquivos_fiscais")?.trim() || "C:/Certificados";
-      let diretorio = pastaBase;
+      // Como caminho padrão para busca do certificado digital, usa a Pasta Base de Arquivos Fiscais + \certificado
+      const pastaBase = form.getValues("pasta_arquivos_fiscais")?.trim().replace(/\//g, "\\");
+      let diretorio = "";
+      if (pastaBase) {
+        diretorio = pastaBase.endsWith("\\") ? `${pastaBase}certificado` : `${pastaBase}\\certificado`;
+      } else {
+        diretorio = "C:\\Certificados";
+      }
       
       if (tipoCertificadoAtual === 'ARQUIVO') {
-        const campoCert = form.getValues("certificado")?.trim();
+        const campoCert = form.getValues("certificado")?.trim().replace(/\//g, "\\");
         if (campoCert) {
-          if (campoCert.toLowerCase().endsWith('.pfx') || campoCert.toLowerCase().endsWith('.p12')) {
-            const lastSlash = Math.max(campoCert.lastIndexOf('/'), campoCert.lastIndexOf('\\'));
-            if (lastSlash > -1) {
-              diretorio = campoCert.substring(0, lastSlash);
+          const lastSlash = campoCert.lastIndexOf('\\');
+          if (lastSlash > -1) {
+            const subDir = campoCert.substring(0, lastSlash);
+            // Verifica se é um caminho absoluto (contém dois pontos ou inicia com contra-barra)
+            const isAbsolute = subDir.includes(':') || subDir.startsWith('\\');
+            if (isAbsolute) {
+              diretorio = subDir;
+            } else if (pastaBase) {
+              // Se for um caminho relativo, resolve em relação à pastaBase
+              diretorio = pastaBase.endsWith("\\") ? `${pastaBase}${subDir}` : `${pastaBase}\\${subDir}`;
             }
-          } else if (campoCert.includes('/') || campoCert.includes('\\')) {
-            diretorio = campoCert;
           }
         }
       }
+
+      // Normaliza as barras duplicadas
+      diretorio = diretorio.replace(/\\+/g, "\\");
 
       const payload = tipoCertificadoAtual === 'REPOSITORIO' ? {} : { diretorio };
 
@@ -420,22 +432,8 @@ const FiscalConfigForm = () => {
   };
 
   const selecionarCertificado = (path: string) => {
-    let valorFinal = path;
-    if (tipoCertificadoAtual === 'ARQUIVO') {
-      const pastaBase = form.getValues("pasta_arquivos_fiscais")?.trim();
-      if (pastaBase) {
-        const baseNorm = pastaBase.replace(/\\/g, '/').toLowerCase();
-        const pathNorm = path.replace(/\\/g, '/').toLowerCase();
-        
-        if (pathNorm.startsWith(baseNorm)) {
-          let rel = path.substring(pastaBase.length);
-          if (rel.startsWith('/') || rel.startsWith('\\')) {
-            rel = rel.substring(1);
-          }
-          valorFinal = rel;
-        }
-      }
-    }
+    // Normaliza todas as barras para contra-barra no Windows
+    let valorFinal = path.replace(/\//g, "\\").replace(/\\+/g, "\\");
     form.setValue("certificado", valorFinal);
     setModalCertOpen(false);
   };
@@ -586,8 +584,9 @@ const FiscalConfigForm = () => {
                               </FormLabel>
                               <FormControl>
                                 <Input 
-                                  placeholder={tipoCertificadoAtual === 'ARQUIVO' ? "Ex: C:\\Certificados\\empresa.pfx" : "Ex: 4A8B9C1029..."} 
+                                  placeholder={tipoCertificadoAtual === 'ARQUIVO' ? "Clique em 'Buscar no Servidor' para selecionar..." : "Ex: 4A8B9C1029..."} 
                                   autoComplete="new-password"
+                                  readOnly={tipoCertificadoAtual === 'ARQUIVO'}
                                   {...field} 
                                 />
                               </FormControl>
@@ -1085,7 +1084,7 @@ const FiscalConfigForm = () => {
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>
-                {tipoCertificadoAtual === 'REPOSITORIO' ? "Certificados no Windows" : `Arquivos no Servidor (${diretorioBuscado || "C:/Certificados"})`}
+                {tipoCertificadoAtual === 'REPOSITORIO' ? "Certificados no Windows" : `Arquivos no Servidor (${diretorioBuscado || "C:\\\\Certificados"})`}
               </DialogTitle>
             </DialogHeader>
             <ScrollArea className="max-h-[400px] mt-4">
