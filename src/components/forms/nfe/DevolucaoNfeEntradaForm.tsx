@@ -39,7 +39,11 @@ const cfopDevolucaoSugerido = (cfopEntrada: string): string => {
   return "5202";
 };
 
-const DevolucaoNfeEntradaForm: React.FC = () => {
+interface DevolucaoNfeEntradaFormProps {
+  initialNfeId?: number;
+}
+
+const DevolucaoNfeEntradaForm: React.FC<DevolucaoNfeEntradaFormProps> = ({ initialNfeId }) => {
   const { XEmpresaId, openTab } = useAppContext();
   const [XStep, setXStep] = useState<1 | 2 | 3>(1);
 
@@ -97,9 +101,23 @@ const DevolucaoNfeEntradaForm: React.FC = () => {
   };
 
   useEffect(() => {
-    if (XStep === 1 && XEmpresaId) buscarNotas();
+    if (XStep === 1 && XEmpresaId && !initialNfeId) buscarNotas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [XStep, XEmpresaId]);
+
+  // Pré-carregamento via prop
+  useEffect(() => {
+    if (!initialNfeId || !XEmpresaId) return;
+    (async () => {
+      const { data, error } = await db.from("fiscal_nfe_cabecalho")
+        .select("nfe_cabecalho_id,nr_nota,serie,dt_emissao,dt_entrada,vl_total_nf,chave_nfe,cadastro_id,st_nf,modelo,tp_nf,cadastro:cadastro_id(razao_social,cnpj)")
+        .eq("nfe_cabecalho_id", initialNfeId)
+        .maybeSingle();
+      if (error || !data) { toast.error("NF-e de origem não encontrada."); return; }
+      await selecionarNota(data);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialNfeId, XEmpresaId]);
 
   const selecionarNota = async (nfe: any) => {
     setXLoading(true);

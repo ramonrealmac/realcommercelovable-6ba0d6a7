@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import logoRealsys from "@/assets/logo_realsys.jpg";
+import { useThemeColors } from "@/hooks/useThemeColors";
 
 type AuthMode = "signin" | "signup";
 
@@ -38,6 +39,8 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
   const [XLoadingEmpresas, setXLoadingEmpresas] = useState(false);
   const [XEmpresaSelecionada, setXEmpresaSelecionada] = useState<number | null>(null);
   const [XEmpresaConfirmada, setXEmpresaConfirmada] = useState(false);
+
+  const { XLogomarca } = useThemeColors(XEmpresaConfirmada ? 0 : 1);
 
   useEffect(() => {
     let active = true;
@@ -235,7 +238,7 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
         <Card className="w-full max-w-md border-border bg-card shadow-sm">
           <CardHeader className="space-y-3">
             <div className="flex flex-col items-center gap-3">
-              <img src={logoRealsys} alt="RealSys" className="h-20 w-20 object-contain rounded-lg" />
+              <img src={XLogomarca || logoRealsys} alt="RealSys" className="h-20 max-w-[200px] object-contain rounded-lg" />
             </div>
             <div className="space-y-1 text-center">
               <CardTitle>{title}</CardTitle>
@@ -316,7 +319,7 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
         <Card className="w-full max-w-md border-border bg-card shadow-sm">
           <CardHeader className="space-y-3">
             <div className="flex flex-col items-center gap-3">
-              <img src={logoRealsys} alt="RealSys" className="h-20 w-20 object-contain rounded-lg" />
+              <img src={XLogomarca || logoRealsys} alt="RealSys" className="h-20 max-w-[200px] object-contain rounded-lg" />
             </div>
             <div className="space-y-1 text-center">
               <CardTitle>Sem empresa vinculada</CardTitle>
@@ -345,7 +348,7 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
         <Card className="w-full max-w-md border-border bg-card shadow-sm">
           <CardHeader className="space-y-3">
             <div className="flex flex-col items-center gap-3">
-              <img src={logoRealsys} alt="RealSys" className="h-20 w-20 object-contain rounded-lg" />
+              <img src={XLogomarca || logoRealsys} alt="RealSys" className="h-20 max-w-[200px] object-contain rounded-lg" />
             </div>
             <div className="space-y-1 text-center">
               <CardTitle>Selecione a empresa</CardTitle>

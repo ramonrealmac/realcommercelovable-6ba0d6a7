@@ -43,7 +43,6 @@ const PerfilForm = lazy(() => import("@/components/forms/config/PerfilForm"));
 const ControleAcessoForm = lazy(() => import("@/components/forms/config/ControleAcessoForm"));
 const UsuarioForm = lazy(() => import("@/components/forms/config/UsuarioForm"));
 const TrocaSenhaForm = lazy(() => import("@/components/forms/config/TrocaSenhaForm"));
-const ProvedorTestForm = lazy(() => import("@/components/forms/fiscal/ProvedorTestForm"));
 const ConsultaEstoqueForm = lazy(() => import("@/components/forms/estoques/ConsultaEstoqueForm"));
 const AjusteEstoqueForm = lazy(() => import("@/components/forms/ajuste/AjusteEstoqueForm"));
 const InventarioEmBreve = lazy(() => import("@/components/forms/ajuste/InventarioEmBreve"));
@@ -133,7 +132,7 @@ const AppContent = () => {
       case "nfe-recebidas":
         return <NfeRecebidasForm />;
       case "devolucao-nfe-entrada":
-        return <DevolucaoNfeEntradaForm />;
+        return <DevolucaoNfeEntradaForm initialNfeId={params?.nfe_cabecalho_id} />;
       case "devolucao-nfe-saida":
       case "devolucao-nfe-saida-fiscal":
         return <DevolucaoNfeSaidaForm initialNfeId={params?.nfe_cabecalho_id} />;
@@ -165,8 +164,6 @@ const AppContent = () => {
         return <NfeInutilizacaoForm initialData={params} />;
       case "TrocaSenhaForm":
         return <TrocaSenhaForm />;
-      case "provedor-test":
-        return <ProvedorTestForm />;
       case "importacao":
         return <ImportacaoForm />;
       case "rpb-relatorios":
@@ -179,8 +176,6 @@ const AppContent = () => {
         return <InventarioEmBreve />;
 
       // PDV cases
-      case "pdv":
-        return <PdvCaixaForm />;
       case "abertura-caixa":
         return <AberturaCaixaForm />;
       case "pdv-caixa":

@@ -34,7 +34,7 @@ const buildGridCols = (
     label: "Status", 
     width: "120px", 
     align: "center", 
-    render: r => r.status === "F" ? "🔒 Finalizado" : "🔓 Aberto" 
+    render: r => r.status === "F" ? "Finalizado" : "Aberto" 
   },
   { key: "observacao", label: "Observação Geral", width: "3fr" },
 ];
@@ -228,11 +228,6 @@ export default function AjusteEstoqueForm() {
         return (
           <div className="space-y-4 max-w-4xl">
             <div className="bg-gradient-to-br from-card to-card/90 border border-border/60 rounded-xl p-5 shadow-sm space-y-4">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2 border-b border-border/40 pb-2">
-                <ClipboardList className="w-4.5 h-4.5 text-primary" />
-                Dados Básicos do Ajuste
-              </h2>
-
               <div className="grid grid-cols-12 gap-4">
                 {/* Número do Ajuste */}
                 <div className="col-span-12 sm:col-span-2">
@@ -281,7 +276,7 @@ export default function AjusteEstoqueForm() {
                   <input 
                     readOnly 
                     tabIndex={-1}
-                    value={record.status === "F" ? "🔒 Finalizado / Somente Leitura" : "🔓 Aberto / Em Edição"} 
+                    value={record.status === "F" ? "Finalizado / Somente Leitura" : "Aberto / Em Edição"} 
                     className={`w-full border rounded-lg px-3 py-1.5 text-sm mt-1 outline-none font-bold text-center border-border/80 ${
                       record.status === "F" ? "bg-emerald-500/10 text-emerald-600" : "bg-cyan-500/10 text-cyan-600"
                     }`} 

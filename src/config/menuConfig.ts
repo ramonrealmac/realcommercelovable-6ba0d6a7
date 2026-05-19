@@ -161,10 +161,7 @@ export const MENU_CONFIG: MenuItem[] = [
         title: "Saídas",
         icon: ArrowUpFromLine,
         children: [
-          { id: "pdv", title: "Novo Pedido", icon: FilePen },
-          { id: "finalizar-venda", title: "Finalizar Venda", icon: BadgeDollarSign },
-          { id: "pedidos", title: "Meus Pedidos", icon: ClipboardList },
-          { id: "devolucao-nfe-saida", title: "Devolução de NF-e de Saída", icon: ArrowUpFromLine },
+          { id: "pedidos", title: "Pedidos", icon: ClipboardList },
           {
             id: "mov-entregas",
             title: "Entregas",
@@ -244,6 +241,7 @@ export const MENU_CONFIG: MenuItem[] = [
           { id: "nfe-form", title: "Notas Emitidas", icon: FilePen },
           { id: "cce", title: "Carta de Correção", icon: FilePen },
           { id: "nfe-inutilizacao", title: "Inutilização de Numeração", icon: FileX },
+          { id: "devolucao-nfe-entrada", title: "Devolução de NF-e de Entrada", icon: ArrowUpFromLine },
           { id: "devolucao-nfe-saida-fiscal", title: "Devolução de NF-e de Saída", icon: ArrowDownToLine },
         ]
       },
@@ -263,12 +261,7 @@ export const MENU_CONFIG: MenuItem[] = [
     id: "relatorios-menu",
     title: "6. Relatórios",
     icon: FileBarChart,
-    children: [
-      { id: "rel-contas-receber", title: "Relatórios - Contas a Receber", icon: FileUp },
-      { id: "rel-contas-pagar", title: "Relatórios - Contas a Pagar", icon: FileDown },
-      { id: "relatorios", title: "Relatórios - Vendas", icon: ShoppingCart },
-      { id: "rel-produtos", title: "Relatórios - Produtos", icon: Package2 },
-    ],
+    children: [],
   },
   {
     id: "configuracoes",
@@ -282,7 +275,6 @@ export const MENU_CONFIG: MenuItem[] = [
       { id: "rpb-relatorios", title: "Report Builder Pro", icon: FileBarChart },
       { id: "parametros", title: "Parâmetros", icon: Settings2 },
       { id: "licencas", title: "Ativar Licenças", icon: Key },
-      { id: "provedor-test", title: "Teste Provedor", icon: Activity },
       { id: "importacao", title: "Importação", icon: FileUp },
     ],
   },
