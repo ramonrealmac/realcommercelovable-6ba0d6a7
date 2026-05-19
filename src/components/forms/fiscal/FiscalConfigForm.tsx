@@ -5,7 +5,7 @@ import { Save, Search, Activity, ShieldCheck, Terminal, Mail } from "lucide-reac
 import { supabase } from "@/integrations/supabase/client";
 import { useAppContext } from "@/contexts/AppContext";
 import MonitorFiscalLogDialog from "./MonitorFiscalLogDialog";
-import ClienteSearchDialog, { IClienteRow } from "./pedido/ClienteSearchDialog";
+import ClienteSearchDialog, { IClienteRow } from "../pedido/ClienteSearchDialog";
 import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
 
 import { Button } from "@/components/ui/button";

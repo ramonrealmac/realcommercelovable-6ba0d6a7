@@ -28,7 +28,7 @@ import {
 import { mdfeEmissaoService } from "../services/mdfeEmissaoService";
 import MdfeCloseDialog from "./dialogs/MdfeCloseDialog";
 import FiscalProgressDialog from "@/components/fiscal/FiscalProgressDialog";
-import MonitorFiscalLogDialog from "@/components/forms/MonitorFiscalLogDialog";
+import MonitorFiscalLogDialog from "@/components/forms/fiscal/MonitorFiscalLogDialog";
 
 const db = supabase as any;
 

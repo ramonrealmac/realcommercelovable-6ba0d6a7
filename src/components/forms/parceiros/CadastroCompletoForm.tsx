@@ -8,7 +8,7 @@ import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import { validateCPF, validateCNPJ, validateCPFOrCNPJ, formatCPFCNPJ, formatPhone, formatDateBR, parseDateBR } from "@/lib/validators";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Loader2, MapPin } from "lucide-react";
-import VeiculoGrid from "@/components/forms/VeiculoGrid";
+import VeiculoGrid from "./VeiculoGrid";
 import CidadeSearchDialog from "@/components/shared/CidadeSearchDialog";
 import { baseService } from "@/utils/baseService";
 import { useGridFilter } from "@/hooks/useGridFilter";

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import FiscalEmailDialog from "./FiscalEmailDialog";
 import FiscalProgressDialog from "@/components/fiscal/FiscalProgressDialog";
-import FiscalPreValidacaoDialog from "@/components/forms/FiscalPreValidacaoDialog";
+import FiscalPreValidacaoDialog from "@/components/forms/fiscal/FiscalPreValidacaoDialog";
 import type { IFiscalValidacaoErro } from "@/services/fiscalPreValidacao";
 import { supabase } from "@/integrations/supabase/client";
 

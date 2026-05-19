@@ -4,28 +4,31 @@ import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
 import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import type { IGridColumn } from "@/components/grid/DataGrid";
-import NfeItensTab from "./nfe/NfeItensTab";
-import NfePagamentoTab from "./nfe/NfePagamentoTab";
-import type { INfeCabecalho, TNfeSt } from "./nfe/types";
-import { NFE_ST_LABELS } from "./nfe/types";
-import { Search } from "lucide-react";
+import NfeItensTab from "./NfeItensTab";
+import NfePagamentoTab from "./NfePagamentoTab";
+import type { INfeCabecalho, TNfeSt } from "./types";
+import { NFE_ST_LABELS } from "./types";
+import { Search, Send } from "lucide-react";
 import { formatCPFCNPJ } from "@/lib/validators";
+import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
 
 const db = supabase as any;
 
 interface IClienteInfo { id: number; cnpj: string; razao: string; }
 
 const XGridCols: IGridColumn[] = [
-  { key: "nfe_cabecalho_id", label: "Nº",      width: "70px",  align: "right" },
-  { key: "nr_nota",          label: "Nota",    width: "100px" },
-  { key: "serie",            label: "Série",   width: "60px",  align: "center" },
-  { key: "modelo",           label: "Mod.",    width: "60px",  align: "center" },
-  { key: "dt_emissao",       label: "Emissão", width: "110px", render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
+  { key: "nfe_cabecalho_id", label: "ID",      width: "60px",  align: "right" },
+  { key: "pedido_id",        label: "Pedido",  width: "80px",  align: "right", render: r => r.pedido_id || r.movimento_id || "" },
+  { key: "tp_nf",            label: "Tipo",    width: "70px",  render: r => r.tp_nf === 0 ? "Entrada" : "Saída" },
+  { key: "nr_nota",          label: "Nota",    width: "90px" },
+  { key: "serie",            label: "Série",   width: "50px",  align: "center" },
+  { key: "modelo",           label: "Mod.",    width: "50px",  align: "center" },
+  { key: "dt_emissao",       label: "Emissão", width: "100px", render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
   { key: "_dest",            label: "Destinatário", width: "2fr", getValue: (r: any) => r._dest_razao || "", render: (r: any) => r._dest_razao || (r.cadastro_id ? `#${r.cadastro_id}` : "") },
   { 
     key: "st_nf", 
     label: "Status", 
-    width: "110px", 
+    width: "100px", 
     render: r => {
       const label = NFE_ST_LABELS[r.st_nf as TNfeSt] || r.st_nf;
       const colors: any = {
@@ -44,7 +47,8 @@ const XGridCols: IGridColumn[] = [
       );
     }
   },
-  { key: "vl_total_nf",      label: "Total",   width: "120px", align: "right", render: r => Number(r.vl_total_nf || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) },
+  { key: "vl_total_nf",      label: "Total",   width: "110px", align: "right", render: r => Number(r.vl_total_nf || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) },
+  { key: "chave_nfe",        label: "Chave de Acesso", width: "300px", render: r => <span className="font-mono text-[10px]">{r.chave_nfe}</span> },
 ];
 
 const XDefault: Partial<INfeCabecalho> = {
@@ -67,7 +71,7 @@ const XDefault: Partial<INfeCabecalho> = {
   dt_saida: new Date().toISOString().substring(0, 10),
 };
 
-const NfeEmtidaForm: React.FC = () => {
+const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
   const { XEmpresaId, XEmpresaMatrizId } = useAppContext();
 
   const [XClienteCache, setXClienteCache] = useState<Record<number, IClienteInfo>>({});
@@ -128,24 +132,58 @@ const NfeEmtidaForm: React.FC = () => {
         XSelectCols: "*",
         XOrderBy: "nfe_cabecalho_id",
         XSoftDelete: false,
-        XApplyFilter: (q) => q.eq("tp_nf", 1),
+        XApplyFilter: (q) => q, // Remove filter to show both Entry/Exit or allow user to filter
         XCanEdit: (rec: any) => !["E", "C", "D", "1", "2"].includes(String(rec.st_nf)),
         XOnAfterLoad: (rows: any[]) => {
           const ids = [...new Set(rows.map(r => r.cadastro_id).filter(Boolean))] as number[];
           if (ids.length) ensureClienteInfo(ids);
         },
-        XOnBeforeSave: (rec) => {
-          if (!rec.cadastro_id) throw new Error("Selecione o Destinatário.");
-          if (!rec.nr_nota?.toString().trim()) throw new Error("Informe o número da Nota Fiscal.");
-          if (!rec.dt_emissao) throw new Error("Informe a Data de Emissão.");
-          if (!rec.nat_op?.toString().trim()) throw new Error("Informe a Natureza da Operação.");
-          return { ...rec, tp_nf: 1, empresa_id: rec.empresa_id || XEmpresaId };
+        XOnBeforeSave: (rec: any) => {
+          if (rec.tp_nf === undefined || rec.tp_nf === null) rec.tp_nf = 1;
+          return { ...rec, empresa_id: rec.empresa_id || XEmpresaId };
         },
       }}
       XGridCols={gridCols}
       XExportTitle="NF-e Emitidas"
       XAfterInsertTab="itens"
       XRefreshRef={XRefreshRef}
+      XInitialId={initialId}
+      XToolbarExtras={({ currentRecord, isEditing, refresh }) => {
+        if (!currentRecord || isEditing) return null;
+        const st = String(currentRecord.st_nf || "");
+        // Permite enviar quando: Aberta (A), Rejeitada (R/3) ou em re-tentativa
+        const podeEnviar = ["A", "R", "3", "P"].includes(st) && Number(currentRecord.tp_nf) === 1;
+        if (!podeEnviar) return null;
+        return (
+          <button
+            type="button"
+            onClick={async () => {
+              if (!confirm(`Enviar NF-e #${currentRecord.nfe_cabecalho_id} para a SEFAZ via fiscal-worker?`)) return;
+              const tid = toast.loading("Enviando para fila do fiscal-worker...");
+              try {
+                const res = await fiscalEmissaoService.retransmitirDocumento(
+                  currentRecord.nfe_cabecalho_id,
+                  XEmpresaId
+                );
+                toast.dismiss(tid);
+                if (res.success) {
+                  toast.success(`Evento #${res.fiscal_evento_id} enfileirado. Aguarde o fiscal-worker processar.`);
+                  await refresh();
+                } else {
+                  toast.error("Falha: " + (res.message || "Erro desconhecido"));
+                }
+              } catch (e: any) {
+                toast.dismiss(tid);
+                toast.error("Erro: " + e.message);
+              }
+            }}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-primary text-primary-foreground rounded-md hover:opacity-90 shadow-sm"
+            title="Cria evento PENDENTE no fiscal_evento para que o fiscal-worker transmita a NF-e à SEFAZ"
+          >
+            <Send className="w-3.5 h-3.5" /> ENVIAR SEFAZ
+          </button>
+        );
+      }}
       XExtraTabs={[
         {
           key: "itens", label: "Itens da NF-e",
@@ -201,6 +239,31 @@ const NfeEmtidaForm: React.FC = () => {
                   <label className="text-xs text-muted-foreground">Observações da NF-e</label>
                   <textarea readOnly={ro} value={record.obs_nf ?? ""} onChange={e => setField("obs_nf" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-2 text-sm min-h-[100px]" />
                 </div>
+
+                {/* Cancelamento */}
+                <div className="border border-border rounded p-3 bg-card">
+                  <p className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">Cancelamento</p>
+                  <div className="grid grid-cols-12 gap-3">
+                    <div className="col-span-3">
+                      <label className="text-xs text-muted-foreground">Dt. Cancelamento</label>
+                      <input readOnly value={(record as any).dt_cancelamento ? new Date((record as any).dt_cancelamento).toLocaleString("pt-BR") : ""} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary" />
+                    </div>
+                    <div className="col-span-3">
+                      <label className="text-xs text-muted-foreground">Protocolo Cancel.</label>
+                      <input readOnly value={(record as any).protocolo_cancelamento ?? ""} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary font-mono" />
+                    </div>
+                    <div className="col-span-6">
+                      <label className="text-xs text-muted-foreground">Motivo Cancelamento</label>
+                      <input readOnly={ro} value={(record as any).motivo_cancelamento ?? ""} onChange={e => setField("motivo_cancelamento" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* XML */}
+                <div>
+                  <label className="text-xs text-muted-foreground">XML da NF-e</label>
+                  <textarea readOnly value={record.xml_nf ?? ""} className="w-full border border-border rounded px-2 py-2 text-[10px] font-mono min-h-[120px] bg-secondary/50" />
+                </div>
               </div>
             );
           },
@@ -215,33 +278,52 @@ const NfeEmtidaForm: React.FC = () => {
             {/* Linha 1 */}
             <div className="grid grid-cols-12 gap-3 items-end">
               <div className="col-span-1">
-                <label className="text-xs text-muted-foreground">Cód.</label>
+                <label className="text-xs text-muted-foreground">ID</label>
                 <input readOnly value={record.nfe_cabecalho_id ?? (mode === "insert" ? "(Novo)" : "")} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right" />
               </div>
               <div className="col-span-1">
-                <label className="text-xs text-muted-foreground">Modelo</label>
-                <select disabled={ro} value={record.modelo ?? "55"} onChange={e => setField("modelo" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
-                  <option value="55">55</option>
-                  <option value="65">65</option>
-                </select>
+                <label className="text-xs text-muted-foreground">Pedido</label>
+                <input readOnly value={(record as any).pedido_id ?? (record as any).movimento_id ?? ""} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right" title="Nº do pedido (movimento) que originou esta nota" />
               </div>
               <div className="col-span-2">
+                <label className="text-xs text-muted-foreground">Tipo de Nota</label>
+                <select disabled={ro} value={record.tp_nf ?? 1} onChange={e => setField("tp_nf" as any, Number(e.target.value) as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
+                  <option value={1}>1 - Saída</option>
+                  <option value={0}>0 - Entrada</option>
+                </select>
+              </div>
+              <div className="col-span-1">
+                <label className="text-xs text-muted-foreground">Origem</label>
+                <input readOnly value={record.origem_inclusao === "X" ? "XML" : "Manual"} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-center" />
+              </div>
+              <div className="col-span-1">
+                <label className="text-xs text-muted-foreground">Modelo</label>
+                <select disabled={ro} value={record.modelo ?? 55} onChange={e => setField("modelo" as any, Number(e.target.value) as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
+                  <option value={55}>55</option>
+                  <option value={65}>65</option>
+                </select>
+              </div>
+              <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Nº Nota <span className="text-destructive">*</span></label>
-                <input readOnly={ro} value={record.nr_nota ?? ""} onChange={e => setField("nr_nota" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
+                <input readOnly={ro} type="number" value={record.nr_nota || ""} onChange={e => setField("nr_nota" as any, Number(e.target.value) as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
               <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Série</label>
-                <input readOnly={ro} value={record.serie ?? ""} onChange={e => setField("serie" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm text-center" />
+                <input readOnly={ro} type="number" value={record.serie || ""} onChange={e => setField("serie" as any, Number(e.target.value) as any)} className="w-full border border-border rounded px-2 py-1 text-sm text-center" />
               </div>
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Dt. Emissão <span className="text-destructive">*</span></label>
                 <input type="date" readOnly={ro} value={(record.dt_emissao || "").toString().substring(0, 10)} onChange={e => setField("dt_emissao" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Dt. Saída</label>
                 <input type="date" readOnly={ro} value={(record.dt_saida || "").toString().substring(0, 10)} onChange={e => setField("dt_saida" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
-              <div className="col-span-3">
+              <div className="col-span-1">
+                <label className="text-xs text-muted-foreground">Dt. Entrada</label>
+                <input type="date" readOnly={ro} value={((record as any).dt_entrada || "").toString().substring(0, 10)} onChange={e => setField("dt_entrada" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
+              </div>
+              <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Status</label>
                 <input readOnly value={NFE_ST_LABELS[stAtual] || stAtual} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary" />
               </div>
@@ -327,19 +409,33 @@ const NfeEmtidaForm: React.FC = () => {
 
             {/* Totais */}
             <div className="border border-border rounded p-3 bg-card">
-              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Totais da Nota</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide font-bold">Totais da Nota Fiscal</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-3">
                 {[
-                  { label: "Produtos", key: "vl_produtos" },
+                  { label: "Produtos", key: "vl_produto" },
                   { label: "Desconto", key: "vl_desconto" },
                   { label: "Frete",    key: "vl_frete"    },
                   { label: "Seguro",   key: "vl_seguro"   },
                   { label: "Despesa",  key: "vl_despesa"  },
-                  { label: "IPI",      key: "vl_ipi"      },
+                  { label: "Outros",   key: "vl_outro"    },
+                  { label: "Base Cálc.", key: "vl_bc"     },
+                  { label: "ICMS",     key: "vl_icms"     },
+                  { label: "ICMS Deson.", key: "vl_icms_deson" },
                   { label: "ICMS-ST",  key: "vl_icms_st"  },
+                  { label: "FCP",      key: "vl_fcp"      },
+                  { label: "FCP-ST",   key: "vl_fcp_st"   },
+                  { label: "FCP-ST Ret.", key: "vl_fcp_st_ret" },
+                  { label: "IPI",      key: "vl_ipi"      },
+                  { label: "IPI Devol.", key: "vl_ipi_devol" },
+                  { label: "II",       key: "vl_ii"       },
+                  { label: "PIS",      key: "vl_pis"      },
+                  { label: "COFINS",   key: "vl_cofins"   },
+                  { label: "IBS",      key: "vl_ibs"      },
+                  { label: "CBS",      key: "vl_cbs"      },
+                  { label: "IS",       key: "vl_is"       },
                 ].map(f => (
-                  <div key={f.key} className="flex flex-col">
-                    <label className="text-xs text-muted-foreground">{f.label}</label>
+                  <div key={f.key} className="flex flex-col gap-1">
+                    <label className="text-[10px] text-muted-foreground uppercase font-semibold">{f.label}</label>
                     <input
                       type="text"
                       readOnly={ro}
@@ -349,16 +445,16 @@ const NfeEmtidaForm: React.FC = () => {
                         const val = e.target.value.replace(/\./g, "").replace(",", ".");
                         setField(f.key as any, val as any);
                       }}
-                      className={`w-full border border-border rounded px-2 py-1 text-sm text-right ${ro ? "bg-secondary" : "bg-card"}`}
+                      className={`w-full border border-border rounded px-2 py-1.5 text-xs text-right font-mono ${ro ? "bg-secondary/50" : "bg-card"}`}
                     />
                   </div>
                 ))}
                 <div className="col-span-2 lg:col-span-1 flex flex-col justify-end">
-                  <label className="text-xs font-bold text-primary">TOTAL NOTA</label>
+                  <label className="text-xs font-black text-primary uppercase">TOTAL NOTA</label>
                   <input
                     readOnly
                     value={fmt2(Number(record.vl_total_nf || 0))}
-                    className="w-full border border-primary/30 rounded px-2 py-1 text-sm font-bold text-right bg-primary/5 text-primary"
+                    className="w-full border-2 border-primary/40 rounded px-2 py-1.5 text-sm font-black text-right bg-primary/10 text-primary font-mono shadow-sm"
                   />
                 </div>
               </div>
@@ -370,4 +466,4 @@ const NfeEmtidaForm: React.FC = () => {
   );
 };
 
-export default NfeEmtidaForm;
+export default NfeEmitidaForm;

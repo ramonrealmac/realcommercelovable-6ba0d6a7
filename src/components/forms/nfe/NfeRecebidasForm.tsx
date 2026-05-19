@@ -6,7 +6,7 @@ import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import { provedorService } from "@/services/provedorService";
 import { RefreshCw, Download, CheckCircle, AlertTriangle, ShieldCheck, ShieldAlert, FileSearch, Eye, Terminal, Target } from "lucide-react";
 import { formatCPFCNPJ } from "@/lib/validators";
-import MonitorFiscalLogDialog from "./MonitorFiscalLogDialog";
+import MonitorFiscalLogDialog from "../fiscal/MonitorFiscalLogDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { 
   DropdownMenu, 

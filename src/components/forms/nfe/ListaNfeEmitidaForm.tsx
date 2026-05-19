@@ -32,7 +32,7 @@ import { formatCPFCNPJ } from "@/lib/validators";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import MonitorFiscalLogDialog from "@/components/forms/MonitorFiscalLogDialog";
+import MonitorFiscalLogDialog from "@/components/forms/fiscal/MonitorFiscalLogDialog";
 import FiscalProgressDialog from "@/components/fiscal/FiscalProgressDialog";
 
 interface IProps {

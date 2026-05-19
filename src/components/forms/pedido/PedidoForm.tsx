@@ -4,12 +4,12 @@ import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
 import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import type { IGridColumn } from "@/components/grid/DataGrid";
-import type { IMovimento, IMovimentoItem } from "./pedido/types";
+import type { IMovimento, IMovimentoItem } from "./types";
 import DataGrid from "@/components/grid/DataGrid";
-import { ST_PEDIDO_LABELS, TP_DESCONTO_LABELS } from "./pedido/types";
-import PedidoItensTab from "./pedido/PedidoItensTab";
-import PedidoPagamentoTab from "./pedido/PedidoPagamentoTab";
-import ClienteSearchDialog, { IClienteRow } from "./pedido/ClienteSearchDialog";
+import { ST_PEDIDO_LABELS, TP_DESCONTO_LABELS } from "./types";
+import PedidoItensTab from "./PedidoItensTab";
+import PedidoPagamentoTab from "./PedidoPagamentoTab";
+import ClienteSearchDialog, { IClienteRow } from "./ClienteSearchDialog";
 import { Search, Send, Reply, Lock, Unlock, Ban, ArrowLeftRight, Wallet, CircleDollarSign, Package } from "lucide-react";
 import { ToolbarBtn, ToolbarSeparator } from "@/components/shared/FormToolbar";
 

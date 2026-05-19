@@ -6,7 +6,7 @@ import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import type { IGridColumn } from "@/components/grid/DataGrid";
 import { Search, Send, FileText, CheckCircle2, Clock, AlertCircle, Printer, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import NfeSearchDialog, { buscarNfePorNumero, INfeRow } from "./nfe/NfeSearchDialog";
+import NfeSearchDialog, { buscarNfePorNumero, INfeRow } from "./NfeSearchDialog";
 
 const db = supabase as any;
 

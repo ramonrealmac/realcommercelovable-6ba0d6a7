@@ -4,10 +4,10 @@ import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
 import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import type { IGridColumn } from "@/components/grid/DataGrid";
-import type { IMovimento } from "./pedido/types";
+import type { IMovimento } from "../pedido/types";
 import { ToolbarBtn, ToolbarSeparator } from "@/components/shared/FormToolbar";
 import { Send, CheckCircle2, Lock, Trash2, Calendar, ClipboardList } from "lucide-react";
-import AjusteEstoqueItensTab from "./ajuste/AjusteEstoqueItensTab";
+import AjusteEstoqueItensTab from "./AjusteEstoqueItensTab";
 
 const db = supabase as any;
 
