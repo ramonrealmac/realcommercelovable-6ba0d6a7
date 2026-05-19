@@ -1,0 +1,1 @@
+ALTER TABLE public.produto ADD COLUMN IF NOT EXISTS xdias_venda_online text DEFAULT '0,1,2,3,4';

@@ -45,6 +45,9 @@ export interface IPdvPedidoFechado {
   vendedor_nome: string;
   vl_movimento: number;
   dt_emissao: string | null;
+  is_external?: boolean;
+  origem?: string;
+  tp_origem?: string | null;
 }
 
 export interface IPdvPagamentoLinha {

@@ -1,0 +1,1 @@
+ALTER TABLE public.parametro ADD COLUMN xabacatepay_webhook_secret text DEFAULT NULL;

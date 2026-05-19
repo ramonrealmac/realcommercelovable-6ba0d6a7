@@ -382,33 +382,99 @@ const NfeRecebidasForm: React.FC = () => {
             break;
           }
 
-          // Processa documentos deste lote
-          const docs = Object.keys(parsed).filter(k => 
-            k.toUpperCase().startsWith("RESNFE") || 
-            k.toUpperCase().startsWith("PROCNFE")
-          );
+          // Processa documentos deste lote (suporta INI plano e JSON aninhado do worker)
+          const allDocs: Array<{ key: string; doc: any }> = [];
+          
+          const extractDocsFromObject = (obj: any) => {
+            if (!obj || typeof obj !== "object") return;
+            for (const key of Object.keys(obj)) {
+              const kUpper = key.toUpperCase();
+              const doc = obj[key];
+              if (!doc || typeof doc !== "object") continue;
+              
+              const schemaUpper = String(doc.schema || "").toUpperCase();
+              
+              // Se for evento, ignoramos (não é nota fiscal)
+              if (schemaUpper === "RESEVENTO" || kUpper.startsWith("RESEVE")) {
+                continue;
+              }
+              
+              // Chaves válidas de documentos: resNFe, procNFe, ResDFe, ou schemas correspondentes
+              if (
+                kUpper.startsWith("RESNFE") || 
+                kUpper.startsWith("PROCNFE") || 
+                kUpper.startsWith("RESD") || // ResDFe
+                schemaUpper === "RESNFE" || 
+                schemaUpper === "PROCNFE"
+              ) {
+                allDocs.push({ key, doc });
+              }
+            }
+          };
 
-          for (const key of docs) {
-            const doc = parsed[key];
-            const chNFe = doc.chNFe || doc.ChNFe || doc.CH_NFE;
-            if (!chNFe) continue;
+          // 1. Tenta extrair da raiz (formato INI)
+          extractDocsFromObject(parsed);
+
+          // 2. Tenta extrair do objeto aninhado DistribuicaoDFe (formato JSON)
+          if (parsed.DistribuicaoDFe && typeof parsed.DistribuicaoDFe === "object") {
+            extractDocsFromObject(parsed.DistribuicaoDFe);
+          }
+
+          console.log(`[Sinc] Documentos identificados para processamento neste lote: ${allDocs.length}`);
+
+          for (const { key, doc } of allDocs) {
+            // Chave da NFe pode vir como chNFe (INI) ou chDFe (JSON)
+            const chNFe = doc.chNFe || doc.ChNFe || doc.CH_NFE || doc.chDFe || doc.ChDFe || doc.CHDDFE;
+            if (!chNFe) {
+              console.log(`[Sinc] Documento ${key} ignorado por falta de chave de acesso (chave_nfe).`, doc);
+              continue;
+            }
+
+            // CNPJ do emitente pode vir como CNPJ (INI) ou CNPJCPF (JSON)
+            const cnpj_emitente = doc.CNPJ || doc.Cnpj || doc.cnpj || doc.CNPJCPF || doc.CnpjCpf || doc.cnpjcpf || doc.CPF || doc.Cpf || doc.cpf || "";
+
+            // Nome do emitente
+            const nm_emitente = (doc.xNome || doc.XNome || doc.nome || "DESCONHECIDO").toUpperCase();
+
+            // Data de emissão pode vir como dEmi (INI) ou dhEmi (JSON)
+            const dt_emissao = doc.dEmi || doc.DEmi || doc.data_emissao || doc.dhEmi || doc.DhEmi || null;
+
+            // Valor total da nota pode vir como vNF (INI/JSON)
+            const vl_total = Number(doc.vNF || doc.VNF || doc.valor || 0);
+
+            // NSU
+            let nsuVal: number | null = null;
+            const rawNSU = doc.NSU || doc.nsu;
+            if (rawNSU) {
+              const parsedNSU = parseInt(rawNSU, 10);
+              if (!isNaN(parsedNSU)) {
+                nsuVal = parsedNSU;
+              }
+            }
+
+            const nr_nota = chNFe.length === 44 ? chNFe.substring(25, 34) : (doc.nNF || doc.NNF || doc.numero || null);
+            const serie = chNFe.length === 44 ? chNFe.substring(22, 25) : (doc.serie || doc.Serie || null);
 
             const payload = {
               empresa_id: XEmpresaId,
               chave_nfe: chNFe,
-              cnpj_emitente: doc.CNPJ || doc.Cnpj || doc.cnpj || doc.CPF || doc.Cpf || doc.cpf,
-              nm_emitente: (doc.xNome || doc.XNome || doc.nome || "DESCONHECIDO").toUpperCase(),
-              dt_emissao: doc.dEmi || doc.DEmi || doc.data_emissao,
-              vl_total: Number(doc.vNF || doc.VNF || doc.valor || 0),
-              nr_nota: chNFe.substring(25, 34),
-              serie: chNFe.substring(22, 25),
-              nsu: doc.NSU || doc.nsu,
+              cnpj_emitente: cnpj_emitente,
+              nm_emitente: nm_emitente,
+              dt_emissao: dt_emissao,
+              vl_total: vl_total,
+              nr_nota: nr_nota,
+              serie: serie,
+              nsu: nsuVal,
               xml_resumo: JSON.stringify(doc),
               updated_at: new Date().toISOString()
             };
 
             const { error } = await db.from("fiscal_nfe_recebida").upsert(payload, { onConflict: "chave_nfe" });
-            if (!error) totalNovos++;
+            if (error) {
+              console.error(`[Sinc] Erro ao salvar nota ${chNFe} no banco de dados:`, error);
+            } else {
+              totalNovos++;
+            }
           }
 
           // Prepara próxima volta se houver mais documentos

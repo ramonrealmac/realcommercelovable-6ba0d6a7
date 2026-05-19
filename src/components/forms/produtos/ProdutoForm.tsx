@@ -56,6 +56,7 @@ const emptyForm = (): Record<string, string> => ({
   nome: "", nome_reduzido: "", descricao: "", unidade_id: "", gtin: "", referencia: "",
   tp_produto: "PA", ativo: "S", preco_venda: "0", preco_promocional: "0", vl_compra: "0",
   pc_markup: "0", preco_sugerido: "0", url_foto: "", venda_online: "true",
+  loja_virtual: "false", forca_venda: "false", ecommerce: "false",
   dias_venda_online: "0,1,2,3,4", controla_estoque: "S",
   produto_grupo_id: "", produto_subgrupo_id: "", linha_id: "",
   nm_ecommerce: "", ds_ecommerce: "",
@@ -526,6 +527,9 @@ const ProdutoForm: React.FC = () => {
       nm_ecommerce: XF.nm_ecommerce.trim(),
       ds_ecommerce: XF.ds_ecommerce.trim(),
       url_foto: XF.url_foto.trim(),
+      loja_virtual: XF.loja_virtual === "true",
+      forca_venda: XF.forca_venda === "true",
+      ecommerce: XF.ecommerce === "true",
       ncm: XF.ncm.replace(/\D/g, ""),
       cest: XF.cest.replace(/\D/g, ""),
       mva: toNum(XF.mva),
@@ -727,7 +731,7 @@ const ProdutoForm: React.FC = () => {
     if (!file) return;
     const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
     const path = `produtos/${XEmpresaMatrizId}/${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from("logos").upload(path, file, { upsert: true });
+    const { error } = await supabase.storage.from("logos").upload(path, file, { upsert: false });
     if (error) { toast.error("Erro no upload: " + error.message); return; }
     const { data: urlData } = supabase.storage.from("logos").getPublicUrl(path);
     set("url_foto", urlData.publicUrl);
@@ -871,9 +875,9 @@ const ProdutoForm: React.FC = () => {
   );
 
   /* ─── Sub-tabs configuration ─── */
-  const XSubTabs = ["cadastro", "estoques", "codbarras", "tributacoes", "custo", "adicionais"];
+  const XSubTabs = ["cadastro", "venda_externa", "estoques", "codbarras", "tributacoes", "custo", "adicionais"];
   const XSubTabLabels: Record<string, string> = {
-    cadastro: "Cadastro", estoques: "Estoques", codbarras: "Código de Barras",
+    cadastro: "Cadastro", venda_externa: "Venda Externa", estoques: "Estoques", codbarras: "Código de Barras",
     tributacoes: "Tributações", custo: "Formação do Custo da Compra", adicionais: "Dados Adicionais",
   };
 
@@ -975,7 +979,13 @@ const ProdutoForm: React.FC = () => {
                   {renderField("GTIN", "gtin")}
                   {renderField("Referência", "referencia")}
                 </div>
-                {/* E-commerce fields */}
+              </div>
+            )}
+
+            {/* ══════ ABA VENDA EXTERNA ══════ */}
+            {XSubTab === "venda_externa" && (
+              <div className="space-y-3">
+                {/* E-commerce fields transferred */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {renderField("Nome E-commerce", "nm_ecommerce")}
                   <div>
@@ -1010,6 +1020,59 @@ const ProdutoForm: React.FC = () => {
                     rows={3}
                     className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XIsEditing ? XBgEdit : XBgRead} focus:ring-2 focus:ring-ring outline-none`}
                   />
+                </div>
+
+                {/* Checkboxes: Loja Virtual, Força de Venda, E-commerce */}
+                <div className="bg-slate-50 dark:bg-slate-900/40 p-4 rounded-lg border border-border/60 mt-4">
+                  <h4 className="text-xs font-bold text-muted-foreground uppercase mb-3 tracking-wider">Canais de Venda Ativos</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {XIsEditing ? (
+                      <>
+                        <label className="flex items-center gap-3 text-sm font-medium cursor-pointer p-2 bg-card hover:bg-slate-100 dark:hover:bg-slate-800 rounded border border-border transition-colors">
+                          <Checkbox
+                            checked={XF.loja_virtual === "true"}
+                            onCheckedChange={(c) => set("loja_virtual", c ? "true" : "false")}
+                          />
+                          Venda na Loja Virtual
+                        </label>
+                        <label className="flex items-center gap-3 text-sm font-medium cursor-pointer p-2 bg-card hover:bg-slate-100 dark:hover:bg-slate-800 rounded border border-border transition-colors">
+                          <Checkbox
+                            checked={XF.forca_venda === "true"}
+                            onCheckedChange={(c) => set("forca_venda", c ? "true" : "false")}
+                          />
+                          Venda na Força de Vendas
+                        </label>
+                        <label className="flex items-center gap-3 text-sm font-medium cursor-pointer p-2 bg-card hover:bg-slate-100 dark:hover:bg-slate-800 rounded border border-border transition-colors">
+                          <Checkbox
+                            checked={XF.ecommerce === "true"}
+                            onCheckedChange={(c) => set("ecommerce", c ? "true" : "false")}
+                          />
+                          Venda no E-commerce
+                        </label>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2 text-sm font-medium p-2 bg-secondary rounded border border-border/40">
+                          <span className={`text-sm font-bold ${XCurrentRecord?.loja_virtual ? "text-success" : "text-destructive"}`}>
+                            {XCurrentRecord?.loja_virtual ? "✓" : "✗"}
+                          </span>
+                          Loja Virtual
+                        </div>
+                        <div className="flex items-center gap-2 text-sm font-medium p-2 bg-secondary rounded border border-border/40">
+                          <span className={`text-sm font-bold ${XCurrentRecord?.forca_venda ? "text-success" : "text-destructive"}`}>
+                            {XCurrentRecord?.forca_venda ? "✓" : "✗"}
+                          </span>
+                          Força de Vendas
+                        </div>
+                        <div className="flex items-center gap-2 text-sm font-medium p-2 bg-secondary rounded border border-border/40">
+                          <span className={`text-sm font-bold ${XCurrentRecord?.ecommerce ? "text-success" : "text-destructive"}`}>
+                            {XCurrentRecord?.ecommerce ? "✓" : "✗"}
+                          </span>
+                          E-commerce
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

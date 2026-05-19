@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
-import { LogOut, Search, Trash2, Plus, Receipt, RefreshCw, Settings, Wrench, Percent, ShoppingCart, Tag, CircleDollarSign, Package, CornerDownLeft, Lock } from "lucide-react";
+import { LogOut, Search, Trash2, Plus, Receipt, RefreshCw, Settings, Wrench, Percent, ShoppingCart, Tag, CircleDollarSign, Package, CornerDownLeft, Lock, Home, Smartphone, Globe } from "lucide-react";
 import ProdutoSearchDialog, { buscarProdutoPorCodigo, IProdutoRow } from "../pedido/ProdutoSearchDialog";
 import ClienteSearchDialog, { IClienteRow } from "../pedido/ClienteSearchDialog";
 import VendedorSearchDialog, { IVendedorRow } from "./VendedorSearchDialog";
@@ -154,41 +154,26 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
 
   // Carrega pedidos fechados
   const carregarPedidos = useCallback(async () => {
-    const { data, error } = await db.from("movimento")
-      .select("movimento_id, nr_movimento, cadastro_id, vl_movimento, dt_emissao, funcionario_id")
-      .eq("empresa_id", XEmpresaId)
-      .eq("st_pedido", "F")
-      .eq("excluido", false)
-      .order("movimento_id", { ascending: false })
+    const { data, error } = await db.from("vw_pedidos_caixa_union")
+      .select("movimento_id, nr_movimento, cadastro_id, cliente_nome, vendedor_id, vendedor_nome, vl_movimento, dt_emissao, is_external, origem, tp_origem")
+      .order("dt_emissao", { ascending: false })
       .limit(200);
     if (error) { toast.error(error.message); return; }
-
-    const cadIds = Array.from(new Set((data || []).map((m: any) => m.cadastro_id).filter(Boolean)));
-    const funcIds = Array.from(new Set((data || []).map((m: any) => m.funcionario_id).filter(Boolean)));
-    const [cadRes, funcRes] = await Promise.all([
-      cadIds.length
-        ? db.from("cadastro").select("cadastro_id, razao_social, nome_fantasia").in("cadastro_id", cadIds)
-        : Promise.resolve({ data: [] }),
-      funcIds.length
-        ? db.from("funcionario").select("funcionario_id, nome").in("funcionario_id", funcIds)
-        : Promise.resolve({ data: [] }),
-    ]);
-    const cadMap: Record<number, string> = {};
-    for (const c of (cadRes.data || []) as any[]) cadMap[c.cadastro_id] = c.nome_fantasia || c.razao_social;
-    const funcMap: Record<number, string> = {};
-    for (const f of (funcRes.data || []) as any[]) funcMap[f.funcionario_id] = f.nome || "";
 
     setXPedidos(((data || []) as any[]).map(m => ({
       movimento_id: m.movimento_id,
       nr_movimento: m.nr_movimento,
       cadastro_id: m.cadastro_id,
-      cliente_nome: cadMap[m.cadastro_id] || "(Consumidor)",
-      vendedor_id: m.funcionario_id,
-      vendedor_nome: funcMap[m.funcionario_id] || "",
+      cliente_nome: m.cliente_nome || "(Consumidor)",
+      vendedor_id: m.vendedor_id,
+      vendedor_nome: m.vendedor_nome || "",
       vl_movimento: Number(m.vl_movimento || 0),
       dt_emissao: m.dt_emissao,
+      is_external: !!m.is_external,
+      origem: m.origem || "LOCAL",
+      tp_origem: m.tp_origem || null
     })));
-  }, [XEmpresaId]);
+  }, []);
 
   // Subtotal e lógica de recebimento necessária para finalizarVenda
   const subtotal = XCart.reduce((a, c) => a + c.qt_item * c.vl_unitario, 0);
@@ -215,9 +200,11 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
 
     if (XPedidoSel) {
       // Pedido fechado: busca itens do banco incluindo o campo entrega
-      const { data: itBanco } = await db.from("movimento_item")
+      const tableName = XPedidoSel.is_external ? "emovimento_item" : "movimento_item";
+      const idColumn = XPedidoSel.is_external ? "emovimento_id" : "movimento_id";
+      const { data: itBanco } = await db.from(tableName)
         .select("produto_id, nm_produto, qt_movimento, deposito_id, unidade_id, entrega")
-        .eq("movimento_id", XPedidoSel.movimento_id)
+        .eq(idColumn, XPedidoSel.movimento_id)
         .eq("excluido", false);
       itensValidar = ((itBanco || []) as any[]).map((it: any) => ({
         produto_id: it.produto_id,
@@ -284,26 +271,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     return true;
   };
 
-  // ===== Finalizar venda =====
-  const finalizarVenda = useCallback(async () => {
-    if (!podeReceber) { toast.error("Selecione um pedido ou adicione itens à venda direta."); return; }
-    if (!XParams) { toast.error("Parâmetros da empresa não carregados."); return; }
 
-    // Valida estoque antes de abrir pagamento
-    const estoqueOk = await validarEstoqueAntesDeFinalizar();
-    if (!estoqueOk) return;
-
-    let pagtos: IMovimentoPagamento[] = [];
-    if (XPedidoSel) {
-      const { data } = await db.from("movimento_pagamento")
-        .select("movimento_pagamento_id, condicao_id, vl_pagamento, numero_autorizacao, bandeira_id, operadora_id, n_parcelas")
-        .eq("movimento_id", XPedidoSel.movimento_id)
-        .eq("excluido", false);
-      pagtos = (data || []) as IMovimentoPagamento[];
-    }
-    setXPagtosPedido(pagtos);
-    setXOpenPagto(true);
-  }, [podeReceber, XParams, XPedidoSel, XCart, XPedidoSelItens, XEmpresaId]);
 
   // ===== Salvar como Pre-venda (apenas para venda direta) =====
   const salvarPreVenda = useCallback(async () => {
@@ -335,59 +303,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     }
   }, [XCart, XParams, XCliente, XVendedor, XEmpresaId, caixa.funcionario_id]);
 
-  // ===== Atalhos de teclado =====
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-      const isInput = tag === 'input' || tag === 'textarea' || tag === 'select';
 
-      switch (e.key) {
-        case 'F2':
-          e.preventDefault();
-          searchRef.current?.focus();
-          searchRef.current?.select();
-          break;
-        case 'F3':
-          e.preventDefault();
-          if (!XPedidoSel) setXOpenCliente(true);
-          break;
-        case 'F4':
-          e.preventDefault();
-          if (!XPedidoSel && XPodeInfVend) setXOpenVend(true);
-          break;
-        case 'F5':
-          e.preventDefault();
-          carregarPedidos();
-          toast.info('Lista de pedidos atualizada.');
-          break;
-        case 'F6':
-          e.preventDefault();
-          if (!XPedidoSel && XCart.length > 0) setXOpenDesc(true);
-          break;
-
-        case 'F9':
-          e.preventDefault();
-          finalizarVenda();
-          break;
-        case 'F1':
-          e.preventDefault();
-          setXShowAtalhos(prev => !prev);
-          break;
-        case 'Escape':
-          e.preventDefault();
-          if (XPedidoSel) setXPedidoSel(null);
-          break;
-        case 'Delete':
-          if (!isInput && XCart.length > 0) {
-            e.preventDefault();
-            setXCart(prev => prev.slice(0, -1));
-          }
-          break;
-      }
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [XPedidoSel, XPodeInfVend, XCart, XOpenDesc, finalizarVenda, carregarPedidos]);
 
   useEffect(() => { carregarPedidos(); }, [carregarPedidos]);
 
@@ -414,11 +330,14 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   useEffect(() => {
     if (!XPedidoSel) { setXPedidoSelItens([]); return; }
     (async () => {
-      const { data } = await db.from("movimento_item")
-        .select("movimento_item_id, produto_id, nm_produto, qt_movimento, vl_und_produto, vl_movimento, unidade_id")
-        .eq("movimento_id", XPedidoSel.movimento_id)
+      const tableName = XPedidoSel.is_external ? "emovimento_item" : "movimento_item";
+      const idColumn = XPedidoSel.is_external ? "emovimento_id" : "movimento_id";
+      const orderColumn = XPedidoSel.is_external ? "emovimento_item_id" : "movimento_item_id";
+      const { data } = await db.from(tableName)
+        .select("produto_id, nm_produto, qt_movimento, vl_und_produto, vl_movimento, unidade_id")
+        .eq(idColumn, XPedidoSel.movimento_id)
         .eq("excluido", false)
-        .order("movimento_item_id");
+        .order(orderColumn);
       setXPedidoSelItens(data || []);
     })();
   }, [XPedidoSel]);
@@ -580,73 +499,123 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       let nrMov: number;
       let total: number;
 
-      if (XPedidoSel) {
-        console.log("[PdvTela] Finalizando pedido existente:", XPedidoSel.movimento_id);
+      if (XPedidoSel?.is_external) {
+        console.log("[PdvTela] Confirmando venda externa (loja virtual):", XPedidoSel.movimento_id);
         movimentoId = XPedidoSel.movimento_id;
         nrMov = XPedidoSel.nr_movimento || movimentoId;
         total = XPedidoSel.vl_movimento;
+
+        const { data: userDataRpc } = await supabase.auth.getUser();
+        const userIdRpc = userDataRpc.user?.id;
+
+        const { data: rpcRes, error: rpcErr } = await db.rpc("fu_pdv_confirmar_venda_externa", {
+          _emovimento_id: movimentoId,
+          _caixa_abertura_id: abertura.caixa_abertura_id,
+          _funcionario_caixa_id: caixa.funcionario_id,
+          _dt_movimento: dtMovimento,
+          _tp_operacao_caixa: String(XParams!.tp_operacao_caixa),
+          _centro_custo_caixa: XParams!.centro_custo_caixa,
+          _usuario_id: userIdRpc
+        });
+
+        if (rpcErr) throw new Error("Erro de conexão ao confirmar venda externa: " + rpcErr.message);
+        if (rpcRes?.error) throw new Error("Falha no banco de dados ao importar venda externa: " + rpcRes.error);
+
+        // O RPC retorna os dados da venda local recém criada
+        if (rpcRes?.vl_somado_caixa > 0) {
+          abertura.vl_fechamento = Number(abertura.vl_fechamento || 0) + Number(rpcRes.vl_somado_caixa);
+        }
+        
+        const novoMovId = rpcRes?.movimento_id || rpcRes?.id || movimentoId;
+
+        const itensImp = XPedidoSelItens.map((it: any) => ({
+          nm_produto: it.nm_produto,
+          qt_movimento: Number(it.qt_movimento || 0),
+          unidade_id: it.unidade_id,
+          vl_und_produto: Number(it.vl_und_produto || 0),
+          vl_movimento: Number(it.vl_movimento || it.qt_movimento * it.vl_und_produto || 0),
+        }));
+
+        setXImpressaoDados({
+          movimento_id: novoMovId,
+          nr_movimento: nrMov,
+          cliente_nome: XPedidoSel.cliente_nome,
+          cliente_id: rpcRes?.cadastro_id || XPedidoSel.cadastro_id,
+          caixa_nome: caixa.nome,
+          dt_movimento: new Date(dtMovimento + "T00:00:00").toLocaleDateString("pt-BR"),
+          itens: itensImp,
+          total,
+        });
+
       } else {
-        console.log("[PdvTela] Criando nova venda direta...");
-        const novo = await criarMovimentoVendaDireta();
-        if (!novo) throw new Error("Falha ao criar cabeçalho do movimento.");
-        movimentoId = novo.movimento_id;
-        nrMov = novo.nr;
-        total = novo.total;
-        console.log("[PdvTela] Venda direta criada. ID:", movimentoId, "NR:", nrMov, "Total:", total);
+        if (XPedidoSel) {
+          console.log("[PdvTela] Finalizando pedido existente:", XPedidoSel.movimento_id);
+          movimentoId = XPedidoSel.movimento_id;
+          nrMov = XPedidoSel.nr_movimento || movimentoId;
+          total = XPedidoSel.vl_movimento;
+        } else {
+          console.log("[PdvTela] Criando nova venda direta...");
+          const novo = await criarMovimentoVendaDireta();
+          if (!novo) throw new Error("Falha ao criar cabeçalho do movimento.");
+          movimentoId = novo.movimento_id;
+          nrMov = novo.nr;
+          total = novo.total;
+          console.log("[PdvTela] Venda direta criada. ID:", movimentoId, "NR:", nrMov, "Total:", total);
+        }
+
+        // ===== TRANSAÇÃO ATÔMICA VIA RPC =====
+        const { data: userDataRpc } = await supabase.auth.getUser();
+        const userIdRpc = userDataRpc.user?.id;
+
+        console.log("[PdvTela] Enviando recebimento para o banco (RPC)...");
+        const { data: rpcRes, error: rpcErr } = await db.rpc("fu_pdv_registrar_recebimento_venda", {
+          _empresa_id: XEmpresaId,
+          _movimento_id: movimentoId,
+          _caixa_abertura_id: abertura.caixa_abertura_id,
+          _funcionario_caixa_id: caixa.funcionario_id,
+          _dt_movimento: dtMovimento,
+          _tp_operacao_caixa: String(XParams!.tp_operacao_caixa),
+          _centro_custo_caixa: XParams!.centro_custo_caixa,
+          _pagamentos: linhas,
+          _usuario_id: userIdRpc
+        });
+
+        if (rpcErr) throw new Error("Erro de conexão ao registrar venda: " + rpcErr.message);
+        if (rpcRes?.error) throw new Error("Falha no banco de dados: " + rpcRes.error);
+
+        // Atualiza o state local do caixa abertura apenas para reflexo na UI, se o RPC somou algo
+        if (rpcRes?.vl_somado_caixa > 0) {
+          abertura.vl_fechamento = Number(abertura.vl_fechamento || 0) + Number(rpcRes.vl_somado_caixa);
+        }
+
+        // Monta dados de impressão para o próximo dialog
+        const itensImp = XPedidoSel
+          ? XPedidoSelItens.map((it: any) => ({
+              nm_produto: it.nm_produto,
+              qt_movimento: Number(it.qt_movimento || 0),
+              unidade_id: it.unidade_id,
+              vl_und_produto: Number(it.vl_und_produto || 0),
+              vl_movimento: Number(it.vl_movimento || it.qt_movimento * it.vl_und_produto || 0),
+            }))
+          : XCart.map(c => ({
+              nm_produto: c.nm_produto,
+              qt_movimento: c.qt_item,
+              unidade_id: c.unidade_id,
+              vl_und_produto: c.vl_unitario,
+              vl_movimento: c.qt_item * c.vl_unitario,
+            }));
+            
+        setXImpressaoDados({
+          movimento_id: movimentoId,
+          nr_movimento: nrMov,
+          cliente_nome: XPedidoSel ? XPedidoSel.cliente_nome : (XCliente?.nome_fantasia || XCliente?.razao_social || "(Consumidor)"),
+          cliente_id: XPedidoSel ? XPedidoSel.cadastro_id : (XCliente?.cadastro_id || null),
+          caixa_nome: caixa.nome,
+          dt_movimento: new Date(dtMovimento + "T00:00:00").toLocaleDateString("pt-BR"),
+          itens: itensImp,
+          total,
+        });
       }
-
-      // ===== TRANSAÇÃO ATÔMICA VIA RPC =====
-      const { data: userDataRpc } = await supabase.auth.getUser();
-      const userIdRpc = userDataRpc.user?.id;
-
-      console.log("[PdvTela] Enviando recebimento para o banco (RPC)...");
-      const { data: rpcRes, error: rpcErr } = await db.rpc("fu_pdv_registrar_recebimento_venda", {
-        _empresa_id: XEmpresaId,
-        _movimento_id: movimentoId,
-        _caixa_abertura_id: abertura.caixa_abertura_id,
-        _funcionario_caixa_id: caixa.funcionario_id,
-        _dt_movimento: dtMovimento,
-        _tp_operacao_caixa: String(XParams!.tp_operacao_caixa),
-        _centro_custo_caixa: XParams!.centro_custo_caixa,
-        _pagamentos: linhas,
-        _usuario_id: userIdRpc
-      });
-
-      if (rpcErr) throw new Error("Erro de conexão ao registrar venda: " + rpcErr.message);
-      if (rpcRes?.error) throw new Error("Falha no banco de dados: " + rpcRes.error);
-
-      // Atualiza o state local do caixa abertura apenas para reflexo na UI, se o RPC somou algo
-      if (rpcRes?.vl_somado_caixa > 0) {
-        abertura.vl_fechamento = Number(abertura.vl_fechamento || 0) + Number(rpcRes.vl_somado_caixa);
-      }
-
-      // Monta dados de impressão para o próximo dialog
-      const itensImp = XPedidoSel
-        ? XPedidoSelItens.map((it: any) => ({
-            nm_produto: it.nm_produto,
-            qt_movimento: Number(it.qt_movimento || 0),
-            unidade_id: it.unidade_id,
-            vl_und_produto: Number(it.vl_und_produto || 0),
-            vl_movimento: Number(it.vl_movimento || it.qt_movimento * it.vl_und_produto || 0),
-          }))
-        : XCart.map(c => ({
-            nm_produto: c.nm_produto,
-            qt_movimento: c.qt_item,
-            unidade_id: c.unidade_id,
-            vl_und_produto: c.vl_unitario,
-            vl_movimento: c.qt_item * c.vl_unitario,
-          }));
-          
-      setXImpressaoDados({
-        movimento_id: movimentoId,
-        nr_movimento: nrMov,
-        cliente_nome: XPedidoSel ? XPedidoSel.cliente_nome : (XCliente?.nome_fantasia || XCliente?.razao_social || "(Consumidor)"),
-        cliente_id: XPedidoSel ? XPedidoSel.cadastro_id : (XCliente?.cadastro_id || null),
-        caixa_nome: caixa.nome,
-        dt_movimento: new Date(dtMovimento + "T00:00:00").toLocaleDateString("pt-BR"),
-        itens: itensImp,
-        total,
-      });
 
       toast.success(`Pedido ${nrMov} recebido com sucesso.`, { id: tId });
       setXOpenPagto(false);
@@ -670,6 +639,86 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     setXImpressaoDados(null);
     carregarPedidos();
   };
+
+  // ===== Finalizar venda =====
+  const finalizarVenda = useCallback(async () => {
+    if (!podeReceber) { toast.error("Selecione um pedido ou adicione itens à venda direta."); return; }
+    if (!XParams) { toast.error("Parâmetros da empresa não carregados."); return; }
+
+    // Valida estoque antes de abrir pagamento
+    const estoqueOk = await validarEstoqueAntesDeFinalizar();
+    if (!estoqueOk) return;
+
+    let pagtos: IMovimentoPagamento[] = [];
+    if (XPedidoSel) {
+      if (XPedidoSel.is_external) {
+        console.log("[PdvTela] Pedido externo já pago. Finalizando direto...");
+        await confirmarPagamento([]);
+        return;
+      }
+      const { data } = await db.from("movimento_pagamento")
+        .select("movimento_pagamento_id, condicao_id, vl_pagamento, numero_autorizacao, bandeira_id, operadora_id, n_parcelas")
+        .eq("movimento_id", XPedidoSel.movimento_id)
+        .eq("excluido", false);
+      pagtos = (data || []) as IMovimentoPagamento[];
+    }
+    setXPagtosPedido(pagtos);
+    setXOpenPagto(true);
+  }, [podeReceber, XParams, XPedidoSel, XCart, XPedidoSelItens, XEmpresaId, confirmarPagamento]);
+
+  // Atalhos de teclado
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      const activeTag = document.activeElement?.tagName;
+      const isInput = activeTag === 'INPUT' || activeTag === 'TEXTAREA';
+
+      switch (e.key) {
+        case 'F2':
+          e.preventDefault();
+          searchRef.current?.focus();
+          searchRef.current?.select();
+          break;
+        case 'F3':
+          e.preventDefault();
+          if (!XPedidoSel) setXOpenCliente(true);
+          break;
+        case 'F4':
+          e.preventDefault();
+          if (!XPedidoSel && XPodeInfVend) setXOpenVend(true);
+          break;
+        case 'F5':
+          e.preventDefault();
+          carregarPedidos();
+          toast.info('Lista de pedidos atualizada.');
+          break;
+        case 'F6':
+          e.preventDefault();
+          if (!XPedidoSel && XCart.length > 0) setXOpenDesc(true);
+          break;
+
+        case 'F9':
+          e.preventDefault();
+          finalizarVenda();
+          break;
+        case 'F1':
+          e.preventDefault();
+          setXShowAtalhos(prev => !prev);
+          break;
+        case 'Escape':
+          e.preventDefault();
+          if (XPedidoSel) setXPedidoSel(null);
+          break;
+        case 'Delete':
+          if (!isInput && XCart.length > 0) {
+            e.preventDefault();
+            setXCart(prev => prev.slice(0, -1));
+          }
+          break;
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [XPedidoSel, XPodeInfVend, XCart, XOpenDesc, finalizarVenda, carregarPedidos]);
 
   // Cores dos painéis (usando o token do menu/sidebar)
   const painelBg = "bg-sidebar/30 dark:bg-sidebar/40";
@@ -833,9 +882,9 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
                 </div>
               )}
               {XPedidosFilt.map((p, idx) => {
-                const sel = XPedidoSel?.movimento_id === p.movimento_id;
+                const sel = XPedidoSel?.movimento_id === p.movimento_id && XPedidoSel?.is_external === p.is_external;
                 return (
-                  <button key={p.movimento_id}
+                  <button key={p.is_external ? "ext_" + p.movimento_id : "loc_" + p.movimento_id}
                     onClick={() => { setXPedidoSel(p); setXCart([]); }}
                     className={`w-full text-left px-3 py-1.5 border-b border-border
                       ${idx % 2 ? "bg-muted/40" : ""}
@@ -843,6 +892,24 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
                     {/* Linha 1: Nº + Cliente */}
                     <div className="flex justify-between items-baseline gap-2">
                       <span className="font-bold text-foreground shrink-0">#{p.nr_movimento || p.movimento_id}</span>
+                      {p.is_external ? (
+                        <span className="px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800 flex items-center gap-1 shrink-0">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          <Globe size={9} className="stroke-[2.5]" />
+                          Loja Virtual
+                        </span>
+                      ) : p.tp_origem === "ASSISTENTE" ? (
+                        <span className="px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-indigo-100 text-indigo-800 border border-indigo-300 dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-800 flex items-center gap-1 shrink-0">
+                          <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+                          <Smartphone size={9} className="stroke-[2.5]" />
+                          Força de Vendas
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase rounded bg-slate-100 text-slate-700 border border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 flex items-center gap-1 shrink-0">
+                          <Home size={9} className="stroke-[2.5]" />
+                          Local
+                        </span>
+                      )}
                       <span className="text-blue-600 dark:text-blue-400 font-semibold break-words flex-1 min-w-0">{p.cliente_nome}</span>
                     </div>
                     {/* Linha 2: Vendedor + total */}

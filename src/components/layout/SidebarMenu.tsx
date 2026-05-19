@@ -8,6 +8,7 @@ import { rbFetchRelatorios } from "@/rbuilder/services/rb_reportService";
 import type { IRbRelatorio } from "@/rbuilder/models/rb_types";
 import { rpbListRelatorios } from "@/report-builder/services/rpbService";
 import type { IRpbRelatorio } from "@/report-builder/types";
+import { supabase } from "@/integrations/supabase/client";
 
 const MenuItemNode = ({
   item,
@@ -95,6 +96,26 @@ const SidebarMenu = () => {
   const [XRpbRelatorios, setXRpbRelatorios] = useState<IRpbRelatorio[]>([]);
   const [XSearch, setXSearch] = useState("");
   const [XLastAction, setXLastAction] = useState<{ type: 'expand' | 'collapse', ts: number } | null>(null);
+  const [XSystemVersion, setXSystemVersion] = useState("v1.15.0");
+
+  useEffect(() => {
+    const loadVersion = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("sistema_versoes")
+          .select("versao")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!error && data?.versao) {
+          setXSystemVersion(`v${data.versao}`);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar versao do sistema:", err);
+      }
+    };
+    loadVersion();
+  }, []);
 
   useEffect(() => {
     if (XSidebarOpen && XEmpresaMatrizId > 0) {
@@ -287,6 +308,10 @@ const SidebarMenu = () => {
             )}
           </div>
         </ScrollArea>
+        <div className="p-3 border-t border-border bg-muted/20 text-[10px] text-muted-foreground flex justify-between items-center shrink-0">
+          <span className="font-semibold tracking-wider uppercase opacity-75">RealSys AI</span>
+          <span className="font-mono font-bold bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded shadow-sm">{XSystemVersion}</span>
+        </div>
       </div>
     </>
   );

@@ -602,7 +602,7 @@ const ProdutoForm: React.FC = () => {
     if (!file) return;
     const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
     const path = `produtos/${XEmpresaMatrizId}/${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from("logos").upload(path, file, { upsert: true });
+    const { error } = await supabase.storage.from("logos").upload(path, file, { upsert: false });
     if (error) { toast.error("Erro no upload: " + error.message); return; }
     const { data: urlData } = supabase.storage.from("logos").getPublicUrl(path);
     set("url_foto", urlData.publicUrl);
