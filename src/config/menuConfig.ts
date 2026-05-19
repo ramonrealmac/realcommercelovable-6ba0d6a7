@@ -187,6 +187,15 @@ export const MENU_CONFIG: MenuItem[] = [
           { id: "devolucao-nfe-entrada", title: "Devolução de NF-e de Entrada", icon: ArrowUpFromLine },
         ],
       },
+      {
+        id: "mov-ajustes",
+        title: "Ajustes",
+        icon: Settings2,
+        children: [
+          { id: "ajuste-estoque", title: "Ajuste de Estoque", icon: FilePen },
+          { id: "inventario", title: "Inventário (próxima etapa)", icon: ClipboardList },
+        ],
+      },
       { id: "consulta-estoque", title: "Consulta de Estoque", icon: ClipboardList },
     ],
   },

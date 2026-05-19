@@ -5098,6 +5098,7 @@ export type Database = {
           qt_reservada: number | null
           tp_desconto: string | null
           tp_movimento: string | null
+          tp_ajs_estoque: string | null
           unidade_id: string | null
           vl_bc_cofins: number | null
           vl_bc_fcp: number | null
@@ -5163,6 +5164,7 @@ export type Database = {
           qt_reservada?: number | null
           tp_desconto?: string | null
           tp_movimento?: string | null
+          tp_ajs_estoque?: string | null
           unidade_id?: string | null
           vl_bc_cofins?: number | null
           vl_bc_fcp?: number | null
@@ -5228,6 +5230,7 @@ export type Database = {
           qt_reservada?: number | null
           tp_desconto?: string | null
           tp_movimento?: string | null
+          tp_ajs_estoque?: string | null
           unidade_id?: string | null
           vl_bc_cofins?: number | null
           vl_bc_fcp?: number | null

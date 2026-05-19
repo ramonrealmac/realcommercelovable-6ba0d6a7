@@ -56,6 +56,7 @@ export interface IMovimentoItem {
   deposito_id: number | null;
   entrega: string;
   infad_produto: string | null;
+  tp_ajs_estoque?: string | null;
 }
 
 export interface IMovimentoPagamento {
