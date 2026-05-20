@@ -482,6 +482,7 @@ const NotaFiscalEntradaForm: React.FC = () => {
                     <div className="flex gap-2">
                       <NfeXmlImporter
                         disabled={ro}
+                        empresaId={XEmpresaId}
                         onImported={(dados) => processarXmlImportado(dados, setField, setRecord)}
                       />
                       <button 

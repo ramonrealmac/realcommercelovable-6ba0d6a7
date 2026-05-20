@@ -573,8 +573,21 @@ const NfeRecebidasForm: React.FC = () => {
 
       const parsed = provedorService.parseIni(resp);
       
-      const key = Object.keys(parsed).find(k => k.toUpperCase().startsWith("PROCNFE"));
-      const doc = key ? parsed[key] : null;
+      const baseObj = parsed?.DistribuicaoDFe || parsed;
+      const key = Object.keys(baseObj || {}).find(k => {
+        const doc = baseObj[k];
+        if (!doc || typeof doc !== "object") return false;
+        const kUpper = k.toUpperCase();
+        const schemaUpper = String(doc.schema || "").toUpperCase();
+        return (
+          kUpper.startsWith("PROCNFE") ||
+          kUpper.startsWith("RESNFE") ||
+          kUpper.startsWith("RESD") ||
+          schemaUpper === "PROCNFE" ||
+          schemaUpper === "RESNFE"
+        ) && !!(doc.xml || doc.XML || doc.Xml);
+      });
+      const doc = key ? baseObj[key] : null;
       const xml = doc?.XML || doc?.xml || doc?.Xml;
 
       if (xml) {

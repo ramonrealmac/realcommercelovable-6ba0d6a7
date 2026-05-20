@@ -83,7 +83,7 @@ export const provedorService = {
           comando: comando.split('(')[0],
           payload: { 
             comando_full: comando,
-            dados: comando.includes('("') ? comando.match(/\("(.+)"\)/)?.[1] : "",
+            dados: comando.includes('("') ? comando.match(/\("([\s\S]+)"\)/)?.[1] : "",
             config: finalConfig || {}
           },
           status: "PENDENTE",

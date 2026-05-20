@@ -981,6 +981,7 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 return { sucesso: true, protocol: nProt, pdf_base64: pdfBase64, resposta };
             });
 
+        case 'NFE.EnviarEvento':
         case 'MANIFESTAR_NFE':
             return executarNaDLL(libNFe, config, async (handle) => {
                 libNFe.LimparListaEventos(handle);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import CadastroCompletoForm from "./CadastroCompletoForm";
 import { consumePendingSupplier, INfePendingSupplier } from "@/utils/nfePendingStore";
 
@@ -14,26 +14,28 @@ const FornecedorTransportadorForm: React.FC = () => {
     }
   }, []);
 
-  const defaultValues: Record<string, string> = {
-    st_cliente: "N",
-    st_fornecedor: "S",
-    st_transportador: "N",
-    ...(XPending ? {
-      cnpj:                XPending.cnpj,
-      razao_social:        XPending.razao_social,
-      nome_fantasia:       XPending.nome_fantasia,
-      nome_curto:          XPending.razao_social.substring(0, 30),
-      inscricao_estadual:  XPending.inscricao_estadual,
-      endereco_logradouro: XPending.endereco_logradouro,
-      endereco_numero:     XPending.endereco_numero,
-      endereco_bairro:     XPending.endereco_bairro,
-      endereco_cep:        XPending.endereco_cep,
-      fone_geral:          XPending.fone,
-      email:               XPending.email,
-      tp_pessoa:           XPending.cnpj.replace(/\D/g, "").length === 14 ? "J" : "F",
-      tp_contribuinte:     "C",
-    } : {}),
-  };
+  const defaultValues = useMemo(() => {
+    return {
+      st_cliente: "N",
+      st_fornecedor: "S",
+      st_transportador: "N",
+      ...(XPending ? {
+        cnpj:                XPending.cnpj,
+        razao_social:        XPending.razao_social,
+        nome_fantasia:       XPending.nome_fantasia,
+        nome_curto:          XPending.razao_social.substring(0, 30),
+        inscricao_estadual:  XPending.inscricao_estadual,
+        endereco_logradouro: XPending.endereco_logradouro,
+        endereco_numero:     XPending.endereco_numero,
+        endereco_bairro:     XPending.endereco_bairro,
+        endereco_cep:        XPending.endereco_cep,
+        fone_geral:          XPending.fone,
+        email:               XPending.email,
+        tp_pessoa:           XPending.cnpj.replace(/\D/g, "").length === 14 ? "J" : "F",
+        tp_contribuinte:     "C",
+      } : {}),
+    };
+  }, [XPending]);
 
   return (
     <CadastroCompletoForm

@@ -337,7 +337,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
     setXVendedores(r8.data || []);
   }, []);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (savedId?: number) => {
     setXLoading(true);
     let XQuery = db
       .from("cadastro")
@@ -345,8 +345,15 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
       .eq("empresa_id", XEmpresaMatrizId)
       .eq("excluido", false);
 
-    // Apply data filters
-    if (dataFilter) {
+    if (skipInitialLoad && !savedId) {
+      setXData([]);
+      setXLoading(false);
+      return;
+    }
+
+    if (skipInitialLoad && savedId) {
+      XQuery = XQuery.eq("cadastro_id", savedId);
+    } else if (dataFilter) {
       if (filterMode === "or") {
         const XParts: string[] = [];
         if (dataFilter.st_cliente) XParts.push(`st_cliente.eq.${dataFilter.st_cliente}`);
@@ -361,9 +368,17 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
     }
 
     const { data: XRows } = await XQuery.order("cadastro_id");
-    setXData(XRows || []);
+    const rows = XRows || [];
+    setXData(rows);
+
+    if (savedId) {
+      const idx = rows.findIndex((r: any) => r.cadastro_id === savedId);
+      if (idx >= 0) {
+        setXCurrentIdx(idx);
+      }
+    }
     setXLoading(false);
-  }, [XEmpresaMatrizId, dataFilter, filterMode]);
+  }, [XEmpresaMatrizId, dataFilter, filterMode, skipInitialLoad]);
 
   useEffect(() => {
     if (!skipInitialLoad) loadData();
@@ -385,7 +400,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
       }, 0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // executa apenas na montagem
+  }, [autoInsert]); // executa quando autoInsert mudar
 
   // Populate form when editing
   useEffect(() => {
@@ -563,7 +578,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
 
     toast.success(XFormMode === "edit" ? "Cadastro alterado com sucesso." : "Cadastro incluído com sucesso.");
     setXFormMode("view");
-    await loadData();
+    await loadData(XSavedCadastroId || undefined);
   };
 
 
