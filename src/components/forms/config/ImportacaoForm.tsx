@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppContext } from "@/contexts/AppContext";
 import { toast } from "sonner";
@@ -26,6 +26,12 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 
+export interface MappingItem {
+  type: "file" | "static";
+  fileIndex?: number;
+  staticValue?: string;
+}
+
 // ── Target Table Definitions & Metadata ─────────────────────────────────────
 interface TableColumn {
   name: string;
@@ -42,7 +48,7 @@ interface TableDefinition {
   primaryKey: string;
   description: string;
   columns: TableColumn[];
-  defaultValues?: Record<string, any>;
+  defaultValues?: Record<string, unknown>;
 }
 
 const TABLE_DEFINITIONS: TableDefinition[] = [
@@ -354,17 +360,114 @@ const ImportacaoForm: React.FC = () => {
   const [parsedRows, setParsedRows] = useState<string[][]>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   
-  // Mapping state: key is DB Column Name, value is CSV Header Column index
-  const [mappings, setMappings] = useState<Record<string, number>>({});
+  // Mapping state: key is DB Column Name, value is MappingItem configuration
+  const [mappings, setMappings] = useState<Record<string, MappingItem>>({});
+  
+  // Profile management states
+  const [selectedProfileName, setSelectedProfileName] = useState<string>("");
+  const [newProfileName, setNewProfileName] = useState<string>("");
+  const [profileNames, setProfileNames] = useState<string[]>([]);
   
   // Import Execution state
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [importProgress, setImportProgress] = useState<number>(0);
   const [importResults, setImportResults] = useState<{ success: number; failed: number } | null>(null);
-  const [failedRowsList, setFailedRowsList] = useState<{ row: number; data: Record<string, any>; error: string }[]>([]);
+  const [failedRowsList, setFailedRowsList] = useState<{ row: number; data: Record<string, unknown>; error: string }[]>([]);
   const [showFailedModal, setShowFailedModal] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const getProfilesKey = (tableId: string) => `import_profiles_${tableId}`;
+
+  // Load profile names list on table selection change
+  useEffect(() => {
+    const key = getProfilesKey(selectedTableId);
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        setProfileNames(Object.keys(parsed));
+      } catch (e) {
+        setProfileNames([]);
+      }
+    } else {
+      setProfileNames([]);
+    }
+    setSelectedProfileName("");
+    setNewProfileName("");
+  }, [selectedTableId]);
+
+  const handleSaveProfile = () => {
+    if (!newProfileName.trim()) {
+      toast.error("Por favor, insira um nome para o perfil.");
+      return;
+    }
+    
+    const key = getProfilesKey(selectedTableId);
+    const stored = localStorage.getItem(key);
+    let profiles: Record<string, Record<string, MappingItem>> = {};
+    if (stored) {
+      try {
+        profiles = JSON.parse(stored);
+      } catch (e) {
+        // Ignored
+      }
+    }
+    
+    profiles[newProfileName.trim()] = mappings;
+    localStorage.setItem(key, JSON.stringify(profiles));
+    
+    setProfileNames(Object.keys(profiles));
+    setSelectedProfileName(newProfileName.trim());
+    setNewProfileName("");
+    toast.success(`Perfil "${newProfileName.trim()}" salvo com sucesso!`);
+  };
+
+  const handleLoadProfile = (name: string) => {
+    if (name === "none" || !name) return;
+    
+    const key = getProfilesKey(selectedTableId);
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      try {
+        const profiles = JSON.parse(stored);
+        const selected = profiles[name];
+        if (selected) {
+          const cols = getActiveColumns();
+          const validMappings: Record<string, MappingItem> = {};
+          Object.entries(selected).forEach(([key, val]) => {
+            if (cols.some(c => c.name === key)) {
+              validMappings[key] = val as MappingItem;
+            }
+          });
+          setMappings(validMappings);
+          setSelectedProfileName(name);
+          toast.success(`Perfil "${name}" carregado com sucesso!`);
+        }
+      } catch (e) {
+        toast.error("Erro ao carregar o perfil.");
+      }
+    }
+  };
+
+  const handleDeleteProfile = () => {
+    if (!selectedProfileName) return;
+    
+    const key = getProfilesKey(selectedTableId);
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      try {
+        const profiles = JSON.parse(stored);
+        delete profiles[selectedProfileName];
+        localStorage.setItem(key, JSON.stringify(profiles));
+        setProfileNames(Object.keys(profiles));
+        setSelectedProfileName("");
+        toast.success(`Perfil excluído com sucesso!`);
+      } catch (e) {
+        toast.error("Erro ao excluir o perfil.");
+      }
+    }
+  };
 
   // Retrieve current active table definition
   const activeTable = TABLE_DEFINITIONS.find(t => t.id === selectedTableId) || TABLE_DEFINITIONS[0];
@@ -374,7 +477,7 @@ const ImportacaoForm: React.FC = () => {
   const finalOverridePK = isStringPK ? true : overridePK;
 
   // Compile active columns list based on PK preference
-  const getActiveColumns = () => {
+  const getActiveColumns = useCallback(() => {
     const cols = [...activeTable.columns];
     if (finalOverridePK && !isStringPK) {
       cols.unshift({
@@ -386,7 +489,7 @@ const ImportacaoForm: React.FC = () => {
       });
     }
     return cols;
-  };
+  }, [activeTable, finalOverridePK, isStringPK]);
 
   const activeColumns = getActiveColumns();
 
@@ -410,7 +513,7 @@ const ImportacaoForm: React.FC = () => {
     setCsvHeaders(headers);
     
     // Auto mapping fuzzy logic matching
-    const autoMappings: Record<string, number> = {};
+    const autoMappings: Record<string, MappingItem> = {};
     const cols = getActiveColumns();
     
     cols.forEach(col => {
@@ -421,12 +524,32 @@ const ImportacaoForm: React.FC = () => {
         return normH.includes(normName) || normName.includes(normH) || normH.includes(normLabel) || normLabel.includes(normH);
       });
       if (index !== -1) {
-        autoMappings[col.name] = index;
+        autoMappings[col.name] = { type: "file", fileIndex: index };
       }
     });
     
+    // Try to load last used mapping config for this table
+    const lastUsed = localStorage.getItem(`import_mapping_last_${selectedTableId}`);
+    if (lastUsed) {
+      try {
+        const parsed = JSON.parse(lastUsed);
+        const validMappings: Record<string, MappingItem> = {};
+        Object.entries(parsed).forEach(([key, val]) => {
+          if (cols.some(c => c.name === key)) {
+            validMappings[key] = val as MappingItem;
+          }
+        });
+        if (Object.keys(validMappings).length > 0) {
+          setMappings(validMappings);
+          return;
+        }
+      } catch (e) {
+        console.error("Failed to parse last used mappings", e);
+      }
+    }
+    
     setMappings(autoMappings);
-  }, [csvContent, delimiter, selectedTableId, overridePK]);
+  }, [csvContent, delimiter, selectedTableId, overridePK, getActiveColumns]);
 
   // ── Drag & Drop & Upload Handling ─────────────────────────────────────────
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -466,11 +589,22 @@ const ImportacaoForm: React.FC = () => {
       setCurrentStep(2);
     } else if (currentStep === 2) {
       // Validate mapping required columns
-      const missingRequired = activeColumns.filter(c => c.required && mappings[c.name] === undefined);
+      const missingRequired = activeColumns.filter(c => {
+        if (!c.required) return false;
+        const mapping = mappings[c.name];
+        if (!mapping) return true;
+        if (mapping.type === "file") {
+          return mapping.fileIndex === undefined;
+        } else {
+          return mapping.staticValue === undefined || mapping.staticValue === "";
+        }
+      });
       if (missingRequired.length > 0) {
         toast.error(`Mapeie todas as colunas obrigatórias: ${missingRequired.map(c => c.label).join(", ")}`);
         return;
       }
+      // Save last used mapping config
+      localStorage.setItem(`import_mapping_last_${selectedTableId}`, JSON.stringify(mappings));
       setCurrentStep(3);
     } else if (currentStep === 3) {
       setCurrentStep(4);
@@ -502,7 +636,7 @@ const ImportacaoForm: React.FC = () => {
 
     // Parse and prepare data rows
     const payloadRows = parsedRows.map((row, rowIndex) => {
-      const record: Record<string, any> = {};
+      const record: Record<string, unknown> = {};
       
       record.empresa_id = XEmpresaId || 1;
 
@@ -512,8 +646,17 @@ const ImportacaoForm: React.FC = () => {
         });
       }
 
-      Object.entries(mappings).forEach(([colName, headerIdx]) => {
-        let rawValue = row[headerIdx];
+      Object.entries(mappings).forEach(([colName, mapping]) => {
+        let rawValue: string | undefined;
+        if (mapping.type === "static") {
+          rawValue = mapping.staticValue;
+        } else {
+          const headerIdx = mapping.fileIndex;
+          if (headerIdx !== undefined) {
+            rawValue = row[headerIdx];
+          }
+        }
+
         if (typeof rawValue === "string") {
           rawValue = rawValue.trim();
         }
@@ -526,12 +669,20 @@ const ImportacaoForm: React.FC = () => {
         if (!colDef) return;
 
         if (colDef.type === "number") {
-          const cleanNum = rawValue.replace(/\./g, "").replace(/,/g, ".");
-          const num = parseFloat(cleanNum);
-          record[colName] = isNaN(num) ? null : num;
+          if (typeof rawValue === "number") {
+            record[colName] = rawValue;
+          } else {
+            const cleanNum = String(rawValue).replace(/\./g, "").replace(/,/g, ".");
+            const num = parseFloat(cleanNum);
+            record[colName] = isNaN(num) ? null : num;
+          }
         } else if (colDef.type === "boolean") {
-          const valLower = rawValue.toLowerCase();
-          record[colName] = valLower === "sim" || valLower === "s" || valLower === "1" || valLower === "true";
+          if (typeof rawValue === "boolean") {
+            record[colName] = rawValue;
+          } else {
+            const valLower = String(rawValue).toLowerCase();
+            record[colName] = valLower === "sim" || valLower === "s" || valLower === "1" || valLower === "true" || valLower === "yes" || valLower === "y";
+          }
         } else {
           record[colName] = rawValue;
         }
@@ -600,7 +751,8 @@ const ImportacaoForm: React.FC = () => {
           } else {
             successCount += chunk.length;
           }
-        } catch (err: any) {
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : "Erro inesperado";
           if (abortOnError) {
             isAborted = true;
             failedCount += chunk.length;
@@ -608,7 +760,7 @@ const ImportacaoForm: React.FC = () => {
               localFailedList.push({
                 row: item.rowIndex,
                 data: item.record,
-                error: `Importação abortada: ${err.message}`
+                error: `Importação abortada: ${errMsg}`
               });
             });
             return;
@@ -619,7 +771,7 @@ const ImportacaoForm: React.FC = () => {
             localFailedList.push({
               row: item.rowIndex,
               data: item.record,
-              error: err.message || "Erro inesperado"
+              error: errMsg
             });
           });
         } finally {
@@ -680,8 +832,13 @@ const ImportacaoForm: React.FC = () => {
   };
 
   const getMappedPreviewValue = (csvRow: string[], colName: string) => {
-    const headerIdx = mappings[colName];
-    if (headerIdx === undefined) return "-";
+    const mapping = mappings[colName];
+    if (!mapping) return "";
+    if (mapping.type === "static") {
+      return mapping.staticValue || "";
+    }
+    const headerIdx = mapping.fileIndex;
+    if (headerIdx === undefined) return "";
     return csvRow[headerIdx] || "";
   };
 
@@ -939,6 +1096,68 @@ const ImportacaoForm: React.FC = () => {
         {/* ── STEP 2: FIELD MAPPING GRID ───────────────────────────────────── */}
         {currentStep === 2 && (
           <div className="max-w-6xl mx-auto w-full py-2 flex flex-col gap-6">
+            {/* Perfis de Mapeamento */}
+            <Card>
+              <CardContent className="pt-6">
+                <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground block mb-4">
+                  Perfis de Mapeamento Salvos
+                </span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Carregar Perfil</Label>
+                    <div className="flex gap-2">
+                      <Select 
+                        value={selectedProfileName}
+                        onValueChange={handleLoadProfile}
+                      >
+                        <SelectTrigger className="h-10 text-xs font-semibold">
+                          <SelectValue placeholder="Selecione um perfil salvo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {profileNames.length === 0 ? (
+                            <SelectItem value="none" disabled className="text-xs">Nenhum perfil salvo</SelectItem>
+                          ) : (
+                            profileNames.map(name => (
+                              <SelectItem key={name} value={name} className="text-xs">{name}</SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      {selectedProfileName && selectedProfileName !== "none" && (
+                        <Button 
+                          variant="destructive" 
+                          onClick={handleDeleteProfile}
+                          className="h-10 text-xs font-semibold px-3 shrink-0"
+                          title="Excluir perfil selecionado"
+                        >
+                          Excluir
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Salvar Novo Perfil</Label>
+                    <div className="flex gap-2">
+                      <Input 
+                        type="text" 
+                        placeholder="Nome do perfil (ex: Layout Distribuidor A)" 
+                        value={newProfileName}
+                        onChange={(e) => setNewProfileName(e.target.value)}
+                        className="h-10 text-xs font-medium"
+                      />
+                      <Button 
+                        onClick={handleSaveProfile}
+                        className="h-10 text-xs font-bold uppercase tracking-wider px-4 shrink-0"
+                      >
+                        Salvar
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardContent className="pt-6">
                 <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground block mb-4">
@@ -950,13 +1169,16 @@ const ImportacaoForm: React.FC = () => {
                     <thead>
                       <tr className="border-b border-border text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
                         <th className="py-3 px-4 w-1/3">Coluna no Banco</th>
-                        <th className="py-3 px-4 w-1/2">Coluna Correspondente no CSV</th>
+                        <th className="py-3 px-4 w-1/2">Coluna Correspondente ou Valor</th>
                         <th className="py-3 px-4 text-right">Obrigatoriedade</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {activeColumns.map(col => {
-                        const isMapped = mappings[col.name] !== undefined;
+                        const mapping = mappings[col.name];
+                        const isMapped = mapping !== undefined;
+                        const mappingType = mapping?.type || "file";
+
                         return (
                           <tr key={col.name} className="hover:bg-muted/30 transition-colors">
                             <td className="py-4 px-4">
@@ -965,33 +1187,122 @@ const ImportacaoForm: React.FC = () => {
                               <p className="text-xs text-muted-foreground mt-1 font-normal">{col.description}</p>
                             </td>
                             <td className="py-4 px-4">
-                              <select 
-                                value={mappings[col.name] !== undefined ? mappings[col.name] : ""}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setMappings(prev => {
-                                    const updated = { ...prev };
-                                    if (val === "") {
-                                      delete updated[col.name];
-                                    } else {
-                                      updated[col.name] = parseInt(val);
-                                    }
-                                    return updated;
-                                  });
-                                }}
-                                className={`w-full max-w-md h-10 px-3 bg-background text-xs font-medium border rounded-md transition-colors ${
-                                  isMapped 
-                                    ? "border-emerald-500/50 text-emerald-600 focus:border-emerald-500" 
-                                    : col.required 
-                                      ? "border-destructive/40 focus:border-destructive text-destructive" 
-                                      : "border-input focus:border-primary text-foreground"
-                                } outline-none`}
-                              >
-                                <option value="">-- Ignorar ou Não Mapeado --</option>
-                                {csvHeaders.map((header, idx) => (
-                                  <option key={idx} value={idx}>{header} (Exemplo: "{parsedRows[0]?.[idx] || ""}")</option>
-                                ))}
-                              </select>
+                              <div className="flex flex-col gap-2 max-w-md">
+                                <div className="flex rounded-md border border-input p-0.5 w-fit bg-muted/30">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setMappings(prev => ({
+                                        ...prev,
+                                        [col.name]: {
+                                          type: "file",
+                                          fileIndex: prev[col.name]?.fileIndex !== undefined ? prev[col.name].fileIndex : undefined
+                                        }
+                                      }));
+                                    }}
+                                    className={`px-3 py-1 text-[11px] font-semibold rounded-sm transition-all ${
+                                      mappingType === "file"
+                                        ? "bg-background text-foreground shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground"
+                                    }`}
+                                  >
+                                    Coluna do CSV
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setMappings(prev => ({
+                                        ...prev,
+                                        [col.name]: {
+                                          type: "static",
+                                          staticValue: prev[col.name]?.staticValue || ""
+                                        }
+                                      }));
+                                    }}
+                                    className={`px-3 py-1 text-[11px] font-semibold rounded-sm transition-all ${
+                                      mappingType === "static"
+                                        ? "bg-background text-foreground shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground"
+                                    }`}
+                                  >
+                                    Valor Estático
+                                  </button>
+                                </div>
+
+                                {mappingType === "file" ? (
+                                  <select 
+                                    value={mapping?.fileIndex !== undefined ? mapping.fileIndex : ""}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setMappings(prev => {
+                                        const updated = { ...prev };
+                                        if (val === "") {
+                                          delete updated[col.name];
+                                        } else {
+                                          updated[col.name] = {
+                                            type: "file",
+                                            fileIndex: parseInt(val)
+                                          };
+                                        }
+                                        return updated;
+                                      });
+                                    }}
+                                    className={`w-full h-10 px-3 bg-background text-xs font-medium border rounded-md transition-colors ${
+                                      mapping?.fileIndex !== undefined
+                                        ? "border-emerald-500/50 text-emerald-600 focus:border-emerald-500" 
+                                        : col.required 
+                                          ? "border-destructive/40 focus:border-destructive text-destructive" 
+                                          : "border-input focus:border-primary text-foreground"
+                                    } outline-none`}
+                                  >
+                                    <option value="">-- Ignorar ou Não Mapeado --</option>
+                                    {csvHeaders.map((header, idx) => (
+                                      <option key={idx} value={idx}>{header} (Exemplo: "{parsedRows[0]?.[idx] || ""}")</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <div>
+                                    {col.type === "boolean" ? (
+                                      <select
+                                        value={mapping?.staticValue || ""}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          setMappings(prev => ({
+                                            ...prev,
+                                            [col.name]: {
+                                              type: "static",
+                                              staticValue: val
+                                            }
+                                          }));
+                                        }}
+                                        className="w-full h-10 px-3 bg-background text-xs font-medium border border-emerald-500/50 text-emerald-600 focus:border-emerald-500 rounded-md outline-none"
+                                      >
+                                        <option value="">-- Selecione --</option>
+                                        <option value="true">Sim (True)</option>
+                                        <option value="false">Não (False)</option>
+                                      </select>
+                                    ) : (
+                                      <Input
+                                        type={col.type === "number" ? "number" : "text"}
+                                        step={col.type === "number" ? "any" : undefined}
+                                        placeholder={`Digite o valor estático para ${col.label}`}
+                                        value={mapping?.staticValue || ""}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          setMappings(prev => ({
+                                            ...prev,
+                                            [col.name]: {
+                                              type: "static",
+                                              staticValue: val
+                                            }
+                                          }));
+                                        }}
+                                        className="w-full h-10 px-3 bg-background text-xs font-medium border border-emerald-500/50 text-emerald-600 focus:border-emerald-500 rounded-md outline-none"
+                                      />
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             </td>
                             <td className="py-4 px-4 text-right">
                               {col.required ? (
@@ -1232,6 +1543,8 @@ const ImportacaoForm: React.FC = () => {
               setCsvHeaders([]);
               setMappings({});
               setImportResults(null);
+              setSelectedProfileName("");
+              setNewProfileName("");
             }}
             className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold uppercase"
           >
