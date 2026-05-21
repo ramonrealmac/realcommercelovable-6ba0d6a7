@@ -349,6 +349,9 @@ function normalizeDate(val: string): string {
     const [day, month, year] = val.split("/");
     return `${year}-${month}-${day}`;
   }
+  if (/^\d{4}\/\d{2}\/\d{2}$/.test(val)) {
+    return val.replace(/\//g, "-");
+  }
   return val;
 }
 
@@ -1313,7 +1316,7 @@ const ImportacaoForm: React.FC = () => {
                                                   } else if (col.type === "boolean") {
                                                     defaultValue = "false";
                                                   } else if (isDate) {
-                                                    defaultValue = "01/01/1900";
+                                                    defaultValue = "1900/01/01";
                                                   } else {
                                                     defaultValue = "";
                                                   }
@@ -1369,7 +1372,7 @@ const ImportacaoForm: React.FC = () => {
                                                 id={`fallback-val-${col.name}`}
                                                 type={col.type === "number" ? "number" : "text"}
                                                 step={col.type === "number" ? "any" : undefined}
-                                                placeholder={`Digite o valor complementar (ex: ${col.name.startsWith("dt_") || col.name.includes("data") || col.name.includes("vencto") ? "01/01/1900" : col.type === "number" ? "0" : "Valor"})`}
+                                                placeholder={`Digite o valor complementar (ex: ${col.name.startsWith("dt_") || col.name.includes("data") || col.name.includes("vencto") ? "1900/01/01" : col.type === "number" ? "0" : "Valor"})`}
                                                 value={mapping.fallbackValue ?? ""}
                                                 onChange={(e) => {
                                                   const val = e.target.value;
