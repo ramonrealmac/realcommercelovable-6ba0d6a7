@@ -47,6 +47,7 @@ const ConsultaEstoqueForm = lazy(() => import("@/components/forms/estoques/Consu
 const AjusteEstoqueForm = lazy(() => import("@/components/forms/ajuste/AjusteEstoqueForm"));
 const InventarioEmBreve = lazy(() => import("@/components/forms/ajuste/InventarioEmBreve"));
 const ImportacaoForm = lazy(() => import("@/components/forms/config/ImportacaoForm"));
+const SistemaVersoesForm = lazy(() => import("@/components/forms/config/SistemaVersoesForm"));
 const NfeInutilizacaoForm = lazy(() => import("@/components/forms/nfe/NfeInutilizacaoForm"));
 const RbReportExecutor = lazy(() => import("@/rbuilder/components/rb_ReportExecutor"));
 const RpbManager = lazy(() => import("@/report-builder").then(m => ({ default: m.RpbManager })));
@@ -166,6 +167,8 @@ const AppContent = () => {
         return <TrocaSenhaForm />;
       case "importacao":
         return <ImportacaoForm />;
+      case "sistema-versoes":
+        return <SistemaVersoesForm />;
       case "rpb-relatorios":
         return <RpbManager />;
       case "consulta-estoque":
