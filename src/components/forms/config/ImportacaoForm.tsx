@@ -30,6 +30,8 @@ export interface MappingItem {
   type: "file" | "static";
   fileIndex?: number;
   staticValue?: string;
+  useFallback?: boolean;
+  fallbackValue?: string;
 }
 
 // ── Target Table Definitions & Metadata ─────────────────────────────────────
@@ -342,6 +344,14 @@ function parseCSV(text: string, selectedDelimiter: string = "auto"): string[][] 
   return results;
 }
 
+function normalizeDate(val: string): string {
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(val)) {
+    const [day, month, year] = val.split("/");
+    return `${year}-${month}-${day}`;
+  }
+  return val;
+}
+
 const ImportacaoForm: React.FC = () => {
   const { XEmpresaId } = useAppContext();
   
@@ -594,7 +604,11 @@ const ImportacaoForm: React.FC = () => {
         const mapping = mappings[c.name];
         if (!mapping) return true;
         if (mapping.type === "file") {
-          return mapping.fileIndex === undefined;
+          if (mapping.fileIndex === undefined) return true;
+          if (mapping.useFallback && (mapping.fallbackValue === undefined || mapping.fallbackValue === "")) {
+            return true;
+          }
+          return false;
         } else {
           return mapping.staticValue === undefined || mapping.staticValue === "";
         }
@@ -660,13 +674,22 @@ const ImportacaoForm: React.FC = () => {
         if (typeof rawValue === "string") {
           rawValue = rawValue.trim();
         }
-        if (rawValue === undefined || rawValue === "") {
-          record[colName] = null;
-          return;
-        }
 
         const colDef = activeColumns.find(c => c.name === colName);
         if (!colDef) return;
+
+        const isEmpty = rawValue === undefined || rawValue === "";
+
+        if (isEmpty) {
+          if (mapping.type === "file" && mapping.useFallback) {
+            rawValue = mapping.fallbackValue ?? "";
+          } else {
+            record[colName] = null;
+            return;
+          }
+        }
+
+        const isDateCol = colName.startsWith("dt_") || colName.includes("data") || colName.includes("vencto");
 
         if (colDef.type === "number") {
           if (typeof rawValue === "number") {
@@ -683,6 +706,8 @@ const ImportacaoForm: React.FC = () => {
             const valLower = String(rawValue).toLowerCase();
             record[colName] = valLower === "sim" || valLower === "s" || valLower === "1" || valLower === "true" || valLower === "yes" || valLower === "y";
           }
+        } else if (isDateCol) {
+          record[colName] = typeof rawValue === "string" ? normalizeDate(rawValue) : rawValue;
         } else {
           record[colName] = rawValue;
         }
@@ -839,7 +864,12 @@ const ImportacaoForm: React.FC = () => {
     }
     const headerIdx = mapping.fileIndex;
     if (headerIdx === undefined) return "";
-    return csvRow[headerIdx] || "";
+    
+    const rawVal = csvRow[headerIdx];
+    if ((rawVal === undefined || rawVal.trim() === "") && mapping.useFallback) {
+      return mapping.fallbackValue || "";
+    }
+    return rawVal || "";
   };
 
   return (
@@ -1230,36 +1260,139 @@ const ImportacaoForm: React.FC = () => {
                                 </div>
 
                                 {mappingType === "file" ? (
-                                  <select 
-                                    value={mapping?.fileIndex !== undefined ? mapping.fileIndex : ""}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      setMappings(prev => {
-                                        const updated = { ...prev };
-                                        if (val === "") {
-                                          delete updated[col.name];
-                                        } else {
-                                          updated[col.name] = {
-                                            type: "file",
-                                            fileIndex: parseInt(val)
-                                          };
-                                        }
-                                        return updated;
-                                      });
-                                    }}
-                                    className={`w-full h-10 px-3 bg-background text-xs font-medium border rounded-md transition-colors ${
-                                      mapping?.fileIndex !== undefined
-                                        ? "border-emerald-500/50 text-emerald-600 focus:border-emerald-500" 
-                                        : col.required 
-                                          ? "border-destructive/40 focus:border-destructive text-destructive" 
-                                          : "border-input focus:border-primary text-foreground"
-                                    } outline-none`}
-                                  >
-                                    <option value="">-- Ignorar ou Não Mapeado --</option>
-                                    {csvHeaders.map((header, idx) => (
-                                      <option key={idx} value={idx}>{header} (Exemplo: "{parsedRows[0]?.[idx] || ""}")</option>
-                                    ))}
-                                  </select>
+                                  <div className="flex flex-col gap-2 w-full">
+                                    <select 
+                                      value={mapping?.fileIndex !== undefined ? mapping.fileIndex : ""}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setMappings(prev => {
+                                          const updated = { ...prev };
+                                          if (val === "") {
+                                            delete updated[col.name];
+                                          } else {
+                                            updated[col.name] = {
+                                              type: "file",
+                                              fileIndex: parseInt(val)
+                                            };
+                                          }
+                                          return updated;
+                                        });
+                                      }}
+                                      className={`w-full h-10 px-3 bg-background text-xs font-medium border rounded-md transition-colors ${
+                                        mapping?.fileIndex !== undefined
+                                          ? "border-emerald-500/50 text-emerald-600 focus:border-emerald-500" 
+                                          : col.required 
+                                            ? "border-destructive/40 focus:border-destructive text-destructive" 
+                                            : "border-input focus:border-primary text-foreground"
+                                      } outline-none`}
+                                    >
+                                      <option value="">-- Ignorar ou Não Mapeado --</option>
+                                      {csvHeaders.map((header, idx) => (
+                                        <option key={idx} value={idx}>{header} (Exemplo: "{parsedRows[0]?.[idx] || ""}")</option>
+                                      ))}
+                                    </select>
+                                    
+                                    {mapping?.fileIndex !== undefined && (
+                                      <div className="flex flex-col gap-1.5 border border-border/60 bg-muted/20 p-2.5 rounded-md mt-1">
+                                        <div className="flex items-center gap-2">
+                                          <input
+                                            type="checkbox"
+                                            id={`fallback-checkbox-${col.name}`}
+                                            checked={!!mapping.useFallback}
+                                            onChange={(e) => {
+                                              const checked = e.target.checked;
+                                              setMappings(prev => {
+                                                const item = prev[col.name];
+                                                if (!item || item.type !== "file") return prev;
+                                                
+                                                let defaultValue = "";
+                                                if (checked) {
+                                                  const isDate = col.name.startsWith("dt_") || col.name.includes("data") || col.name.includes("vencto");
+                                                  if (col.type === "number") {
+                                                    defaultValue = "0";
+                                                  } else if (col.type === "boolean") {
+                                                    defaultValue = "false";
+                                                  } else if (isDate) {
+                                                    defaultValue = "01/01/1900";
+                                                  } else {
+                                                    defaultValue = "";
+                                                  }
+                                                }
+
+                                                return {
+                                                  ...prev,
+                                                  [col.name]: {
+                                                    ...item,
+                                                    useFallback: checked,
+                                                    fallbackValue: defaultValue
+                                                  }
+                                                };
+                                              });
+                                            }}
+                                            className="rounded border-input text-primary focus:ring-primary w-4 h-4 accent-emerald-600 cursor-pointer"
+                                          />
+                                          <label htmlFor={`fallback-checkbox-${col.name}`} className="text-xs font-semibold text-muted-foreground cursor-pointer select-none">
+                                            Usar valor complementar se nulo/vazio
+                                          </label>
+                                        </div>
+                                        
+                                        {mapping.useFallback && (
+                                          <div className="mt-1.5 flex flex-col gap-1">
+                                            <Label htmlFor={`fallback-val-${col.name}`} className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                              Valor Complementar
+                                            </Label>
+                                            {col.type === "boolean" ? (
+                                              <select
+                                                id={`fallback-val-${col.name}`}
+                                                value={mapping.fallbackValue || "false"}
+                                                onChange={(e) => {
+                                                  const val = e.target.value;
+                                                  setMappings(prev => {
+                                                    const item = prev[col.name];
+                                                    if (!item || item.type !== "file") return prev;
+                                                    return {
+                                                      ...prev,
+                                                      [col.name]: {
+                                                        ...item,
+                                                        fallbackValue: val
+                                                      }
+                                                    };
+                                                  });
+                                                }}
+                                                className="h-9 px-2 bg-background text-xs font-medium border border-border rounded-md outline-none focus:border-primary w-full"
+                                              >
+                                                <option value="true">Sim (True)</option>
+                                                <option value="false">Não (False)</option>
+                                              </select>
+                                            ) : (
+                                              <Input
+                                                id={`fallback-val-${col.name}`}
+                                                type={col.type === "number" ? "number" : "text"}
+                                                step={col.type === "number" ? "any" : undefined}
+                                                placeholder={`Digite o valor complementar (ex: ${col.name.startsWith("dt_") || col.name.includes("data") || col.name.includes("vencto") ? "01/01/1900" : col.type === "number" ? "0" : "Valor"})`}
+                                                value={mapping.fallbackValue ?? ""}
+                                                onChange={(e) => {
+                                                  const val = e.target.value;
+                                                  setMappings(prev => {
+                                                    const item = prev[col.name];
+                                                    if (!item || item.type !== "file") return prev;
+                                                    return {
+                                                      ...prev,
+                                                      [col.name]: {
+                                                        ...item,
+                                                        fallbackValue: val
+                                                      }
+                                                    };
+                                                  });
+                                                }}
+                                                className="h-9 px-3 text-xs font-medium focus:border-primary bg-background"
+                                              />
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
                                 ) : (
                                   <div>
                                     {col.type === "boolean" ? (
