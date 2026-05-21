@@ -692,7 +692,9 @@ const ImportacaoForm: React.FC = () => {
           }
         }
 
-        const isDateCol = colName.startsWith("dt_") || colName.includes("data") || colName.includes("vencto");
+        const nameLower = colName.toLowerCase();
+        const isDateCol = nameLower.startsWith("dt_") || nameLower.includes("data") || nameLower.includes("vencto");
+        const isBoolCol = colDef.type === "boolean" || nameLower.startsWith("fl_") || nameLower.startsWith("lg_") || nameLower.startsWith("st_");
 
         if (colDef.type === "number") {
           if (typeof rawValue === "number") {
@@ -702,11 +704,11 @@ const ImportacaoForm: React.FC = () => {
             const num = parseFloat(cleanNum);
             record[colName] = isNaN(num) ? null : num;
           }
-        } else if (colDef.type === "boolean") {
+        } else if (isBoolCol) {
           if (typeof rawValue === "boolean") {
             record[colName] = rawValue;
           } else {
-            const valLower = String(rawValue).toLowerCase();
+            const valLower = String(rawValue).toLowerCase().trim();
             record[colName] = valLower === "sim" || valLower === "s" || valLower === "1" || valLower === "true" || valLower === "yes" || valLower === "y";
           }
         } else if (isDateCol) {
@@ -1211,6 +1213,9 @@ const ImportacaoForm: React.FC = () => {
                         const mapping = mappings[col.name];
                         const isMapped = mapping !== undefined;
                         const mappingType = mapping?.type || "file";
+                        const nameLower = col.name.toLowerCase();
+                        const isDate = nameLower.startsWith("dt_") || nameLower.includes("data") || nameLower.includes("vencto");
+                        const isBoolean = col.type === "boolean" || nameLower.startsWith("fl_") || nameLower.startsWith("lg_") || nameLower.startsWith("st_");
 
                         return (
                           <tr key={col.name} className="hover:bg-muted/30 transition-colors">
@@ -1310,10 +1315,9 @@ const ImportacaoForm: React.FC = () => {
                                                 
                                                 let defaultValue = "";
                                                 if (checked) {
-                                                  const isDate = col.name.startsWith("dt_") || col.name.includes("data") || col.name.includes("vencto");
                                                   if (col.type === "number") {
                                                     defaultValue = "0";
-                                                  } else if (col.type === "boolean") {
+                                                  } else if (isBoolean) {
                                                     defaultValue = "false";
                                                   } else if (isDate) {
                                                     defaultValue = "1900/01/01";
@@ -1344,7 +1348,7 @@ const ImportacaoForm: React.FC = () => {
                                             <Label htmlFor={`fallback-val-${col.name}`} className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                                               Valor Complementar
                                             </Label>
-                                            {col.type === "boolean" ? (
+                                            {isBoolean ? (
                                               <select
                                                 id={`fallback-val-${col.name}`}
                                                 value={mapping.fallbackValue || "false"}
@@ -1372,7 +1376,7 @@ const ImportacaoForm: React.FC = () => {
                                                 id={`fallback-val-${col.name}`}
                                                 type={col.type === "number" ? "number" : "text"}
                                                 step={col.type === "number" ? "any" : undefined}
-                                                placeholder={`Digite o valor complementar (ex: ${col.name.startsWith("dt_") || col.name.includes("data") || col.name.includes("vencto") ? "1900/01/01" : col.type === "number" ? "0" : "Valor"})`}
+                                                placeholder={`Digite o valor complementar (ex: ${isDate ? "1900/01/01" : col.type === "number" ? "0" : "Valor"})`}
                                                 value={mapping.fallbackValue ?? ""}
                                                 onChange={(e) => {
                                                   const val = e.target.value;
@@ -1398,7 +1402,7 @@ const ImportacaoForm: React.FC = () => {
                                   </div>
                                 ) : (
                                   <div>
-                                    {col.type === "boolean" ? (
+                                    {isBoolean ? (
                                       <select
                                         value={mapping?.staticValue || ""}
                                         onChange={(e) => {
