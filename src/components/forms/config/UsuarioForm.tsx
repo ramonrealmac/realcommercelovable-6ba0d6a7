@@ -150,12 +150,20 @@ const UsuarioForm: React.FC = () => {
     if (!XEmail.trim()) { toast.error("E-mail é obrigatório."); return; }
     if (ctrl.XFormMode === "insert") {
       if (!XSenha || XSenha.length < 6) { toast.error("Informe uma senha com no mínimo 6 caracteres."); return; }
-      const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({ email: XEmail.trim(), password: XSenha });
-      if (signUpErr) { toast.error("Erro ao criar usuário: " + signUpErr.message); return; }
-      const XNewUserId = signUpData.user?.id;
-      if (!XNewUserId) return;
-      await (supabase as any).from("profiles").upsert({ id: XNewUserId, email: XEmail.trim(), nm_usuario: XNmUsuario.trim(), ds_login: XDsLogin.trim(), ds_foto: XDsFoto.trim() }, { onConflict: "id" });
-      await supabase.from("empresa_usuario").insert({ empresa_id: XEmpresaId, user_id: XNewUserId });
+      const { data: fnData, error: fnErr } = await supabase.functions.invoke("admin-create-user", {
+        body: {
+          email: XEmail.trim(),
+          password: XSenha,
+          nm_usuario: XNmUsuario.trim(),
+          ds_login: XDsLogin.trim(),
+          ds_foto: XDsFoto.trim(),
+          empresa_id: XEmpresaId,
+        },
+      });
+      if (fnErr || (fnData as any)?.error) {
+        toast.error("Erro ao criar usuário: " + (fnErr?.message || (fnData as any)?.error || "falha desconhecida"));
+        return;
+      }
       toast.success("Usuário criado com sucesso.");
     } else if (ctrl.XFormMode === "edit" && ctrl.XCurrentRecord) {
       const { error } = await (supabase as any).from("profiles").update({ nm_usuario: XNmUsuario.trim(), ds_login: XDsLogin.trim(), ds_foto: XDsFoto.trim() }).eq("id", ctrl.XCurrentRecord.user_id);
