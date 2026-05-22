@@ -665,6 +665,7 @@ export type Database = {
       bandeira: {
         Row: {
           bandeira_id: number
+          cd_bandeira: number | null
           descricao: string | null
           dt_alteracao: string | null
           dt_cadastro: string | null
@@ -673,6 +674,7 @@ export type Database = {
         }
         Insert: {
           bandeira_id: number
+          cd_bandeira?: number | null
           descricao?: string | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
@@ -681,6 +683,7 @@ export type Database = {
         }
         Update: {
           bandeira_id?: number
+          cd_bandeira?: number | null
           descricao?: string | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
@@ -836,6 +839,7 @@ export type Database = {
       cadastro: {
         Row: {
           cadastro_id: number
+          cd_cadastro: number
           cnpj: string
           condicao_id: number | null
           conj_cpf: string
@@ -908,6 +912,7 @@ export type Database = {
         }
         Insert: {
           cadastro_id?: number
+          cd_cadastro: number
           cnpj?: string
           condicao_id?: number | null
           conj_cpf?: string
@@ -980,6 +985,7 @@ export type Database = {
         }
         Update: {
           cadastro_id?: number
+          cd_cadastro?: number
           cnpj?: string
           condicao_id?: number | null
           conj_cpf?: string
@@ -1070,6 +1076,7 @@ export type Database = {
       cadastro_grupo: {
         Row: {
           cadastro_grupo_id: number
+          cd_cadastro_grupo: number
           dt_alteracao: string | null
           dt_cadastro: string | null
           empresa_id: number
@@ -1078,6 +1085,7 @@ export type Database = {
         }
         Insert: {
           cadastro_grupo_id?: number
+          cd_cadastro_grupo: number
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
@@ -1086,6 +1094,7 @@ export type Database = {
         }
         Update: {
           cadastro_grupo_id?: number
+          cd_cadastro_grupo?: number
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
@@ -1105,6 +1114,7 @@ export type Database = {
       cadastro_preco: {
         Row: {
           cadastro_preco_id: number
+          cd_cadastro_preco: number | null
           dt_alteracao: string | null
           dt_cadastro: string | null
           empresa_id: number
@@ -1114,6 +1124,7 @@ export type Database = {
         }
         Insert: {
           cadastro_preco_id: number
+          cd_cadastro_preco?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id: number
@@ -1123,6 +1134,7 @@ export type Database = {
         }
         Update: {
           cadastro_preco_id?: number
+          cd_cadastro_preco?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
@@ -1137,6 +1149,7 @@ export type Database = {
           ativo: boolean | null
           cadastro_id: number
           capacidade_kg: number | null
+          cd_cadastro_veiculo: number | null
           descricao: string | null
           dt_alteracao: string | null
           dt_cadastro: string | null
@@ -1157,6 +1170,7 @@ export type Database = {
           ativo?: boolean | null
           cadastro_id: number
           capacidade_kg?: number | null
+          cd_cadastro_veiculo?: number | null
           descricao?: string | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
@@ -1177,6 +1191,7 @@ export type Database = {
           ativo?: boolean | null
           cadastro_id?: number
           capacidade_kg?: number | null
+          cd_cadastro_veiculo?: number | null
           descricao?: string | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
@@ -1194,13 +1209,6 @@ export type Database = {
           veiculo_id?: never
         }
         Relationships: [
-          {
-            foreignKeyName: "fk_cadastro"
-            columns: ["cadastro_id"]
-            isOneToOne: false
-            referencedRelation: "cadastro"
-            referencedColumns: ["cadastro_id"]
-          },
           {
             foreignKeyName: "fk_empresa"
             columns: ["empresa_id"]
@@ -1385,16 +1393,19 @@ export type Database = {
       }
       centro_custo: {
         Row: {
+          cd_centro_custo: number | null
           centro_custo_id: number
           empresa_id: number | null
           nome: string | null
         }
         Insert: {
+          cd_centro_custo?: number | null
           centro_custo_id?: never
           empresa_id?: number | null
           nome?: string | null
         }
         Update: {
+          cd_centro_custo?: number | null
           centro_custo_id?: never
           empresa_id?: number | null
           nome?: string | null
@@ -1691,6 +1702,36 @@ export type Database = {
         }
         Relationships: []
       }
+      cliente: {
+        Row: {
+          cnpj: string
+          dep_nome1: string | null
+          dt_cadastro: string | null
+          excluido: boolean | null
+          fone_geral: string | null
+          id: number
+          razao_social: string
+        }
+        Insert: {
+          cnpj: string
+          dep_nome1?: string | null
+          dt_cadastro?: string | null
+          excluido?: boolean | null
+          fone_geral?: string | null
+          id?: number
+          razao_social: string
+        }
+        Update: {
+          cnpj?: string
+          dep_nome1?: string | null
+          dt_cadastro?: string | null
+          excluido?: boolean | null
+          fone_geral?: string | null
+          id?: number
+          razao_social?: string
+        }
+        Relationships: []
+      }
       comissao: {
         Row: {
           cadastro_id: number | null
@@ -1737,6 +1778,8 @@ export type Database = {
       }
       condicao_pagamento: {
         Row: {
+          cd_condicao: number | null
+          cd_condicao_pagamento: number | null
           condicao_id: number
           descricao: string
           dt_alteracao: string | null
@@ -1762,6 +1805,8 @@ export type Database = {
           tipo_prazo: string | null
         }
         Insert: {
+          cd_condicao?: number | null
+          cd_condicao_pagamento?: number | null
           condicao_id?: number
           descricao: string
           dt_alteracao?: string | null
@@ -1787,6 +1832,8 @@ export type Database = {
           tipo_prazo?: string | null
         }
         Update: {
+          cd_condicao?: number | null
+          cd_condicao_pagamento?: number | null
           condicao_id?: number
           descricao?: string
           dt_alteracao?: string | null
@@ -1845,6 +1892,7 @@ export type Database = {
           carteira: string | null
           carteira_modalidade: string | null
           carteira_tipo: string | null
+          cd_conta: number | null
           cod_cedente: string | null
           conta_cobranca: string | null
           conta_corrente: string | null
@@ -1889,6 +1937,7 @@ export type Database = {
           carteira?: string | null
           carteira_modalidade?: string | null
           carteira_tipo?: string | null
+          cd_conta?: number | null
           cod_cedente?: string | null
           conta_cobranca?: string | null
           conta_corrente?: string | null
@@ -1933,6 +1982,7 @@ export type Database = {
           carteira?: string | null
           carteira_modalidade?: string | null
           carteira_tipo?: string | null
+          cd_conta?: number | null
           cod_cedente?: string | null
           conta_cobranca?: string | null
           conta_corrente?: string | null
@@ -1958,6 +2008,7 @@ export type Database = {
       }
       convenio: {
         Row: {
+          cd_convenio: number | null
           convenio_id: number
           dt_alteracao: string | null
           dt_cadastro: string | null
@@ -1967,6 +2018,7 @@ export type Database = {
           plano_id: number | null
         }
         Insert: {
+          cd_convenio?: number | null
           convenio_id: number
           dt_alteracao?: string | null
           dt_cadastro?: string | null
@@ -1976,6 +2028,7 @@ export type Database = {
           plano_id?: number | null
         }
         Update: {
+          cd_convenio?: number | null
           convenio_id?: number
           dt_alteracao?: string | null
           dt_cadastro?: string | null
@@ -1988,6 +2041,7 @@ export type Database = {
       }
       corretora: {
         Row: {
+          cd_corretora: number | null
           corretora_id: number
           dt_alteracao: string | null
           dt_cadastro: string | null
@@ -1996,6 +2050,7 @@ export type Database = {
           nome: string
         }
         Insert: {
+          cd_corretora?: number | null
           corretora_id?: number
           dt_alteracao?: string | null
           dt_cadastro?: string | null
@@ -2004,6 +2059,7 @@ export type Database = {
           nome: string
         }
         Update: {
+          cd_corretora?: number | null
           corretora_id?: number
           dt_alteracao?: string | null
           dt_cadastro?: string | null
@@ -2023,6 +2079,7 @@ export type Database = {
       }
       deposito: {
         Row: {
+          cd_deposito: number | null
           deposito_id: number
           dt_alteracao: string | null
           dt_cadastro: string | null
@@ -2033,6 +2090,7 @@ export type Database = {
           st_privado: boolean
         }
         Insert: {
+          cd_deposito?: number | null
           deposito_id?: number
           dt_alteracao?: string | null
           dt_cadastro?: string | null
@@ -2043,6 +2101,7 @@ export type Database = {
           st_privado?: boolean
         }
         Update: {
+          cd_deposito?: number | null
           deposito_id?: number
           dt_alteracao?: string | null
           dt_cadastro?: string | null
@@ -2059,6 +2118,230 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "empresa"
             referencedColumns: ["empresa_id"]
+          },
+        ]
+      }
+      emovimento: {
+        Row: {
+          cadastro_id: number | null
+          cliente_id: number | null
+          deposito_id: number | null
+          dt_cancelamento: string | null
+          dt_emissao: string | null
+          dt_finalizacao: string | null
+          email_responsavel: string | null
+          emovimento_id: number
+          empresa_id: number
+          excluido: boolean | null
+          id_transacao_abacatepay: string | null
+          nm_crianca: string | null
+          nm_responsavel: string | null
+          nr_movimento: number | null
+          nr_telefone_responsavel: string | null
+          observacao: string | null
+          qr_code_pagamento: string | null
+          st_pedido: string | null
+          tp_movimento: string | null
+          tp_origem: string | null
+          url_pagamento: string | null
+          vl_desconto: number | null
+          vl_movimento: number | null
+          vl_produto: number | null
+        }
+        Insert: {
+          cadastro_id?: number | null
+          cliente_id?: number | null
+          deposito_id?: number | null
+          dt_cancelamento?: string | null
+          dt_emissao?: string | null
+          dt_finalizacao?: string | null
+          email_responsavel?: string | null
+          emovimento_id?: number
+          empresa_id?: number
+          excluido?: boolean | null
+          id_transacao_abacatepay?: string | null
+          nm_crianca?: string | null
+          nm_responsavel?: string | null
+          nr_movimento?: number | null
+          nr_telefone_responsavel?: string | null
+          observacao?: string | null
+          qr_code_pagamento?: string | null
+          st_pedido?: string | null
+          tp_movimento?: string | null
+          tp_origem?: string | null
+          url_pagamento?: string | null
+          vl_desconto?: number | null
+          vl_movimento?: number | null
+          vl_produto?: number | null
+        }
+        Update: {
+          cadastro_id?: number | null
+          cliente_id?: number | null
+          deposito_id?: number | null
+          dt_cancelamento?: string | null
+          dt_emissao?: string | null
+          dt_finalizacao?: string | null
+          email_responsavel?: string | null
+          emovimento_id?: number
+          empresa_id?: number
+          excluido?: boolean | null
+          id_transacao_abacatepay?: string | null
+          nm_crianca?: string | null
+          nm_responsavel?: string | null
+          nr_movimento?: number | null
+          nr_telefone_responsavel?: string | null
+          observacao?: string | null
+          qr_code_pagamento?: string | null
+          st_pedido?: string | null
+          tp_movimento?: string | null
+          tp_origem?: string | null
+          url_pagamento?: string | null
+          vl_desconto?: number | null
+          vl_movimento?: number | null
+          vl_produto?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "emovimento_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "cliente"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      emovimento_item: {
+        Row: {
+          cd_produto: string | null
+          deposito_id: number | null
+          emovimento_id: number
+          emovimento_item_id: number
+          empresa_id: number
+          entrega: string | null
+          excluido: boolean | null
+          nm_produto: string | null
+          produto_id: number | null
+          qt_movimento: number | null
+          qt_reservada: number | null
+          tp_movimento: string | null
+          unidade_id: string | null
+          vl_desconto: number | null
+          vl_movimento: number | null
+          vl_produto: number | null
+          vl_und_produto: number | null
+        }
+        Insert: {
+          cd_produto?: string | null
+          deposito_id?: number | null
+          emovimento_id: number
+          emovimento_item_id?: number
+          empresa_id?: number
+          entrega?: string | null
+          excluido?: boolean | null
+          nm_produto?: string | null
+          produto_id?: number | null
+          qt_movimento?: number | null
+          qt_reservada?: number | null
+          tp_movimento?: string | null
+          unidade_id?: string | null
+          vl_desconto?: number | null
+          vl_movimento?: number | null
+          vl_produto?: number | null
+          vl_und_produto?: number | null
+        }
+        Update: {
+          cd_produto?: string | null
+          deposito_id?: number | null
+          emovimento_id?: number
+          emovimento_item_id?: number
+          empresa_id?: number
+          entrega?: string | null
+          excluido?: boolean | null
+          nm_produto?: string | null
+          produto_id?: number | null
+          qt_movimento?: number | null
+          qt_reservada?: number | null
+          tp_movimento?: string | null
+          unidade_id?: string | null
+          vl_desconto?: number | null
+          vl_movimento?: number | null
+          vl_produto?: number | null
+          vl_und_produto?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "emovimento_item_emovimento_id_fkey"
+            columns: ["emovimento_id"]
+            isOneToOne: false
+            referencedRelation: "emovimento"
+            referencedColumns: ["emovimento_id"]
+          },
+          {
+            foreignKeyName: "emovimento_item_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "produto"
+            referencedColumns: ["produto_id"]
+          },
+          {
+            foreignKeyName: "emovimento_item_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "vw_produtos_disponiveis"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      emovimento_pagamento: {
+        Row: {
+          condicao_id: number | null
+          dt_pagamento: string | null
+          emovimento_id: number
+          emovimento_pagamento_id: number
+          empresa_id: number
+          excluido: boolean | null
+          n_parcelas: number | null
+          nr_autorizacao: string | null
+          obs_pagamento: string | null
+          tp_pagamento: string
+          vl_pagamento: number | null
+          vl_total: number | null
+        }
+        Insert: {
+          condicao_id?: number | null
+          dt_pagamento?: string | null
+          emovimento_id: number
+          emovimento_pagamento_id?: number
+          empresa_id?: number
+          excluido?: boolean | null
+          n_parcelas?: number | null
+          nr_autorizacao?: string | null
+          obs_pagamento?: string | null
+          tp_pagamento: string
+          vl_pagamento?: number | null
+          vl_total?: number | null
+        }
+        Update: {
+          condicao_id?: number | null
+          dt_pagamento?: string | null
+          emovimento_id?: number
+          emovimento_pagamento_id?: number
+          empresa_id?: number
+          excluido?: boolean | null
+          n_parcelas?: number | null
+          nr_autorizacao?: string | null
+          obs_pagamento?: string | null
+          tp_pagamento?: string
+          vl_pagamento?: number | null
+          vl_total?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "emovimento_pagamento_emovimento_id_fkey"
+            columns: ["emovimento_id"]
+            isOneToOne: false
+            referencedRelation: "emovimento"
+            referencedColumns: ["emovimento_id"]
           },
         ]
       }
@@ -2088,6 +2371,7 @@ export type Database = {
           cor_texto_secundario: string | null
           css_customizado: string | null
           deposito_estoque_caixa: number
+          deposito_venda_externa_id: number | null
           dfe_maxnsu_busca: number | null
           dt_alteracao: string | null
           dt_cadastro: string | null
@@ -2115,12 +2399,15 @@ export type Database = {
           lg_valida_estoque_pdv: boolean | null
           logomarca: string | null
           msg_pos_pagamento: string | null
+          nm_aba_lojavirtual: string | null
           nm_escola: string | null
           nome_fantasia: string
           pc_fcp_empresa: number | null
           pc_icms_interestadual: number | null
           pdv_pesquisa_campos: string | null
           pdv_pesquisa_campos_cliente: string | null
+          pesquisa_prod_limite: number
+          pesquisa_prod_min_letras: number
           qt_saida_qt_decimais: number | null
           qt_venda_qt_decimais: number | null
           razao_social: string
@@ -2160,6 +2447,7 @@ export type Database = {
           cor_texto_secundario?: string | null
           css_customizado?: string | null
           deposito_estoque_caixa?: number
+          deposito_venda_externa_id?: number | null
           dfe_maxnsu_busca?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
@@ -2187,12 +2475,15 @@ export type Database = {
           lg_valida_estoque_pdv?: boolean | null
           logomarca?: string | null
           msg_pos_pagamento?: string | null
+          nm_aba_lojavirtual?: string | null
           nm_escola?: string | null
           nome_fantasia?: string
           pc_fcp_empresa?: number | null
           pc_icms_interestadual?: number | null
           pdv_pesquisa_campos?: string | null
           pdv_pesquisa_campos_cliente?: string | null
+          pesquisa_prod_limite?: number
+          pesquisa_prod_min_letras?: number
           qt_saida_qt_decimais?: number | null
           qt_venda_qt_decimais?: number | null
           razao_social?: string
@@ -2232,6 +2523,7 @@ export type Database = {
           cor_texto_secundario?: string | null
           css_customizado?: string | null
           deposito_estoque_caixa?: number
+          deposito_venda_externa_id?: number | null
           dfe_maxnsu_busca?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
@@ -2259,12 +2551,15 @@ export type Database = {
           lg_valida_estoque_pdv?: boolean | null
           logomarca?: string | null
           msg_pos_pagamento?: string | null
+          nm_aba_lojavirtual?: string | null
           nm_escola?: string | null
           nome_fantasia?: string
           pc_fcp_empresa?: number | null
           pc_icms_interestadual?: number | null
           pdv_pesquisa_campos?: string | null
           pdv_pesquisa_campos_cliente?: string | null
+          pesquisa_prod_limite?: number
+          pesquisa_prod_min_letras?: number
           qt_saida_qt_decimais?: number | null
           qt_venda_qt_decimais?: number | null
           razao_social?: string
@@ -2402,6 +2697,7 @@ export type Database = {
       }
       estoque: {
         Row: {
+          cd_estoque: number | null
           deposito_id: number
           dt_alteracao: string | null
           dt_ult_entrada: string | null
@@ -2419,6 +2715,7 @@ export type Database = {
           produto_id: number
         }
         Insert: {
+          cd_estoque?: number | null
           deposito_id?: number
           dt_alteracao?: string | null
           dt_ult_entrada?: string | null
@@ -2436,6 +2733,7 @@ export type Database = {
           produto_id: number
         }
         Update: {
+          cd_estoque?: number | null
           deposito_id?: number
           dt_alteracao?: string | null
           dt_ult_entrada?: string | null
@@ -2527,10 +2825,18 @@ export type Database = {
             referencedRelation: "produto"
             referencedColumns: ["produto_id"]
           },
+          {
+            foreignKeyName: "estoque_log_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "vw_produtos_disponiveis"
+            referencedColumns: ["id"]
+          },
         ]
       }
       fator_conversao: {
         Row: {
+          cd_fator_conversao: number | null
           dt_alteracao: string | null
           dt_cadastro: string | null
           empresa_id: number
@@ -2542,6 +2848,7 @@ export type Database = {
           unidade_id: string
         }
         Insert: {
+          cd_fator_conversao?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id: number
@@ -2553,6 +2860,7 @@ export type Database = {
           unidade_id: string
         }
         Update: {
+          cd_fator_conversao?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
@@ -2574,6 +2882,7 @@ export type Database = {
           aviario: string | null
           cadastro_id: number | null
           cadastro_id_dest: number | null
+          cd_financeiro: number | null
           cobranca_asaas: string | null
           cod_barras: string | null
           documento: string
@@ -2618,6 +2927,7 @@ export type Database = {
           aviario?: string | null
           cadastro_id?: number | null
           cadastro_id_dest?: number | null
+          cd_financeiro?: number | null
           cobranca_asaas?: string | null
           cod_barras?: string | null
           documento?: string
@@ -2662,6 +2972,7 @@ export type Database = {
           aviario?: string | null
           cadastro_id?: number | null
           cadastro_id_dest?: number | null
+          cd_financeiro?: number | null
           cobranca_asaas?: string | null
           cod_barras?: string | null
           documento?: string
@@ -2802,6 +3113,11 @@ export type Database = {
           serie_mdf: string | null
           serie_nfce: string | null
           serie_nfe: string | null
+          ssl_crypt_lib: string | null
+          ssl_http_lib: string | null
+          ssl_lib: string | null
+          ssl_type: string | null
+          ssl_xml_sign_lib: string | null
           ti_emitente_mdf: number | null
           tipo_certificado: string | null
           ultima_nfce: number | null
@@ -2811,6 +3127,7 @@ export type Database = {
           url_chaveh: string | null
           url_consulta: string | null
           url_consultah: string | null
+          verificar_validade_cert: boolean | null
           versao_mdf: string | null
           versao_nf: string | null
           webser_mdf: string | null
@@ -2852,6 +3169,11 @@ export type Database = {
           serie_mdf?: string | null
           serie_nfce?: string | null
           serie_nfe?: string | null
+          ssl_crypt_lib?: string | null
+          ssl_http_lib?: string | null
+          ssl_lib?: string | null
+          ssl_type?: string | null
+          ssl_xml_sign_lib?: string | null
           ti_emitente_mdf?: number | null
           tipo_certificado?: string | null
           ultima_nfce?: number | null
@@ -2861,6 +3183,7 @@ export type Database = {
           url_chaveh?: string | null
           url_consulta?: string | null
           url_consultah?: string | null
+          verificar_validade_cert?: boolean | null
           versao_mdf?: string | null
           versao_nf?: string | null
           webser_mdf?: string | null
@@ -2902,6 +3225,11 @@ export type Database = {
           serie_mdf?: string | null
           serie_nfce?: string | null
           serie_nfe?: string | null
+          ssl_crypt_lib?: string | null
+          ssl_http_lib?: string | null
+          ssl_lib?: string | null
+          ssl_type?: string | null
+          ssl_xml_sign_lib?: string | null
           ti_emitente_mdf?: number | null
           tipo_certificado?: string | null
           ultima_nfce?: number | null
@@ -2911,6 +3239,7 @@ export type Database = {
           url_chaveh?: string | null
           url_consulta?: string | null
           url_consultah?: string | null
+          verificar_validade_cert?: boolean | null
           versao_mdf?: string | null
           versao_nf?: string | null
           webser_mdf?: string | null
@@ -3720,13 +4049,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "nfe_cabecalho_cadastro_id_fkey"
-            columns: ["cadastro_id"]
-            isOneToOne: false
-            referencedRelation: "cadastro"
-            referencedColumns: ["cadastro_id"]
-          },
-          {
             foreignKeyName: "nfe_cabecalho_deposito_id_fkey"
             columns: ["deposito_id"]
             isOneToOne: false
@@ -4097,6 +4419,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "produto"
             referencedColumns: ["produto_id"]
+          },
+          {
+            foreignKeyName: "nfe_item_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "vw_produtos_disponiveis"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -4470,6 +4799,7 @@ export type Database = {
           caixa_cnc_venda: string | null
           caixa_edit_venda: string
           caixa_inf_vend: string | null
+          cd_funcionario: number | null
           corretora_id: number | null
           empresa_id: number | null
           entregador: string | null
@@ -4495,6 +4825,7 @@ export type Database = {
           caixa_cnc_venda?: string | null
           caixa_edit_venda?: string
           caixa_inf_vend?: string | null
+          cd_funcionario?: number | null
           corretora_id?: number | null
           empresa_id?: number | null
           entregador?: string | null
@@ -4520,6 +4851,7 @@ export type Database = {
           caixa_cnc_venda?: string | null
           caixa_edit_venda?: string
           caixa_inf_vend?: string | null
+          cd_funcionario?: number | null
           corretora_id?: number | null
           empresa_id?: number | null
           entregador?: string | null
@@ -4667,6 +4999,7 @@ export type Database = {
       }
       linha_produto: {
         Row: {
+          cd_linha: number | null
           dt_alteracao: string | null
           dt_cadastro: string | null
           empresa_id: number
@@ -4675,6 +5008,7 @@ export type Database = {
           nome: string
         }
         Insert: {
+          cd_linha?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
@@ -4683,6 +5017,7 @@ export type Database = {
           nome: string
         }
         Update: {
+          cd_linha?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
@@ -5045,13 +5380,6 @@ export type Database = {
             referencedColumns: ["funcionario_id"]
           },
           {
-            foreignKeyName: "movimento_cadastro_id_fkey"
-            columns: ["cadastro_id"]
-            isOneToOne: false
-            referencedRelation: "cadastro"
-            referencedColumns: ["cadastro_id"]
-          },
-          {
             foreignKeyName: "movimento_empresa_id_fkey"
             columns: ["empresa_id"]
             isOneToOne: false
@@ -5096,9 +5424,9 @@ export type Database = {
           qt_entregue: number | null
           qt_movimento: number | null
           qt_reservada: number | null
+          tp_ajs_estoque: string | null
           tp_desconto: string | null
           tp_movimento: string | null
-          tp_ajs_estoque: string | null
           unidade_id: string | null
           vl_bc_cofins: number | null
           vl_bc_fcp: number | null
@@ -5162,9 +5490,9 @@ export type Database = {
           qt_entregue?: number | null
           qt_movimento?: number | null
           qt_reservada?: number | null
+          tp_ajs_estoque?: string | null
           tp_desconto?: string | null
           tp_movimento?: string | null
-          tp_ajs_estoque?: string | null
           unidade_id?: string | null
           vl_bc_cofins?: number | null
           vl_bc_fcp?: number | null
@@ -5228,9 +5556,9 @@ export type Database = {
           qt_entregue?: number | null
           qt_movimento?: number | null
           qt_reservada?: number | null
+          tp_ajs_estoque?: string | null
           tp_desconto?: string | null
           tp_movimento?: string | null
-          tp_ajs_estoque?: string | null
           unidade_id?: string | null
           vl_bc_cofins?: number | null
           vl_bc_fcp?: number | null
@@ -5798,6 +6126,7 @@ export type Database = {
       }
       plano: {
         Row: {
+          cd_plano: number | null
           conta: string | null
           empresa_id: number
           natureza: string | null
@@ -5807,6 +6136,7 @@ export type Database = {
           tp_conta: string | null
         }
         Insert: {
+          cd_plano?: number | null
           conta?: string | null
           empresa_id: number
           natureza?: string | null
@@ -5816,6 +6146,7 @@ export type Database = {
           tp_conta?: string | null
         }
         Update: {
+          cd_plano?: number | null
           conta?: string | null
           empresa_id?: number
           natureza?: string | null
@@ -5828,6 +6159,7 @@ export type Database = {
       }
       plano_conta: {
         Row: {
+          cd_plano_conta: number | null
           conta: string
           dt_alteracao: string | null
           dt_cadastro: string | null
@@ -5840,6 +6172,7 @@ export type Database = {
           tp_natureza: string | null
         }
         Insert: {
+          cd_plano_conta?: number | null
           conta: string
           dt_alteracao?: string | null
           dt_cadastro?: string | null
@@ -5852,6 +6185,7 @@ export type Database = {
           tp_natureza?: string | null
         }
         Update: {
+          cd_plano_conta?: number | null
           conta?: string
           dt_alteracao?: string | null
           dt_cadastro?: string | null
@@ -5877,6 +6211,7 @@ export type Database = {
         Row: {
           banco_id: number | null
           caminho_remessa: string
+          cd_portador: number | null
           conta_id: string | null
           dt_alteracao: string | null
           dt_cadastro: string | null
@@ -5888,6 +6223,7 @@ export type Database = {
         Insert: {
           banco_id?: number | null
           caminho_remessa?: string
+          cd_portador?: number | null
           conta_id?: string | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
@@ -5899,6 +6235,7 @@ export type Database = {
         Update: {
           banco_id?: number | null
           caminho_remessa?: string
+          cd_portador?: number | null
           conta_id?: string | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
@@ -5922,6 +6259,7 @@ export type Database = {
           altura: number
           area: number
           ativo: string | null
+          cd_produto: number | null
           cest: string | null
           comprimento: number
           controla_estoque: string | null
@@ -5930,8 +6268,10 @@ export type Database = {
           ds_ecommerce: string
           dt_alteracao: string | null
           dt_cadastro: string | null
+          ecommerce: boolean | null
           empresa_id: number
           excluido: boolean | null
+          forca_venda: boolean | null
           grupo_ibscbs_id: number | null
           grupo_icms_id: number | null
           grupo_ipi_id: number | null
@@ -5939,6 +6279,7 @@ export type Database = {
           gtin: string | null
           largura: number
           linha_id: number | null
+          loja_virtual: boolean | null
           mva: number
           ncm: string
           nm_ecommerce: string
@@ -5999,6 +6340,7 @@ export type Database = {
           altura?: number
           area?: number
           ativo?: string | null
+          cd_produto?: number | null
           cest?: string | null
           comprimento?: number
           controla_estoque?: string | null
@@ -6007,8 +6349,10 @@ export type Database = {
           ds_ecommerce?: string
           dt_alteracao?: string | null
           dt_cadastro?: string | null
+          ecommerce?: boolean | null
           empresa_id?: number
           excluido?: boolean | null
+          forca_venda?: boolean | null
           grupo_ibscbs_id?: number | null
           grupo_icms_id?: number | null
           grupo_ipi_id?: number | null
@@ -6016,6 +6360,7 @@ export type Database = {
           gtin?: string | null
           largura?: number
           linha_id?: number | null
+          loja_virtual?: boolean | null
           mva?: number
           ncm?: string
           nm_ecommerce?: string
@@ -6076,6 +6421,7 @@ export type Database = {
           altura?: number
           area?: number
           ativo?: string | null
+          cd_produto?: number | null
           cest?: string | null
           comprimento?: number
           controla_estoque?: string | null
@@ -6084,8 +6430,10 @@ export type Database = {
           ds_ecommerce?: string
           dt_alteracao?: string | null
           dt_cadastro?: string | null
+          ecommerce?: boolean | null
           empresa_id?: number
           excluido?: boolean | null
+          forca_venda?: boolean | null
           grupo_ibscbs_id?: number | null
           grupo_icms_id?: number | null
           grupo_ipi_id?: number | null
@@ -6093,6 +6441,7 @@ export type Database = {
           gtin?: string | null
           largura?: number
           linha_id?: number | null
+          loja_virtual?: boolean | null
           mva?: number
           ncm?: string
           nm_ecommerce?: string
@@ -6268,23 +6617,24 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "produto_fornecedor_cadastro_id_fkey"
-            columns: ["cadastro_id"]
-            isOneToOne: false
-            referencedRelation: "cadastro"
-            referencedColumns: ["cadastro_id"]
-          },
-          {
             foreignKeyName: "produto_fornecedor_produto_id_fkey"
             columns: ["produto_id"]
             isOneToOne: false
             referencedRelation: "produto"
             referencedColumns: ["produto_id"]
           },
+          {
+            foreignKeyName: "produto_fornecedor_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "vw_produtos_disponiveis"
+            referencedColumns: ["id"]
+          },
         ]
       }
       produto_grupo: {
         Row: {
+          cd_produto_grupo: number | null
           dt_alteracao: string | null
           dt_cadastro: string | null
           empresa_id: number
@@ -6293,6 +6643,7 @@ export type Database = {
           produto_grupo_id: number
         }
         Insert: {
+          cd_produto_grupo?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
@@ -6301,6 +6652,7 @@ export type Database = {
           produto_grupo_id?: number
         }
         Update: {
+          cd_produto_grupo?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
@@ -6312,6 +6664,7 @@ export type Database = {
       }
       produto_subgrupo: {
         Row: {
+          cd_produto_subgrupo: number | null
           dt_alteracao: string | null
           dt_cadastro: string | null
           empresa_id: number
@@ -6321,6 +6674,7 @@ export type Database = {
           produto_subgrupo_id: number
         }
         Insert: {
+          cd_produto_subgrupo?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
@@ -6330,6 +6684,7 @@ export type Database = {
           produto_subgrupo_id?: number
         }
         Update: {
+          cd_produto_subgrupo?: number | null
           dt_alteracao?: string | null
           dt_cadastro?: string | null
           empresa_id?: number
@@ -7012,6 +7367,71 @@ export type Database = {
         }
         Relationships: []
       }
+      parametro_horario: {
+        Row: {
+          empresa_id: number | null
+          excluido_visivel: boolean | null
+          id: number | null
+          xdia_semana: number | null
+          xhr_fim_matutino: string | null
+          xhr_fim_noturno: string | null
+          xhr_fim_vespertino: string | null
+          xhr_inicio_matutino: string | null
+          xhr_inicio_noturno: string | null
+          xhr_inicio_vespertino: string | null
+          xlg_dia_ativo: boolean | null
+        }
+        Insert: {
+          empresa_id?: number | null
+          excluido_visivel?: boolean | null
+          id?: number | null
+          xdia_semana?: number | null
+          xhr_fim_matutino?: string | null
+          xhr_fim_noturno?: string | null
+          xhr_fim_vespertino?: string | null
+          xhr_inicio_matutino?: string | null
+          xhr_inicio_noturno?: string | null
+          xhr_inicio_vespertino?: string | null
+          xlg_dia_ativo?: boolean | null
+        }
+        Update: {
+          empresa_id?: number | null
+          excluido_visivel?: boolean | null
+          id?: number | null
+          xdia_semana?: number | null
+          xhr_fim_matutino?: string | null
+          xhr_fim_noturno?: string | null
+          xhr_fim_vespertino?: string | null
+          xhr_inicio_matutino?: string | null
+          xhr_inicio_noturno?: string | null
+          xhr_inicio_vespertino?: string | null
+          xlg_dia_ativo?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_empresa_hs_lojavirtual_empresa"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresa"
+            referencedColumns: ["empresa_id"]
+          },
+        ]
+      }
+      vw_produtos_disponiveis: {
+        Row: {
+          excluido_visivel: boolean | null
+          id: number | null
+          xcd_produto: string | null
+          xdias_venda_online: string | null
+          xlg_venda_online: boolean | null
+          xnm_grupo_produto: string | null
+          xnm_produto: string | null
+          xqt_estoque_disponivel: number | null
+          xurl_foto: string | null
+          xvl_preco_venda: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       finalizar_venda_caixa: {
@@ -7064,6 +7484,10 @@ export type Database = {
         Args: { _sala_id: number; _user_id: string }
         Returns: boolean
       }
+      fu_finalizar_ajuste_estoque: {
+        Args: { _movimento_id: number; _usuario_id?: string }
+        Returns: Json
+      }
       fu_form_permissao: {
         Args: { _empresa_id: number; _nm_formulario: string; _user_id: string }
         Returns: {
@@ -7102,6 +7526,7 @@ export type Database = {
           xlg_valida_estoque_link: boolean
           xlg_valida_estoque_pdv: boolean
           xmsg_pos_pagamento: string
+          xnm_aba_lojavirtual: string
           xnm_escola: string
           xurl_banner_vendas: string
           xurl_favicon: string
@@ -7110,7 +7535,7 @@ export type Database = {
         }[]
       }
       fu_get_pedido_status_public: {
-        Args: { _cpf: string; _movimento_id: number }
+        Args: { _cpf: string; _pedido_id: number }
         Returns: {
           dt_emissao: string
           id: number
@@ -7144,6 +7569,18 @@ export type Database = {
         Args: {
           _movimento_id: number
           _novo_status: string
+          _usuario_id?: string
+        }
+        Returns: Json
+      }
+      fu_pdv_confirmar_venda_externa: {
+        Args: {
+          _caixa_abertura_id: number
+          _centro_custo_caixa: number
+          _dt_movimento: string
+          _emovimento_id: number
+          _funcionario_caixa_id: number
+          _tp_operacao_caixa: string
           _usuario_id?: string
         }
         Returns: Json
