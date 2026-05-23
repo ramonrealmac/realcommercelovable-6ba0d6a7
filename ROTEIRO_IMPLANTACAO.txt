@@ -1,0 +1,116 @@
+================================================================================
+          ROTEIRO DE IMPLANTAÇÃO E DEPLOY - REALCOMMERCE (AMBIENTE DO CLIENTE)
+================================================================================
+
+Este guia descreve o processo passo a passo para:
+1. Gerar e empacotar os arquivos de produção na sua máquina de desenvolvimento.
+2. Implantar e rodar o sistema no Docker do cliente ocultando todo o código-fonte.
+
+--------------------------------------------------------------------------------
+PARTE 1: GERAÇÃO DOS ARQUIVOS DE PRODUÇÃO (NA SUA MÁQUINA DE DESENVOLVIMENTO)
+--------------------------------------------------------------------------------
+
+Antes de enviar os arquivos para o cliente, você deve gerar a build estática do 
+frontend e (opcionalmente) compilar as ferramentas de backend Node.js em 
+executáveis binários para ocultar o código-fonte.
+
+Passo 1: Validar as Credenciais
+   * Abra o aplicativo localmente, use o Assistente de Configurações para definir
+     e testar a conexão com o Supabase de Produção do cliente.
+   * Certifique-se de que a conexão retornou sucesso no teste do banco.
+   * O arquivo ".env" gerado na raiz do seu projeto conterá as chaves oficiais.
+
+Passo 2: Gerar a Build do Frontend (React)
+   * No terminal do seu projeto local, execute:
+     npm run build
+   * Isso lerá as credenciais do ".env" e criará a pasta "dist/" na raiz do projeto.
+   * A pasta "dist/" contém apenas arquivos estáticos (.html, .js, .css) 
+     otimizados, minificados e ofuscados. Nenhum código-fonte (.tsx) existirá nela.
+
+Passo 3: Empacotar a Ponte e o Fiscal Worker (Opcional - Proteção de Código)
+   Se você for enviar o provedor-bridge ou o fiscal-worker para rodar no cliente,
+   use a ferramenta "pkg" para compilá-los em binários (.exe para Windows ou 
+   binários para Linux), impedindo que o cliente leia o código Javascript:
+   
+   * Instale o pkg de forma global:
+     npm install -g pkg
+   
+   * Compilar o provedor-bridge:
+     pkg provedor-bridge.cjs --targets node18-win-x64,node18-linux-x64 --output provedor-bridge
+   
+   * Isso gerará os executáveis "provedor-bridge.exe" (Windows) e "provedor-bridge" (Linux).
+
+Passo 4: Preparar o Pacote de Envio
+   Crie uma pasta vazia chamada "realcommerce-deploy" na sua máquina e copie apenas 
+   os seguintes arquivos para dentro dela:
+   
+   1. A pasta "dist/" (gerada no Passo 2)
+   2. O arquivo "nginx.conf" (configuração do servidor web)
+   3. Os binários compilados ("provedor-bridge.exe" ou "provedor-bridge")
+   4. Um arquivo novo chamado "docker-compose.yml" (que criaremos na Parte 2 abaixo)
+
+   Compacte esta pasta em um arquivo "realcommerce-deploy.zip" para envio.
+
+--------------------------------------------------------------------------------
+PARTE 2: IMPLANTAÇÃO NO SERVIDOR OU DOCKER DO CLIENTE
+--------------------------------------------------------------------------------
+
+Passo 1: Instalação de Pré-requisitos no Servidor do Cliente
+   * Certifique-se de que o servidor Linux/Windows do cliente tenha instalado:
+     - Docker (versão 20.10 ou superior)
+     - Docker Compose (versão 2.0 ou superior)
+
+Passo 2: Transferência e Extração dos Arquivos
+   * Envie o arquivo "realcommerce-deploy.zip" para o servidor do cliente.
+   * Extraia o pacote em uma pasta de produção no servidor, por exemplo:
+     /opt/realcommerce/
+
+Passo 3: Configurar o docker-compose.yml de Produção no Cliente
+   Dentro da pasta extraída no servidor do cliente, crie/mantenha o arquivo 
+   "docker-compose.yml" com a estrutura simplificada abaixo (que consome apenas 
+   a pasta compilada "dist/"):
+
+----------------------- CORTAR AQUI (docker-compose.yml) -----------------------
+version: '3.8'
+
+services:
+  realcommerce-frontend:
+    image: nginx:alpine
+    container_name: realcommerce-frontend
+    ports:
+      - "8080:80"
+    volumes:
+      - ./dist:/usr/share/nginx/html
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    restart: always
+--------------------------------------------------------------------------------
+
+Passo 4: Iniciar o Sistema no Cliente
+   * Abra o terminal do servidor Linux, navegue até a pasta do deploy:
+     cd /opt/realcommerce/
+   
+   * Suba o container Docker em segundo plano:
+     docker compose up -d
+   
+   * O Docker baixará a imagem leve do Nginx e servirá os arquivos estáticos da 
+     pasta "dist" na porta 8080 do servidor.
+
+Passo 5: Verificar o Status
+   * Verifique se o container está rodando normalmente:
+     docker compose ps
+   
+   * Caso queira olhar os logs de acessos do Nginx:
+     docker compose logs -f
+
+--------------------------------------------------------------------------------
+MANUTENÇÃO E ATUALIZAÇÕES FUTURAS
+--------------------------------------------------------------------------------
+Sempre que precisar atualizar o sistema no cliente:
+1. Faça a alteração no código na SUA máquina de desenvolvimento.
+2. Gere uma nova build estática rodando "npm run build" localmente.
+3. Envie apenas a nova pasta "dist/" gerada para o servidor do cliente, 
+   substituindo a antiga.
+4. Execute no servidor do cliente:
+   docker compose restart
+   * O Nginx carregará os arquivos atualizados instantaneamente sem tempo de inatividade.
+================================================================================
