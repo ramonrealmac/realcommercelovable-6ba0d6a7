@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import logoRealsys from "@/assets/logo_realsys.jpg";
 import { useThemeColors } from "@/hooks/useThemeColors";
-import SetupWizard from "@/components/config/SetupWizard";
 
 type AuthMode = "signin" | "signup";
 
@@ -35,10 +34,6 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // Environment status state
-  const [isEnvConfigured, setIsEnvConfigured] = useState(true);
-  const [checkingEnv, setCheckingEnv] = useState(true);
-
   // Empresa selection state
   const [XEmpresasVinculadas, setXEmpresasVinculadas] = useState<IEmpresaVinculada[]>([]);
   const [XLoadingEmpresas, setXLoadingEmpresas] = useState(false);
@@ -50,30 +45,12 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
   useEffect(() => {
     let active = true;
 
-    // Check environment status in Electron
-    const checkEnvironment = async () => {
-      if (window.electronAPI) {
-        try {
-          const res = await window.electronAPI.checkEnvStatus();
-          if (active) {
-            setIsEnvConfigured(res.configured);
-          }
-        } catch (e) {
-          console.error("Erro ao validar .env no Electron:", e);
-        }
-      }
-      if (active) {
-        setCheckingEnv(false);
-      }
-    };
-
-    checkEnvironment();
-
     supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
       setSession(data.session);
       setLoadingSession(false);
     });
+
 
     const {
       data: { subscription },
@@ -244,7 +221,7 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
     }
   };
 
-  if (checkingEnv || loadingSession) {
+  if (loadingSession) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -253,11 +230,6 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
         </div>
       </div>
     );
-  }
-
-  // If env is not configured, redirect to SetupWizard directly
-  if (!isEnvConfigured) {
-    return <SetupWizard onConfigureSuccess={() => setIsEnvConfigured(true)} />;
   }
 
 

@@ -1,0 +1,2 @@
+D:\Projetos\IA\RealcommerceLovable\FiscalWorkerTray\bin\Release\net7.0-windows\win-x64\publish\FiscalWorkerTray.pdb
+D:\Projetos\IA\RealcommerceLovable\FiscalWorkerTray\bin\Release\net7.0-windows\win-x64\publish\FiscalWorkerTray.exe

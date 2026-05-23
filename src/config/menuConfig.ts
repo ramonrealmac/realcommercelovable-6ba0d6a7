@@ -58,7 +58,6 @@ import {
   Unlock,
   Calculator,
   FileX,
-  Database,
 } from "lucide-react";
 
 export interface MenuItem {
@@ -278,7 +277,6 @@ export const MENU_CONFIG: MenuItem[] = [
       { id: "licencas", title: "Ativar Licenças", icon: Key },
       { id: "importacao", title: "Importação", icon: FileUp },
       { id: "sistema-versoes", title: "Melhorias do Sistema", icon: ClipboardCheck },
-      { id: "config-banco", title: "Configuração do Banco", icon: Database },
     ],
   },
 ];

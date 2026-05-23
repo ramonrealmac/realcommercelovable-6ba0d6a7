@@ -1,0 +1,3 @@
+Get-ChildItem -Path C:\ -Filter "supabase" -Directory -Recurse -ErrorAction SilentlyContinue
+
+cd C:\Users\ramon\supabase  (pasta retornada no comando acima)
