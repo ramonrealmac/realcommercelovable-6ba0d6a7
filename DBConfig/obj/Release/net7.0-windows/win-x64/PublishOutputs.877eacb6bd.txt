@@ -1,2 +1,0 @@
-D:\Projetos\IA\RealcommerceLovable\DBConfig\bin\Release\net7.0-windows\win-x64\publish\DBConfig.pdb
-D:\Projetos\IA\RealcommerceLovable\DBConfig\bin\Release\net7.0-windows\win-x64\publish\DBConfig.exe

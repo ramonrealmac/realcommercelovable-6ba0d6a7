@@ -14,3 +14,17 @@ services:
     restart: always
     environment:
       - NODE_ENV=production
+
+  realcommerce-lojavirtual:
+    build:
+      context: ./lojavirtual
+      dockerfile: Dockerfile
+      args:
+        - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+        - VITE_SUPABASE_PUBLISHABLE_KEY=${VITE_SUPABASE_PUBLISHABLE_KEY}
+    container_name: realcommerce-lojavirtual
+    ports:
+      - "8081:80"
+    restart: always
+    environment:
+      - NODE_ENV=production

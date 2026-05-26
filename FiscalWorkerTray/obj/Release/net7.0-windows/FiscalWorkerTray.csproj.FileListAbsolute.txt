@@ -1,0 +1,15 @@
+D:\Projetos\IA\RealcommerceLovable\FiscalWorkerTray\bin\Release\net7.0-windows\FiscalWorkerTray.exe
+D:\Projetos\IA\RealcommerceLovable\FiscalWorkerTray\bin\Release\net7.0-windows\FiscalWorkerTray.deps.json
+D:\Projetos\IA\RealcommerceLovable\FiscalWorkerTray\bin\Release\net7.0-windows\FiscalWorkerTray.runtimeconfig.json
+D:\Projetos\IA\RealcommerceLovable\FiscalWorkerTray\bin\Release\net7.0-windows\FiscalWorkerTray.dll
+D:\Projetos\IA\RealcommerceLovable\FiscalWorkerTray\bin\Release\net7.0-windows\FiscalWorkerTray.pdb
+D:\Projetos\IA\RealcommerceLovable\FiscalWorkerTray\obj\Release\net7.0-windows\FiscalWorkerTray.csproj.AssemblyReference.cache
+D:\Projetos\IA\RealcommerceLovable\FiscalWorkerTray\obj\Release\net7.0-windows\FiscalWorkerTray.GeneratedMSBuildEditorConfig.editorconfig
+D:\Projetos\IA\RealcommerceLovable\FiscalWorkerTray\obj\Release\net7.0-windows\FiscalWorkerTray.AssemblyInfoInputs.cache
+D:\Projetos\IA\RealcommerceLovable\FiscalWorkerTray\obj\Release\net7.0-windows\FiscalWorkerTray.AssemblyInfo.cs
+D:\Projetos\IA\RealcommerceLovable\FiscalWorkerTray\obj\Release\net7.0-windows\FiscalWorkerTray.csproj.CoreCompileInputs.cache
+D:\Projetos\IA\RealcommerceLovable\FiscalWorkerTray\obj\Release\net7.0-windows\FiscalWorkerTray.dll
+D:\Projetos\IA\RealcommerceLovable\FiscalWorkerTray\obj\Release\net7.0-windows\refint\FiscalWorkerTray.dll
+D:\Projetos\IA\RealcommerceLovable\FiscalWorkerTray\obj\Release\net7.0-windows\FiscalWorkerTray.pdb
+D:\Projetos\IA\RealcommerceLovable\FiscalWorkerTray\obj\Release\net7.0-windows\FiscalWorkerTray.genruntimeconfig.cache
+D:\Projetos\IA\RealcommerceLovable\FiscalWorkerTray\obj\Release\net7.0-windows\ref\FiscalWorkerTray.dll

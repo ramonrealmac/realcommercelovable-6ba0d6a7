@@ -1,0 +1,12 @@
+- Obtenha a versao atual do sistema atraves da tabela sistema_versoes do nosso banco de dados;
+- Monte uma pasta no caminho na pasta D:\BackUp\Projetos\SISTEMAS_IA\RealsysVersoes\[Numero da Versao];
+- Baixe o esquema da versao atual do nosso banco de dados do nosso supabase nuvem e copie para D:\BackUp\Projetos\SISTEMAS_IA\RealsysVersoes\[Numero da Versao]\database\esquema.sql;
+- Copie a compilação do sistema para a pasta  D:\BackUp\Projetos\SISTEMAS_IA\RealsysVersoes\[Numero da Versao]\system\;   (todos e somente arquivos necessarios para montar o sistema em um novo servidor, através . Sem os fontes para evitar plagio);
+- Copie o compilado do fiscal-worker para a pasta D:\BackUp\Projetos\SISTEMAS_IA\RealsysVersoes\[Numero da Versao]\fiscal-worker\
+ 
+- O instalador do docker esta na pasta D:\BackUp\Projetos\SISTEMAS_IA\RealsysVersoes\    (DockerDesktopInstaller.exe)
+
+
+
+
+https://drive.google.com/drive/folders/1EZi_9nXbLjeWcgtNndA5c4m2viBpHzIB?usp=sharing

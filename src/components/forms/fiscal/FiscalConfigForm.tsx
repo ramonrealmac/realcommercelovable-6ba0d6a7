@@ -444,7 +444,7 @@ const FiscalConfigForm = () => {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Configuração Fiscal</h2>
           <p className="text-muted-foreground">
-            Configure o certificado digital e teste a comunicação com a SEFAZ (Worker ACBr).
+            Configure o certificado digital e teste a comunicação com a SEFAZ (Worker).
           </p>
         </div>
 
