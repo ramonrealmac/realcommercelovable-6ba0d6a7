@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const net = require('net');
 const http = require('http');
@@ -76,7 +76,7 @@ function startBridge() {
   });
 
   server.listen(BRIDGE_PORT, () => {
-    console.log(`Ponte Integrada ativa na porta ${BRIDGE_PORT}`);
+    console.log(`Ponte Integrada active na porta ${BRIDGE_PORT}`);
   });
 }
 
@@ -106,6 +106,14 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // IPC Handler for selecting directories natively in Electron
+  ipcMain.handle('select-directory', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory', 'createDirectory']
+    });
+    return result.filePaths[0]; // Returns selected path or undefined
+  });
+
   startBridge();
   createWindow();
 

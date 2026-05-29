@@ -1,1 +1,0 @@
-ALTER TABLE public.estoque ADD COLUMN IF NOT EXISTS endereco varchar(20) NOT NULL DEFAULT '';

@@ -43,6 +43,7 @@ import {
   ShoppingCart,
   Package2,
   Settings2,
+  Database,
   FolderOpen,
   Folder,
   Filter,
@@ -277,6 +278,7 @@ export const MENU_CONFIG: MenuItem[] = [
       { id: "licencas", title: "Ativar Licenças", icon: Key },
       { id: "importacao", title: "Importação", icon: FileUp },
       { id: "sistema-versoes", title: "Melhorias do Sistema", icon: ClipboardCheck },
+      { id: "backup-config", title: "Backup de Dados", icon: Database },
     ],
   },
 ];

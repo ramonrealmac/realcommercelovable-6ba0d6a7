@@ -1,1 +1,0 @@
-ALTER TABLE public.fiscal_config ADD COLUMN IF NOT EXISTS pasta_arquivos_fiscais text;
