@@ -7,8 +7,6 @@ import type { IGridColumn } from "@/components/grid/DataGrid";
 import { Send, Lock, XCircle } from "lucide-react";
 import { mdfeEmissaoService } from "../services/mdfeEmissaoService";
 
-import MdfCarregaTab from "./tabs/MdfCarregaTab";
-import MdfDescarregaTab from "./tabs/MdfDescarregaTab";
 import MdfDocumentosTab from "./tabs/MdfDocumentosTab";
 import MdfVeiculosTab from "./tabs/MdfVeiculosTab";
 import MdfMotoristasTab from "./tabs/MdfMotoristasTab";
@@ -174,30 +172,24 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
       XGridCols={XGridCols}
       XExportTitle="MDF-e"
       XRefreshRef={XRefreshRef}
-      XAfterInsertTab="carrega"
+      XAfterInsertTab="percurso"
+      XCadastroLabel="Dados Gerais"
       XExtraTabs={[
         {
-          key: "carrega", label: "Carregamento",
-          render: ({ currentRecord }) => (
-            <MdfCarregaTab
+          key: "percurso", label: "Percurso",
+          render: ({ currentRecord, record, setField, isEditing }) => (
+            <MdfPercursoTab
               mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
               empresaId={XEmpresaId}
               podeEditar={currentRecord?.status === "D"}
+              record={record}
+              setField={setField}
+              isEditing={isEditing}
             />
           ),
         },
         {
-          key: "descarrega", label: "Descarregamento",
-          render: ({ currentRecord }) => (
-            <MdfDescarregaTab
-              mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
-              empresaId={XEmpresaId}
-              podeEditar={currentRecord?.status === "D"}
-            />
-          ),
-        },
-        {
-          key: "docs", label: "Documentos (NF-e)",
+          key: "docs", label: "Documentos",
           render: ({ currentRecord }) => (
             <MdfDocumentosTab
               mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
@@ -220,16 +212,6 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
           key: "motoristas", label: "Motoristas",
           render: ({ currentRecord }) => (
             <MdfMotoristasTab
-              mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
-              empresaId={XEmpresaId}
-              podeEditar={currentRecord?.status === "D"}
-            />
-          ),
-        },
-        {
-          key: "percurso", label: "Percurso (UF)",
-          render: ({ currentRecord }) => (
-            <MdfPercursoTab
               mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
               empresaId={XEmpresaId}
               podeEditar={currentRecord?.status === "D"}
@@ -351,41 +333,23 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
               </div>
             </div>
 
-            {/* ── Linha 2: Viagem + UFs + Modalidade ── */}
+            {/* ── Linha 2: Viagem + Modalidade ── */}
             <div className="grid grid-cols-12 gap-3 items-end">
-              <div className="col-span-2">
+              <div className="col-span-3">
                 <label className="text-xs text-muted-foreground">Dt. Viagem <span className="text-destructive">*</span></label>
                 <input type="date" readOnly={ro}
                   value={String(record.dt_viagem || "").substring(0, 10)}
                   onChange={e => setField("dt_viagem", e.target.value)}
                   className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-3">
                 <label className="text-xs text-muted-foreground">Hora Viagem <span className="text-destructive">*</span></label>
                 <input type="time" readOnly={ro}
                   value={record.hr_viagem ?? "00:00:00"}
                   onChange={e => setField("hr_viagem", e.target.value)}
                   className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
-              <div className="col-span-2">
-                <label className="text-xs text-muted-foreground">UF Inicial <span className="text-destructive">*</span></label>
-                <select disabled={ro} value={record.ufini ?? ""}
-                  onChange={e => setField("ufini", e.target.value)}
-                  className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
-                  <option value="">— UF —</option>
-                  {UF_LIST.map(uf => <option key={uf} value={uf}>{uf}</option>)}
-                </select>
-              </div>
-              <div className="col-span-2">
-                <label className="text-xs text-muted-foreground">UF Final <span className="text-destructive">*</span></label>
-                <select disabled={ro} value={record.uffim ?? ""}
-                  onChange={e => setField("uffim", e.target.value)}
-                  className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
-                  <option value="">— UF —</option>
-                  {UF_LIST.map(uf => <option key={uf} value={uf}>{uf}</option>)}
-                </select>
-              </div>
-              <div className="col-span-2">
+              <div className="col-span-3">
                 <label className="text-xs text-muted-foreground">Modalidade</label>
                 <select disabled={ro} value={record.modalidade ?? "1"}
                   onChange={e => setField("modalidade", e.target.value)}
@@ -396,7 +360,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
                   <option value="4">4 - Ferroviário</option>
                 </select>
               </div>
-              <div className="col-span-2">
+              <div className="col-span-3">
                 <label className="text-xs text-muted-foreground">Unidade Medida</label>
                 <select disabled={ro} value={record.unidade ?? "KG"}
                   onChange={e => setField("unidade", e.target.value)}

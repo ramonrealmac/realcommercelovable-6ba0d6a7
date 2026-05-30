@@ -4,6 +4,20 @@ import { toast } from "sonner";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import GridActionToolbar, { gridActions } from "@/components/grid/GridActionToolbar";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+// Helper functions to clean old database values to 2-digit codes
+const cleanRodado = (v: string | null | undefined): string => {
+  if (!v) return "01";
+  const match = String(v).match(/^(\d{2})/);
+  return match ? match[1] : "01";
+};
+
+const cleanCarroceria = (v: string | null | undefined): string => {
+  if (!v) return "00";
+  const match = String(v).match(/^(\d{2})/);
+  return match ? match[1] : "00";
+};
 
 const db = supabase as any;
 
@@ -27,7 +41,9 @@ interface IVeiculo {
 
 interface VeiculoGridProps {
   XEmpresaId: number;
-  XCadastroId: number;
+  XCadastroId?: number;
+  tempVeiculos?: IVeiculo[];
+  onChangeTempVeiculos?: (veiculos: IVeiculo[]) => void;
 }
 
 const XVeiculoColumns: IGridColumn[] = [
@@ -39,7 +55,12 @@ const XVeiculoColumns: IGridColumn[] = [
   { key: "ativo", label: "Ativo", width: "70px", align: "center", render: (r: IVeiculo) => r.ativo ? "Sim" : "Não" },
 ];
 
-const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) => {
+const VeiculoGrid: React.FC<VeiculoGridProps> = ({ 
+  XEmpresaId, 
+  XCadastroId,
+  tempVeiculos,
+  onChangeTempVeiculos
+}) => {
   const [XVeiculos, setXVeiculos] = useState<IVeiculo[]>([]);
   const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
   const [XFilterValues, setXFilterValues] = useState<Record<string, string>>({});
@@ -61,21 +82,25 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) =>
   const [XEditAtivo, setXEditAtivo] = useState(true);
 
   const loadData = useCallback(async () => {
+    if (!XCadastroId) return;
     const { data } = await db
       .from("cadastro_veiculo")
       .select("*")
       .eq("cadastro_id", XCadastroId)
-      .eq("empresa_id", XEmpresaId)
       .eq("excluido", false)
       .order("veiculo_id");
     setXVeiculos(data || []);
-  }, [XEmpresaId, XCadastroId]);
+  }, [XCadastroId]);
 
   useEffect(() => {
-    loadData();
+    if (XCadastroId) {
+      loadData();
+    } else if (tempVeiculos) {
+      setXVeiculos(tempVeiculos);
+    }
     setXSelectedIdx(null);
     setXEditMode("none");
-  }, [XEmpresaId, XCadastroId, loadData]);
+  }, [XEmpresaId, XCadastroId, loadData, tempVeiculos]);
 
   const XFiltered = XVeiculos.filter(v => {
     const fc = XFilterValues["veiculo_id"] || "";
@@ -83,8 +108,8 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) =>
     const fd = XFilterValues["descricao"] || "";
     const fa = XFilterValues["ativo"] || "";
     if (fc && !String(v.veiculo_id).includes(fc)) return false;
-    if (fp && !v.placa.toLowerCase().includes(fp.toLowerCase())) return false;
-    if (fd && !v.descricao.toLowerCase().includes(fd.toLowerCase())) return false;
+    if (fp && !(v.placa || "").toLowerCase().includes(fp.toLowerCase())) return false;
+    if (fd && !(v.descricao || "").toLowerCase().includes(fd.toLowerCase())) return false;
     if (fa) {
       const XAtivoStr = v.ativo ? "sim" : "não";
       if (!XAtivoStr.includes(fa.toLowerCase())) return false;
@@ -120,8 +145,8 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) =>
     setXEditRenavam(XSelectedVeiculo.renavam || "");
     setXEditTara(String(XSelectedVeiculo.tara || 0));
     setXEditCapacidade(String(XSelectedVeiculo.capacidade_kg || 0));
-    setXEditTpRodado(XSelectedVeiculo.tp_rodado || "01");
-    setXEditTpCarroceria(XSelectedVeiculo.tp_carroceria || "00");
+    setXEditTpRodado(cleanRodado(XSelectedVeiculo.tp_rodado));
+    setXEditTpCarroceria(cleanCarroceria(XSelectedVeiculo.tp_carroceria));
     setXEditUf(XSelectedVeiculo.uf || "");
     setXEditTpVeiculo(XSelectedVeiculo.tp_veiculo || "TRACAO");
     setXEditAtivo(XSelectedVeiculo.ativo);
@@ -146,10 +171,35 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) =>
       uf: XEditUf.toUpperCase().trim(),
       tp_veiculo: XEditTpVeiculo,
       ativo: XEditAtivo,
-      cadastro_id: XCadastroId,
+      cadastro_id: XCadastroId || 0,
       empresa_id: XEmpresaId,
     };
 
+    if (!XCadastroId) {
+      // Memory-only mode for new records
+      if (XEditMode === "insert") {
+        const newV: IVeiculo = {
+          ...XPayload,
+          veiculo_id: -Math.floor(Math.random() * 1000000), // temp negative ID
+        };
+        if (onChangeTempVeiculos && tempVeiculos) {
+          onChangeTempVeiculos([...tempVeiculos, newV]);
+        }
+        toast.success("Veículo adicionado temporariamente.");
+      } else if (XEditMode === "edit" && XSelectedVeiculo) {
+        if (onChangeTempVeiculos && tempVeiculos) {
+          const updated = tempVeiculos.map(v => 
+            v.veiculo_id === XSelectedVeiculo.veiculo_id ? { ...v, ...XPayload } : v
+          );
+          onChangeTempVeiculos(updated);
+        }
+        toast.success("Veículo alterado temporariamente.");
+      }
+      setXEditMode("none");
+      return;
+    }
+
+    // Database mode
     if (XEditMode === "insert") {
       const { error } = await db.from("cadastro_veiculo").insert({ ...XPayload, dt_cadastro: new Date().toISOString() });
       if (error) { toast.error("Erro ao incluir veículo: " + error.message); return; }
@@ -165,6 +215,20 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) =>
 
   const handleExcluir = async () => {
     if (!XSelectedVeiculo) return;
+
+    if (!XCadastroId) {
+      // Memory-only mode
+      if (confirm(`Remover veículo "${XSelectedVeiculo.placa}"?`)) {
+        if (onChangeTempVeiculos && tempVeiculos) {
+          const filtered = tempVeiculos.filter(v => v.veiculo_id !== XSelectedVeiculo.veiculo_id);
+          onChangeTempVeiculos(filtered);
+        }
+        toast.success("Veículo removido.");
+        setXSelectedIdx(null);
+      }
+      return;
+    }
+
     if (confirm(`Excluir veículo "${XSelectedVeiculo.placa}"?`)) {
       await db.from("cadastro_veiculo").update({ excluido: true }).eq("veiculo_id", XSelectedVeiculo.veiculo_id);
       toast.success("Veículo excluído.");
@@ -218,16 +282,15 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) =>
                 className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-12 text-center"
               />
             </div>
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-0.5 w-32">
               <label className="text-[10px] text-muted-foreground">Tipo</label>
-              <select 
-                value={XEditTpVeiculo} 
-                onChange={e => setXEditTpVeiculo(e.target.value)}
-                className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-32"
-              >
-                <option value="TRACAO">TRAÇÃO</option>
-                <option value="REBOQUE">REBOQUE</option>
-              </select>
+              <Select value={XEditTpVeiculo} onValueChange={setXEditTpVeiculo}>
+                <SelectTrigger className="h-[30px] text-xs bg-card"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="TRACAO">TRAÇÃO</SelectItem>
+                  <SelectItem value="REBOQUE">REBOQUE</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex flex-col gap-0.5">
               <label className="text-[10px] text-muted-foreground">RENAVAM</label>
@@ -269,35 +332,33 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) =>
                 className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-24 text-right"
               />
             </div>
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-0.5 w-44">
               <label className="text-[10px] text-muted-foreground">Rodado</label>
-              <select 
-                value={XEditTpRodado} 
-                onChange={e => setXEditTpRodado(e.target.value)}
-                className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-36"
-              >
-                <option value="01">01 - TRUCK</option>
-                <option value="02">02 - TOCO</option>
-                <option value="03 - CAVALO MECANICO">03 - CAVALO MECÂNICO</option>
-                <option value="04 - VAN">04 - VAN</option>
-                <option value="05 - UTILITARIO">05 - UTILITÁRIO</option>
-                <option value="06 - OUTROS">06 - OUTROS</option>
-              </select>
+              <Select value={XEditTpRodado} onValueChange={setXEditTpRodado}>
+                <SelectTrigger className="h-[30px] text-xs bg-card"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="01">01 - TRUCK</SelectItem>
+                  <SelectItem value="02">02 - TOCO</SelectItem>
+                  <SelectItem value="03">03 - CAVALO MECÂNICO</SelectItem>
+                  <SelectItem value="04">04 - VAN</SelectItem>
+                  <SelectItem value="05">05 - UTILITÁRIO</SelectItem>
+                  <SelectItem value="06">06 - OUTROS</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-0.5 w-48">
               <label className="text-[10px] text-muted-foreground">Carroceria</label>
-              <select 
-                value={XEditTpCarroceria} 
-                onChange={e => setXEditTpCarroceria(e.target.value)}
-                className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-36"
-              >
-                <option value="00">00 - NÃO APLICÁVEL</option>
-                <option value="01">01 - ABERTA</option>
-                <option value="02">02 - FECHADA/BAÚ</option>
-                <option value="03">03 - GRANELERA</option>
-                <option value="04">04 - PORTA CONTAINER</option>
-                <option value="05">05 - SIDER</option>
-              </select>
+              <Select value={XEditTpCarroceria} onValueChange={setXEditTpCarroceria}>
+                <SelectTrigger className="h-[30px] text-xs bg-card"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="00">00 - NÃO APLICÁVEL</SelectItem>
+                  <SelectItem value="01">01 - ABERTA</SelectItem>
+                  <SelectItem value="02">02 - FECHADA/BAÚ</SelectItem>
+                  <SelectItem value="03">03 - GRANELEIRA</SelectItem>
+                  <SelectItem value="04">04 - PORTA CONTAINER</SelectItem>
+                  <SelectItem value="05">05 - SIDER</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex flex-col gap-0.5 items-center pb-1">
               <label className="text-[10px] text-muted-foreground">Ativo</label>
@@ -339,8 +400,8 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({ XEmpresaId, XCadastroId }) =>
             setXEditRenavam(v.renavam || "");
             setXEditTara(String(v.tara || 0));
             setXEditCapacidade(String(v.capacidade_kg || 0));
-            setXEditTpRodado(v.tp_rodado || "01");
-            setXEditTpCarroceria(v.tp_carroceria || "00");
+            setXEditTpRodado(cleanRodado(v.tp_rodado));
+            setXEditTpCarroceria(cleanCarroceria(v.tp_carroceria));
             setXEditUf(v.uf || "");
             setXEditTpVeiculo(v.tp_veiculo || "TRACAO");
             setXEditAtivo(v.ativo);

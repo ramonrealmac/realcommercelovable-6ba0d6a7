@@ -53,6 +53,108 @@ interface TableDefinition {
   defaultValues?: Record<string, unknown>;
 }
 
+const TABLE_FIELD_LIMITS: Record<string, Record<string, number>> = {
+  cadastro: {
+    cnpj: 18,
+    razao_social: 60,
+    nome_fantasia: 60,
+    identificacao: 40,
+    nome_curto: 60,
+    endereco_logradouro: 60,
+    endereco_numero: 10,
+    endereco_bairro: 40,
+    endereco_cep: 10,
+    fone_geral: 15,
+    fone_comercial: 15,
+    tp_pessoa: 1,
+    st_cadastro: 1,
+    dep_nome1: 60,
+    dep_nome2: 60,
+    dep_nome3: 60,
+    dep_telefone1: 16,
+    dep_telefone2: 16,
+    dep_telefone3: 16,
+    dep_email1: 120,
+    dep_email2: 120,
+    dep_email3: 120,
+    dep_cpf1: 18,
+    dep_cpf2: 18,
+    dep_cpf3: 18,
+    dep_st1: 1,
+    dep_st2: 1,
+    dep_st3: 1,
+    email: 120,
+    st_cliente: 1,
+    st_vendedor: 1,
+    st_fornecedor: 1,
+    st_transportador: 1,
+  },
+  produto: {
+    nome: 80,
+    nome_reduzido: 80,
+    referencia: 20,
+    gtin: 14,
+    unidade_id: 5,
+    tp_produto: 2,
+    ativo: 1,
+    controla_estoque: 1,
+  },
+  produto_grupo: {
+    nome: 50,
+  },
+  produto_subgrupo: {
+    nome: 50,
+  },
+  cfop: {
+    codigo: 10,
+  },
+  comissao: {
+    tp_comissao: 1,
+  },
+  condicao_pagamento: {
+    tp_doc: 20,
+  },
+  financeiro: {
+    tp_financeiro: 1,
+    nr_documento: 50,
+    st_financeiro: 1,
+    tp_pagamento: 30,
+  },
+  financeiro_baixa: {
+    tp_pagamento: 30,
+    nr_autorizacao: 50,
+  },
+  movimento: {
+    tp_movimento: 2,
+    st_pedido: 1,
+    status: 1,
+    faturado: 1,
+    observacao: 300,
+    tp_origem: 10,
+  },
+  movimento_item: {
+    tp_movimento: 2,
+    unidade_id: 5,
+  },
+  plano_conta: {
+    tp_conta: 1,
+    tp_natureza: 1,
+  },
+  tipo_operacao: {
+    tipo_movimento: 1,
+  },
+  tipo_pag_rec: {
+    tipo: 1,
+  },
+  unidade: {
+    unidade_id: 5,
+  },
+  cadastro_veiculo: {
+    placa: 10,
+    uf: 2,
+  },
+};
+
 const TABLE_DEFINITIONS: TableDefinition[] = [
   {
     id: "produto",
@@ -131,11 +233,11 @@ const TABLE_DEFINITIONS: TableDefinition[] = [
     ]
   },
   {
-    id: "cliente",
+    id: "cadastro",
     name: "cadastro",
-    label: "Clientes",
+    label: "Cadastro",
     primaryKey: "cadastro_id",
-    description: "Cadastro geral de clientes (Parceiros de negócios).",
+    description: "Cadastro geral de parceiros de negócios (Clientes, Fornecedores, etc).",
     defaultValues: { st_cliente: "S", st_fornecedor: "N", st_transportador: "N" },
     columns: [
       { name: "cd_cadastro", label: "Código do Cadastro (cd_cadastro)", type: "string", required: true, description: "Código de identificação único do cadastro por empresa." },
@@ -200,6 +302,17 @@ const TABLE_DEFINITIONS: TableDefinition[] = [
       { name: "modelo", label: "Modelo", type: "string", required: false, description: "Modelo específico." },
       { name: "uf", label: "UF da Placa", type: "string", required: false, description: "Estado da licença do veículo (ex: SP, RJ)." },
       { name: "renavam", label: "RENAVAM", type: "string", required: false, description: "Código de registro nacional do veículo." }
+    ]
+  },
+  {
+    id: "cadastro_grupo",
+    name: "cadastro_grupo",
+    label: "Grupo de Parceiros",
+    primaryKey: "cadastro_grupo_id",
+    description: "Grupos e classificações de clientes e fornecedores (Parceiros de negócios).",
+    columns: [
+      { name: "cd_cadastro_grupo", label: "Código do Grupo (cd_cadastro_grupo)", type: "number", required: true, description: "Código de identificação numérico exclusivo do grupo por empresa." },
+      { name: "nome", label: "Nome do Grupo", type: "string", required: true, description: "Nome comercial ou descrição do grupo." }
     ]
   },
   {
@@ -367,8 +480,43 @@ function normalizeDate(val: string): string {
   return val;
 }
 
+// Helper function to apply translation rules for a specific column
+function applyColumnFormula(value: string, formulaStr: string): string {
+  if (!formulaStr || !formulaStr.trim()) return value;
+  
+  let formula = formulaStr.trim();
+  if (formula.toLowerCase().startsWith("cond:")) {
+    formula = formula.substring(5);
+  } else {
+    return value;
+  }
+  
+  const rules = formula.split(",");
+  for (const rule of rules) {
+    const trimmedRule = rule.trim();
+    if (!trimmedRule) continue;
+    
+    const parts = trimmedRule.split("=");
+    if (parts.length === 2) {
+      const sourceVal = parts[0].trim();
+      const targetVal = parts[1].trim();
+      if (value.trim().toLowerCase() === sourceVal.toLowerCase()) {
+        return targetVal;
+      }
+    } else if (parts.length >= 3) {
+      const sourceVal = parts[1].trim();
+      const targetVal = parts.slice(2).join("=").trim();
+      if (value.trim().toLowerCase() === sourceVal.toLowerCase()) {
+        return targetVal;
+      }
+    }
+  }
+  
+  return value;
+}
+
 const ImportacaoForm: React.FC = () => {
-  const { XEmpresaId } = useAppContext();
+  const { XEmpresaId, XEmpresaMatrizId } = useAppContext();
   
   // ── Wizard State ──────────────────────────────────────────────────────────
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -416,7 +564,16 @@ const ImportacaoForm: React.FC = () => {
   // Load profile names list on table selection change
   useEffect(() => {
     const key = getProfilesKey(selectedTableId);
-    const stored = localStorage.getItem(key);
+    let stored = localStorage.getItem(key);
+    
+    // Backward compatibility: if selectedTableId is "cadastro" and no profiles exist, fallback and migrate "cliente"
+    if (!stored && selectedTableId === "cadastro") {
+      stored = localStorage.getItem(getProfilesKey("cliente"));
+      if (stored) {
+        localStorage.setItem(key, stored);
+      }
+    }
+    
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
@@ -437,18 +594,30 @@ const ImportacaoForm: React.FC = () => {
       return;
     }
     
+    interface SavedProfile {
+      mappings: Record<string, MappingItem>;
+      avoidDuplicates?: boolean;
+      abortOnError?: boolean;
+      delimiter?: string;
+    }
+    
     const key = getProfilesKey(selectedTableId);
     const stored = localStorage.getItem(key);
-    let profiles: Record<string, Record<string, MappingItem>> = {};
+    let profiles: Record<string, SavedProfile> = {};
     if (stored) {
       try {
-        profiles = JSON.parse(stored);
+        profiles = JSON.parse(stored) as Record<string, SavedProfile>;
       } catch (e) {
         // Ignored
       }
     }
     
-    profiles[newProfileName.trim()] = mappings;
+    profiles[newProfileName.trim()] = {
+      mappings,
+      avoidDuplicates,
+      abortOnError,
+      delimiter
+    };
     localStorage.setItem(key, JSON.stringify(profiles));
     
     setProfileNames(Object.keys(profiles));
@@ -460,20 +629,41 @@ const ImportacaoForm: React.FC = () => {
   const handleLoadProfile = (name: string) => {
     if (name === "none" || !name) return;
     
+    interface SavedProfile {
+      mappings: Record<string, MappingItem>;
+      avoidDuplicates?: boolean;
+      abortOnError?: boolean;
+      delimiter?: string;
+    }
+    
     const key = getProfilesKey(selectedTableId);
     const stored = localStorage.getItem(key);
     if (stored) {
       try {
-        const profiles = JSON.parse(stored);
+        const profiles = JSON.parse(stored) as Record<string, SavedProfile | Record<string, MappingItem>>;
         const selected = profiles[name];
         if (selected) {
+          // If the profile has 'mappings' property, it is the new structure
+          const hasMappingsProperty = "mappings" in selected;
+          const loadedMappings = hasMappingsProperty 
+            ? (selected as SavedProfile).mappings 
+            : (selected as Record<string, MappingItem>);
+          
+          if (hasMappingsProperty) {
+            const profileObj = selected as SavedProfile;
+            if (profileObj.avoidDuplicates !== undefined) setAvoidDuplicates(profileObj.avoidDuplicates);
+            if (profileObj.abortOnError !== undefined) setAbortOnError(profileObj.abortOnError);
+            if (profileObj.delimiter !== undefined) setDelimiter(profileObj.delimiter);
+          }
+          
           const cols = getActiveColumns();
           const validMappings: Record<string, MappingItem> = {};
-          Object.entries(selected).forEach(([key, val]) => {
+          Object.entries(loadedMappings).forEach(([key, val]) => {
             if (cols.some(c => c.name === key)) {
               validMappings[key] = val as MappingItem;
             }
           });
+          
           setMappings(validMappings);
           setSelectedProfileName(name);
           toast.success(`Perfil "${name}" carregado com sucesso!`);
@@ -672,13 +862,21 @@ const ImportacaoForm: React.FC = () => {
     let isAborted = false;
     const localFailedList: typeof failedRowsList = [];
 
+    const companyId = XEmpresaId || 1;
+    const matrizCompanyId = XEmpresaMatrizId || companyId;
+    
+    // Distinguish matrix-level (shared catalog) vs branch-level (operational/transaction) tables
+    const matrixTables = ["cadastro", "cadastro_grupo", "produto", "produto_grupo", "produto_subgrupo", "linha_produto", "unidade"];
+    const isMatrixTable = matrixTables.includes(activeTable.name);
+    const targetCompanyId = isMatrixTable ? matrizCompanyId : companyId;
+
     // Pre-fetch unique lookup mappings for products
     const groupMap: Record<string, number> = {};
     const subgrupoMap: Record<string, number> = {};
     const linhaMap: Record<string, number> = {};
 
     if (selectedTableId === "produto") {
-      const companyId = XEmpresaId || 1;
+      const lookupCompanyId = matrizCompanyId;
 
       const extractCodes = (colName: string): string[] => {
         const mapping = mappings[colName];
@@ -709,7 +907,7 @@ const ImportacaoForm: React.FC = () => {
             const { data, error } = await supabase
               .from("produto_grupo")
               .select("produto_grupo_id, cd_produto_grupo")
-              .eq("empresa_id", companyId)
+              .eq("empresa_id", lookupCompanyId)
               .in("cd_produto_grupo", groupCodes);
             if (error) {
               console.error("Erro ao buscar produto_grupo:", error);
@@ -730,7 +928,7 @@ const ImportacaoForm: React.FC = () => {
             const { data, error } = await supabase
               .from("produto_subgrupo")
               .select("produto_subgrupo_id, cd_produto_subgrupo")
-              .eq("empresa_id", companyId)
+              .eq("empresa_id", lookupCompanyId)
               .in("cd_produto_subgrupo", subgrupoCodes);
             if (error) {
               console.error("Erro ao buscar produto_subgrupo:", error);
@@ -751,7 +949,7 @@ const ImportacaoForm: React.FC = () => {
             const { data, error } = await supabase
               .from("linha_produto")
               .select("linha_id, cd_linha")
-              .eq("empresa_id", companyId)
+              .eq("empresa_id", lookupCompanyId)
               .in("cd_linha", linhaCodes);
             if (error) {
               console.error("Erro ao buscar linha_produto:", error);
@@ -836,7 +1034,7 @@ const ImportacaoForm: React.FC = () => {
           // 1. Insert missing groups
           if (missingGroups.size > 0) {
             const insertGroups = Array.from(missingGroups).map(code => ({
-              empresa_id: companyId,
+              empresa_id: lookupCompanyId,
               cd_produto_grupo: code,
               nome: code
             }));
@@ -888,7 +1086,7 @@ const ImportacaoForm: React.FC = () => {
               const { data: firstGroup } = await supabase
                 .from("produto_grupo")
                 .select("produto_grupo_id")
-                .eq("empresa_id", companyId)
+                .eq("empresa_id", lookupCompanyId)
                 .limit(1)
                 .maybeSingle();
               if (firstGroup) {
@@ -899,7 +1097,7 @@ const ImportacaoForm: React.FC = () => {
             const insertSubgrupos = Array.from(missingSubgrupos).map(code => {
               const gid = subgrupoToGroupId[code] || fallbackGroupId;
               return {
-                empresa_id: companyId,
+                empresa_id: lookupCompanyId,
                 cd_produto_subgrupo: code,
                 nome: code,
                 produto_grupo_id: gid
@@ -910,7 +1108,7 @@ const ImportacaoForm: React.FC = () => {
               const { data: newDefGroup } = await supabase
                 .from("produto_grupo")
                 .insert({
-                  empresa_id: companyId,
+                  empresa_id: lookupCompanyId,
                   cd_produto_grupo: "GERAL",
                   nome: "Grupo Geral"
                 })
@@ -947,7 +1145,7 @@ const ImportacaoForm: React.FC = () => {
           // 3. Insert missing lines
           if (missingLinhas.size > 0) {
             const insertLinhas = Array.from(missingLinhas).map(code => ({
-              empresa_id: companyId,
+              empresa_id: lookupCompanyId,
               cd_linha: code,
               nome: code
             }));
@@ -975,7 +1173,7 @@ const ImportacaoForm: React.FC = () => {
     const payloadRows = parsedRows.map((row, rowIndex) => {
       const record: Record<string, unknown> = {};
       
-      record.empresa_id = XEmpresaId || 1;
+      record.empresa_id = targetCompanyId;
 
       if (activeTable.defaultValues) {
         Object.entries(activeTable.defaultValues).forEach(([key, val]) => {
@@ -991,6 +1189,13 @@ const ImportacaoForm: React.FC = () => {
           const headerIdx = mapping.fileIndex;
           if (headerIdx !== undefined) {
             rawValue = row[headerIdx];
+            
+            // Apply translation formula if configured!
+            if (mapping.useFallback && mapping.fallbackValue && mapping.fallbackValue.trim().toLowerCase().startsWith("cond:")) {
+              if (rawValue !== undefined && rawValue !== null) {
+                rawValue = applyColumnFormula(rawValue, mapping.fallbackValue);
+              }
+            }
           }
         }
 
@@ -1001,11 +1206,19 @@ const ImportacaoForm: React.FC = () => {
         const colDef = activeColumns.find(c => c.name === colName);
         if (!colDef) return;
 
-        const isEmpty = rawValue === undefined || rawValue === "";
+        let isEmpty = rawValue === undefined || rawValue === "";
 
         if (isEmpty) {
-          if (mapping.type === "file" && mapping.useFallback) {
-            rawValue = mapping.fallbackValue ?? "";
+          // If fallback is NOT a condition formula, use it as fallback value
+          if (mapping.type === "file" && mapping.useFallback && mapping.fallbackValue !== undefined && !mapping.fallbackValue.trim().toLowerCase().startsWith("cond:")) {
+            rawValue = mapping.fallbackValue === "" ? " " : mapping.fallbackValue;
+            isEmpty = rawValue === undefined || rawValue === "";
+          }
+        }
+
+        if (isEmpty) {
+          if (mapping.useFallback) {
+            rawValue = " ";
           } else {
             record[colName] = null;
             return;
@@ -1015,6 +1228,18 @@ const ImportacaoForm: React.FC = () => {
         const nameLower = colName.toLowerCase();
         const isDateCol = nameLower.startsWith("dt_") || nameLower.includes("data") || nameLower.includes("vencto");
         const isBoolCol = colDef.type === "boolean" || nameLower.startsWith("fl_") || nameLower.startsWith("lg_") || nameLower.startsWith("st_");
+
+        // Truncate string value if target column has a length limit in the database
+        if (typeof rawValue === "string") {
+          const dbTableName = activeTable.name;
+          const tableLimits = TABLE_FIELD_LIMITS[dbTableName];
+          if (tableLimits && tableLimits[colName] !== undefined) {
+            const limit = tableLimits[colName];
+            if (rawValue.length > limit) {
+              rawValue = rawValue.substring(0, limit);
+            }
+          }
+        }
 
         if (colDef.type === "number") {
           if (typeof rawValue === "number") {
@@ -1211,11 +1436,33 @@ const ImportacaoForm: React.FC = () => {
     const headerIdx = mapping.fileIndex;
     if (headerIdx === undefined) return "";
     
-    const rawVal = csvRow[headerIdx];
-    if ((rawVal === undefined || rawVal.trim() === "") && mapping.useFallback) {
-      return mapping.fallbackValue || "";
+    let rawVal = csvRow[headerIdx];
+    
+    // Apply translation formula if configured!
+    if (mapping.useFallback && mapping.fallbackValue && mapping.fallbackValue.trim().toLowerCase().startsWith("cond:")) {
+      if (rawVal !== undefined && rawVal !== null) {
+        rawVal = applyColumnFormula(rawVal, mapping.fallbackValue);
+      }
+      if (rawVal === undefined || rawVal.trim() === "") {
+        rawVal = " ";
+      }
+    } else if ((rawVal === undefined || rawVal.trim() === "") && mapping.useFallback) {
+      rawVal = mapping.fallbackValue === "" ? " " : (mapping.fallbackValue || " ");
     }
-    return rawVal || "";
+    
+    let finalVal = rawVal || " ";
+    if (typeof finalVal === "string") {
+      finalVal = finalVal.trim();
+      const dbTableName = activeTable.name;
+      const tableLimits = TABLE_FIELD_LIMITS[dbTableName];
+      if (tableLimits && tableLimits[colName] !== undefined) {
+        const limit = tableLimits[colName];
+        if (finalVal.length > limit) {
+          finalVal = finalVal.substring(0, limit);
+        }
+      }
+    }
+    return finalVal;
   };
 
   return (
@@ -1680,14 +1927,14 @@ const ImportacaoForm: React.FC = () => {
                                             className="rounded border-input text-primary focus:ring-primary w-4 h-4 accent-emerald-600 cursor-pointer"
                                           />
                                           <label htmlFor={`fallback-checkbox-${col.name}`} className="text-xs font-semibold text-muted-foreground cursor-pointer select-none">
-                                            Usar valor complementar se nulo/vazio
+                                            Usar valor complementar ou condição/fórmula
                                           </label>
                                         </div>
                                         
                                         {mapping.useFallback && (
                                           <div className="mt-1.5 flex flex-col gap-1">
                                             <Label htmlFor={`fallback-val-${col.name}`} className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                                              Valor Complementar
+                                              Valor Complementar / Condição
                                             </Label>
                                             {isBoolean ? (
                                               <select
@@ -1715,9 +1962,14 @@ const ImportacaoForm: React.FC = () => {
                                             ) : (
                                               <Input
                                                 id={`fallback-val-${col.name}`}
-                                                type={col.type === "number" ? "number" : "text"}
-                                                step={col.type === "number" ? "any" : undefined}
-                                                placeholder={`Digite o valor complementar (ex: ${isDate ? "1900/01/01" : col.type === "number" ? "0" : "Valor"})`}
+                                                type="text"
+                                                placeholder={
+                                                  col.type === "number"
+                                                    ? "Ex: 0 ou cond:A=1,B=2"
+                                                    : isDate
+                                                      ? "Ex: 1900-01-01 ou cond:Hoje=2026-05-27"
+                                                      : "Ex: Valor ou cond:MASCULINO=M,FEMININO=F"
+                                                }
                                                 value={mapping.fallbackValue ?? ""}
                                                 onChange={(e) => {
                                                   const val = e.target.value;

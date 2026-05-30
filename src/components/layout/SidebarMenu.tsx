@@ -96,7 +96,7 @@ const SidebarMenu = () => {
   const [XRpbRelatorios, setXRpbRelatorios] = useState<IRpbRelatorio[]>([]);
   const [XSearch, setXSearch] = useState("");
   const [XLastAction, setXLastAction] = useState<{ type: 'expand' | 'collapse', ts: number } | null>(null);
-  const [XSystemVersion, setXSystemVersion] = useState("v1.15.0");
+  const [XSystemVersion, setXSystemVersion] = useState("v1.16.0");
 
   useEffect(() => {
     const loadVersion = async () => {

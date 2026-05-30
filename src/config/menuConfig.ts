@@ -97,6 +97,7 @@ export const MENU_CONFIG: MenuItem[] = [
           { id: "produtos", title: "Produtos", icon: CartFlatbed },
           { id: "linhas-produtos", title: "Linhas de Produtos", icon: AlignJustify },
           { id: "grupo-produtos", title: "Grupos de Produtos", icon: Box },
+          { id: "subgrupo-produtos", title: "Subgrupos de Produtos", icon: Boxes },
           { id: "unidades", title: "Unidades", icon: Layers },
         ],
       },

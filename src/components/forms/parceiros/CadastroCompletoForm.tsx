@@ -138,6 +138,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
   const [XBuscandoCep, setXBuscandoCep] = useState(false);
   const [XBuscandoGeo, setXBuscandoGeo] = useState(false);
   const [XCidadeDlgOpen, setXCidadeDlgOpen] = useState(false);
+  const [tempVeiculos, setTempVeiculos] = useState<any[]>([]);
 
 
   // Lookups
@@ -424,7 +425,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
     setXF(XDefaults);
     setXInnerTab("cadastro");
     setXCadastroInnerTab("geral");
-
+    setTempVeiculos([]);
   };
 
   const handleEditar = () => {
@@ -576,6 +577,33 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
       XSavedCadastroId = XInserted?.cadastro_id || null;
     }
 
+    if (XFormMode === "insert" && tempVeiculos.length > 0 && XSavedCadastroId) {
+      const vehiclesToInsert = tempVeiculos.map(v => ({
+        placa: v.placa,
+        descricao: v.descricao,
+        marca: v.marca,
+        modelo: v.modelo,
+        renavam: v.renavam,
+        tara: v.tara,
+        capacidade_kg: v.capacidade_kg,
+        tp_rodado: v.tp_rodado,
+        tp_carroceria: v.tp_carroceria,
+        uf: v.uf,
+        tp_veiculo: v.tp_veiculo,
+        ativo: v.ativo,
+        cadastro_id: XSavedCadastroId,
+        empresa_id: XEmpresaMatrizId,
+        dt_cadastro: new Date().toISOString(),
+      }));
+      const { error: errV } = await db.from("cadastro_veiculo").insert(vehiclesToInsert);
+      if (errV) {
+        toast.error("Parceiro salvo, mas erro ao salvar os veículos: " + errV.message);
+      } else {
+        toast.success(`${tempVeiculos.length} veículo(s) vinculados ao parceiro.`);
+      }
+      setTempVeiculos([]);
+    }
+
     toast.success(XFormMode === "edit" ? "Cadastro alterado com sucesso." : "Cadastro incluído com sucesso.");
     setXFormMode("view");
     await loadData(XSavedCadastroId || undefined);
@@ -703,9 +731,26 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
 
   const XCadTabs = useMemo(() => {
     const XBase = ["geral", "endereco", "complemento", "geo"];
-    if (showVeiculoTab) XBase.push("veiculos");
+    const isTransportador = XIsEditing
+      ? XF.st_transportador === "S"
+      : XCurrentRecord?.st_transportador === "S";
+
+    if (showVeiculoTab && isTransportador) {
+      XBase.push("veiculos");
+    }
     return XBase;
-  }, [showVeiculoTab]);
+  }, [showVeiculoTab, XIsEditing, XF.st_transportador, XCurrentRecord?.st_transportador]);
+
+  // Auto-redirect if "veiculos" tab gets hidden while active
+  useEffect(() => {
+    const isTransportador = XIsEditing
+      ? XF.st_transportador === "S"
+      : XCurrentRecord?.st_transportador === "S";
+
+    if (XCadastroInnerTab === "veiculos" && (!showVeiculoTab || !isTransportador)) {
+      setXCadastroInnerTab("geral");
+    }
+  }, [XCadastroInnerTab, showVeiculoTab, XIsEditing, XF.st_transportador, XCurrentRecord?.st_transportador]);
 
   const XCadTabLabels: Record<string, string> = {
     geral: "Dados Gerais",
@@ -1073,8 +1118,25 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
             )}
 
             {/* === ABA VEÍCULOS === */}
-            {XCadastroInnerTab === "veiculos" && showVeiculoTab && XCurrentRecord && (
-              <VeiculoGrid XEmpresaId={XEmpresaId} XCadastroId={XCurrentRecord.cadastro_id} />
+            {XCadastroInnerTab === "veiculos" && showVeiculoTab && (
+              XFormMode === "insert" ? (
+                <VeiculoGrid
+                  XEmpresaId={XEmpresaMatrizId}
+                  tempVeiculos={tempVeiculos}
+                  onChangeTempVeiculos={setTempVeiculos}
+                />
+              ) : XCurrentRecord ? (
+                <VeiculoGrid
+                  XEmpresaId={XEmpresaMatrizId}
+                  XCadastroId={XCurrentRecord.cadastro_id}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 border border-dashed border-border rounded-lg bg-slate-50/50 dark:bg-slate-900/50 h-64 text-center">
+                  <p className="text-sm font-semibold text-muted-foreground">
+                    Selecione um parceiro primeiro.
+                  </p>
+                </div>
+              )
             )}
           </div>
         ) : (
