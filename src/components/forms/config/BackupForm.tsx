@@ -300,6 +300,9 @@ const BackupForm: React.FC = () => {
     let fileName = "";
     let mimeType = "";
 
+    const supaUrl = import.meta.env.VITE_SUPABASE_URL || "";
+    const supaKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
+
     if (scriptType === "windows") {
       fileName = "automacao_backup_realsys.bat";
       mimeType = "text/plain";
@@ -315,6 +318,8 @@ set DB_PASSWORD=${dbPass}
 set BACKUP_DIR=${formattedBackupPath}
 set SYSTEM_DIR=${formattedSysPath}
 set SUPABASE_DIR=${formattedSupaPath}
+set SUPABASE_URL=${supaUrl}
+set SUPABASE_KEY=${supaKey}
 
 :: Obter carimbo de data e hora para os arquivos
 for /f "tokens=2-4 delims=/ " %%a in ('date /t') do (set mydate=%%c-%%a-%%b)
@@ -327,11 +332,41 @@ echo ==============================================
 set PGPASSWORD=%DB_PASSWORD%
 pg_dump -h %DB_HOST% -p %DB_PORT% -U %DB_USER% -F c -b -v -f "%BACKUP_DIR%\\db_backup_%FILE_SUFFIX%.sql" %DB_NAME%
 
+if %ERRORLEVEL% neq 0 (
+  echo ERRO: Falha ao gerar o dump do banco de dados.
+  curl -X POST "%SUPABASE_URL%/rest/v1/sys_backup_log" ^
+    -H "apikey: %SUPABASE_KEY%" ^
+    -H "Authorization: Bearer %SUPABASE_KEY%" ^
+    -H "Content-Type: application/json" ^
+    -d "{\\"backup_type\\":\\"database\\", \\"status\\":\\"failed\\", \\"error_message\\":\\"pg_dump exit code %ERRORLEVEL%\\"}"
+) else (
+  for %%I in ("%BACKUP_DIR%\\db_backup_%FILE_SUFFIX%.sql") do set FILE_SIZE=%%~zI
+  curl -X POST "%SUPABASE_URL%/rest/v1/sys_backup_log" ^
+    -H "apikey: %SUPABASE_KEY%" ^
+    -H "Authorization: Bearer %SUPABASE_KEY%" ^
+    -H "Content-Type: application/json" ^
+    -d "{\\"backup_type\\":\\"database\\", \\"status\\":\\"success\\", \\"file_name\\":\\"db_backup_%FILE_SUFFIX%.sql\\", \\"file_size_bytes\\":%FILE_SIZE%}"
+)
+
 echo ==============================================
 echo [2/3] Compactando pasta de arquivos do Sistema...
 echo ==============================================
 if exist "%SYSTEM_DIR%" (
     tar -czf "%BACKUP_DIR%\\system_backup_%FILE_SUFFIX%.tar.gz" -C "%SYSTEM_DIR%" .
+    if %ERRORLEVEL% neq 0 (
+      curl -X POST "%SUPABASE_URL%/rest/v1/sys_backup_log" ^
+        -H "apikey: %SUPABASE_KEY%" ^
+        -H "Authorization: Bearer %SUPABASE_KEY%" ^
+        -H "Content-Type: application/json" ^
+        -d "{\\"backup_type\\":\\"system\\", \\"status\\":\\"failed\\", \\"error_message\\":\\"tar system files exit code %ERRORLEVEL%\\"}"
+    ) else (
+      for %%I in ("%BACKUP_DIR%\\system_backup_%FILE_SUFFIX%.tar.gz") do set FILE_SIZE=%%~zI
+      curl -X POST "%SUPABASE_URL%/rest/v1/sys_backup_log" ^
+        -H "apikey: %SUPABASE_KEY%" ^
+        -H "Authorization: Bearer %SUPABASE_KEY%" ^
+        -H "Content-Type: application/json" ^
+        -d "{\\"backup_type\\":\\"system\\", \\"status\\":\\"success\\", \\"file_name\\":\\"system_backup_%FILE_SUFFIX%.tar.gz\\", \\"file_size_bytes\\":%FILE_SIZE%}"
+    )
 ) else (
     echo AVISO: Pasta de origem do sistema nao encontrada.
 )
@@ -341,6 +376,20 @@ echo [3/3] Compactando pasta de arquivos do Supabase...
 echo ==============================================
 if exist "%SUPABASE_DIR%" (
     tar -czf "%BACKUP_DIR%\\supabase_backup_%FILE_SUFFIX%.tar.gz" -C "%SUPABASE_DIR%" .
+    if %ERRORLEVEL% neq 0 (
+      curl -X POST "%SUPABASE_URL%/rest/v1/sys_backup_log" ^
+        -H "apikey: %SUPABASE_KEY%" ^
+        -H "Authorization: Bearer %SUPABASE_KEY%" ^
+        -H "Content-Type: application/json" ^
+        -d "{\\"backup_type\\":\\"system\\", \\"status\\":\\"failed\\", \\"error_message\\":\\"tar supabase volumes exit code %ERRORLEVEL%\\"}"
+    ) else (
+      for %%I in ("%BACKUP_DIR%\\supabase_backup_%FILE_SUFFIX%.tar.gz") do set FILE_SIZE=%%~zI
+      curl -X POST "%SUPABASE_URL%/rest/v1/sys_backup_log" ^
+        -H "apikey: %SUPABASE_KEY%" ^
+        -H "Authorization: Bearer %SUPABASE_KEY%" ^
+        -H "Content-Type: application/json" ^
+        -d "{\\"backup_type\\":\\"system\\", \\"status\\":\\"success\\", \\"file_name\\":\\"supabase_backup_%FILE_SUFFIX%.tar.gz\\", \\"file_size_bytes\\":%FILE_SIZE%}"
+    )
 ) else (
     echo AVISO: Pasta de origem do Supabase nao encontrada.
 )
@@ -362,6 +411,8 @@ DB_PASSWORD="${dbPass}"
 BACKUP_DIR="${formattedBackupPath}"
 SYSTEM_DIR="${formattedSysPath}"
 SUPABASE_DIR="${formattedSupaPath}"
+SUPABASE_URL="${supaUrl}"
+SUPABASE_KEY="${supaKey}"
 
 FILE_SUFFIX=$(date +%Y-%m-%d_%H%M)
 
@@ -370,12 +421,44 @@ echo "[1/3] Realizando backup do Banco de Dados..."
 echo "=============================================="
 export PGPASSWORD="$DB_PASSWORD"
 pg_dump -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -F c -b -v -f "$BACKUP_DIR/db_backup_$FILE_SUFFIX.sql" "$DB_NAME"
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -ne 0 ]; then
+  echo "ERRO: Falha ao gerar o dump do banco de dados."
+  curl -X POST "$SUPABASE_URL/rest/v1/sys_backup_log" \
+    -H "apikey: $SUPABASE_KEY" \
+    -H "Authorization: Bearer $SUPABASE_KEY" \
+    -H "Content-Type: application/json" \
+    -d "{\\"backup_type\\":\\"database\\", \\"status\\":\\"failed\\", \\"error_message\\":\\"pg_dump exit code $EXIT_CODE\\"}"
+else
+  FILE_SIZE=$(stat -c%s "$BACKUP_DIR/db_backup_$FILE_SUFFIX.sql")
+  curl -X POST "$SUPABASE_URL/rest/v1/sys_backup_log" \
+    -H "apikey: $SUPABASE_KEY" \
+    -H "Authorization: Bearer $SUPABASE_KEY" \
+    -H "Content-Type: application/json" \
+    -d "{\\"backup_type\\":\\"database\\", \\"status\\":\\"success\\", \\"file_name\\":\\"db_backup_$FILE_SUFFIX.sql\\", \\"file_size_bytes\\":$FILE_SIZE}"
+fi
 
 echo "=============================================="
 echo "[2/3] Compactando pasta de arquivos do Sistema..."
 echo "=============================================="
 if [ -d "$SYSTEM_DIR" ]; then
     tar -czf "$BACKUP_DIR/system_backup_$FILE_SUFFIX.tar.gz" -C "$SYSTEM_DIR" .
+    EXIT_CODE=$?
+    if [ $EXIT_CODE -ne 0 ]; then
+      curl -X POST "$SUPABASE_URL/rest/v1/sys_backup_log" \
+        -H "apikey: $SUPABASE_KEY" \
+        -H "Authorization: Bearer $SUPABASE_KEY" \
+        -H "Content-Type: application/json" \
+        -d "{\\"backup_type\\":\\"system\\", \\"status\\":\\"failed\\", \\"error_message\\":\\"tar system files exit code $EXIT_CODE\\"}"
+    else
+      FILE_SIZE=$(stat -c%s "$BACKUP_DIR/system_backup_$FILE_SUFFIX.tar.gz")
+      curl -X POST "$SUPABASE_URL/rest/v1/sys_backup_log" \
+        -H "apikey: $SUPABASE_KEY" \
+        -H "Authorization: Bearer $SUPABASE_KEY" \
+        -H "Content-Type: application/json" \
+        -d "{\\"backup_type\\":\\"system\\", \\"status\\":\\"success\\", \\"file_name\\":\\"system_backup_$FILE_SUFFIX.tar.gz\\", \\"file_size_bytes\\":$FILE_SIZE}"
+    fi
 else
     echo "AVISO: Pasta de origem do sistema não encontrada."
 fi
@@ -385,6 +468,21 @@ echo "[3/3] Compactando pasta de arquivos do Supabase..."
 echo "=============================================="
 if [ -d "$SUPABASE_DIR" ]; then
     tar -czf "$BACKUP_DIR/supabase_backup_$FILE_SUFFIX.tar.gz" -C "$SUPABASE_DIR" .
+    EXIT_CODE=$?
+    if [ $EXIT_CODE -ne 0 ]; then
+      curl -X POST "$SUPABASE_URL/rest/v1/sys_backup_log" \
+        -H "apikey: $SUPABASE_KEY" \
+        -H "Authorization: Bearer $SUPABASE_KEY" \
+        -H "Content-Type: application/json" \
+        -d "{\\"backup_type\\":\\"system\\", \\"status\\":\\"failed\\", \\"error_message\\":\\"tar supabase volumes exit code $EXIT_CODE\\"}"
+    else
+      FILE_SIZE=$(stat -c%s "$BACKUP_DIR/supabase_backup_$FILE_SUFFIX.tar.gz")
+      curl -X POST "$SUPABASE_URL/rest/v1/sys_backup_log" \
+        -H "apikey: $SUPABASE_KEY" \
+        -H "Authorization: Bearer $SUPABASE_KEY" \
+        -H "Content-Type: application/json" \
+        -d "{\\"backup_type\\":\\"system\\", \\"status\\":\\"success\\", \\"file_name\\":\\"supabase_backup_$FILE_SUFFIX.tar.gz\\", \\"file_size_bytes\\":$FILE_SIZE}"
+    fi
 else
     echo "AVISO: Pasta de origem do Supabase não encontrada."
 fi
