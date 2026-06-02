@@ -6,7 +6,7 @@ const UF_MAP: Record<string, string> = {
 };
 
 export const gerarIniMdfe = (params: any): string => {
-  const { manifesto, carrega, descarrega, condutores, documentos, veiculos, percurso, fConfig } = params;
+  const { manifesto, carrega, descarrega, condutores, documentos, veiculos, percurso, pagamentos, componentes, parcelas, fConfig } = params;
 
   const esc = (val: any) => String(val || '').replace(/\n/g, ' ');
   const formatData = (d: any) => d ? String(d).substring(0, 10) : '';
@@ -18,7 +18,9 @@ export const gerarIniMdfe = (params: any): string => {
   ini += `cUF=${UF_MAP[manifesto.ufini] || '35'}\n`;
   ini += `tpAmb=${fConfig?.ambiente_mdfe || 2}\n`;
   ini += `tpEmit=${manifesto.tp_emitente || '1'}\n`;
-  ini += `tpTransp=${manifesto.tp_transportador || '1'}\n`;
+  if (manifesto.tp_transportador && String(manifesto.tp_transportador).trim() !== "") {
+    ini += `tpTransp=${manifesto.tp_transportador}\n`;
+  }
   ini += `mod=${manifesto.modelo || '58'}\n`;
   ini += `serie=${manifesto.serie || '1'}\n`;
   ini += `nMDF=${manifesto.numero || ''}\n`;
@@ -36,6 +38,24 @@ export const gerarIniMdfe = (params: any): string => {
     
     ini += "[rodo]\n";
     ini += `RNTRC=${manifesto.rntrc || 'ISENTO'}\n\n`;
+
+    // CIOT
+    if (manifesto.ciot && String(manifesto.ciot).trim() !== "") {
+      const ciotClean = String(manifesto.ciot).replace(/\D/g, "");
+      const ciotCnpjCpfClean = manifesto.ciot_cnpj_cpf ? String(manifesto.ciot_cnpj_cpf).replace(/\D/g, "") : "";
+      ini += "[infCIOT001]\n";
+      ini += `CIOT=${ciotClean}\n`;
+      ini += `CNPJCPF=${ciotCnpjCpfClean || '00000000000000'}\n\n`;
+    }
+
+    // Contratante
+    if (manifesto.contratante_cnpj_cpf && String(manifesto.contratante_cnpj_cpf).trim() !== "") {
+      const contrCnpjCpfClean = String(manifesto.contratante_cnpj_cpf).replace(/\D/g, "");
+      const contrNomeClean = esc(manifesto.contratante_nome || "");
+      ini += "[infContratante001]\n";
+      ini += `CNPJCPF=${contrCnpjCpfClean}\n`;
+      ini += `xNome=${contrNomeClean}\n\n`;
+    }
 
     // Veículos
     const vTracao = veiculos.find((v: any) => v.tp_veiculo === 'TRACAO');
@@ -123,6 +143,68 @@ export const gerarIniMdfe = (params: any): string => {
     ini += `[infPercurso${idx}]\n`;
     ini += `UFPer=${p.uf}\n\n`;
   });
+
+  // Informações de Pagamento (infPag) - Obrigatório para Carga Lotação no Modal Rodoviário
+  const qtdDfe = qNFe + qCTe;
+  const tpEmit = Number(manifesto.tp_emitente || 1);
+  const tpTransp = manifesto.tp_transportador;
+
+  const isInfPagMandatoryVal = () => {
+    if (manifesto.modalidade !== '1') return false;
+    if (qtdDfe !== 1) return false;
+    if (tpEmit === 1) return true;
+    if (tpEmit === 2 && tpTransp && String(tpTransp).trim() !== "") return true;
+    if (tpEmit === 3) return true;
+    return false;
+  };
+
+  if (isInfPagMandatoryVal()) {
+    const pag = (pagamentos && pagamentos.length > 0) ? pagamentos[0] : null;
+    const temParcelas = parcelas && parcelas.length > 0;
+    const indPag = temParcelas ? "1" : "0";
+    const cnpjipefClean = pag?.cnpjipef 
+      ? String(pag.cnpjipef).replace(/\D/g, "") 
+      : (manifesto.transp_cnpj_cpf ? String(manifesto.transp_cnpj_cpf).replace(/\D/g, "") : "");
+
+    ini += "[infPag001]\n";
+    ini += `CNPJCPF=${cnpjipefClean || '00000000000000'}\n`;
+    ini += `vContrato=${manifesto.valor_total || pag?.vl_contrato || 0}\n`;
+    ini += `indPag=${indPag}\n`;
+    if (pag?.adiantamento && Number(pag.adiantamento) > 0) {
+      ini += `vAdiant=${pag.adiantamento}\n`;
+    }
+    ini += "\n";
+
+    // Componentes de pagamento
+    if (componentes && componentes.length > 0) {
+      componentes.forEach((comp: any, idx: number) => {
+        const compIdx = String(idx + 1).padStart(3, '0');
+        ini += `[Comp001${compIdx}]\n`;
+        ini += `tpComp=${comp.tp_componente || '99'}\n`;
+        ini += `vComp=${comp.vl_componente || 0}\n`;
+        if (comp.tp_componente === '99') {
+          ini += `xComp=${esc(comp.ds_componente || 'Outros')}\n`;
+        }
+        ini += "\n";
+      });
+    } else {
+      // Se não houver componentes cadastrados, gerar um componente padrão de Frete (04)
+      ini += "[Comp001001]\n";
+      ini += "tpComp=04\n";
+      ini += `vComp=${manifesto.valor_total || pag?.vl_contrato || 0}\n\n`;
+    }
+
+    // Parcelas a prazo
+    if (indPag === "1" && parcelas && parcelas.length > 0) {
+      parcelas.forEach((p: any, idx: number) => {
+        const prazoIdx = String(idx + 1).padStart(3, '0');
+        ini += `[infPrazo001${prazoIdx}]\n`;
+        ini += `nParcela=${p.nr_parcela}\n`;
+        ini += `dVenc=${formatData(p.dt_vencimento)}\n`;
+        ini += `vParcela=${p.vl_parcela || 0}\n\n`;
+      });
+    }
+  }
 
   return ini;
 };

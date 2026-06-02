@@ -38,7 +38,7 @@ interface StandardCrudFormProps<T extends Record<string, any>> {
   XRefreshRef?: React.MutableRefObject<(() => Promise<void>) | null>;
   XInitialId?: any;
   XToolbarExtras?: (ctx: { currentRecord: any; isEditing: boolean; setRecord: (r: any) => void; refresh: () => Promise<void>; setInnerTab: (tab: string) => void }) => React.ReactNode;
-  XHiddenTabs?: string[];
+  XHiddenTabs?: string[] | ((record: any) => string[]);
   XCadastroLabel?: string;
 }
 
@@ -140,7 +140,10 @@ function StandardCrudForm<T extends Record<string, any>>({
       />
 
       <div className="flex border-b border-border bg-card">
-        {XTabsList.filter(t => !XHiddenTabs.includes(t.key)).map(t => (
+        {XTabsList.filter(t => {
+          const hidden = typeof XHiddenTabs === "function" ? XHiddenTabs(XActiveRecord) : XHiddenTabs;
+          return !hidden.includes(t.key);
+        }).map(t => (
           <button
             key={t.key}
             className={`px-5 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-all ${

@@ -27,15 +27,19 @@ export const mdfeEmissaoService = {
         { data: veiculos },
         { data: percurso },
         { data: pagamentos },
+        { data: componentes },
+        { data: parcelas },
         { data: fConfig }
       ] = await Promise.all([
         db.from("fiscal_mdf_carrega").select("*, cidade(*)").eq("mdf_manifesto_id", mdfManifestoId).eq("excluido", false),
         db.from("fiscal_mdf_descarrega").select("*, cidade(*)").eq("mdf_manifesto_id", mdfManifestoId).eq("excluido", false),
-        db.from("fiscal_mdf_motorista").select("*, fiscal_mdf_condutor(*)").eq("mdf_manifesto_id", mdfManifestoId).eq("excluido", false),
+        db.from("fiscal_mdf_condutor").select("*, cadastro_motorista(*)").eq("mdf_manifesto_id", mdfManifestoId).eq("excluido", false),
         db.from("fiscal_mdf_documento").select("*, cidade(*)").eq("mdf_manifesto_id", mdfManifestoId).eq("excluido", false),
         db.from("fiscal_mdf_veiculo").select("*").eq("mdf_manifesto_id", mdfManifestoId).eq("excluido", false),
         db.from("fiscal_mdf_percurso").select("*").eq("mdf_manifesto_id", mdfManifestoId).eq("excluido", false),
         db.from("fiscal_mdf_pagamento").select("*").eq("mdf_manifesto_id", mdfManifestoId).eq("excluido", false),
+        db.from("fiscal_mdf_componente").select("*").eq("mdf_manifesto_id", mdfManifestoId).eq("excluido", false),
+        db.from("fiscal_mdf_pagtos").select("*").eq("mdf_manifesto_id", mdfManifestoId).eq("excluido", false),
         db.from("fiscal_config").select("*").eq("empresa_id", empresaId).single()
       ]);
 
@@ -45,13 +49,15 @@ export const mdfeEmissaoService = {
         descarrega: descarrega || [],
         condutores: (condutores || []).map((m: any) => ({
           ...m,
-          nome: m.fiscal_mdf_condutor?.nome,
-          cpf: m.fiscal_mdf_condutor?.cpf
+          nome: m.cadastro_motorista?.nome,
+          cpf: m.cadastro_motorista?.cpf
         })),
         documentos: documentos || [],
         veiculos: veiculos || [],
         percurso: percurso || [],
         pagamentos: pagamentos || [],
+        componentes: componentes || [],
+        parcelas: parcelas || [],
         fConfig
       };
 

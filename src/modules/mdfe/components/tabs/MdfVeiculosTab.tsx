@@ -7,41 +7,87 @@ interface IProps {
   mdfManifestoId: number | null;
   empresaId: number;
   podeEditar: boolean;
+  onTracaoCadastroIdChange?: (cadastroId: number | null) => void;
+  onMotoristasChanged?: () => void;
 }
 
-const MdfVeiculosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEditar }) => {
+const MdfVeiculosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEditar, onTracaoCadastroIdChange, onMotoristasChanged }) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [rows, setRows] = useState<any[]>([]);
   const [veiculoId, setVeiculoId] = useState("");
   const [placa, setPlaca] = useState("");
   const [tipo, setTipo] = useState("TRACAO");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [veiculosList, setVeiculosList] = useState<any[]>([]);
 
   const load = useCallback(async () => {
     if (!mdfManifestoId) return;
-    const { data } = await supabase
-      .from("fiscal_mdf_veiculo")
-      .select("*")
-      .eq("mdf_manifesto_id", mdfManifestoId)
-      .eq("excluido", false)
-      .order("mdf_veiculo_id");
-    setRows(data || []);
+    try {
+      const { data, error } = await supabase
+        .from("fiscal_mdf_veiculo")
+        .select("*")
+        .eq("mdf_manifesto_id", mdfManifestoId)
+        .eq("excluido", false)
+        .order("mdf_veiculo_id");
+      if (error) {
+        console.error("Erro ao carregar veículos do MDF-e:", error);
+        toast.error("Erro ao carregar veículos do MDF-e: " + error.message);
+        return;
+      }
+      setRows(data || []);
+    } catch (err: unknown) {
+      const errorObj = err as Error;
+      console.error("Exceção ao carregar veículos do MDF-e:", errorObj);
+      toast.error("Erro ao carregar veículos do MDF-e: " + errorObj.message);
+    }
   }, [mdfManifestoId]);
 
   const loadVeiculos = useCallback(async () => {
-    const { data } = await supabase
-      .from("cadastro_veiculo")
-      .select("veiculo_id, placa, descricao, renavam, tara, capacidade_kg, tp_rodado, tp_carroceria, uf, tp_veiculo")
-      .eq("empresa_id", empresaId)
-      .eq("excluido", false)
-      .eq("ativo", true)
-      .order("placa");
-    setVeiculosList(data || []);
+    try {
+      const { data, error } = await supabase
+        .from("cadastro_veiculo")
+        .select("veiculo_id, placa, descricao, renavam, tara, capacidade_kg, tp_rodado, tp_carroceria, uf, tp_veiculo, cadastro_id")
+        .eq("empresa_id", empresaId)
+        .eq("excluido", false)
+        .eq("ativo", true)
+        .order("placa");
+      if (error) {
+        console.error("Erro ao carregar lista de veículos:", error);
+        toast.error("Erro ao carregar lista de veículos: " + error.message);
+        return;
+      }
+      setVeiculosList(data || []);
+    } catch (err: unknown) {
+      const errorObj = err as Error;
+      console.error("Exceção ao carregar lista de veículos:", errorObj);
+      toast.error("Erro ao carregar lista de veículos: " + errorObj.message);
+    }
   }, [empresaId]);
+
+  useEffect(() => {
+    setRows([]);
+    if (onTracaoCadastroIdChange) {
+      onTracaoCadastroIdChange(null);
+    }
+  }, [mdfManifestoId, onTracaoCadastroIdChange]);
 
   useEffect(() => { 
     load(); 
     loadVeiculos();
   }, [load, loadVeiculos]);
+
+  useEffect(() => {
+    if (!onTracaoCadastroIdChange) return;
+    const tracaoRow = rows.find(r => r.tp_veiculo === "TRACAO");
+    if (tracaoRow) {
+      const vObj = veiculosList.find(x => x.veiculo_id === tracaoRow.veiculo_id);
+      if (vObj && vObj.cadastro_id) {
+        onTracaoCadastroIdChange(vObj.cadastro_id);
+        return;
+      }
+    }
+    onTracaoCadastroIdChange(null);
+  }, [rows, veiculosList, onTracaoCadastroIdChange]);
 
   const handleAdd = async () => {
     if (!veiculoId) { toast.warning("Selecione um veículo."); return; }
@@ -69,9 +115,30 @@ const MdfVeiculosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
       uf: v.uf,
       tp_veiculo: v.tp_veiculo,
       dt_cadastro: new Date().toISOString(),
+      excluido: false,
     });
 
     if (error) { toast.error("Erro ao adicionar: " + error.message); return; }
+
+    // Atualizar o transp_cnpj_cpf e rntrc no manifesto se o veículo adicionado for TRACAO
+    if (v.tp_veiculo === "TRACAO" && v.cadastro_id) {
+      const { data: cadastro } = await supabase
+        .from("cadastro")
+        .select("cnpj, rntrc")
+        .eq("cadastro_id", v.cadastro_id)
+        .maybeSingle();
+
+      if (cadastro) {
+        await supabase
+          .from("fiscal_mdf_manifesto")
+          .update({ 
+            transp_cnpj_cpf: cadastro.cnpj || null,
+            rntrc: cadastro.rntrc || null
+          })
+          .eq("mdf_manifesto_id", mdfManifestoId);
+      }
+    }
+
     toast.success("Veículo adicionado.");
     setVeiculoId(""); setPlaca(""); setTipo("TRACAO");
     load();
@@ -79,7 +146,68 @@ const MdfVeiculosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
 
   const handleRemove = async (id: number) => {
     if (!confirm("Remover este veículo?")) return;
-    await supabase.from("fiscal_mdf_veiculo").update({ excluido: true, dt_alteracao: new Date().toISOString() }).eq("mdf_veiculo_id", id);
+    
+    // Identifica o transportador (cadastro_id) do veículo sendo removido
+    const removedRow = rows.find(r => r.mdf_veiculo_id === id);
+    const vObj = veiculosList.find(x => x.veiculo_id === removedRow?.veiculo_id);
+    const carrierId = vObj?.cadastro_id;
+
+    const { error } = await supabase
+      .from("fiscal_mdf_veiculo")
+      .update({ excluido: true, dt_alteracao: new Date().toISOString() })
+      .eq("mdf_veiculo_id", id);
+
+    if (error) {
+      toast.error("Erro ao remover veículo: " + error.message);
+      return;
+    }
+
+    // Se o veículo removido for TRACAO, limpa o transp_cnpj_cpf e o rntrc no manifesto
+    if (removedRow?.tp_veiculo === "TRACAO" && mdfManifestoId) {
+      await supabase
+        .from("fiscal_mdf_manifesto")
+        .update({ transp_cnpj_cpf: null, rntrc: null })
+        .eq("mdf_manifesto_id", mdfManifestoId);
+    }
+
+    // Se houver transportador e ID do manifesto, verifica se sobrou algum outro veículo dele no manifesto
+    if (carrierId && mdfManifestoId) {
+      const remainingVehiclesFromSameCarrier = rows.filter(
+        r => r.mdf_veiculo_id !== id && 
+             veiculosList.find(x => x.veiculo_id === r.veiculo_id)?.cadastro_id === carrierId
+      );
+
+      if (remainingVehiclesFromSameCarrier.length === 0) {
+        // Busca motoristas vinculados a este manifesto
+        const { data: linkedCondutores } = await supabase
+          .from("fiscal_mdf_condutor")
+          .select("mdf_condutor_id, condutor_id, cadastro_motorista(cadastro_id)")
+          .eq("mdf_manifesto_id", mdfManifestoId)
+          .eq("excluido", false);
+
+        if (linkedCondutores) {
+          // Identifica os motoristas que pertencem ao transportador do veículo removido
+          const condutoresToRemove = (linkedCondutores as any[]).filter(
+            (m: any) => m.cadastro_motorista?.cadastro_id === carrierId
+          );
+
+          if (condutoresToRemove.length > 0) {
+            const idsToRemove = condutoresToRemove.map((m: any) => m.mdf_condutor_id);
+            await supabase
+              .from("fiscal_mdf_condutor")
+              .update({ excluido: true, dt_alteracao: new Date().toISOString() })
+              .in("mdf_condutor_id", idsToRemove);
+            
+            toast.info("Motorista(s) do transportador também foram desvinculados.");
+            if (onMotoristasChanged) {
+              onMotoristasChanged();
+            }
+          }
+        }
+      }
+    }
+
+    toast.success("Veículo removido.");
     load();
   };
 
@@ -114,28 +242,28 @@ const MdfVeiculosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
       <table className="w-full text-sm border-collapse">
         <thead>
           <tr className="bg-secondary text-left">
-            <th className="px-3 py-2 border border-border text-xs font-medium w-[80px]">ID</th>
-            <th className="px-3 py-2 border border-border text-xs font-medium">Placa</th>
-            <th className="px-3 py-2 border border-border text-xs font-medium">Tipo</th>
-            <th className="px-3 py-2 border border-border text-xs font-medium">UF</th>
-            {podeEditar && <th className="px-3 py-2 border border-border text-xs font-medium w-[60px]"></th>}
+            <th className="px-3 py-2 border border-border text-xs font-medium w-[120px]">Placa</th>
+            <th className="px-3 py-2 border border-border text-xs font-medium">Descrição</th>
+            {podeEditar && <th className="px-3 py-2 border border-border text-xs font-medium w-[50px]"></th>}
           </tr>
         </thead>
         <tbody>
-          {rows.map(r => (
-            <tr key={r.mdf_veiculo_id} className="hover:bg-accent/30">
-              <td className="px-3 py-1.5 border border-border text-right">{r.veiculo_id}</td>
-              <td className="px-3 py-1.5 border border-border font-mono">{r.placa}</td>
-              <td className="px-3 py-1.5 border border-border">{r.tp_veiculo === "TRACAO" ? "Tração" : "Reboque"}</td>
-              <td className="px-3 py-1.5 border border-border text-center">{r.uf}</td>
-              {podeEditar && (
-                <td className="px-3 py-1.5 border border-border text-center">
-                  <button onClick={() => handleRemove(r.mdf_veiculo_id)} className="text-destructive hover:text-destructive/80"><Trash2 className="w-4 h-4" /></button>
-                </td>
-              )}
-            </tr>
-          ))}
-          {!rows.length && <tr><td colSpan={5} className="px-3 py-4 text-center text-muted-foreground text-sm">Nenhum veículo adicionado.</td></tr>}
+          {rows.map(r => {
+            const vObj = veiculosList.find(x => x.veiculo_id === r.veiculo_id);
+            const descricao = vObj ? vObj.descricao : "";
+            return (
+              <tr key={r.mdf_veiculo_id} className="hover:bg-accent/30">
+                <td className="px-3 py-1.5 border border-border font-mono">{r.placa}</td>
+                <td className="px-3 py-1.5 border border-border">{descricao || "—"}</td>
+                {podeEditar && (
+                  <td className="px-3 py-1.5 border border-border text-center w-[50px]">
+                    <button onClick={() => handleRemove(r.mdf_veiculo_id)} className="text-destructive hover:text-destructive/80"><Trash2 className="w-4 h-4" /></button>
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+          {!rows.length && <tr><td colSpan={podeEditar ? 3 : 2} className="px-3 py-4 text-center text-muted-foreground text-sm">Nenhum veículo adicionado.</td></tr>}
         </tbody>
       </table>
     </div>

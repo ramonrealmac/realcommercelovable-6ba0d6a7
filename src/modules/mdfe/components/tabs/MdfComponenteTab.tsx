@@ -9,11 +9,17 @@ interface IProps {
   podeEditar: boolean;
 }
 
-const TIPOS = ["FRETE PESO","FRETE VALOR","PEDÁGIO","SEGURO","DESCARGA","CARGA","OUTROS"];
+const TIPOS = [
+  { value: "01", label: "01 - Vale Pedágio" },
+  { value: "02", label: "02 - Impostos, taxas e contribuições" },
+  { value: "03", label: "03 - Despesas (bancárias, meios de pagamento, outras)" },
+  { value: "04", label: "04 - Frete" },
+  { value: "99", label: "99 – Outros oficiais" }
+];
 
 const MdfComponenteTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEditar }) => {
   const [rows, setRows] = useState<any[]>([]);
-  const [tpComp, setTpComp] = useState("FRETE PESO");
+  const [tpComp, setTpComp] = useState("01");
   const [vlComp, setVlComp] = useState("0");
   const [dsComp, setDsComp] = useState("");
 
@@ -49,7 +55,10 @@ const MdfComponenteTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
 
   const handleRemove = async (id: number) => {
     if (!confirm("Remover este componente?")) return;
-    await supabase.from("fiscal_mdf_componente").update({ excluido: true, dt_alteracao: new Date().toISOString() }).eq("mdf_componente_id", id);
+    await supabase
+      .from("fiscal_mdf_componente")
+      .update({ excluido: true, dt_alteracao: new Date().toISOString() })
+      .eq("mdf_componente_id", id);
     load();
   };
 
@@ -64,7 +73,7 @@ const MdfComponenteTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
           <div className="col-span-3">
             <label className="text-xs text-muted-foreground">Tipo</label>
             <select value={tpComp} onChange={e => setTpComp(e.target.value)} className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
-              {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+              {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
           <div className="col-span-2">
@@ -96,7 +105,9 @@ const MdfComponenteTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
         <tbody>
           {rows.map(r => (
             <tr key={r.mdf_componente_id} className="hover:bg-accent/30">
-              <td className="px-3 py-1.5 border border-border">{r.tp_componente}</td>
+              <td className="px-3 py-1.5 border border-border">
+                {TIPOS.find(t => t.value === r.tp_componente)?.label || r.tp_componente}
+              </td>
               <td className="px-3 py-1.5 border border-border">{r.ds_componente}</td>
               <td className="px-3 py-1.5 border border-border text-right">{Number(r.vl_componente || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
               {podeEditar && (

@@ -19,6 +19,7 @@ const cleanCarroceria = (v: string | null | undefined): string => {
   return match ? match[1] : "00";
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
 interface IVeiculo {
@@ -83,13 +84,25 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({
 
   const loadData = useCallback(async () => {
     if (!XCadastroId) return;
-    const { data } = await db
-      .from("cadastro_veiculo")
-      .select("*")
-      .eq("cadastro_id", XCadastroId)
-      .eq("excluido", false)
-      .order("veiculo_id");
-    setXVeiculos(data || []);
+    try {
+      const { data, error } = await db
+        .from("cadastro_veiculo")
+        .select("*")
+        .eq("cadastro_id", XCadastroId)
+        .eq("excluido", false)
+        .order("veiculo_id");
+      if (error) {
+        console.error("Erro ao carregar veículos:", error);
+        toast.error("Erro ao carregar veículos: " + error.message);
+        return;
+      }
+      console.log("Veículos carregados com sucesso:", data);
+      setXVeiculos(data || []);
+    } catch (err: unknown) {
+      const errorObj = err as Error;
+      console.error("Exceção ao carregar veículos:", errorObj);
+      toast.error("Erro ao carregar veículos: " + errorObj.message);
+    }
   }, [XCadastroId]);
 
   useEffect(() => {
@@ -173,6 +186,7 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({
       ativo: XEditAtivo,
       cadastro_id: XCadastroId || 0,
       empresa_id: XEmpresaId,
+      excluido: false,
     };
 
     if (!XCadastroId) {
@@ -200,17 +214,23 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({
     }
 
     // Database mode
-    if (XEditMode === "insert") {
-      const { error } = await db.from("cadastro_veiculo").insert({ ...XPayload, dt_cadastro: new Date().toISOString() });
-      if (error) { toast.error("Erro ao incluir veículo: " + error.message); return; }
-      toast.success("Veículo incluído com sucesso.");
-    } else if (XEditMode === "edit" && XSelectedVeiculo) {
-      const { error } = await db.from("cadastro_veiculo").update({ ...XPayload, dt_alteracao: new Date().toISOString() }).eq("veiculo_id", XSelectedVeiculo.veiculo_id);
-      if (error) { toast.error("Erro ao alterar veículo: " + error.message); return; }
-      toast.success("Veículo alterado com sucesso.");
+    try {
+      if (XEditMode === "insert") {
+        const { error } = await db.from("cadastro_veiculo").insert({ ...XPayload, dt_cadastro: new Date().toISOString() });
+        if (error) { toast.error("Erro ao incluir veículo: " + error.message); return; }
+        toast.success("Veículo incluído com sucesso.");
+      } else if (XEditMode === "edit" && XSelectedVeiculo) {
+        const { error } = await db.from("cadastro_veiculo").update({ ...XPayload, dt_alteracao: new Date().toISOString() }).eq("veiculo_id", XSelectedVeiculo.veiculo_id);
+        if (error) { toast.error("Erro ao alterar veículo: " + error.message); return; }
+        toast.success("Veículo alterado com sucesso.");
+      }
+      setXEditMode("none");
+      await loadData();
+    } catch (err: unknown) {
+      const errorObj = err as Error;
+      console.error("Exceção ao salvar veículo:", errorObj);
+      toast.error("Erro ao salvar veículo: " + errorObj.message);
     }
-    setXEditMode("none");
-    loadData();
   };
 
   const handleExcluir = async () => {

@@ -7,73 +7,106 @@ interface IProps {
   mdfManifestoId: number | null;
   empresaId: number;
   podeEditar: boolean;
+  veiculoCadastroId: number | null;
+  refreshTrigger?: number;
 }
 
-const MdfMotoristasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEditar }) => {
+const MdfMotoristasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEditar, veiculoCadastroId, refreshTrigger }) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [motoristas, setMotoristas] = useState<any[]>([]);
-  const [cpf, setCpf] = useState("");
-  const [nome, setNome] = useState("");
-  const [telefone, setTelefone] = useState("");
-  const [pix, setPix] = useState("");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [motoristasList, setMotoristasList] = useState<any[]>([]);
+  const [selectedMotoristaId, setSelectedMotoristaId] = useState("");
 
   const load = useCallback(async () => {
     if (!mdfManifestoId) return;
-    const { data } = await supabase
-      .from("fiscal_mdf_motorista")
-      .select("mdf_motorista_id, condutor_id, excluido, fiscal_mdf_condutor(cpf, nome, telefone, pix)")
-      .eq("mdf_manifesto_id", mdfManifestoId)
-      .eq("excluido", false);
-    setMotoristas(data || []);
+    try {
+      const { data, error } = await supabase
+        .from("fiscal_mdf_condutor")
+        .select("mdf_condutor_id, condutor_id, excluido, cadastro_motorista(cpf, nome, telefone, chave_pix)")
+        .eq("mdf_manifesto_id", mdfManifestoId)
+        .eq("excluido", false);
+      if (error) {
+        console.error("Erro ao carregar motoristas do MDF-e:", error);
+        toast.error("Erro ao carregar motoristas do MDF-e: " + error.message);
+        return;
+      }
+      setMotoristas(data || []);
+    } catch (err: unknown) {
+      const errorObj = err as Error;
+      console.error("Exceção ao carregar motoristas do MDF-e:", errorObj);
+      toast.error("Erro ao carregar motoristas do MDF-e: " + errorObj.message);
+    }
   }, [mdfManifestoId]);
 
-  useEffect(() => { load(); }, [load]);
+  const loadMotoristasList = useCallback(async () => {
+    if (!veiculoCadastroId) {
+      setMotoristasList([]);
+      setSelectedMotoristaId("");
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from("cadastro_motorista")
+        .select("motorista_id, cpf, nome, telefone, chave_pix")
+        .eq("cadastro_id", veiculoCadastroId)
+        .eq("empresa_id", empresaId)
+        .eq("excluido", false)
+        .eq("ativo", true)
+        .order("nome");
+      if (error) {
+        console.error("Erro ao carregar motoristas do cadastro:", error);
+        return;
+      }
+      setMotoristasList(data || []);
+    } catch (err) {
+      console.error("Exceção ao carregar motoristas do cadastro:", err);
+    }
+  }, [veiculoCadastroId, empresaId]);
+
+  useEffect(() => { load(); }, [load, refreshTrigger]);
+  useEffect(() => { loadMotoristasList(); }, [loadMotoristasList]);
 
   const handleAdd = async () => {
-    const cpfClean = cpf.replace(/\D/g, "");
-    if (cpfClean.length !== 11) { toast.warning("CPF deve ter 11 dígitos."); return; }
-    if (!nome.trim()) { toast.warning("Nome é obrigatório."); return; }
+    if (!selectedMotoristaId) { toast.warning("Selecione um motorista."); return; }
     if (!mdfManifestoId) { toast.warning("Salve o cabeçalho primeiro."); return; }
 
-    // Cria ou busca o condutor pelo CPF
-    let condutorId: number;
-    const { data: existing } = await supabase
-      .from("fiscal_mdf_condutor")
-      .select("condutor_id")
-      .eq("cpf", cpfClean)
-      .eq("empresa_id", empresaId)
-      .maybeSingle();
+    const mObj = motoristasList.find(x => String(x.motorista_id) === selectedMotoristaId);
+    if (!mObj) { toast.error("Motorista selecionado não foi encontrado."); return; }
 
-    if (existing) {
-      condutorId = existing.condutor_id;
-      await supabase.from("fiscal_mdf_condutor").update({ nome: nome.toUpperCase(), telefone, pix }).eq("condutor_id", condutorId);
-    } else {
-      const { data: novo, error } = await supabase.from("fiscal_mdf_condutor").insert({
-        empresa_id: empresaId,
-        cpf: cpfClean,
-        nome: nome.toUpperCase(),
-        telefone,
-        pix,
-        dt_cadastro: new Date().toISOString(),
-      }).select("condutor_id").single();
-      if (error || !novo) { toast.error("Erro ao cadastrar condutor: " + error?.message); return; }
-      condutorId = novo.condutor_id;
+    const cpfClean = mObj.cpf.replace(/\D/g, "");
+    const nomeUpper = mObj.nome.toUpperCase();
+    const tel = mObj.telefone || "";
+    const pixKey = mObj.chave_pix || "";
+
+    // Verifica se já está adicionado na lista local
+    const alreadyLinked = motoristas.some(m => {
+      const c = m.cadastro_motorista || {};
+      return c.cpf === cpfClean;
+    });
+    if (alreadyLinked) {
+      toast.warning("Este motorista já está vinculado a este manifesto.");
+      return;
     }
 
-    const { error: errMotorista } = await supabase.from("fiscal_mdf_motorista").insert({
+    const condutorId = Number(selectedMotoristaId);
+
+    const { error: errMotorista } = await supabase.from("fiscal_mdf_condutor").insert({
       mdf_manifesto_id: mdfManifestoId,
       empresa_id: empresaId,
       condutor_id: condutorId,
       dt_cadastro: new Date().toISOString(),
+      excluido: false,
     });
     if (errMotorista) { toast.error("Erro ao vincular motorista: " + errMotorista.message); return; }
     toast.success("Motorista adicionado.");
-    setCpf(""); setNome(""); setTelefone(""); setPix("");
+    setSelectedMotoristaId("");
     load();
   };
 
   const handleRemove = async (id: number) => {
     if (!confirm("Remover este motorista?")) return;
-    await supabase.from("fiscal_mdf_motorista").update({ excluido: true, dt_alteracao: new Date().toISOString() }).eq("mdf_motorista_id", id);
+    await supabase.from("fiscal_mdf_condutor").update({ excluido: true, dt_alteracao: new Date().toISOString() }).eq("mdf_condutor_id", id);
     load();
   };
 
@@ -87,68 +120,68 @@ const MdfMotoristasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
   return (
     <div className="space-y-4 p-2">
       {podeEditar && (
-        <div className="space-y-2 border border-border rounded p-3 bg-card">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Adicionar Motorista / Condutor</p>
-          <div className="grid grid-cols-12 gap-3 items-end">
-            <div className="col-span-3">
-              <label className="text-xs text-muted-foreground">CPF <span className="text-destructive">*</span></label>
-              <input value={cpf} onChange={e => setCpf(e.target.value.replace(/\D/g, "").substring(0, 11))}
-                placeholder="00000000000"
-                className="w-full border border-border rounded px-2 py-1 text-sm font-mono" />
-            </div>
-            <div className="col-span-5">
-              <label className="text-xs text-muted-foreground">Nome <span className="text-destructive">*</span></label>
-              <input value={nome} onChange={e => setNome(e.target.value.toUpperCase())}
-                className="w-full border border-border rounded px-2 py-1 text-sm" />
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs text-muted-foreground">Telefone</label>
-              <input value={telefone} onChange={e => setTelefone(e.target.value)}
-                className="w-full border border-border rounded px-2 py-1 text-sm" />
-            </div>
-            <div className="col-span-2">
-              <button onClick={handleAdd} className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm w-full justify-center hover:bg-primary/90">
-                <Plus className="w-4 h-4" /> Adicionar
-              </button>
-            </div>
+        <div className="grid grid-cols-12 gap-3 items-end border border-border rounded p-3 bg-card">
+          <div className="col-span-8">
+            <label className="text-xs text-muted-foreground">Selecionar Motorista <span className="text-destructive">*</span></label>
+            {!veiculoCadastroId ? (
+              <div className="w-full border border-dashed border-border rounded px-2 py-1.5 text-xs text-muted-foreground bg-accent/20">
+                Selecione primeiro um veículo de Tração no manifesto
+              </div>
+            ) : motoristasList.length === 0 ? (
+              <div className="w-full border border-dashed border-destructive/30 rounded px-2 py-1.5 text-xs text-destructive bg-destructive/5 font-medium">
+                Nenhum motorista cadastrado para este transportador
+              </div>
+            ) : (
+              <select
+                value={selectedMotoristaId}
+                onChange={e => setSelectedMotoristaId(e.target.value)}
+                className="w-full border border-border rounded px-2 py-1 text-sm bg-card"
+              >
+                <option value="">— Selecione um motorista —</option>
+                {motoristasList.map(m => (
+                  <option key={m.motorista_id} value={String(m.motorista_id)}>
+                    {formatCPF(m.cpf)} - {m.nome}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
-          <div className="grid grid-cols-12 gap-3">
-            <div className="col-span-4">
-              <label className="text-xs text-muted-foreground">Chave PIX</label>
-              <input value={pix} onChange={e => setPix(e.target.value)}
-                className="w-full border border-border rounded px-2 py-1 text-sm" />
-            </div>
+          <div className="col-span-4">
+            <button
+              onClick={handleAdd}
+              disabled={!veiculoCadastroId || !selectedMotoristaId}
+              className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm w-full justify-center hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Plus className="w-4 h-4" /> Vincular Motorista
+            </button>
           </div>
         </div>
       )}
       <table className="w-full text-sm border-collapse">
         <thead>
           <tr className="bg-secondary text-left">
-            <th className="px-3 py-2 border border-border text-xs font-medium">CPF</th>
+            <th className="px-3 py-2 border border-border text-xs font-medium w-[160px] whitespace-nowrap">CPF</th>
             <th className="px-3 py-2 border border-border text-xs font-medium">Nome</th>
-            <th className="px-3 py-2 border border-border text-xs font-medium">Telefone</th>
-            <th className="px-3 py-2 border border-border text-xs font-medium">PIX</th>
-            {podeEditar && <th className="px-3 py-2 border border-border text-xs font-medium w-[60px]"></th>}
+            {podeEditar && <th className="px-3 py-2 border border-border text-xs font-medium w-[50px]"></th>}
           </tr>
         </thead>
         <tbody>
           {motoristas.map(m => {
-            const c = (m.fiscal_mdf_condutor || {}) as any;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const c = (m.cadastro_motorista || {}) as any;
             return (
-              <tr key={m.mdf_motorista_id} className="hover:bg-accent/30">
-                <td className="px-3 py-1.5 border border-border font-mono">{formatCPF(c.cpf || "")}</td>
+              <tr key={m.mdf_condutor_id} className="hover:bg-accent/30">
+                <td className="px-3 py-1.5 border border-border font-mono whitespace-nowrap">{formatCPF(c.cpf || "")}</td>
                 <td className="px-3 py-1.5 border border-border">{c.nome}</td>
-                <td className="px-3 py-1.5 border border-border">{c.telefone}</td>
-                <td className="px-3 py-1.5 border border-border">{c.pix}</td>
                 {podeEditar && (
-                  <td className="px-3 py-1.5 border border-border text-center">
-                    <button onClick={() => handleRemove(m.mdf_motorista_id)} className="text-destructive hover:text-destructive/80"><Trash2 className="w-4 h-4" /></button>
+                  <td className="px-3 py-1.5 border border-border text-center w-[50px]">
+                    <button onClick={() => handleRemove(m.mdf_condutor_id)} className="text-destructive hover:text-destructive/80"><Trash2 className="w-4 h-4" /></button>
                   </td>
                 )}
               </tr>
             );
           })}
-          {!motoristas.length && <tr><td colSpan={5} className="px-3 py-4 text-center text-muted-foreground text-sm">Nenhum motorista vinculado.</td></tr>}
+          {!motoristas.length && <tr><td colSpan={podeEditar ? 3 : 2} className="px-3 py-4 text-center text-muted-foreground text-sm">Nenhum motorista vinculado.</td></tr>}
         </tbody>
       </table>
     </div>
