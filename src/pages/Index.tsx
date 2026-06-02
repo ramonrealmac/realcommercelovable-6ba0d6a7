@@ -14,6 +14,7 @@ const CadastroGrupoForm = lazy(() => import("@/components/forms/parceiros/Cadast
 const ProdutoForm = lazy(() => import("@/components/forms/produtos/ProdutoForm"));
 const LinhaProdutoForm = lazy(() => import("@/components/forms/produtos/LinhaProdutoForm"));
 const GrupoProdutosForm = lazy(() => import("@/components/forms/produtos/GrupoProdutosForm"));
+const SubgrupoProdutosForm = lazy(() => import("@/components/forms/produtos/SubgrupoProdutosForm"));
 const UnidadeForm = lazy(() => import("@/components/forms/produtos/UnidadeForm"));
 const EstoqueForm = lazy(() => import("@/components/forms/estoques/EstoqueForm"));
 const DepositoForm = lazy(() => import("@/components/forms/estoques/DepositoForm"));
@@ -102,6 +103,8 @@ const AppContent = () => {
         return <LinhaProdutoForm />;
       case "grupo-produtos":
         return <GrupoProdutosForm />;
+      case "subgrupo-produtos":
+        return <SubgrupoProdutosForm />;
       case "unidades":
         return <UnidadeForm />;
       case "estoque":

@@ -74,9 +74,12 @@ export const gerarIniMdfe = (params: any): string => {
   }
 
   // Totais
+  const qNFe = documentos.filter((d: any) => d.chave?.substring(20, 22) !== "57").length;
+  const qCTe = documentos.filter((d: any) => d.chave?.substring(20, 22) === "57").length;
+
   ini += "[tot]\n";
-  ini += `qCTe=0\n`;
-  ini += `qNFe=${manifesto.qtd_nfe || 0}\n`;
+  ini += `qCTe=${qCTe}\n`;
+  ini += `qNFe=${qNFe}\n`;
   ini += `vCarga=${manifesto.valor_total || 0}\n`;
   ini += `cUnid=01\n`;
   ini += `qCarga=${manifesto.peso_total || 0}\n\n`;
@@ -85,8 +88,8 @@ export const gerarIniMdfe = (params: any): string => {
   carrega.forEach((c: any, i: number) => {
     const idx = String(i + 1).padStart(3, '0');
     ini += `[infMunCarrega${idx}]\n`;
-    ini += `cMunCarrega=${c.cidade?.ibge_id || c.cidade_id}\n`;
-    ini += `xMunCarrega=${esc(c.cidade?.nome)}\n\n`;
+    ini += `cMunCarrega=${c.cidade?.cd_ibge || c.cidade?.ibge_id || c.cidade_id}\n`;
+    ini += `xMunCarrega=${esc(c.cidade?.descricao || c.cidade?.nome)}\n\n`;
   });
 
   // Localidades de Descarregamento e Documentos
@@ -98,13 +101,19 @@ export const gerarIniMdfe = (params: any): string => {
     const primDoc = docsDaCidade[0];
 
     ini += `[infMunDesc${idxMun}]\n`;
-    ini += `cMunDesc=${primDoc.cidade?.ibge_id || cidId}\n`;
-    ini += `xMunDesc=${esc(primDoc.cidade?.nome)}\n\n`;
+    ini += `cMunDesc=${primDoc.cidade?.cd_ibge || primDoc.cidade?.ibge_id || cidId}\n`;
+    ini += `xMunDesc=${esc(primDoc.cidade?.descricao || primDoc.cidade?.nome)}\n\n`;
 
     docsDaCidade.forEach((d: any, j: number) => {
       const idxDoc = String(j + 1).padStart(3, '0');
-      ini += `[infNFe${idxMun}${idxDoc}]\n`;
-      ini += `chNFe=${d.chave}\n\n`;
+      const model = d.chave?.substring(20, 22);
+      if (model === "57") {
+        ini += `[infCTe${idxMun}${idxDoc}]\n`;
+        ini += `chCTe=${d.chave}\n\n`;
+      } else {
+        ini += `[infNFe${idxMun}${idxDoc}]\n`;
+        ini += `chNFe=${d.chave}\n\n`;
+      }
     });
   });
 

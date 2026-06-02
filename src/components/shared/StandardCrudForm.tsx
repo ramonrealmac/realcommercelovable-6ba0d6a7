@@ -40,10 +40,11 @@ interface StandardCrudFormProps<T extends Record<string, any>> {
   XInitialId?: any;
   XToolbarExtras?: (ctx: { currentRecord: any; isEditing: boolean; setRecord: (r: any) => void; refresh: () => Promise<void>; setInnerTab: (tab: string) => void }) => React.ReactNode;
   XHiddenTabs?: string[];
+  XCadastroLabel?: string;
 }
 
 function StandardCrudForm<T extends Record<string, any>>({
-  config, XGridCols, renderCadastro, XExtraTabs = [], XExportTitle, XAfterInsertTab, XRefreshRef, XInitialId, XToolbarExtras, XHiddenTabs = []
+  config, XGridCols, renderCadastro, XExtraTabs = [], XExportTitle, XAfterInsertTab, XRefreshRef, XInitialId, XToolbarExtras, XHiddenTabs = [], XCadastroLabel = "Cadastro"
 }: StandardCrudFormProps<T>) {
   const { closeTab, XTabs, XActiveTabId } = useAppContext();
   const [XInnerTab, setXInnerTab] = useState<string>("cadastro");
@@ -175,8 +176,8 @@ function StandardCrudForm<T extends Record<string, any>>({
   };
 
   const XTabsList = useMemo(
-    () => [{ key: "cadastro", label: "Cadastro" }, ...XExtraTabs.map(t => ({ key: t.key, label: t.label })), { key: "localizar", label: "Localizar" }],
-    [XExtraTabs]
+    () => [{ key: "cadastro", label: XCadastroLabel }, ...XExtraTabs.map(t => ({ key: t.key, label: t.label })), { key: "localizar", label: "Localizar" }],
+    [XExtraTabs, XCadastroLabel]
   );
 
   const XActiveRecord: any = ctrl.XIsEditing ? ctrl.XEditRecord : (ctrl.XCurrentRecord || {});

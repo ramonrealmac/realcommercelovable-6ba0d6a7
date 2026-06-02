@@ -16,9 +16,10 @@ interface IProps {
   open: boolean;
   onClose: () => void;
   onSelect: (cidade: ICidadeRow) => void;
+  ufFilter?: string;
 }
 
-const CidadeSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
+const CidadeSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, ufFilter }) => {
   const [XTermo, setXTermo] = useState("");
   const [XRows, setXRows] = useState<ICidadeRow[]>([]);
   const [XLoading, setXLoading] = useState(false);
@@ -29,9 +30,13 @@ const CidadeSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
     setXLoading(true);
     let q = db.from("cidade")
       .select("cidade_id, descricao, estado_id, cd_ibge")
-      .eq("excluido", false)
-      .order("descricao")
-      .limit(100);
+      .eq("excluido", false);
+
+    if (ufFilter) {
+      q = q.eq("estado_id", ufFilter.toUpperCase());
+    }
+
+    q = q.order("descricao").limit(100);
 
     const t = termo.trim();
     if (t) {
@@ -52,7 +57,7 @@ const CidadeSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
     setXRows(data as ICidadeRow[]);
     setXSelectedIdx(null);
     setXLoading(false);
-  }, []);
+  }, [ufFilter]);
 
   useEffect(() => {
     if (open) {

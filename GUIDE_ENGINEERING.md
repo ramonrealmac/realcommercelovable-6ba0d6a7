@@ -1,4 +1,4 @@
-# Guia de Engenharia: ERP RealSys (v1.10.0)
+# Guia de Engenharia: ERP RealSys (v1.16.0)
 
 Este documento descreve como utilizar as novas ferramentas de arquitetura e qualidade implementadas durante a modernização do sistema.
 
