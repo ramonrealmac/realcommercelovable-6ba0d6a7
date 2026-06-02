@@ -83,14 +83,14 @@ const FormToolbar: React.FC<FormToolbarProps> = ({
     <div className="flex items-center gap-0.5 p-1 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 overflow-x-auto no-scrollbar">
       {!XIsEditing ? (
         <>
-          <ToolbarBtn icon={<Plus size={18} />} label="Incluir (Ins)" onClick={onIncluir} color="success" />
-          <ToolbarBtn icon={<SquarePen size={18} />} label="Alterar (F2)" onClick={onEditar} disabled={!XHasRecord || !XCanEdit} color="warning" />
-          <ToolbarBtn icon={<Trash2 size={18} />} label="Excluir (Del)" onClick={onExcluir} disabled={!XHasRecord || !XCanEdit} color="destructive" />
+          <ToolbarBtn icon={<Plus size={18} />} label="Incluir (+)" onClick={onIncluir} color="success" />
+          <ToolbarBtn icon={<SquarePen size={18} />} label="Alterar (*)" onClick={onEditar} disabled={!XHasRecord || !XCanEdit} color="warning" />
+          <ToolbarBtn icon={<Trash2 size={18} />} label="Excluir (-)" onClick={onExcluir} disabled={!XHasRecord || !XCanEdit} color="destructive" />
           <ToolbarSeparator />
-          <ToolbarBtn icon={<ChevronsLeft size={18} />} label="Primeiro" onClick={onFirst} disabled={XIsFirst || !XHasRecord} color="nav" />
-          <ToolbarBtn icon={<ChevronLeft size={18} />} label="Anterior" onClick={onPrev} disabled={XIsFirst || !XHasRecord} color="nav" />
-          <ToolbarBtn icon={<ChevronRight size={18} />} label="Próximo" onClick={onNext} disabled={XIsLast || !XHasRecord} color="nav" />
-          <ToolbarBtn icon={<ChevronsRight size={18} />} label="Último" onClick={onLast} disabled={XIsLast || !XHasRecord} color="nav" />
+          <ToolbarBtn icon={<ChevronsLeft size={18} />} label="Primeiro (Seta Cima)" onClick={onFirst} disabled={XIsFirst || !XHasRecord} color="nav" />
+          <ToolbarBtn icon={<ChevronLeft size={18} />} label="Anterior (Seta Esquerda)" onClick={onPrev} disabled={XIsFirst || !XHasRecord} color="nav" />
+          <ToolbarBtn icon={<ChevronRight size={18} />} label="Próximo (Seta Direita)" onClick={onNext} disabled={XIsLast || !XHasRecord} color="nav" />
+          <ToolbarBtn icon={<ChevronsRight size={18} />} label="Último (Seta Baixo)" onClick={onLast} disabled={XIsLast || !XHasRecord} color="nav" />
           <ToolbarSeparator />
           <ToolbarBtn icon={<RefreshCw size={18} />} label="Atualizar (F5)" onClick={onRefresh} color="info" />
           <ToolbarBtn icon={<Search size={18} />} label="Localizar (F3)" onClick={onLocalizar} color="info" />
@@ -98,8 +98,8 @@ const FormToolbar: React.FC<FormToolbarProps> = ({
         </>
       ) : (
         <>
-          <ToolbarBtn icon={<Save size={18} />} label="Salvar (F10)" onClick={onSalvar} color="success" />
-          <ToolbarBtn icon={<X size={18} />} label="Cancelar (Esc)" onClick={onCancelar} color="destructive" />
+          <ToolbarBtn icon={<Save size={18} />} label="Salvar (+)" onClick={onSalvar} color="success" />
+          <ToolbarBtn icon={<X size={18} />} label="Cancelar (*)" onClick={onCancelar} color="destructive" />
         </>
       )}
       <ToolbarSeparator />

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import FormToolbar from "@/components/shared/FormToolbar";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import { useCrudController, ICrudConfig, TFormMode } from "@/hooks/useCrudController";
@@ -31,6 +31,7 @@ interface StandardCrudFormProps<T extends Record<string, any>> {
     isEditing: boolean;
     currentRecord: any | null;
     setInnerTab: (tab: string) => void;
+    onSalvar?: () => Promise<void>;
   }) => React.ReactNode;
   XExtraTabs?: IExtraTab[];
   XExportTitle?: string;
@@ -58,6 +59,95 @@ function StandardCrudForm<T extends Record<string, any>>({
   }), [config, XAfterInsertTab]);
 
   const ctrl = useCrudController<any>(wrappedConfig);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Keyboard shortcuts listener for the registration screen
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // 1. Only proceed if this component is visible in the DOM (not hidden in a tab)
+      if (!containerRef.current || containerRef.current.offsetParent === null) {
+        return;
+      }
+
+      // 2. Ignore if a dialog or alertdialog modal is open (e.g. search filters, search dialogs, confirmation dialogs)
+      if (document.querySelector('[role="dialog"]') !== null || document.querySelector('[role="alertdialog"]') !== null) {
+        return;
+      }
+
+      // 3. Ignore if key is pressed with modifier keys (Ctrl, Alt, Meta)
+      if (e.ctrlKey || e.altKey || e.metaKey) {
+        return;
+      }
+
+      const activeElement = document.activeElement;
+      const isTyping = activeElement && (
+        activeElement.tagName === "INPUT" ||
+        activeElement.tagName === "TEXTAREA" ||
+        activeElement.tagName === "SELECT" ||
+        activeElement.getAttribute("contenteditable") === "true"
+      );
+
+      // In NAVIGATION (VIEW) mode:
+      if (!ctrl.XIsEditing) {
+        // If typing in search filters or any other field, ignore navigation shortcuts
+        if (isTyping) {
+          return;
+        }
+
+        if (e.key === "+") {
+          e.preventDefault();
+          ctrl.handleIncluir();
+          setXInnerTab("cadastro");
+        } else if (e.key === "*") {
+          e.preventDefault();
+          ctrl.handleEditar();
+          setXInnerTab("cadastro");
+        } else if (e.key === "-") {
+          e.preventDefault();
+          ctrl.handleExcluir();
+        } else if (e.key === "ArrowRight") {
+          e.preventDefault();
+          ctrl.handleNext();
+        } else if (e.key === "ArrowLeft") {
+          e.preventDefault();
+          ctrl.handlePrev();
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          ctrl.handleFirst();
+        } else if (e.key === "ArrowDown") {
+          e.preventDefault();
+          ctrl.handleLast();
+        }
+      } 
+      // In EDIT/INSERT mode:
+      else {
+        // Always trigger save (+) and cancel (*) shortcuts even if focused on an input
+        if (e.key === "+") {
+          e.preventDefault();
+          ctrl.handleSalvar();
+        } else if (e.key === "*") {
+          e.preventDefault();
+          ctrl.handleCancelar();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [
+    ctrl.XIsEditing,
+    ctrl.handleIncluir,
+    ctrl.handleEditar,
+    ctrl.handleExcluir,
+    ctrl.handleSalvar,
+    ctrl.handleCancelar,
+    ctrl.handleFirst,
+    ctrl.handlePrev,
+    ctrl.handleNext,
+    ctrl.handleLast,
+    setXInnerTab
+  ]);
 
   useEffect(() => {
     if (XRefreshRef) XRefreshRef.current = ctrl.loadData;
@@ -94,7 +184,7 @@ function StandardCrudForm<T extends Record<string, any>>({
   const XEffectiveCurrentRecord = ctrl.XFormMode === "insert" ? null : ctrl.XCurrentRecord;
 
   return (
-    <div className="flex flex-col h-full bg-background" data-form-container>
+    <div ref={containerRef} className="flex flex-col h-full bg-background" data-form-container>
       <FormToolbar
         XIsEditing={ctrl.XIsEditing}
         XHasRecord={!!ctrl.XCurrentRecord}
@@ -166,7 +256,8 @@ function StandardCrudForm<T extends Record<string, any>>({
           mode: ctrl.XFormMode,
           isEditing: ctrl.XIsEditing,
           currentRecord: XEffectiveCurrentRecord,
-          setInnerTab: setXInnerTab
+          setInnerTab: setXInnerTab,
+          onSalvar: ctrl.handleSalvar
         })}
 
         {XExtraTabs.map(t => XInnerTab === t.key && (

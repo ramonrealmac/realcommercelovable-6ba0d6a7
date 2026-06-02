@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
 import StandardCrudForm from "@/components/shared/StandardCrudForm";
+import type { TFormMode } from "@/hooks/useCrudController";
 import type { IGridColumn } from "@/components/grid/DataGrid";
 import type { IMovimento, IMovimentoItem } from "./types";
 import DataGrid from "@/components/grid/DataGrid";
@@ -11,6 +12,7 @@ import PedidoItensTab from "./PedidoItensTab";
 import PedidoPagamentoTab from "./PedidoPagamentoTab";
 import ClienteSearchDialog, { IClienteRow } from "./ClienteSearchDialog";
 import { Search, Send, Reply, Lock, Unlock, Ban, ArrowLeftRight, Wallet, CircleDollarSign, Package } from "lucide-react";
+import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 import { ToolbarBtn, ToolbarSeparator } from "@/components/shared/FormToolbar";
 
 const db = supabase as any;
@@ -55,8 +57,296 @@ const XDefaultRecord: Partial<IMovimento> = {
   dt_entrega: new Date().toISOString().substring(0, 10),
 };
 
+interface PedidoCadastroFormContentProps {
+  record: any;
+  setField: (k: string, v: any) => void;
+  setRecord: (r: any) => void;
+  mode: TFormMode;
+  isEditing: boolean;
+  currentRecord: any | null;
+  setInnerTab: (tab: string) => void;
+  
+  vendedores: ILookup[];
+  tpOperacoes: ILookup[];
+  rotas: ILookup[];
+  cidades: ILookup[];
+  clientesCache: Record<number, IClienteInfo>;
+  setXClientesCache: React.Dispatch<React.SetStateAction<Record<number, IClienteInfo>>>;
+  abrirPesquisaCliente: (onPick: (c: IClienteRow) => void) => void;
+  clientePadraoId: number | null;
+  ensureClienteInfo: (ids: number[]) => Promise<void>;
+  
+  pedidoTotalCtx: { movimentoId: number | null; total: number; itens: IMovimentoItem[] };
+  setXMovimentoParaBuscar: (id: number | null) => void;
+  setXModoInsertSemId: (val: boolean) => void;
+  handleKeyDown: (e: React.KeyboardEvent<HTMLElement>) => void;
+  onSalvar?: () => Promise<void>;
+}
+
+const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
+  record, setField, setRecord, mode, isEditing, currentRecord, setInnerTab,
+  vendedores, tpOperacoes, rotas, cidades, clientesCache, setXClientesCache,
+  abrirPesquisaCliente, clientePadraoId, ensureClienteInfo,
+  pedidoTotalCtx, setXMovimentoParaBuscar, setXModoInsertSemId, handleKeyDown,
+  onSalvar
+}) => {
+  const clientInputRef = useRef<HTMLInputElement>(null);
+  const vendedorSelectRef = useRef<HTMLSelectElement>(null);
+
+  // Auto-foco no campo do cliente ao inserir ou alterar
+  useEffect(() => {
+    if (isEditing) {
+      setTimeout(() => {
+        clientInputRef.current?.focus();
+      }, 100);
+    }
+  }, [isEditing]);
+
+  const handleClienteKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isEditing) return;
+
+    if (e.key === "F2") {
+      e.preventDefault();
+      e.stopPropagation();
+      if (clientePadraoId) {
+        await ensureClienteInfo([clientePadraoId]);
+        setField("cadastro_id", clientePadraoId as any);
+        // Avança o foco imediatamente para o vendedor
+        setTimeout(() => {
+          vendedorSelectRef.current?.focus();
+        }, 50);
+      } else {
+        toast.error("Cliente padrão não configurado nas configurações fiscais.");
+      }
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!record.cadastro_id) {
+        // Abre a lista de pesquisa
+        handleSearchCliente();
+      } else {
+        // Se ja tiver informado cliente, avanca para o proximo campo vendedor
+        vendedorSelectRef.current?.focus();
+      }
+    }
+  };
+
+  const handleSearchCliente = () => {
+    abrirPesquisaCliente((c) => {
+      setXClientesCache(prev => ({
+        ...prev,
+        [c.cadastro_id]: {
+          id: c.cadastro_id,
+          cnpj: c.cnpj || "",
+          razao: c.razao_social || "",
+          fantasia: c.nome_fantasia || ""
+        }
+      }));
+      setField("cadastro_id", c.cadastro_id as any);
+      // Ao retornar da pesquisa, poe o foco em vendedor
+      setTimeout(() => {
+        vendedorSelectRef.current?.focus();
+      }, 150);
+    });
+  };
+
+  const stAtual = (record.st_pedido || "O") as string;
+  const ro = !isEditing || (mode === "edit" && stAtual !== "O");
+  const fmt = (v: number) => Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtQ = (v: number) => Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+
+  // Itens em cache (sincronizados com a aba Itens)
+  const movId = currentRecord?.movimento_id;
+  const isInsertNovo = mode === "insert" && !movId;
+  const itensCache = !isInsertNovo && pedidoTotalCtx.movimentoId === movId ? pedidoTotalCtx.itens : [];
+
+  // Sinaliza side-effects via state
+  if (!isInsertNovo && movId && pedidoTotalCtx.movimentoId !== movId) {
+    queueMicrotask(() => setXMovimentoParaBuscar(movId));
+  }
+  if (isInsertNovo && (pedidoTotalCtx.movimentoId !== null || pedidoTotalCtx.itens.length > 0)) {
+    queueMicrotask(() => setXModoInsertSemId(true));
+  }
+
+  const T = itensCache.reduce((acc, i: any) => ({
+    vl_produto: acc.vl_produto + Number(i.vl_produto || 0),
+    vl_desconto: acc.vl_desconto + Number(i.vl_desconto || 0),
+    vl_frete: acc.vl_frete + Number(i.vl_frete || 0),
+    vl_despesa: acc.vl_despesa + Number(i.vl_despesa || 0),
+    vl_seguro: acc.vl_seguro + Number(i.vl_seguro || 0),
+    vl_outro: acc.vl_outro + Number(i.vl_outro || 0),
+    vl_movimento: acc.vl_movimento + Number(i.vl_movimento || 0),
+  }), { vl_produto: 0, vl_desconto: 0, vl_frete: 0, vl_despesa: 0, vl_seguro: 0, vl_outro: 0, vl_movimento: 0 });
+
+  const visualCols = [
+    { key: "cd_produto", label: "Código", width: "90px", align: "right" as const, render: (r: any) => r.cd_produto || (r.produto_id ?? "") },
+    { key: "nm_produto", label: "Produto", width: "2fr" },
+    { key: "qt_movimento", label: "Qtd.", width: "90px", align: "right" as const, render: (r: any) => fmtQ(r.qt_movimento) },
+    { key: "vl_und_produto", label: "Vlr. Unit", width: "100px", align: "right" as const, render: (r: any) => fmt(r.vl_und_produto) },
+    { key: "vl_produto", label: "Subtotal", width: "110px", align: "right" as const, render: (r: any) => fmt(r.vl_produto) },
+    { key: "pc_desconto", label: "Desc.(%)", width: "80px", align: "right" as const, render: (r: any) => fmt(r.pc_desconto) },
+    { key: "vl_desconto", label: "Desc.(R$)", width: "100px", align: "right" as const, render: (r: any) => fmt(r.vl_desconto) },
+    { key: "vl_despesa", label: "Vlr. Desp.", width: "100px", align: "right" as const, render: (r: any) => fmt(r.vl_despesa) },
+    { key: "vl_frete", label: "Vlr. Frete", width: "100px", align: "right" as const, render: (r: any) => fmt(r.vl_frete) },
+    { key: "vl_seguro", label: "Vlr. Seg.", width: "100px", align: "right" as const, render: (r: any) => fmt(r.vl_seguro) },
+    { key: "vl_outro", label: "Vlr. Outros", width: "100px", align: "right" as const, render: (r: any) => fmt(r.vl_outro) },
+    { key: "vl_movimento", label: "Total", width: "110px", align: "right" as const, render: (r: any) => fmt(r.vl_movimento) },
+  ];
+
+  return (
+    <div className="space-y-4" onKeyDown={handleKeyDown}>
+      <div className="grid grid-cols-12 gap-3">
+        <div className="col-span-1">
+          <label className="text-xs text-muted-foreground">Pedido</label>
+          <input readOnly tabIndex={-1} value={record.nr_movimento ?? (mode === "insert" ? "(Novo)" : "")} className="w-full border border-border rounded px-2 py-1 text-sm text-right bg-secondary/50 focus:outline-none" />
+        </div>
+        <div className="col-span-5">
+          <label className="text-xs text-muted-foreground">Cliente <span className="text-destructive">*</span></label>
+          <div className="flex gap-1">
+            <input
+              ref={clientInputRef}
+              readOnly
+              value={record.cadastro_id ? (clientesCache[record.cadastro_id]?.razao || `#${record.cadastro_id}`) : ""}
+              placeholder="F2 = Padrão, Enter = Pesquisar..."
+              className="flex-1 border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
+              data-lookup="true"
+              data-required="true"
+              data-lookup-key="cliente"
+              onKeyDown={handleClienteKeyDown}
+            />
+            <button
+              type="button"
+              tabIndex={-1}
+              disabled={ro}
+              onClick={handleSearchCliente}
+              className="px-2 py-1 border border-border rounded bg-card hover:bg-accent disabled:opacity-50"
+              title="Pesquisar cliente"
+              data-lookup-trigger="true"
+              data-lookup-key="cliente"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+            {record.cadastro_id && !ro && (
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setField("cadastro_id", null as any)}
+                className="px-2 py-1 border border-border rounded bg-card hover:bg-accent text-xs"
+                title="Limpar"
+              >×</button>
+            )}
+          </div>
+        </div>
+        <div className="col-span-3">
+          <label className="text-xs text-muted-foreground">Vendedor <span className="text-destructive">*</span></label>
+          <select ref={vendedorSelectRef} disabled={ro} value={record.funcionario_id ?? ""} onChange={e => setField("funcionario_id", e.target.value ? Number(e.target.value) : null as any)} className="w-full border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none">
+            <option value="">--</option>
+            {vendedores.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+          </select>
+        </div>
+        <div className="col-span-2">
+          <label className="text-xs text-muted-foreground">Status</label>
+          <input readOnly tabIndex={-1} value={ST_PEDIDO_LABELS[stAtual] || stAtual} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary/50 focus:outline-none" />
+        </div>
+        <div className="col-span-1">
+          <label className="text-xs text-muted-foreground">Faturado</label>
+          <input readOnly tabIndex={-1} value={record.faturado ?? "N"} className="w-full border border-border rounded px-2 py-1 text-sm text-center bg-secondary/50 focus:outline-none" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-12 gap-3">
+        <div className="col-span-2">
+          <label className="text-xs text-muted-foreground">Dt. Emissão <span className="text-destructive">*</span></label>
+          <input type="date" tabIndex={-1} disabled={ro} value={(record.dt_emissao || "").toString().substring(0, 10)} onChange={e => setField("dt_emissao", e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary/20 focus:outline-none" />
+        </div>
+        <div className="col-span-2">
+          <label className="text-xs text-muted-foreground">Dt. Entrega <span className="text-destructive">*</span></label>
+          <input type="date" disabled={ro} value={(record.dt_entrega || "").toString().substring(0, 10)} onChange={e => setField("dt_entrega", e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none" />
+        </div>
+        <div className="col-span-3">
+          <label className="text-xs text-muted-foreground">Tipo de Operação</label>
+          <select disabled={ro} value={record.tp_operacao_id ?? ""} onChange={e => setField("tp_operacao_id", e.target.value ? Number(e.target.value) : null as any)} className="w-full border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none">
+            <option value="">--</option>
+            {tpOperacoes.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+          </select>
+        </div>
+        <div className="col-span-3">
+          <label className="text-xs text-muted-foreground">Tipo de Movimento <span className="text-destructive">*</span></label>
+          <select disabled={ro} value={record.tp_movimento || "PD"} onChange={e => setField("tp_movimento", e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none">
+            <option value="PD">Pedido</option>
+            <option value="SV">Saída por Venda</option>
+            <option value="OR">Orçamento</option>
+          </select>
+        </div>
+        <div className="col-span-2">
+          <label className="text-xs text-muted-foreground">NF</label>
+          <input readOnly tabIndex={-1} value={record.numero_nfe ?? ""} className="w-full border border-border rounded px-2 py-1 text-sm text-right bg-secondary/50 focus:outline-none" />
+        </div>
+      </div>
+
+      {/* Linha do Tipo de Desconto */}
+      <div className="grid grid-cols-12 gap-3 items-end">
+        <div className="col-span-3">
+          <label className="text-xs text-muted-foreground">Tipo de Desconto <span className="text-destructive">*</span></label>
+          <select
+            disabled={ro}
+            value={record.tp_desconto || "N"}
+            onChange={e => setField("tp_desconto", e.target.value as any)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                onSalvar?.();
+              }
+            }}
+            className="w-full border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
+          >
+            {Object.entries(TP_DESCONTO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Grid de produtos somente leitura */}
+      {currentRecord?.movimento_id && (
+        <>
+          <DataGrid
+            columns={visualCols}
+            data={itensCache as any[]}
+            maxHeight="260px"
+            exportTitle="Itens do Pedido"
+            showRecordCount={true}
+          />
+
+          {/* Painel de totalizadores — 7 cards */}
+          <div className="border border-border rounded p-3 bg-card">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+              {[
+                { label: "Subtotal", value: T.vl_produto },
+                { label: "Desc. (R$)", value: T.vl_desconto },
+                { label: "Vlr. Frete", value: T.vl_frete },
+                { label: "Vlr. Desp.", value: T.vl_despesa },
+                { label: "Vlr. Seg.", value: T.vl_seguro },
+                { label: "Vlr. Outros", value: T.vl_outro },
+              ].map((c) => (
+                <div key={c.label} className="flex flex-col border border-border rounded px-3 py-2 bg-secondary/40">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">{c.label}</span>
+                  <span className="text-base font-semibold text-right tabular-nums">{fmt(c.value)}</span>
+                </div>
+              ))}
+              <div className="flex flex-col border border-primary/40 rounded px-3 py-2 bg-primary/10">
+                <span className="text-xs uppercase tracking-wide text-primary/80">Total</span>
+                <span className="text-lg font-bold text-primary text-right tabular-nums">{fmt(T.vl_movimento)}</span>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 const PedidoForm: React.FC = () => {
   const { XEmpresaId } = useAppContext();
+  const { handleKeyDown } = useEnterTraversal();
   const [XVendedores, setXVendedores] = useState<ILookup[]>([]);
   const [XTpOperacoes, setXTpOperacoes] = useState<ILookup[]>([]);
   const [XRotas, setXRotas] = useState<ILookup[]>([]);
@@ -75,6 +365,8 @@ const PedidoForm: React.FC = () => {
   const XClientesCacheRef = useRef<Record<number, IClienteInfo>>(XClientesCache);
   useEffect(() => { XClientesCacheRef.current = XClientesCache; }, [XClientesCache]);
   const XCurrentRecordRef = useRef<IMovimento | null>(null);
+  const XSetInnerTabRef = useRef<((tab: string) => void) | null>(null);
+  const XIsEditingRef = useRef(false);
 
   // Lookups independentes — falha em um não bloqueia os outros
   useEffect(() => {
@@ -131,6 +423,25 @@ const PedidoForm: React.FC = () => {
     }
   }, []); // dependência estável via ref
 
+  const [XClientePadraoId, setXClientePadraoId] = useState<number | null>(null);
+
+  // Load default client from fiscal configurations
+  useEffect(() => {
+    if (!XEmpresaId) return;
+    (async () => {
+      const { data: fConfig } = await db.from("fiscal_config")
+        .select("cliente_padrao_id")
+        .eq("empresa_id", XEmpresaId)
+        .maybeSingle();
+
+      if (fConfig?.cliente_padrao_id) {
+        setXClientePadraoId(fConfig.cliente_padrao_id);
+        // Pre-cache default client's info
+        await ensureClienteInfo([fConfig.cliente_padrao_id]);
+      }
+    })();
+  }, [XEmpresaId, ensureClienteInfo]);
+
   const abrirPesquisaCliente = (onPick: (c: IClienteRow) => void) => {
     setXSearchTarget(() => onPick);
     setXSearchOpen(true);
@@ -167,14 +478,32 @@ const PedidoForm: React.FC = () => {
     }
   }, []);
 
-  // Keyboard shortcut F7 for Pre-venda
+  // Keyboard shortcuts F7 and F9
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "F7" && XCurrentRecordRef.current?.movimento_id) {
-        const st = XCurrentRecordRef.current.st_pedido;
+      const rec = XCurrentRecordRef.current;
+      if (!rec?.movimento_id) return;
+
+      if (e.key === "F7") {
+        const st = rec.st_pedido;
         if (st === "O" || st === "V") {
           e.preventDefault();
-          mudarStatus(XCurrentRecordRef.current.movimento_id, "F", "Confirma o envio deste pedido para o Caixa? O estoque será reservado.");
+          mudarStatus(rec.movimento_id, "F", "Confirma o envio deste pedido para o Caixa? O estoque será reservado.");
+        }
+      } else if (e.key === "F9") {
+        // Atalho F9 para abrir Financeiro / Pagamento
+        // Regras: em navegação, valor > 0, não enviado para caixa, não cancelado, não faturado
+        const valor = Number(rec.vl_movimento || 0);
+        if (
+          !XIsEditingRef.current &&
+          valor > 0 &&
+          rec.st_pedido !== "F" &&
+          rec.st_pedido !== "C" &&
+          rec.faturado !== "S"
+        ) {
+          e.preventDefault();
+          XSetInnerTabRef.current?.("pagamento");
+          setXOpenPagtoDialog(true);
         }
       }
     };
@@ -230,6 +559,8 @@ const PedidoForm: React.FC = () => {
       <StandardCrudForm<IMovimento>
         XToolbarExtras={({ currentRecord, refresh, setInnerTab, isEditing }) => {
         XCurrentRecordRef.current = currentRecord;
+        XSetInnerTabRef.current = setInnerTab;
+        XIsEditingRef.current = isEditing;
         if (!currentRecord?.movimento_id || isEditing) return null;
         const stAtual = currentRecord.st_pedido;
         return (
@@ -469,216 +800,31 @@ const PedidoForm: React.FC = () => {
             },
           },
         ]}
-        renderCadastro={({ record, setField, mode, isEditing, currentRecord, setInnerTab }) => {
-          const stAtual = (record.st_pedido || "O") as string;
-          const ro = !isEditing || (mode === "edit" && stAtual !== "O");
-          const fmt = (v: number) => Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-          const fmtQ = (v: number) => Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
-
-          const fmtInput = (v: any, dec = 2) => {
-            if (v === 0 || v === "0") return Number(0).toLocaleString("pt-BR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
-            if (v === "" || v === undefined || v === null) return "";
-            if (typeof v === "number") return v.toLocaleString("pt-BR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
-            return String(v);
-          };
-
-          const parseNum = (v: any) => {
-            if (!v) return 0;
-            if (typeof v === "number") return v;
-            let s = String(v).replace(/\s/g, "");
-            if (s.includes(",")) {
-              s = s.replace(/\./g, "").replace(",", ".");
-            }
-            const n = parseFloat(s);
-            return isNaN(n) ? 0 : n;
-          };
-
-          // Itens em cache (sincronizados com a aba Itens)
-          const movId = currentRecord?.movimento_id;
-          const isInsertNovo = mode === "insert" && !movId;
-          const itensCache = !isInsertNovo && XPedidoTotalCtx.movimentoId === movId ? XPedidoTotalCtx.itens : [];
-
-          // Sinaliza side-effects via state (sem executar async direto no render)
-          if (!isInsertNovo && movId && XPedidoTotalCtx.movimentoId !== movId) {
-            queueMicrotask(() => setXMovimentoParaBuscar(movId));
-          }
-          if (isInsertNovo && (XPedidoTotalCtx.movimentoId !== null || XPedidoTotalCtx.itens.length > 0)) {
-            queueMicrotask(() => setXModoInsertSemId(true));
-          }
-
-          const T = itensCache.reduce((acc, i: any) => ({
-            vl_produto: acc.vl_produto + Number(i.vl_produto || 0),
-            vl_desconto: acc.vl_desconto + Number(i.vl_desconto || 0),
-            vl_frete: acc.vl_frete + Number(i.vl_frete || 0),
-            vl_despesa: acc.vl_despesa + Number(i.vl_despesa || 0),
-            vl_seguro: acc.vl_seguro + Number(i.vl_seguro || 0),
-            vl_outro: acc.vl_outro + Number(i.vl_outro || 0),
-            vl_movimento: acc.vl_movimento + Number(i.vl_movimento || 0),
-          }), { vl_produto: 0, vl_desconto: 0, vl_frete: 0, vl_despesa: 0, vl_seguro: 0, vl_outro: 0, vl_movimento: 0 });
-
-          const handleBlur = (key: string, val: any, decimals = 2) => {
-            const n = parseNum(val);
-            if (key === 'pc_desconto') {
-              const sub = T.vl_produto;
-              const calcVl = +(sub * n / 100).toFixed(2);
-              setField("pc_desconto", n as any);
-              setField("vl_desconto", calcVl as any);
-            } else if (key === 'vl_desconto') {
-              const sub = T.vl_produto;
-              const calcPc = sub > 0 ? +(n / sub * 100).toFixed(2) : 0;
-              setField("vl_desconto", n as any);
-              setField("pc_desconto", calcPc as any);
-            } else {
-              setField(key as any, n as any);
-            }
-          };
-
-          const visualCols = [
-            { key: "cd_produto", label: "Código", width: "90px", align: "right" as const, render: (r: any) => r.cd_produto || (r.produto_id ?? "") },
-            { key: "nm_produto", label: "Produto", width: "2fr" },
-            { key: "qt_movimento", label: "Qtd.", width: "90px", align: "right" as const, render: (r: any) => fmtQ(r.qt_movimento) },
-            { key: "vl_und_produto", label: "Vlr. Unit", width: "100px", align: "right" as const, render: (r: any) => fmt(r.vl_und_produto) },
-            { key: "vl_produto", label: "Subtotal", width: "110px", align: "right" as const, render: (r: any) => fmt(r.vl_produto) },
-            { key: "pc_desconto", label: "Desc.(%)", width: "80px", align: "right" as const, render: (r: any) => fmt(r.pc_desconto) },
-            { key: "vl_desconto", label: "Desc.(R$)", width: "100px", align: "right" as const, render: (r: any) => fmt(r.vl_desconto) },
-            { key: "vl_despesa", label: "Vlr. Desp.", width: "100px", align: "right" as const, render: (r: any) => fmt(r.vl_despesa) },
-            { key: "vl_frete", label: "Vlr. Frete", width: "100px", align: "right" as const, render: (r: any) => fmt(r.vl_frete) },
-            { key: "vl_seguro", label: "Vlr. Seg.", width: "100px", align: "right" as const, render: (r: any) => fmt(r.vl_seguro) },
-            { key: "vl_outro", label: "Vlr. Outros", width: "100px", align: "right" as const, render: (r: any) => fmt(r.vl_outro) },
-            { key: "vl_movimento", label: "Total", width: "110px", align: "right" as const, render: (r: any) => fmt(r.vl_movimento) },
-          ];
-
+        renderCadastro={({ record, setField, setRecord, mode, isEditing, currentRecord, setInnerTab, onSalvar }) => {
           return (
-            <div className="space-y-4">
-              <div className="grid grid-cols-12 gap-3">
-                <div className="col-span-1">
-                  <label className="text-xs text-muted-foreground">Pedido</label>
-                  <input readOnly value={record.nr_movimento ?? (mode === "insert" ? "(Novo)" : "")} className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
-                </div>
-                <div className="col-span-5">
-                  <label className="text-xs text-muted-foreground">Cliente <span className="text-destructive">*</span></label>
-                  <div className="flex gap-1">
-                    <input
-                      readOnly
-                      value={record.cadastro_id ? (XClientesCache[record.cadastro_id]?.razao || `#${record.cadastro_id}`) : ""}
-                      placeholder="Clique na lupa para pesquisar..."
-                      className="flex-1 border border-border rounded px-2 py-1 text-sm"
-                    />
-                    <button
-                      type="button"
-                      disabled={ro}
-                      onClick={() => abrirPesquisaCliente((c) => {
-                        setXClientesCache(prev => ({ ...prev, [c.cadastro_id]: { id: c.cadastro_id, cnpj: c.cnpj || "", razao: c.razao_social || "", fantasia: c.nome_fantasia || "" } }));
-                        setField("cadastro_id", c.cadastro_id as any);
-                      })}
-                      className="px-2 py-1 border border-border rounded bg-card hover:bg-accent disabled:opacity-50"
-                      title="Pesquisar cliente"
-                    >
-                      <Search className="w-4 h-4" />
-                    </button>
-                    {record.cadastro_id && !ro && (
-                      <button
-                        type="button"
-                        onClick={() => setField("cadastro_id", null as any)}
-                        className="px-2 py-1 border border-border rounded bg-card hover:bg-accent text-xs"
-                        title="Limpar"
-                      >×</button>
-                    )}
-                  </div>
-                </div>
-                <div className="col-span-3">
-                  <label className="text-xs text-muted-foreground">Vendedor <span className="text-destructive">*</span></label>
-                  <select disabled={ro} value={record.funcionario_id ?? ""} onChange={e => setField("funcionario_id", e.target.value ? Number(e.target.value) : null as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
-                    <option value="">--</option>
-                    {XVendedores.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
-                  </select>
-                </div>
-                <div className="col-span-2">
-                  <label className="text-xs text-muted-foreground">Status</label>
-                  <input readOnly value={ST_PEDIDO_LABELS[stAtual] || stAtual} className="w-full border border-border rounded px-2 py-1 text-sm" />
-                </div>
-                <div className="col-span-1">
-                  <label className="text-xs text-muted-foreground">Faturado</label>
-                  <input readOnly value={record.faturado ?? "N"} className="w-full border border-border rounded px-2 py-1 text-sm text-center" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-12 gap-3">
-                <div className="col-span-2">
-                  <label className="text-xs text-muted-foreground">Dt. Emissão <span className="text-destructive">*</span></label>
-                  <input type="date" disabled={ro} value={(record.dt_emissao || "").toString().substring(0, 10)} onChange={e => setField("dt_emissao", e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
-                </div>
-                <div className="col-span-2">
-                  <label className="text-xs text-muted-foreground">Dt. Entrega <span className="text-destructive">*</span></label>
-                  <input type="date" disabled={ro} value={(record.dt_entrega || "").toString().substring(0, 10)} onChange={e => setField("dt_entrega", e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
-                </div>
-                <div className="col-span-3">
-                  <label className="text-xs text-muted-foreground">Tipo de Operação</label>
-                  <select disabled={ro} value={record.tp_operacao_id ?? ""} onChange={e => setField("tp_operacao_id", e.target.value ? Number(e.target.value) : null as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
-                    <option value="">--</option>
-                    {XTpOperacoes.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-                  </select>
-                </div>
-                <div className="col-span-3">
-                  <label className="text-xs text-muted-foreground">Tipo de Movimento <span className="text-destructive">*</span></label>
-                  <select disabled={ro} value={record.tp_movimento || "PD"} onChange={e => setField("tp_movimento", e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
-                    <option value="PD">Pedido</option>
-                    <option value="SV">Saída por Venda</option>
-                    <option value="OR">Orçamento</option>
-                  </select>
-                </div>
-                <div className="col-span-2">
-                  <label className="text-xs text-muted-foreground">NF</label>
-                  <input readOnly value={record.numero_nfe ?? ""} className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
-                </div>
-              </div>
-
-              {/* Linha do Tipo de Desconto + Botões de status à direita */}
-              <div className="grid grid-cols-12 gap-3 items-end">
-                <div className="col-span-3">
-                  <label className="text-xs text-muted-foreground">Tipo de Desconto <span className="text-destructive">*</span></label>
-                  <select disabled={ro} value={record.tp_desconto || "N"} onChange={e => setField("tp_desconto", e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
-                    {Object.entries(TP_DESCONTO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              {/* Grid de produtos somente leitura */}
-              {currentRecord?.movimento_id && (
-                <>
-                  <DataGrid
-                    columns={visualCols}
-                    data={itensCache as any[]}
-                    maxHeight="260px"
-                    exportTitle="Itens do Pedido"
-                    showRecordCount={true}
-                  />
-
-                  {/* Painel de totalizadores — 7 cards */}
-                  <div className="border border-border rounded p-3 bg-card">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-                      {[
-                        { label: "Subtotal", value: T.vl_produto },
-                        { label: "Desc. (R$)", value: T.vl_desconto },
-                        { label: "Vlr. Frete", value: T.vl_frete },
-                        { label: "Vlr. Desp.", value: T.vl_despesa },
-                        { label: "Vlr. Seg.", value: T.vl_seguro },
-                        { label: "Vlr. Outros", value: T.vl_outro },
-                      ].map((c) => (
-                        <div key={c.label} className="flex flex-col border border-border rounded px-3 py-2 bg-secondary/40">
-                          <span className="text-xs uppercase tracking-wide text-muted-foreground">{c.label}</span>
-                          <span className="text-base font-semibold text-right tabular-nums">{fmt(c.value)}</span>
-                        </div>
-                      ))}
-                      <div className="flex flex-col border border-primary/40 rounded px-3 py-2 bg-primary/10">
-                        <span className="text-xs uppercase tracking-wide text-primary/80">Total</span>
-                        <span className="text-lg font-bold text-primary text-right tabular-nums">{fmt(T.vl_movimento)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+            <PedidoCadastroFormContent
+              record={record}
+              setField={setField}
+              setRecord={setRecord}
+              mode={mode}
+              isEditing={isEditing}
+              currentRecord={currentRecord}
+              setInnerTab={setInnerTab}
+              onSalvar={onSalvar}
+              vendedores={XVendedores}
+              tpOperacoes={XTpOperacoes}
+              rotas={XRotas}
+              cidades={XCidades}
+              clientesCache={XClientesCache}
+              setXClientesCache={setXClientesCache}
+              abrirPesquisaCliente={abrirPesquisaCliente}
+              clientePadraoId={XClientePadraoId}
+              ensureClienteInfo={ensureClienteInfo}
+              pedidoTotalCtx={XPedidoTotalCtx}
+              setXMovimentoParaBuscar={setXMovimentoParaBuscar}
+              setXModoInsertSemId={setXModoInsertSemId}
+              handleKeyDown={handleKeyDown}
+            />
           );
         }}
       />

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -54,6 +54,8 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
   const [XLoading, setXLoading] = useState(false);
   const [XCampos, setXCampos] = useState<CampoKey[]>(CAMPOS_DEFAULT);
   const [XCfgOpen, setXCfgOpen] = useState(false);
+  const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open || !empresaId) return;
@@ -100,11 +102,14 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
     }
     const { data, error } = await q;
     setXLoading(false);
-    if (!error) setXRows((data || []) as IClienteRow[]);
+    if (!error) {
+      setXRows((data || []) as IClienteRow[]);
+      setXSelectedIdx(null);
+    }
   }, [empresaId]);
 
   useEffect(() => {
-    if (open) { setXTermo(""); buscar(""); }
+    if (open) { setXTermo(""); buscar(""); setXSelectedIdx(null); }
   }, [open, buscar]);
 
   useEffect(() => {
@@ -112,6 +117,39 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
     const t = setTimeout(() => buscar(XTermo), 300);
     return () => clearTimeout(t);
   }, [XTermo, open, buscar]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (XRows.length === 0 || XLoading) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setXSelectedIdx(prev => {
+        const next = prev === null ? 0 : Math.min(prev + 1, XRows.length - 1);
+        setTimeout(() => {
+          const el = listRef.current?.querySelector(`[data-index="${next}"]`) as HTMLElement;
+          el?.scrollIntoView({ block: "nearest" });
+        }, 10);
+        return next;
+      });
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setXSelectedIdx(prev => {
+        const next = prev === null ? 0 : Math.max(prev - 1, 0);
+        setTimeout(() => {
+          const el = listRef.current?.querySelector(`[data-index="${next}"]`) as HTMLElement;
+          el?.scrollIntoView({ block: "nearest" });
+        }, 10);
+        return next;
+      });
+    } else if (e.key === "Enter") {
+      const selected = XSelectedIdx !== null ? XSelectedIdx : 0;
+      if (XRows[selected]) {
+        e.preventDefault();
+        onSelect(XRows[selected]);
+        onClose();
+      }
+    }
+  };
 
   const renderChips = (r: IClienteRow) => {
     const sep = <span className="text-muted-foreground/40 select-none">·</span>;
@@ -185,6 +223,7 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
               autoFocus
               value={XTermo}
               onChange={e => setXTermo(e.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder="Digite código, CPF/CNPJ, razão social ou fantasia..."
               className="w-full pl-9 pr-9 py-2 border border-border rounded text-sm bg-card"
             />
@@ -196,19 +235,29 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
           </div>
 
           <div className="border border-border rounded overflow-hidden">
-            <div className="max-h-[460px] overflow-y-auto">
-              {XLoading && <div className="p-6 text-center text-sm text-muted-foreground">Carregando...</div>}
+            <div ref={listRef} className="h-[460px] overflow-y-auto flex flex-col">
+              {XLoading && (
+                <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-6">
+                  Carregando...
+                </div>
+              )}
               {!XLoading && XRows.length === 0 && (
-                <div className="p-6 text-center text-sm text-muted-foreground">Nenhum cliente encontrado.</div>
+                <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-6">
+                  Nenhum cliente encontrado.
+                </div>
               )}
               {!XLoading && XRows.map((r, idx) => {
+                const sel = XSelectedIdx === idx;
                 const zebra = idx % 2 === 1 ? "bg-muted/30" : "";
                 return (
                   <button
                     key={r.cadastro_id}
+                    data-index={idx}
                     onDoubleClick={() => { onSelect(r); onClose(); }}
                     onClick={() => { onSelect(r); onClose(); }}
-                    className={`w-full flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-sm text-left border-t border-border break-words hover:bg-accent/50 ${zebra}`}
+                    className={`w-full flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-sm text-left border-t border-border shrink-0 break-words ${
+                      sel ? "bg-primary/15" : `${zebra} hover:bg-accent/50`
+                    }`}
                   >
                     {renderChips(r)}
                   </button>

@@ -5,6 +5,7 @@ import { useAppContext } from "@/contexts/AppContext";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import GridActionToolbar, { gridActions } from "@/components/grid/GridActionToolbar";
 import { Search } from "lucide-react";
+import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 import type { IMovimento, IMovimentoItem } from "./types";
 import ProdutoSearchDialog, { IProdutoRow, buscarProdutoPorCodigo } from "./ProdutoSearchDialog";
 
@@ -45,6 +46,7 @@ const parseNum = (v: any) => {
 
 const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged, autoNovoTrigger }) => {
   const { XEmpresaId, XEmpresaMatrizId, XEmpresas } = useAppContext();
+  const { handleKeyDown } = useEnterTraversal();
   const [XItens, setXItens] = useState<IMovimentoItem[]>([]);
   const [XDepositos, setXDepositos] = useState<IDepositoLookup[]>([]);
   const [XEdit, setXEdit] = useState<Partial<IMovimentoItem> | null>(null);
@@ -344,7 +346,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
     <div className="space-y-3">
 
       {XEdit && (
-        <div className="border border-border rounded p-3 space-y-2 bg-card">
+        <div className="border border-border rounded p-3 space-y-2 bg-card" onKeyDown={handleKeyDown}>
           {/* Linha 1: Código | 🔎 | Produto | Und | Preço Unit | Qtd | Subtotal */}
           <div className="grid grid-cols-12 gap-2 items-end">
             <div className="col-span-2">
@@ -355,15 +357,29 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
                 value={XCodigo}
                 onChange={e => setXCodigo(e.target.value)}
                 onBlur={onCodigoBlur}
-                onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); } }}
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    const t = XCodigo.trim();
+                    if (t) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      (e.target as HTMLInputElement).blur();
+                    }
+                  }
+                }}
                 placeholder="Cód. ou EAN"
                 className="w-full border border-border rounded px-2 py-1 text-sm"
+                data-lookup="true"
+                data-required="true"
+                data-lookup-key="produto"
               />
             </div>
             <div className="col-span-1 flex gap-1">
               <button ref={lupaRef} type="button" disabled={ro} onClick={() => setXSearchOpen(true)}
                 className="px-2 py-1 border border-border rounded bg-card hover:bg-accent disabled:opacity-50"
-                title="Pesquisar produto">
+                title="Pesquisar produto"
+                data-lookup-trigger="true"
+                data-lookup-key="produto">
                 <Search className="w-4 h-4" />
               </button>
               {XEdit.produto_id && !ro && (
@@ -532,7 +548,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
                 className="text-sm px-3 py-1 rounded bg-primary text-primary-foreground disabled:opacity-50">
                 {XEditingId ? "Salvar" : "Inserir"}
               </button>
-              <button onClick={() => { setXEdit(null); setXEditingId(null); setXEditEstoque(null); setXDepEstoque({}); setXCodigo(""); }}
+              <button type="button" onClick={() => { setXEdit(null); setXEditingId(null); setXEditEstoque(null); setXDepEstoque({}); setXCodigo(""); }}
                 className="text-sm px-3 py-1 rounded border border-border">Cancelar</button>
             </div>
           </div>

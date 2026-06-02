@@ -200,10 +200,10 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
     setXCurrentIdx(i => Math.max(0, i - 1));
   }, [XCurrentRecord, config, loadData]);
 
-  const handleFirst = () => setXCurrentIdx(0);
-  const handlePrev = () => setXCurrentIdx(i => Math.max(0, i - 1));
-  const handleNext = () => setXCurrentIdx(i => Math.min(XData.length - 1, i + 1));
-  const handleLast = () => setXCurrentIdx(XData.length - 1);
+  const handleFirst = useCallback(() => setXCurrentIdx(0), []);
+  const handlePrev = useCallback(() => setXCurrentIdx(i => Math.max(0, i - 1)), []);
+  const handleNext = useCallback(() => setXCurrentIdx(i => Math.min(XData.length - 1, i + 1)), [XData.length]);
+  const handleLast = useCallback(() => setXCurrentIdx(XData.length - 1), [XData.length]);
   const handleRefresh = useCallback(async () => {
     await loadData();
     toast.info("Dados recarregados.");
