@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -151,6 +151,8 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
   const [XLoadingEst, setXLoadingEst] = useState(false);
   const [XCampos, setXCampos] = useState<CampoKey[]>(CAMPOS_DEFAULT);
   const [XCfgOpen, setXCfgOpen] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const XGroupEmpresaIds = useMemo(() => {
     return XEmpresas
@@ -317,6 +319,9 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
       setXSelectedIdx(null);
       setXEstDeps([]);
       buscar("");
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
     }
   }, [open, buscar]);
 
@@ -326,9 +331,49 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
     return () => clearTimeout(t);
   }, [XTermo, open, buscar]);
 
+  useEffect(() => {
+    if (XSelectedIdx !== null && XRows[XSelectedIdx]) {
+      carregarEstoqueDoProduto(XRows[XSelectedIdx].produto_id);
+    } else {
+      setXEstDeps([]);
+    }
+  }, [XSelectedIdx, XRows, carregarEstoqueDoProduto]);
+
   const selecionarLinha = (idx: number, r: IProdutoRow) => {
     setXSelectedIdx(idx);
-    carregarEstoqueDoProduto(r.produto_id);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (XRows.length === 0 || XLoading) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setXSelectedIdx(prev => {
+        const next = prev === null ? 0 : Math.min(prev + 1, XRows.length - 1);
+        setTimeout(() => {
+          const el = listRef.current?.querySelector(`[data-index="${next}"]`) as HTMLElement;
+          el?.scrollIntoView({ block: "nearest" });
+        }, 10);
+        return next;
+      });
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setXSelectedIdx(prev => {
+        const next = prev === null ? 0 : Math.max(prev - 1, 0);
+        setTimeout(() => {
+          const el = listRef.current?.querySelector(`[data-index="${next}"]`) as HTMLElement;
+          el?.scrollIntoView({ block: "nearest" });
+        }, 10);
+        return next;
+      });
+    } else if (e.key === "Enter") {
+      const selected = XSelectedIdx !== null ? XSelectedIdx : 0;
+      if (XRows[selected]) {
+        e.preventDefault();
+        onSelect(XRows[selected]);
+        onClose();
+      }
+    }
   };
 
   const corEstoqueDep = (r: IEstoqueDepositoRow) => {
@@ -385,7 +430,13 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent 
+        className="max-w-3xl"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          inputRef.current?.focus();
+        }}
+      >
         <DialogHeader>
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <DialogTitle>Pesquisar Produto</DialogTitle>
@@ -441,9 +492,11 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
+              ref={inputRef}
               autoFocus
               value={XTermo}
               onChange={e => setXTermo(e.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder="Digite código, nome, referência ou GTIN..."
               className="w-full pl-9 pr-9 py-2 border border-border rounded text-sm bg-card"
             />
@@ -456,10 +509,16 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
 
           {/* Lista em coluna única com chips coloridos */}
           <div className="border border-border rounded overflow-hidden">
-            <div className="max-h-[420px] overflow-y-auto">
-              {XLoading && <div className="p-6 text-center text-sm text-muted-foreground">Carregando...</div>}
+            <div ref={listRef} className="h-[320px] overflow-y-auto flex flex-col">
+              {XLoading && (
+                <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-6">
+                  Carregando...
+                </div>
+              )}
               {!XLoading && XRows.length === 0 && (
-                <div className="p-6 text-center text-sm text-muted-foreground">Nenhum produto encontrado.</div>
+                <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-6">
+                  Nenhum produto encontrado.
+                </div>
               )}
               {!XLoading && XRows.map((r, idx) => {
                 const sel = XSelectedIdx === idx;
@@ -467,9 +526,10 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
                 return (
                   <div
                     key={r.produto_id}
+                    data-index={idx}
                     onClick={() => selecionarLinha(idx, r)}
                     onDoubleClick={() => { onSelect(r); onClose(); }}
-                    className={`flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-sm border-t border-border cursor-pointer break-words ${
+                    className={`flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-sm border-t border-border cursor-pointer shrink-0 break-words ${
                       sel ? "bg-primary/15" : `${zebra} hover:bg-accent/50`
                     }`}
                   >
@@ -491,15 +551,21 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
               <div className="col-span-2 text-right">Reserv.</div>
               <div className="col-span-2 text-right">Disponível</div>
             </div>
-            <div className="overflow-y-auto" style={{ maxHeight: "126px" }}>
+            <div className="overflow-y-auto h-[126px] flex flex-col">
               {XSelectedIdx == null && (
-                <div className="p-3 text-center text-[11px] text-muted-foreground">
+                <div className="flex-1 flex items-center justify-center text-[11px] text-muted-foreground p-3">
                   Selecione um produto para ver o estoque por depósito.
                 </div>
               )}
-              {XLoadingEst && <div className="p-3 text-center text-[11px] text-muted-foreground">Carregando...</div>}
+              {XLoadingEst && (
+                <div className="flex-1 flex items-center justify-center text-[11px] text-muted-foreground p-3">
+                  Carregando...
+                </div>
+              )}
               {!XLoadingEst && XSelectedIdx != null && XEstDeps.length === 0 && (
-                <div className="p-3 text-center text-[11px] text-muted-foreground">Sem registros de estoque para este produto.</div>
+                <div className="flex-1 flex items-center justify-center text-[11px] text-muted-foreground p-3">
+                  Sem registros de estoque para este produto.
+                </div>
               )}
               {!XLoadingEst && XEstDeps.map((d, i) => {
                 const zebra = i % 2 === 1 ? "bg-muted/30" : "";
@@ -511,7 +577,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
                       onSelect(p, d.deposito_id);
                       onClose();
                     }}
-                    className={`grid grid-cols-12 gap-2 px-3 py-1 text-[11px] border-t border-border cursor-pointer hover:bg-accent/50 ${zebra}`}
+                    className={`grid grid-cols-12 gap-2 px-3 py-1 text-[11px] border-t border-border cursor-pointer shrink-0 hover:bg-accent/50 ${zebra}`}
                     title="Duplo clique: seleciona produto e depósito"
                   >
                     <div className="col-span-6 truncate">{d.deposito_nome}</div>

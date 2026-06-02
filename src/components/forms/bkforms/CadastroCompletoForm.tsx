@@ -271,12 +271,130 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
       }));
 
       // Try to match cidade
-      if (data.localidade) {
-        const XCidadeMatch = XCidades.find((c: any) =>
-          c.descricao.toUpperCase() === data.localidade.toUpperCase() &&
-          (!data.uf || c.uf?.toUpperCase() === data.uf.toUpperCase())
+      console.log("[DEBUG CEP] Dados do CEP recebidos:", data);
+      if (data.ibge) {
+        const XSearchIbge = String(data.ibge).trim();
+        console.log("[DEBUG CEP] Buscando por IBGE:", XSearchIbge);
+
+        // 1. Tenta encontrar na lista local em memória pelo IBGE (7 dígitos)
+        let XCidadeMatchIbge = XCidades.find((c: any) =>
+          c.cd_ibge && String(c.cd_ibge).trim() === XSearchIbge
         );
+
+        if (XCidadeMatchIbge) {
+          console.log("[DEBUG CEP] Encontrado na lista local (memória):", XCidadeMatchIbge);
+        } else {
+          console.log("[DEBUG CEP] Não encontrado na lista local, realizando query no banco para cd_ibge =", XSearchIbge);
+          
+          // 2. Fallback: Se não achou na memória, busca no banco pelo cd_ibge
+          const { data: dbCidades, error: dbErr } = await db
+            .from("cidade")
+            .select("cidade_id,descricao,estado_id,cd_ibge")
+            .eq("cd_ibge", XSearchIbge)
+            .eq("excluido", false)
+            .limit(1);
+
+          if (dbErr) {
+            console.error("[DEBUG CEP] Erro na query do banco por IBGE:", dbErr);
+            toast.error(`Erro ao buscar cidade por IBGE: ${dbErr.message}`);
+          } else {
+            console.log("[DEBUG CEP] Resultado da query por IBGE:", dbCidades);
+            if (dbCidades && dbCidades.length > 0) {
+              const dbCidade = dbCidades[0];
+              setXCidades(prev => {
+                if (!prev.some(c => c.cidade_id === dbCidade.cidade_id)) {
+                  return [...prev, dbCidade].sort((a, b) => a.descricao.localeCompare(b.descricao));
+                }
+                return prev;
+              });
+              XCidadeMatchIbge = dbCidade;
+            }
+          }
+        }
+
+        if (XCidadeMatchIbge) {
+          console.log("[DEBUG CEP] Sucesso! Definindo endereco_cidade_id como:", XCidadeMatchIbge.cidade_id);
+          setXF(prev => ({ ...prev, endereco_cidade_id: String(XCidadeMatchIbge.cidade_id) }));
+        } else if (data.localidade) {
+          console.log("[DEBUG CEP] Não encontrou por IBGE, iniciando fallback por Nome + UF:", data.localidade, data.uf);
+          // Fallback para Nome + UF em memória
+          let XCidadeMatch = XCidades.find((c: any) =>
+            c.descricao.toUpperCase() === data.localidade.toUpperCase() &&
+            (!data.uf || c.estado_id?.toUpperCase() === data.uf.toUpperCase())
+          );
+
+          // Se não estiver na memória, busca no banco por Nome + UF (case-insensitive via ilike)
+          if (!XCidadeMatch) {
+            const { data: dbCidades, error: dbErr } = await db
+              .from("cidade")
+              .select("cidade_id,descricao,estado_id,cd_ibge")
+              .ilike("descricao", data.localidade.trim())
+              .eq("estado_id", data.uf || "")
+              .eq("excluido", false)
+              .limit(1);
+
+            if (dbErr) {
+              console.error("[DEBUG CEP] Erro na query por Nome + UF:", dbErr);
+              toast.error(`Erro ao buscar cidade por nome: ${dbErr.message}`);
+            } else {
+              console.log("[DEBUG CEP] Resultado da query por Nome + UF:", dbCidades);
+              if (dbCidades && dbCidades.length > 0) {
+                const dbCidade = dbCidades[0];
+                setXCidades(prev => {
+                  if (!prev.some(c => c.cidade_id === dbCidade.cidade_id)) {
+                    return [...prev, dbCidade].sort((a, b) => a.descricao.localeCompare(b.descricao));
+                  }
+                  return prev;
+                });
+                XCidadeMatch = dbCidade;
+              }
+            }
+          }
+
+          if (XCidadeMatch) {
+            console.log("[DEBUG CEP] Sucesso via Nome + UF! Definindo endereco_cidade_id como:", XCidadeMatch.cidade_id);
+            setXF(prev => ({ ...prev, endereco_cidade_id: String(XCidadeMatch.cidade_id) }));
+          } else {
+            console.warn("[DEBUG CEP] Nenhum resultado por IBGE nem por Nome + UF.");
+          }
+        }
+      } else if (data.localidade) {
+        console.log("[DEBUG CEP] CEP sem IBGE, buscando apenas por Nome + UF:", data.localidade, data.uf);
+        // Fallback apenas por Nome + UF se a API não trouxer código IBGE (case-insensitive via ilike)
+        let XCidadeMatch = XCidades.find((c: any) =>
+          c.descricao.toUpperCase() === data.localidade.toUpperCase() &&
+          (!data.uf || c.estado_id?.toUpperCase() === data.uf.toUpperCase())
+        );
+
+        if (!XCidadeMatch) {
+          const { data: dbCidades, error: dbErr } = await db
+            .from("cidade")
+            .select("cidade_id,descricao,estado_id,cd_ibge")
+            .ilike("descricao", data.localidade.trim())
+            .eq("estado_id", data.uf || "")
+            .eq("excluido", false)
+            .limit(1);
+
+          if (dbErr) {
+            console.error("[DEBUG CEP] Erro na query por Nome + UF:", dbErr);
+            toast.error(`Erro ao buscar cidade por nome: ${dbErr.message}`);
+          } else {
+            console.log("[DEBUG CEP] Resultado da query por Nome + UF:", dbCidades);
+            if (dbCidades && dbCidades.length > 0) {
+              const dbCidade = dbCidades[0];
+              setXCidades(prev => {
+                if (!prev.some(c => c.cidade_id === dbCidade.cidade_id)) {
+                  return [...prev, dbCidade].sort((a, b) => a.descricao.localeCompare(b.descricao));
+                }
+                return prev;
+              });
+              XCidadeMatch = dbCidade;
+            }
+          }
+        }
+
         if (XCidadeMatch) {
+          console.log("[DEBUG CEP] Sucesso! Definindo endereco_cidade_id como:", XCidadeMatch.cidade_id);
           setXF(prev => ({ ...prev, endereco_cidade_id: String(XCidadeMatch.cidade_id) }));
         }
       }
@@ -316,7 +434,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
 
   const loadLookups = useCallback(async () => {
     const [r1, r2, r3, r4, r5, r6, r7, r8] = await Promise.all([
-      db.from("cidade").select("cidade_id,descricao,uf").eq("excluido", false).order("descricao"),
+      db.from("cidade").select("cidade_id,descricao,estado_id,cd_ibge").eq("excluido", false).order("descricao"),
       db.from("cadastro_grupo").select("cadastro_grupo_id,nome").eq("excluido", false).order("nome"),
       db.from("tipo_cadastro").select("tp_cadastro_id,nome").eq("excluido", false).order("nome"),
       db.from("condicao_pagamento").select("condicao_id,descricao").eq("excluido", false).order("descricao"),

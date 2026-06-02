@@ -23,6 +23,7 @@ const CidadeSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
   const [XRows, setXRows] = useState<ICidadeRow[]>([]);
   const [XLoading, setXLoading] = useState(false);
   const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
 
   const buscar = useCallback(async (termo: string) => {
     setXLoading(true);
@@ -58,6 +59,10 @@ const CidadeSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
       setXTermo("");
       setXSelectedIdx(null);
       buscar("");
+      // Garante foco ao abrir
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
     }
   }, [open, buscar]);
 
@@ -69,7 +74,13 @@ const CidadeSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent 
+        className="max-w-3xl"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          inputRef.current?.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Pesquisar Cidade</DialogTitle>
         </DialogHeader>
@@ -77,6 +88,7 @@ const CidadeSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
+              ref={inputRef}
               autoFocus
               value={XTermo}
               onChange={e => setXTermo(e.target.value)}
