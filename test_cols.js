@@ -8,8 +8,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function check() {
   const { data, error } = await supabase
-    .from('cadastro_veiculo')
-    .select('*');
+    .from('fiscal_mdf_veiculo')
+    .select('*, cadastro_veiculo(descricao)')
+    .limit(1);
   if (error) {
     console.error("Query failed:", error.message);
   } else {

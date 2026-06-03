@@ -37,7 +37,7 @@ export const emitirMdfe = async (manifestoId: number, empresaId: number) => {
     .eq("excluido", false);
 
   const { data: motoristas } = await supabase
-    .from("fiscal_mdf_motorista")
+    .from("fiscal_mdf_condutor")
     .select("condutor_id")
     .eq("mdf_manifesto_id", manifestoId)
     .eq("excluido", false);
@@ -58,14 +58,20 @@ export const emitirMdfe = async (manifestoId: number, empresaId: number) => {
   const dtViagem = String(manifesto.dt_viagem || "").substring(0, 10);
   const hrViagem = String(manifesto.hr_viagem || "00:00:00");
 
-  const iniData = [
+  const iniDataArr = [
     "[infMDFe]",
     "versao=3.00",
     "[ide]",
     "cUF=41",
     "tpAmb=2",
     "tpEmit=" + (manifesto.tp_emitente || "1"),
-    "tpTransp=" + (manifesto.tp_transportador || "1"),
+  ];
+
+  if (manifesto.tp_transportador && String(manifesto.tp_transportador).trim() !== "") {
+    iniDataArr.push("tpTransp=" + manifesto.tp_transportador);
+  }
+
+  iniDataArr.push(
     "mod=" + (manifesto.modelo || "58"),
     "serie=" + (manifesto.serie || "1"),
     "nMDF=" + (manifesto.numero || ""),
@@ -81,8 +87,10 @@ export const emitirMdfe = async (manifestoId: number, empresaId: number) => {
     "qMDFe=0",
     "vCarga=" + (manifesto.valor_total || 0),
     "cUnid=01",
-    "qCarga=" + (manifesto.peso_total || 0),
-  ].join("\n");
+    "qCarga=" + (manifesto.peso_total || 0)
+  );
+
+  const iniData = iniDataArr.join("\n");
 
   // 4. Enviar para ACBr via TCP/IP (provedorService usa http://localhost:3434)
   const iniEscapado = iniData.replace(/\n/g, "\\n");

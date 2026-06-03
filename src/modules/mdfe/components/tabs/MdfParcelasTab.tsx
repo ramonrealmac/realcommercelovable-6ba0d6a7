@@ -49,7 +49,10 @@ const MdfParcelasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
 
   const handleRemove = async (id: number) => {
     if (!confirm("Remover esta parcela?")) return;
-    await supabase.from("fiscal_mdf_pagtos").update({ excluido: true, dt_alteracao: new Date().toISOString() }).eq("mdf_pagtos_id", id);
+    await supabase
+      .from("fiscal_mdf_pagtos")
+      .update({ excluido: true, dt_alteracao: new Date().toISOString() })
+      .eq("mdf_pagtos_id", id);
     load();
   };
 

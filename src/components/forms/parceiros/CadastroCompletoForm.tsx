@@ -9,11 +9,14 @@ import { validateCPF, validateCNPJ, validateCPFOrCNPJ, formatCPFCNPJ, formatPhon
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Loader2, MapPin } from "lucide-react";
 import VeiculoGrid from "./VeiculoGrid";
+import MotoristaGrid from "./MotoristaGrid";
 import CidadeSearchDialog from "@/components/shared/CidadeSearchDialog";
 import { baseService } from "@/utils/baseService";
 import { useGridFilter } from "@/hooks/useGridFilter";
 
 const db = supabase as any;
+
+const UF_LIST = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
 
 type TFormMode = "view" | "edit" | "insert";
 
@@ -71,6 +74,9 @@ interface ICadastro {
   excluido: boolean;
   latitude: number | null;
   longitude: number | null;
+  tp_proprietario: string | null;
+  rntrc: string | null;
+  uf_proprietario: string | null;
 }
 
 
@@ -111,6 +117,7 @@ const emptyForm = (): Record<string, string> => ({
   endereco_cidade_id: "", grupo_cadastro_id: "", tp_cadastro_id: "",
   condicao_id: "", funcionario_id: "", portador_id: "", rota_id: "", tabela_preco_id: "",
   latitude: "", longitude: "",
+  tp_proprietario: "", rntrc: "", uf_proprietario: "",
 });
 
 const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
@@ -139,6 +146,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
   const [XBuscandoGeo, setXBuscandoGeo] = useState(false);
   const [XCidadeDlgOpen, setXCidadeDlgOpen] = useState(false);
   const [tempVeiculos, setTempVeiculos] = useState<any[]>([]);
+  const [tempMotoristas, setTempMotoristas] = useState<any[]>([]);
 
 
   // Lookups
@@ -544,6 +552,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
     setXInnerTab("cadastro");
     setXCadastroInnerTab("geral");
     setTempVeiculos([]);
+    setTempMotoristas([]);
   };
 
   const handleEditar = () => {
@@ -681,6 +690,9 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
       inscricao_municipal: toNull(XF.inscricao_municipal) || "",
       latitude: toFloat(XF.latitude),
       longitude: toFloat(XF.longitude),
+      tp_proprietario: toNull(XF.tp_proprietario) || null,
+      rntrc: toNull(XF.rntrc) || null,
+      uf_proprietario: toNull(XF.uf_proprietario) || null,
     };
 
     let XSavedCadastroId: number | null = null;
@@ -720,6 +732,26 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
         toast.success(`${tempVeiculos.length} veículo(s) vinculados ao parceiro.`);
       }
       setTempVeiculos([]);
+    }
+
+    if (XFormMode === "insert" && tempMotoristas.length > 0 && XSavedCadastroId) {
+      const motoristasToInsert = tempMotoristas.map(m => ({
+        cpf: m.cpf,
+        nome: m.nome,
+        telefone: m.telefone,
+        chave_pix: m.chave_pix,
+        cadastro_id: XSavedCadastroId,
+        empresa_id: XEmpresaMatrizId,
+        dt_cadastro: new Date().toISOString(),
+        excluido: false,
+      }));
+      const { error: errM } = await db.from("cadastro_motorista").insert(motoristasToInsert);
+      if (errM) {
+        toast.error("Parceiro salvo, mas erro ao salvar os motoristas: " + errM.message);
+      } else {
+        toast.success(`${tempMotoristas.length} motorista(s) vinculados ao parceiro.`);
+      }
+      setTempMotoristas([]);
     }
 
     toast.success(XFormMode === "edit" ? "Cadastro alterado com sucesso." : "Cadastro incluído com sucesso.");
@@ -777,8 +809,8 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
     </div>
   );
 
-  const renderEditField = (label: string, key: string, options?: { required?: boolean; placeholder?: string; className?: string; noUppercase?: boolean }) => {
-    const XIsLocked = lockedFields.includes(key);
+  const renderEditField = (label: string, key: string, options?: { required?: boolean; placeholder?: string; className?: string; noUppercase?: boolean; disabled?: boolean }) => {
+    const XIsLocked = lockedFields.includes(key) || options?.disabled;
     return (
       <div className={options?.className}>
         <label className="block text-xs font-medium text-muted-foreground mb-1">
@@ -796,24 +828,37 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
     );
   };
 
-  const renderField = (label: string, key: string, options?: { required?: boolean; placeholder?: string; className?: string; noUppercase?: boolean }) => {
+  const renderField = (label: string, key: string, options?: { required?: boolean; placeholder?: string; className?: string; noUppercase?: boolean; disabled?: boolean }) => {
     if (XIsEditing) return renderEditField(label, key, options);
     return renderReadField(label, XCurrentRecord ? (XCurrentRecord as any)[key] : "", options?.className);
   };
 
-  const renderSelect = (label: string, key: string, items: { v: string; l: string }[]) => {
+  const renderSelect = (label: string, key: string, items: { v: string; l: string }[], disabled: boolean = false) => {
     if (!XIsEditing) {
       const XDisplay = items.find(i => i.v === (XCurrentRecord as any)?.[key])?.l || (XCurrentRecord as any)?.[key] || "";
       return renderReadField(label, XDisplay);
     }
-    const XIsLocked = lockedFields.includes(key);
+    const XIsLocked = lockedFields.includes(key) || disabled;
+    
+    // Mapeia itens com valor vazio ("") para "__none__" para evitar erro do Radix Select
+    const mappedItems = items.map(i => ({
+      v: i.v === "" ? "__none__" : i.v,
+      l: i.l
+    }));
+    
+    const currentValue = XF[key] || "__none__";
+
     return (
       <div>
         <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
-        <Select value={XF[key] || ""} onValueChange={(v) => set(key, v)} disabled={XIsLocked}>
+        <Select 
+          value={currentValue === "" ? "__none__" : currentValue} 
+          onValueChange={(v) => set(key, v === "__none__" ? "" : v)} 
+          disabled={XIsLocked}
+        >
           <SelectTrigger className={`h-[34px] text-sm ${XIsLocked ? XFieldBgRead : XFieldBgEdit}`}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {items.map(i => <SelectItem key={i.v} value={i.v}>{i.l}</SelectItem>)}
+            {mappedItems.map(i => <SelectItem key={i.v} value={i.v}>{i.l}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -855,17 +900,18 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
 
     if (showVeiculoTab && isTransportador) {
       XBase.push("veiculos");
+      XBase.push("motoristas");
     }
     return XBase;
   }, [showVeiculoTab, XIsEditing, XF.st_transportador, XCurrentRecord?.st_transportador]);
 
-  // Auto-redirect if "veiculos" tab gets hidden while active
+  // Auto-redirect if "veiculos" or "motoristas" tab gets hidden while active
   useEffect(() => {
     const isTransportador = XIsEditing
       ? XF.st_transportador === "S"
       : XCurrentRecord?.st_transportador === "S";
 
-    if (XCadastroInnerTab === "veiculos" && (!showVeiculoTab || !isTransportador)) {
+    if ((XCadastroInnerTab === "veiculos" || XCadastroInnerTab === "motoristas") && (!showVeiculoTab || !isTransportador)) {
       setXCadastroInnerTab("geral");
     }
   }, [XCadastroInnerTab, showVeiculoTab, XIsEditing, XF.st_transportador, XCurrentRecord?.st_transportador]);
@@ -876,7 +922,12 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
     complemento: "Complemento",
     geo: "Geolocalização",
     veiculos: "Veículos",
+    motoristas: "Motoristas",
   };
+
+  const isNotTransportador = XIsEditing
+    ? XF.st_transportador !== "S"
+    : XCurrentRecord?.st_transportador !== "S";
 
   // Map URL for geolocation
   const XMapLat = XIsEditing ? XF.latitude : (XCurrentRecord?.latitude != null ? String(XCurrentRecord.latitude) : "");
@@ -1150,6 +1201,17 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   {renderField("Seq. Rota", "rota_seq")}
+                  {renderSelect("Tipo de Proprietário", "tp_proprietario", [
+                    { v: "", l: "Não Informado" },
+                    { v: "0", l: "0 - TAC Agregado" },
+                    { v: "1", l: "1 - TAC Independente" },
+                    { v: "2", l: "2 - Outros" }
+                  ], isNotTransportador)}
+                  {renderField("RNTRC", "rntrc", { disabled: isNotTransportador })}
+                  {renderSelect("UF Proprietário", "uf_proprietario", [
+                    { v: "", l: "Não Informado" },
+                    ...UF_LIST.map(uf => ({ v: uf, l: uf }))
+                  ], isNotTransportador)}
                 </div>
               </div>
             )}
@@ -1245,6 +1307,28 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
                 />
               ) : XCurrentRecord ? (
                 <VeiculoGrid
+                  XEmpresaId={XEmpresaMatrizId}
+                  XCadastroId={XCurrentRecord.cadastro_id}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 border border-dashed border-border rounded-lg bg-slate-50/50 dark:bg-slate-900/50 h-64 text-center">
+                  <p className="text-sm font-semibold text-muted-foreground">
+                    Selecione um parceiro primeiro.
+                  </p>
+                </div>
+              )
+            )}
+
+            {/* === ABA MOTORISTAS === */}
+            {XCadastroInnerTab === "motoristas" && showVeiculoTab && (
+              XFormMode === "insert" ? (
+                <MotoristaGrid
+                  XEmpresaId={XEmpresaMatrizId}
+                  tempMotoristas={tempMotoristas}
+                  onChangeTempMotoristas={setTempMotoristas}
+                />
+              ) : XCurrentRecord ? (
+                <MotoristaGrid
                   XEmpresaId={XEmpresaMatrizId}
                   XCadastroId={XCurrentRecord.cadastro_id}
                 />
