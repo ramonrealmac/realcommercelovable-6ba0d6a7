@@ -134,6 +134,34 @@ const CompItem: React.FC<{
         boxSizing: 'border-box',
       }} />
     );
+  } else if (comp.type === 'subreport') {
+    const src = comp as any;
+    inner = (
+      <div style={{
+        width: '100%', height: '100%',
+        border: '2px dashed #3b82f6',
+        backgroundColor: 'rgba(59,130,246,0.06)',
+        borderRadius: '4px',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: '2px',
+        padding: '4px',
+      }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+        </svg>
+        <span style={{ fontSize: '9px', fontWeight: 600, color: '#2563eb', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {src.label || 'Sub-Relatório'}
+        </span>
+        <span style={{ fontSize: '8px', color: src.query_sql ? '#16a34a' : '#d97706' }}>
+          {src.query_sql ? `SQL ✓ · ${src.columns?.length || 0} col.` : '⚠ Configure o SQL'}
+        </span>
+        {src.links?.length > 0 && (
+          <span style={{ fontSize: '8px', color: '#6366f1' }}>
+            🔗 {src.links.length} vínculo(s)
+          </span>
+        )}
+      </div>
+    );
   }
 
   return (

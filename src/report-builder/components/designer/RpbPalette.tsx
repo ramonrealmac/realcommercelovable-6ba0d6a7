@@ -2,7 +2,7 @@
 // Report Builder Pro — Paleta de Componentes (sidebar esquerda)
 // ============================================================
 import React from 'react';
-import { Type, Table2, Hash, Image, Minus, GripVertical, Square } from 'lucide-react';
+import { Type, Table2, Hash, Image, Minus, GripVertical, Square, LayoutList } from 'lucide-react';
 import type { RpbBandName } from '../../types';
 
 interface PaletteItem {
@@ -21,6 +21,7 @@ const ITEMS: PaletteItem[] = [
   { type: 'line',       label: 'Linha Horizontal',   icon: <Minus className="w-4 h-4" />, defaultW: 190, defaultH: 1   },
   { type: 'line-v',     label: 'Linha Vertical',     icon: <GripVertical className="w-4 h-4" />, defaultW: 1, defaultH: 20 },
   { type: 'box',        label: 'Box / Retângulo',    icon: <Square className="w-4 h-4" />, defaultW: 80,  defaultH: 20  },
+  { type: 'subreport',  label: 'Sub-Relatório',      icon: <LayoutList className="w-4 h-4" />, defaultW: 190, defaultH: 40  },
 ];
 
 interface Props {

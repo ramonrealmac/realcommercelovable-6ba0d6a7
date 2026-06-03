@@ -112,13 +112,35 @@ export interface RpbBoxComp extends RpbBaseComp {
   borderRadius: number;     // px
 }
 
+// ── Sub-Relatório ─────────────────────────────────────────────
+// Define o vínculo entre uma coluna do dataset pai e um parâmetro no SQL filho
+export interface RpbSubreportLink {
+  parentField: string;   // coluna do dataset principal (ex: pedido_id)
+  childParam:  string;   // variável no SQL filho, sem chaves (ex: pedido_id)
+}
+
+export interface RpbSubreportComp extends RpbBaseComp {
+  type:          'subreport';
+  label:         string;             // rótulo interno (exibido no designer)
+  query_sql:     string;             // SQL do sub-relatório
+  links:         RpbSubreportLink[]; // vínculos pai→filho (pode ser vazio)
+  columns:       RpbTableColumn[];   // colunas a exibir
+  headerStyle:   RpbStyle;
+  rowStyle:      RpbStyle;
+  showHeader:    boolean;
+  showTitleBar:  boolean;            // exibe barra de título antes da tabela
+  titleText:     string;             // ex: "Formas de Pagamento"
+  emptyMessage:  string;             // mensagem quando não há linhas
+}
+
 export type RpbComponent =
   | RpbTextComp
   | RpbTableComp
   | RpbTotalizerComp
   | RpbImageComp
   | RpbLineComp
-  | RpbBoxComp;
+  | RpbBoxComp
+  | RpbSubreportComp;
 
 // ── Banda ────────────────────────────────────────────────────
 export interface RpbBand {
