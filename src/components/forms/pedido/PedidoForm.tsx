@@ -292,10 +292,13 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
             disabled={ro}
             value={record.tp_desconto || "N"}
             onChange={e => setField("tp_desconto", e.target.value as any)}
-            onKeyDown={(e) => {
+            onKeyDown={async (e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                onSalvar?.();
+                if (onSalvar) {
+                  await onSalvar();
+                  setInnerTab("itens");
+                }
               }
             }}
             className="w-full border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
