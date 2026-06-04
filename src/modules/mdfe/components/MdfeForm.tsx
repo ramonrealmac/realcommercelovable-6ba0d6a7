@@ -28,12 +28,12 @@ const ST_LABELS: Record<TMdfSt, string> = {
 };
 
 const ST_COLORS: Record<TMdfSt, string> = {
-  D: "text-yellow-600",
-  G: "text-blue-600",
-  A: "text-green-600",
-  E: "text-purple-600",
-  C: "text-red-600",
-  R: "text-orange-600",
+  D: "!text-yellow-600",
+  G: "!text-blue-600",
+  A: "!text-green-600",
+  E: "!text-purple-600",
+  C: "!text-red-600",
+  R: "!text-red-600",
 };
 
 const UF_LIST = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
@@ -165,6 +165,16 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
   const [selectedCadastroId, setSelectedCadastroId] = useState<number | null>(null);
   const [refreshMotoristasTrigger, setRefreshMotoristasTrigger] = useState(0);
 
+  useEffect(() => {
+    if (!XEmpresaId) return;
+    const ch = (supabase as any).channel('mdfe_form_changes')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fiscal_mdf_manifesto', filter: `empresa_id=eq.${XEmpresaId}` }, () => {
+        XRefreshRef.current?.();
+      })
+      .subscribe();
+    return () => { try { (supabase as any).removeChannel(ch); } catch {} };
+  }, [XEmpresaId]);
+
   const handleTransmitir = useCallback(async (manifestoId: number) => {
     if (!confirm("Confirma a emissão do MDF-e? O documento será enviado ao SEFAZ via ACBr.")) return;
     toast.loading("Transmitindo MDF-e...", { id: "mdf-tx" });
@@ -207,6 +217,26 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
       if (res.success) {
         toast.success(res.mensagem || "MDF-e transmitido com sucesso!");
         XRefreshRef.current?.();
+
+        // Auto-print DAMDFE
+        let pdfBase64 = res.resposta?.pdf_base64;
+        if (!pdfBase64 && res.resposta?.impressao?.pdf_base64) {
+          pdfBase64 = res.resposta.impressao.pdf_base64;
+        }
+
+        if (pdfBase64) {
+          try {
+            const binaryString = atob(pdfBase64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+            const blob = new Blob([bytes], { type: "application/pdf" });
+            const url = URL.createObjectURL(blob);
+            window.open(url, "_blank");
+          } catch (e: any) {
+            console.error("Falha ao abrir PDF:", e);
+            toast.error("MDF-e autorizado, mas falhou ao abrir o visualizador de PDF.");
+          }
+        }
       } else {
         toast.error(res.mensagem || "Erro na transmissão");
       }
@@ -243,6 +273,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
         XSoftDelete: true,
         XOrderBy: "mdf_manifesto_id",
         XInitialId: initialId,
+        XCanEdit: (rec: any) => !["A", "E", "C"].includes(String(rec.status)),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         XDefaultRecord: { ...XDefault, empresa_id: XEmpresaId } as any,
         XOnBeforeSave: async (rec) => {
@@ -366,7 +397,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
             <MdfPercursoTab
               mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
               empresaId={XEmpresaId}
-              podeEditar={currentRecord?.status === "D"}
+              podeEditar={!currentRecord?.status || ["D", "R"].includes(String(currentRecord?.status))}
               record={record}
               setField={setField}
               isEditing={isEditing}
@@ -379,7 +410,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
             <MdfDocumentosTab
               mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
               empresaId={XEmpresaId}
-              podeEditar={currentRecord?.status === "D"}
+              podeEditar={!currentRecord?.status || ["D", "R"].includes(String(currentRecord?.status))}
             />
           ),
         },
@@ -392,7 +423,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
                 <MdfVeiculosTab
                   mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
                   empresaId={XEmpresaId}
-                  podeEditar={currentRecord?.status === "D"}
+                  podeEditar={!currentRecord?.status || ["D", "R"].includes(String(currentRecord?.status))}
                   onTracaoCadastroIdChange={setSelectedCadastroId}
                   onMotoristasChanged={() => setRefreshMotoristasTrigger(p => p + 1)}
                 />
@@ -402,7 +433,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
                 <MdfMotoristasTab
                   mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
                   empresaId={XEmpresaId}
-                  podeEditar={currentRecord?.status === "D"}
+                  podeEditar={!currentRecord?.status || ["D", "R"].includes(String(currentRecord?.status))}
                   veiculoCadastroId={selectedCadastroId}
                   refreshTrigger={refreshMotoristasTrigger}
                 />
@@ -416,7 +447,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
             <MdfPagamentoTab
               mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
               empresaId={XEmpresaId}
-              podeEditar={currentRecord?.status === "D"}
+              podeEditar={!currentRecord?.status || ["D", "R"].includes(String(currentRecord?.status))}
             />
           ),
         },
@@ -426,7 +457,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
             <MdfComponenteTab
               mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
               empresaId={XEmpresaId}
-              podeEditar={currentRecord?.status === "D"}
+              podeEditar={!currentRecord?.status || ["D", "R"].includes(String(currentRecord?.status))}
             />
           ),
         },
@@ -436,7 +467,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
             <MdfParcelasTab
               mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
               empresaId={XEmpresaId}
-              podeEditar={currentRecord?.status === "D"}
+              podeEditar={!currentRecord?.status || ["D", "R"].includes(String(currentRecord?.status))}
             />
           ),
         },
@@ -499,17 +530,11 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
               </div>
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Status</label>
-                <input readOnly
-                  value={ST_LABELS[st] || st}
-                  className={`w-full border border-border rounded px-2 py-1 text-sm font-semibold bg-secondary ${ST_COLORS[st] || ""}`} />
+                <div className={`w-full border border-border rounded px-2 py-[5px] text-sm font-semibold bg-secondary ${ST_COLORS[st] || ""}`}>
+                  {ST_LABELS[st] || st}
+                </div>
               </div>
               <div className="col-span-3 flex gap-2 items-end flex-wrap">
-                {podeTransmitir && (
-                  <button onClick={() => handleTransmitir(mdfId!)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded bg-green-600 text-white text-xs hover:bg-green-700">
-                    <Send className="w-3.5 h-3.5" /> Transmitir
-                  </button>
-                )}
                 {podeEncerrar && (
                   <button onClick={() => handleEncerrar(mdfId!)}
                     className="flex items-center gap-1 px-3 py-1.5 rounded bg-blue-600 text-white text-xs hover:bg-blue-700">
@@ -634,6 +659,19 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
                       className="w-full border border-green-200 rounded px-2 py-1 text-xs font-mono bg-white text-green-800" />
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* ── Botão Transmitir ── */}
+            {!isEditing && record.mdf_manifesto_id && (record.status === "D" || record.status === "R" || !record.status) && (
+              <div className="flex justify-end pt-3">
+                <button
+                  type="button"
+                  onClick={() => handleTransmitir(record.mdf_manifesto_id)}
+                  className="flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow-md transition-all hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <Send className="w-3.5 h-3.5" /> TRANSMITIR MDF-e PARA SEFAZ
+                </button>
               </div>
             )}
 

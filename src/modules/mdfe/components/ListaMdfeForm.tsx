@@ -15,7 +15,8 @@ import {
   Eye, 
   Terminal,
   Lock,
-  Plus
+  Plus,
+  Trash2
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -69,7 +70,7 @@ const XGridCols: IGridColumn[] = [
           r.status === "A" ? "bg-green-100 text-green-700" :
           r.status === "C" ? "bg-red-100 text-red-700" :
           r.status === "E" ? "bg-purple-100 text-purple-700" : 
-          r.status === "R" ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600"
+          r.status === "R" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"
         }`}>
           {label}
         </span>
@@ -104,7 +105,7 @@ const ListaMdfeForm: React.FC = () => {
         .eq("empresa_id", XEmpresaId)
         .gte("dt_emissao", XDtIni)
         .lte("dt_emissao", XDtFim)
-        .order("created_at", { ascending: false });
+        .order("mdf_manifesto_id", { ascending: false });
 
       if (error) throw error;
       setXData(data || []);
@@ -131,13 +132,63 @@ const ListaMdfeForm: React.FC = () => {
       toast.error("Documento já finalizado.");
       return;
     }
-    toast.info("Enfileirando transmissão...");
-    const res = await mdfeEmissaoService.emitirMdfe(row.mdf_manifesto_id, XEmpresaId);
-    if (res.success) {
-      toast.success("Evento de transmissão criado.");
-      loadData();
-    } else {
-      toast.error("Falha: " + (res.message || "erro desconhecido"));
+    const tid = toast.loading("Transmitindo MDF-e para a SEFAZ...");
+    try {
+      const res = await mdfeEmissaoService.emitirMdfe(row.mdf_manifesto_id, XEmpresaId);
+      if (res.success) {
+        toast.success(res.mensagem || "MDF-e transmitido com sucesso!", { id: tid });
+        loadData();
+
+        // Auto-print DAMDFE
+        let pdfBase64 = res.resposta?.pdf_base64;
+        if (!pdfBase64 && res.resposta?.impressao?.pdf_base64) {
+          pdfBase64 = res.resposta.impressao.pdf_base64;
+        }
+
+        if (pdfBase64) {
+          try {
+            const binaryString = atob(pdfBase64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+            const blob = new Blob([bytes], { type: "application/pdf" });
+            const url = URL.createObjectURL(blob);
+            window.open(url, "_blank");
+          } catch (e: any) {
+            console.error("Falha ao abrir PDF:", e);
+            toast.error("MDF-e autorizado, mas falhou ao abrir o visualizador de PDF.");
+          }
+        }
+      } else {
+        toast.error("Falha: " + (res.mensagem || res.message || "erro desconhecido"), { id: tid });
+      }
+    } catch (err: any) {
+      toast.error("Erro na transmissão: " + err.message, { id: tid });
+    }
+  };
+
+  const handleImprimir = async (row: any) => {
+    if (!XEmpresaId) return;
+    const tid = toast.loading("Gerando DAMDFE...");
+    try {
+      const res = await mdfeEmissaoService.imprimirMdfe(row.mdf_manifesto_id, XEmpresaId);
+      let pdfBase64 = res.success ? (res.resposta?.pdf_base64 || res.pdf_base64) : null;
+      if (!pdfBase64 && res.resposta?.impressao?.pdf_base64) {
+        pdfBase64 = res.resposta.impressao.pdf_base64;
+      }
+
+      if (res.success && pdfBase64) {
+        const binaryString = atob(pdfBase64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+        const blob = new Blob([bytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        window.open(url, "_blank");
+        toast.success("DAMDFE gerado com sucesso!", { id: tid });
+      } else {
+        toast.error(res.mensagem || res.message || "Erro ao gerar PDF do DAMDFE.", { id: tid });
+      }
+    } catch (e: any) {
+      toast.error("Erro na impressão: " + e.message, { id: tid });
     }
   };
 
@@ -168,6 +219,29 @@ const ListaMdfeForm: React.FC = () => {
       toast.error(e.message);
     } finally {
       setXClosing(false);
+    }
+  };
+
+  const handleExcluir = async (row: any) => {
+    if (["A", "C", "E"].includes(row.status)) {
+      toast.error("Não é possível excluir um manifesto com status " + (row.status === "A" ? "Autorizado" : row.status === "E" ? "Encerrado" : "Cancelado") + ".");
+      return;
+    }
+    if (!confirm(`Deseja realmente excluir o MDF-e número ${row.numero || row.mdf_manifesto_id}?`)) {
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from("fiscal_mdf_manifesto")
+        .update({ excluido: true, dt_alteracao: new Date().toISOString() })
+        .eq("mdf_manifesto_id", row.mdf_manifesto_id);
+
+      if (error) throw error;
+
+      toast.success("Manifesto excluído com sucesso.");
+      loadData();
+    } catch (e: any) {
+      toast.error("Erro ao excluir manifesto: " + e.message);
     }
   };
 
@@ -220,9 +294,19 @@ const ListaMdfeForm: React.FC = () => {
                       <DropdownMenuItem onClick={() => { setXLogMdfId(r.mdf_manifesto_id); setXLogDialogOpen(true); }}>
                         <Terminal className="w-4 h-4 mr-2 text-indigo-500" /> Log de Transmissão
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleImprimir(r)} disabled={!["A", "E"].includes(r.status)}>
+                        <Printer className="w-4 h-4 mr-2 text-emerald-500" /> Imprimir DAMDFE
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => openTab({ title: `MDF-e #${r.numero || r.mdf_manifesto_id}`, component: "mdfe-form", params: { mdf_manifesto_id: r.mdf_manifesto_id } })}>
                         <Eye className="w-4 h-4 mr-2 text-primary" /> Editar / Ver
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => handleExcluir(r)} 
+                        disabled={["A", "C", "E"].includes(r.status)}
+                        className="text-red-600 focus:text-red-600 focus:bg-red-50 cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" /> Excluir MDF-e
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

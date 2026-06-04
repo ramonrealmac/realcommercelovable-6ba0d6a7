@@ -6,30 +6,132 @@ const UF_MAP: Record<string, string> = {
 };
 
 export const gerarIniMdfe = (params: any): string => {
-  const { manifesto, carrega, descarrega, condutores, documentos, veiculos, percurso, pagamentos, componentes, parcelas, fConfig } = params;
+  const { manifesto, empresa, carrega, descarrega, condutores, documentos, veiculos, percurso, pagamentos, componentes, parcelas, fConfig } = params;
 
   const esc = (val: any) => String(val || '').replace(/\n/g, ' ');
-  const formatData = (d: any) => d ? String(d).substring(0, 10) : '';
+  
+  const formatData = (d: any): string => {
+    if (!d) return '';
+    if (d instanceof Date) {
+      const dia = String(d.getDate()).padStart(2, '0');
+      const mes = String(d.getMonth() + 1).padStart(2, '0');
+      const ano = d.getFullYear();
+      return `${ano}-${mes}-${dia}`;
+    }
+    let str = String(d).trim();
+    if (/^[A-Za-z]{3}\s[A-Za-z]{3}/.test(str)) {
+      const parsedDate = new Date(str);
+      if (!isNaN(parsedDate.getTime())) {
+        const dia = String(parsedDate.getDate()).padStart(2, '0');
+        const mes = String(parsedDate.getMonth() + 1).padStart(2, '0');
+        const ano = parsedDate.getFullYear();
+        return `${ano}-${mes}-${dia}`;
+      }
+    }
+    str = str.split(/[ T]/)[0];
+    str = str.replace(/\//g, '-');
+    if (/^\d{2}-\d{2}-\d{4}$/.test(str)) {
+      const parts = str.split('-');
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+      return str;
+    }
+    return str.substring(0, 10);
+  };
+
+  const formatTime = (t: any): string => {
+    if (!t) return '00:00:00';
+    let str = String(t).trim();
+    if (str.includes('T')) {
+      str = str.split('T')[1] || '';
+    } else if (str.includes(' ')) {
+      str = str.split(' ')[1] || '';
+    }
+    if (str.includes('-')) {
+      str = str.split('-')[0];
+    }
+    str = str.trim();
+    if (/^\d{2}:\d{2}$/.test(str)) {
+      return `${str}:00`;
+    }
+    if (/^\d{2}:\d{2}:\d{2}$/.test(str)) {
+      return str;
+    }
+    return '00:00:00';
+  };
+
+  const formatACBrDateTime = (dateStr: string, timeStr: string) => {
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]} ${timeStr}`;
+    }
+    return `${dateStr} ${timeStr}`;
+  };
 
   let ini = "[infMDFe]\n";
   ini += "versao=3.00\n\n";
 
+  const now = new Date(Date.now() - 60000); // 1 minuto de margem de segurança para sincronia de relógio com a SEFAZ
+  const currentHours = String(now.getHours()).padStart(2, '0');
+  const currentMinutes = String(now.getMinutes()).padStart(2, '0');
+  const currentSeconds = String(now.getSeconds()).padStart(2, '0');
+  const currentTimeStr = `${currentHours}:${currentMinutes}:${currentSeconds}`;
+
+  const timeStr = formatTime(manifesto.hr_viagem);
+  const formattedDhEmi = formatACBrDateTime(formatData(manifesto.dt_emissao), currentTimeStr);
+  const formattedDhIniViagem = formatACBrDateTime(formatData(manifesto.dt_viagem), timeStr);
+
   ini += "[ide]\n";
   ini += `cUF=${UF_MAP[manifesto.ufini] || '35'}\n`;
   ini += `tpAmb=${fConfig?.ambiente_mdfe || 2}\n`;
-  ini += `tpEmit=${manifesto.tp_emitente || '1'}\n`;
-  if (manifesto.tp_transportador && String(manifesto.tp_transportador).trim() !== "") {
-    ini += `tpTransp=${manifesto.tp_transportador}\n`;
+  
+  const tpEmit = manifesto.tp_emitente || '1';
+  const tpTransp = manifesto.tp_transportador;
+  const skipTpTransp = String(tpEmit) === '2' && String(tpTransp).trim() === '4';
+
+  ini += `tpEmit=${tpEmit}\n`;
+  if (tpTransp && String(tpTransp).trim() !== "" && !skipTpTransp) {
+    ini += `tpTransp=${tpTransp}\n`;
+  } else {
+    ini += "tpTransp=\n";
   }
   ini += `mod=${manifesto.modelo || '58'}\n`;
   ini += `serie=${manifesto.serie || '1'}\n`;
   ini += `nMDF=${manifesto.numero || ''}\n`;
   ini += `cMDF=${String(manifesto.codigo_numerico || manifesto.mdf_manifesto_id).padStart(8, '0')}\n`;
   ini += `modal=${manifesto.modalidade || '1'}\n`;
-  ini += `dhEmi=${formatData(manifesto.dt_emissao)}T${manifesto.hr_viagem || '00:00:00'}-03:00\n`;
-  ini += `dhIniViagem=${formatData(manifesto.dt_viagem)}T${manifesto.hr_viagem || '00:00:00'}-03:00\n`;
+  ini += `dhEmi=${formattedDhEmi}\n`;
+  ini += `dhIniViagem=${formattedDhIniViagem}\n`;
   ini += `UFIni=${manifesto.ufini}\n`;
   ini += `UFFim=${manifesto.uffim}\n\n`;
+
+  // Emitente (Emit) - Obrigatório para MDF-e
+  ini += "[emit]\n";
+  const cnpjEmit = String(empresa?.cnpj || '').replace(/\D/g, '');
+  ini += `CNPJCPF=${cnpjEmit}\n`;
+  ini += `IE=${String(empresa?.ie || empresa?.inscricao_estadual || '').replace(/\D/g, '')}\n`;
+  ini += `xNome=${esc(empresa?.razao_social || '')}\n`;
+  if (empresa?.nome_fantasia) {
+    ini += `xFant=${esc(empresa.nome_fantasia)}\n`;
+  }
+  ini += `xLgr=${esc(empresa?.endereco_logradouro || '')}\n`;
+  ini += `nro=${esc(empresa?.endereco_numero || 'SN')}\n`;
+  if (empresa?.endereco_complemento) {
+    ini += `xCpl=${esc(empresa.endereco_complemento)}\n`;
+  }
+  ini += `xBairro=${esc(empresa?.endereco_bairro || '')}\n`;
+  
+  // Cidade do Emitente
+  const cMunEmit = empresa?.cidade?.cd_ibge || empresa?.cidade?.ibge_id || '';
+  ini += `cMun=${cMunEmit}\n`;
+  ini += `xMun=${esc(empresa?.cidade?.descricao || empresa?.cidade?.nome || '')}\n`;
+  ini += `UF=${empresa?.cidade?.estado_id || empresa?.endereco_uf || ''}\n`;
+  ini += `CEP=${String(empresa?.endereco_cep || '').replace(/\D/g, '')}\n`;
+  if (empresa?.fone_geral || empresa?.telefone) {
+    ini += `Fone=${String(empresa.fone_geral || empresa.telefone).replace(/\D/g, '')}\n`;
+  }
+  ini += "\n";
 
   // Modal Rodoviário
   if (manifesto.modalidade === '1') {
@@ -87,7 +189,7 @@ export const gerarIniMdfe = (params: any): string => {
     // Condutores
     condutores.forEach((c: any, i: number) => {
       const idx = String(i + 1).padStart(3, '0');
-      ini += `[condutor${idx}]\n`;
+      ini += `[moto${idx}]\n`;
       ini += `xNome=${esc(c.nome)}\n`;
       ini += `CPF=${c.cpf}\n\n`;
     });
@@ -107,7 +209,7 @@ export const gerarIniMdfe = (params: any): string => {
   // Localidades de Carregamento
   carrega.forEach((c: any, i: number) => {
     const idx = String(i + 1).padStart(3, '0');
-    ini += `[infMunCarrega${idx}]\n`;
+    ini += `[CARR${idx}]\n`;
     ini += `cMunCarrega=${c.cidade?.cd_ibge || c.cidade?.ibge_id || c.cidade_id}\n`;
     ini += `xMunCarrega=${esc(c.cidade?.descricao || c.cidade?.nome)}\n\n`;
   });
@@ -119,10 +221,9 @@ export const gerarIniMdfe = (params: any): string => {
     const idxMun = String(i + 1).padStart(3, '0');
     const docsDaCidade = documentos.filter((d: any) => d.cidade_id === cidId);
     const primDoc = docsDaCidade[0];
-
-    ini += `[infMunDesc${idxMun}]\n`;
-    ini += `cMunDesc=${primDoc.cidade?.cd_ibge || primDoc.cidade?.ibge_id || cidId}\n`;
-    ini += `xMunDesc=${esc(primDoc.cidade?.descricao || primDoc.cidade?.nome)}\n\n`;
+    ini += `[DESC${idxMun}]\n`;
+    ini += `cMunDescarga=${primDoc.cidade?.cd_ibge || primDoc.cidade?.ibge_id || cidId}\n`;
+    ini += `xMunDescarga=${esc(primDoc.cidade?.descricao || primDoc.cidade?.nome)}\n\n`;
 
     docsDaCidade.forEach((d: any, j: number) => {
       const idxDoc = String(j + 1).padStart(3, '0');
@@ -140,21 +241,20 @@ export const gerarIniMdfe = (params: any): string => {
   // Percurso
   percurso.forEach((p: any, i: number) => {
     const idx = String(i + 1).padStart(3, '0');
-    ini += `[infPercurso${idx}]\n`;
+    ini += `[perc${idx}]\n`;
     ini += `UFPer=${p.uf}\n\n`;
   });
 
   // Informações de Pagamento (infPag) - Obrigatório para Carga Lotação no Modal Rodoviário
   const qtdDfe = qNFe + qCTe;
-  const tpEmit = Number(manifesto.tp_emitente || 1);
-  const tpTransp = manifesto.tp_transportador;
+  const tpEmitNum = Number(tpEmit || 1);
 
   const isInfPagMandatoryVal = () => {
     if (manifesto.modalidade !== '1') return false;
     if (qtdDfe !== 1) return false;
-    if (tpEmit === 1) return true;
-    if (tpEmit === 2 && tpTransp && String(tpTransp).trim() !== "") return true;
-    if (tpEmit === 3) return true;
+    if (tpEmitNum === 1) return true;
+    if (tpEmitNum === 2 && tpTransp && String(tpTransp).trim() !== "" && !skipTpTransp) return true;
+    if (tpEmitNum === 3) return true;
     return false;
   };
 
