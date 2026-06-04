@@ -5,15 +5,17 @@ import React, { useState } from 'react';
 import type {
   RpbComponent, RpbStyle, RpbTableColumn, RpbTotalizerComp,
   RpbTextComp, RpbTableComp, RpbImageComp, RpbLineComp, RpbBoxComp,
+  RpbSubreportComp,
   RpbAlign, RpbFormat, RpbTotalOp, RpbDateFormat,
 } from '../../types';
 import { DEFAULT_STYLE } from '../../types';
+import RpbSubreportConfig from './RpbSubreportConfig';
 
 interface Props {
-  component: RpbComponent | null;
+  component:    RpbComponent | null;
   queryColumns: string[];
-  onChange: (updated: RpbComponent) => void;
-  onDelete: () => void;
+  onChange:     (updated: RpbComponent) => void;
+  onDelete:     () => void;
 }
 
 const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -40,8 +42,9 @@ const SYSTEM_VARS = [
 ];
 
 const RpbProperties: React.FC<Props> = ({ component, queryColumns, onChange, onDelete }) => {
-  const [showVars, setShowVars]           = useState(false);
+  const [showVars, setShowVars]             = useState(false);
   const [expandedColIdx, setExpandedColIdx] = useState<number | null>(null);
+  const [showSubConfig, setShowSubConfig]   = useState(false);
 
   if (!component) {
     return (
@@ -340,6 +343,52 @@ const RpbProperties: React.FC<Props> = ({ component, queryColumns, onChange, onD
               <Input type="number" value={(component as RpbLineComp).thickness}
                 onChange={e => upd({ thickness: parseInt(e.target.value) || 1 } as any)} />
             </div>
+          </div>
+        )}
+
+        {/* ── Subreport component ──────────────────────────────── */}
+        {component.type === 'subreport' && (
+          <div className="space-y-3">
+            {showSubConfig && (
+              <RpbSubreportConfig
+                comp={component as RpbSubreportComp}
+                parentColumns={queryColumns}
+                onChange={(updated) => onChange(updated as RpbComponent)}
+                onClose={() => setShowSubConfig(false)}
+              />
+            )}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+              <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wide">Sub-Relatório</p>
+              <div className="space-y-1 text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Rótulo:</span>
+                  <span className="font-medium truncate max-w-[120px]" title={(component as RpbSubreportComp).label}>
+                    {(component as RpbSubreportComp).label || '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">SQL:</span>
+                  <span className={(component as RpbSubreportComp).query_sql ? 'text-emerald-600 font-medium' : 'text-amber-600'}>
+                    {(component as RpbSubreportComp).query_sql ? '✓ Configurado' : '⚠ Pendente'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Vínculos:</span>
+                  <span className="font-medium">{(component as RpbSubreportComp).links.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Colunas:</span>
+                  <span className="font-medium">{(component as RpbSubreportComp).columns.length}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSubConfig(true)}
+                className="w-full mt-2 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors"
+              >
+                ⚙ Configurar Sub-Relatório
+              </button>
+            </div>
+            <p className="text-[10px] text-muted-foreground text-center">Posição e tamanho são configurados diretamente no canvas.</p>
           </div>
         )}
 

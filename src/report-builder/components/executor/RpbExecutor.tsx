@@ -6,6 +6,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import type { IRpbRelatorio, IRpbFiltro, IRpbConexao } from '../../types';
 import { rpbListFiltros, rpbExecuteQuery } from '../../services/rpbService';
 import { generateReportHtml } from '../renderer/rpbRenderer';
+import type { SubReportDataMap } from '../renderer/rpbRenderer';
 import { emptyLayout } from '../../types';
 import { Play, Printer, Loader2, FileText, FileSpreadsheet, Monitor, X, Download, Search } from 'lucide-react';
 import { toast } from 'sonner';
@@ -117,8 +118,7 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
     const conexao = conexoes.find(c => c.rpb_conexao_id === relatorio.rpb_conexao_id) || null;
     const params = buildParams();
     const { data: rows, error } = await rpbExecuteQuery(relatorio.query_sql, params, conexao);
-    setLoading(false);
-    if (error) { toast.error('Erro na query: ' + error); return; }
+    if (error) { setLoading(false); toast.error('Erro na query: ' + error); return; }
 
     setData(rows);
     const currentLayout = relatorio.layout_json || emptyLayout();
@@ -139,11 +139,37 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
     setExtraVarsRef(evars);
     setLayoutRef(currentLayout);
 
-    const generatedHtml = generateReportHtml(currentLayout, rows, evars);
+    // ── Pré-carrega dados dos sub-relatórios ───────────────────────────
+    const subDataMap: SubReportDataMap = {};
+    // Coleta todos os componentes subreport de todas as bandas
+    const allBandComps = Object.values(currentLayout.bands).flatMap(b => b.components);
+    const subComps = allBandComps.filter((c: any) => c.type === 'subreport') as any[];
+
+    for (const subComp of subComps) {
+      if (!subComp.query_sql?.trim()) continue;
+      subDataMap[subComp.id] = {};
+      for (const row of rows) {
+        // Monta chave de cache para esta linha
+        const rowKey = JSON.stringify(subComp.links.map((l: any) => row[l.parentField]));
+        if (subDataMap[subComp.id][rowKey]) continue; // já carregado
+
+        // Monta parâmetros do SQL filho a partir dos vínculos
+        const subParams: Record<string, any> = { ...params };
+        for (const link of subComp.links as any[]) {
+          if (link.childParam && link.parentField) {
+            subParams[link.childParam] = row[link.parentField] ?? null;
+          }
+        }
+        const { data: subRows } = await rpbExecuteQuery(subComp.query_sql, subParams, conexao);
+        subDataMap[subComp.id][rowKey] = subRows || [];
+      }
+    }
+
+    const generatedHtml = generateReportHtml(currentLayout, rows, evars, subDataMap);
     setHtml(generatedHtml);
+    setLoading(false);
     setExecuted(true);
     toast.success(`${rows.length} registro(s) carregado(s).`);
-    // Abre diálogo de destino ao terminar
     setShowDestino(true);
   }, [relatorio, conexoes, valores, filtros]);
 

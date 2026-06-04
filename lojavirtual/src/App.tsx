@@ -22,6 +22,7 @@ function AppContent() {
       <Route path="/login" element={<Login />} />
       <Route path="/admin" element={<AdminLayout />} />
       <Route path="/loja" element={<LojaIndex />} />
+      <Route path="/loja/:empresaId" element={<LojaIndex />} />
       <Route path="/" element={<Navigate to="/admin" replace />} />
       <Route path="*" element={<NotFound />} />
     </Routes>

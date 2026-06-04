@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +14,7 @@ import {
   ClipboardList, User,
 } from 'lucide-react';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
 /* ─── types ─── */
@@ -24,6 +26,7 @@ interface Produto {
 }
 interface CartItem { produto: Produto; qty: number }
 interface Parametro {
+  id?: number;
   xnm_escola: string | null; xurl_logo: string | null; xurl_banner_vendas: string | null;
   xmsg_pos_pagamento: string | null; xlg_valida_estoque_link: boolean | null;
   xnm_aba_lojavirtual: string | null;
@@ -39,6 +42,7 @@ const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 const STATUS_LABEL: Record<string, string> = { A: 'Aberto', F: 'Finalizado', T: 'Faturado', C: 'Cancelado', P: 'Pago' };
 
 export default function LojaIndex() {
+  const { empresaId } = useParams<{ empresaId?: string }>();
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [params, setParams] = useState<Parametro | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -73,29 +77,53 @@ export default function LojaIndex() {
   /* load products & params */
   useEffect(() => {
     const load = async () => {
-      const [{ data: prods }, { data: rpcData }] = await Promise.all([
-        db.from('vw_produtos_disponiveis')
-          .select('id,xcd_produto,xnm_produto,xvl_preco_venda,xurl_foto,xnm_grupo_produto,xqt_estoque_disponivel,xlg_venda_online,xdias_venda_online')
-          .eq('xlg_venda_online', true).eq('excluido_visivel', false).order('xnm_produto'),
-        db.rpc('fu_get_parametro_publico'),
-      ]);
+      // 1. Resolve domain link from current window origin (skip localhost)
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const currentOrigin = isLocalhost ? null : window.location.origin;
+      const urlEmpresaId = empresaId ? parseInt(empresaId) : null;
+
+      // 2. Fetch public parameter config for styling and validation
+      const { data: rpcData } = await db.rpc('fu_get_parametro_publico', {
+        _empresa_id: urlEmpresaId,
+        _url_link_vendas: currentOrigin
+      });
+      const resolvedParams = rpcData?.[0] || null;
+      const resolvedEmpresaId = resolvedParams ? Number(resolvedParams.id) : null;
+
+      // 3. Load products specifically for resolved company
+      const q = db.from('vw_produtos_disponiveis')
+        .select('id,xcd_produto,xnm_produto,xvl_preco_venda,xurl_foto,xnm_grupo_produto,xqt_estoque_disponivel,xlg_venda_online,xdias_venda_online,empresa_id')
+        .eq('xlg_venda_online', true)
+        .eq('excluido_visivel', false);
+
+      if (resolvedEmpresaId) {
+        q.eq('empresa_id', resolvedEmpresaId);
+      }
+
+      const { data: prods } = await q.order('xnm_produto');
+
       if (prods) setProdutos(prods);
-      if (rpcData?.[0]) setParams(rpcData[0]);
+      if (resolvedParams) setParams(resolvedParams);
 
       // Check store schedule using Brazil timezone (America/Sao_Paulo)
       const tz = 'America/Sao_Paulo';
       const partsFmt = new Intl.DateTimeFormat('en-GB', {
         timeZone: tz, weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
       });
-      const parts = partsFmt.formatToParts(new Date()).reduce((a: any, p) => { a[p.type] = p.value; return a; }, {});
+      const parts = partsFmt.formatToParts(new Date()).reduce((a: Record<string, string>, p) => { a[p.type] = p.value; return a; }, {});
       const wkMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
       const diaSemana = wkMap[parts.weekday] ?? new Date().getDay();
-      const { data: horario } = await db.from('parametro_horario')
+
+      const horarioQuery = db.from('parametro_horario')
         .select('*')
         .eq('xdia_semana', diaSemana)
-        .eq('excluido_visivel', false)
-        .limit(1)
-        .single();
+        .eq('excluido_visivel', false);
+
+      if (resolvedEmpresaId) {
+        horarioQuery.eq('empresa_id', resolvedEmpresaId);
+      }
+
+      const { data: horario } = await horarioQuery.limit(1).maybeSingle();
 
       if (!horario || !horario.xlg_dia_ativo) {
         setLojaAberta(false);
@@ -111,7 +139,7 @@ export default function LojaIndex() {
       setLoading(false);
     };
     load();
-  }, []);
+  }, [empresaId]);
 
   /* filter products by current weekday (Brazil timezone) */
   const today = (() => {
@@ -161,16 +189,16 @@ export default function LojaIndex() {
   };
 
   const updateQty = (prodId: number, delta: number) => {
-    setCart(prev => prev.map(ci => {
+    setCart(prev => prev.map((ci): CartItem | null => {
       if (ci.produto.id !== prodId) return ci;
       const newQty = ci.qty + delta;
-      if (newQty < 1) return null as any;
+      if (newQty < 1) return null;
       const validaEstoque = params?.xlg_valida_estoque_link ?? true;
       if (delta > 0 && validaEstoque && ci.produto.xqt_estoque_disponivel !== null && newQty > ci.produto.xqt_estoque_disponivel) {
         toast({ title: 'Estoque insuficiente', variant: 'destructive' }); return ci;
       }
       return { ...ci, qty: newQty };
-    }).filter(Boolean));
+    }).filter((ci): ci is CartItem => ci !== null));
   };
 
   const removeFromCart = (prodId: number) => setCart(prev => prev.filter(ci => ci.produto.id !== prodId));
@@ -230,7 +258,16 @@ export default function LojaIndex() {
       return;
     }
 
-    const result: PedidoHistorico[] = (pedidos || []).map((p: any) => ({
+    interface PedidoRPCResult {
+      id: number;
+      nr_movimento: number;
+      dt_emissao: string;
+      vl_movimento: number;
+      st_pedido: string;
+      items: { xnm_produto: string; xqt_item: number; xvl_unitario: number; xproduto_id: number }[];
+    }
+
+    const result: PedidoHistorico[] = ((pedidos as PedidoRPCResult[]) || []).map((p) => ({
       id: p.id,
       xnr_pedido: p.nr_movimento,
       xdt_pedido: p.dt_emissao,
@@ -270,6 +307,7 @@ export default function LojaIndex() {
         vl_produto: cartTotal,
         vl_movimento: cartTotal,
         cliente_id: clienteId,
+        empresa_id: params?.id || 1,
       }).select('emovimento_id, nr_movimento').single();
       if (pedErr) throw pedErr;
 
@@ -283,6 +321,7 @@ export default function LojaIndex() {
         vl_und_produto: ci.produto.xvl_preco_venda,
         vl_produto: ci.qty * ci.produto.xvl_preco_venda,
         vl_movimento: ci.qty * ci.produto.xvl_preco_venda,
+        empresa_id: params?.id || 1,
       }));
       const { error: itemErr } = await db.from('emovimento_item').insert(items);
       if (itemErr) throw itemErr;
@@ -331,8 +370,9 @@ export default function LojaIndex() {
         setPaymentQrCodeImage(billingData.qrCodeImage || '');
         setStep('payment');
       }
-    } catch (e: any) {
-      toast({ title: 'Erro ao criar pedido', description: e.message, variant: 'destructive' });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      toast({ title: 'Erro ao criar pedido', description: message, variant: 'destructive' });
     }
     setSubmitting(false);
   };
@@ -365,7 +405,7 @@ export default function LojaIndex() {
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [step, pedidoId, loadHistorico]);
+  }, [step, pedidoId, cpf, loadHistorico]);
 
   /* Copy to clipboard */
   const copyLink = async () => {

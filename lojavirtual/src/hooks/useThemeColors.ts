@@ -37,8 +37,25 @@ export function useThemeColors() {
 
   useEffect(() => {
     const load = async () => {
+      // 1. Parse empresaId from URL path (e.g. /loja/2)
+      const pathMatch = window.location.pathname.match(/\/loja\/(\d+)/);
+      const urlEmpresaId = pathMatch ? parseInt(pathMatch[1]) : null;
+
+      // 2. Resolve domain link from current window origin (skip localhost)
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const currentOrigin = isLocalhost ? null : window.location.origin;
+
       // Use secure RPC that excludes sensitive fields (API keys)
-      const { data: rpcData } = await (supabase as any).rpc('fu_get_parametro_publico');
+      const client = supabase as unknown as {
+        rpc: (
+          name: string,
+          args?: Record<string, unknown>
+        ) => Promise<{ data: Record<string, string>[] | null; error: unknown }>
+      };
+      const { data: rpcData } = await client.rpc('fu_get_parametro_publico', {
+        _empresa_id: urlEmpresaId as unknown,
+        _url_link_vendas: currentOrigin as unknown
+      });
       const data = rpcData?.[0] || null;
       
       if (!data) { setLoaded(true); return; }

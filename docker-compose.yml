@@ -5,26 +5,32 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
-        - VITE_SUPABASE_PUBLISHABLE_KEY=${VITE_SUPABASE_PUBLISHABLE_KEY}
     container_name: realcommerce-frontend
     ports:
       - "8080:80"
     restart: always
-    environment:
-      - NODE_ENV=production
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 2048M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   realcommerce-lojavirtual:
     build:
       context: ./lojavirtual
       dockerfile: Dockerfile
-      args:
-        - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
-        - VITE_SUPABASE_PUBLISHABLE_KEY=${VITE_SUPABASE_PUBLISHABLE_KEY}
     container_name: realcommerce-lojavirtual
     ports:
       - "8081:80"
     restart: always
-    environment:
-      - NODE_ENV=production
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 2048M
+        reservations:
+          cpus: '0.25'
+          memory: 256M

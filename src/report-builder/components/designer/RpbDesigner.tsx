@@ -3,7 +3,7 @@
 // Orquestra: Paleta + Canvas + Propriedades
 // ============================================================
 import React, { useState, useCallback, useEffect } from 'react';
-import type { RpbLayout, RpbBandName, RpbComponent, RpbGroupDef, IRpbRelatorio } from '../../types';
+import type { RpbLayout, RpbBandName, RpbComponent, RpbGroupDef, IRpbRelatorio, RpbSubreportComp } from '../../types';
 import {
   emptyLayout, newId, DEFAULT_STYLE, emptyBand,
   BAND_LABELS, BAND_ORDER,
@@ -292,6 +292,21 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
         break;
       case 'box':
         comp = { ...base, type: 'box', borderColor: '#cccccc', borderThickness: 1, bgColor: 'transparent', borderRadius: 0 };
+        break;
+      case 'subreport':
+        comp = {
+          ...base, type: 'subreport',
+          label: 'Sub-Relatório',
+          query_sql: '',
+          links: [],
+          columns: [],
+          headerStyle: { ...DEFAULT_STYLE, bold: true, bgColor: '#f1f5f9', border: 'all', borderColor: '#cbd5e1' },
+          rowStyle: { ...DEFAULT_STYLE, border: 'bottom', borderColor: '#e2e8f0' },
+          showHeader: true,
+          showTitleBar: true,
+          titleText: 'Sub-Relatório',
+          emptyMessage: 'Nenhum registro',
+        } as RpbSubreportComp;
         break;
       default:
         return;
@@ -706,6 +721,66 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
                     </div>
                   </div>
 
+                </div>
+              </section>
+
+              {/* ── Sub-Relatório ──────────────────────────────────── */}
+              <section>
+                <h3 className="font-semibold text-teal-700 mb-2">🔗 Sub-Relatório — Como Usar</h3>
+                <div className="space-y-3 text-xs">
+                  <div className="border border-border rounded-lg overflow-hidden">
+                    <div className="bg-teal-50 px-3 py-1.5 font-semibold text-teal-700">📌 O que é um Sub-Relatório?</div>
+                    <div className="px-3 py-2 text-muted-foreground space-y-1">
+                      <p>Um componente que executa uma <strong>query própria</strong> para cada linha do relatório principal, exibindo os resultados como uma tabela aninhada.</p>
+                      <p className="text-teal-700 font-medium">Exemplo: Relatório de pedidos → cada pedido lista suas formas de pagamento.</p>
+                    </div>
+                  </div>
+
+                  <div className="border border-border rounded-lg overflow-hidden">
+                    <div className="bg-sky-50 px-3 py-1.5 font-semibold text-sky-700">🚀 Passo a passo para criar</div>
+                    <div className="px-3 py-2 space-y-2">
+                      {[
+                        ['1', 'Paleta', 'Clique em "Sub-Relatório" na paleta esquerda (ou clique em uma banda e depois no item da paleta)'],
+                        ['2', 'Canvas', 'O bloco azul tracejado aparece na banda. Redimensione-o para o tamanho desejado'],
+                        ['3', 'Selecionar', 'Clique no bloco para selecioná-lo. O painel Propriedades (direita) mostrará o card de configuração'],
+                        ['4', 'Configurar', 'Clique em "⚙ Configurar Sub-Relatório" no painel de propriedades'],
+                        ['5', 'SQL', 'Na aba SQL, escreva a query do sub-relatório usando {variavel} para parâmetros do pai'],
+                        ['6', 'Detectar', 'Clique em "Detectar Colunas" — as colunas serão populadas automaticamente'],
+                        ['7', 'Vínculos', 'Na aba Vínculos, defina o campo do pai e o parâmetro no SQL filho (ex: pedido_id → pedido_id)'],
+                        ['8', 'Salvar', 'Clique em Salvar → o bloco mostrará "SQL ✓" e o nº de vínculos e colunas'],
+                        ['9', 'Testar', 'Salve o relatório e execute-o — cada linha do pai mostrará seu sub-relatório aninhado'],
+                      ].map(([n, title, desc]) => (
+                        <div key={n} className="flex gap-2">
+                          <span className="w-5 h-5 bg-sky-600 text-white rounded-full text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{n}</span>
+                          <div>
+                            <span className="font-semibold text-foreground">{title}: </span>
+                            <span className="text-muted-foreground">{desc}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="border border-border rounded-lg overflow-hidden">
+                    <div className="bg-amber-50 px-3 py-1.5 font-semibold text-amber-700">💡 Exemplo de SQL com vínculo</div>
+                    <div className="px-3 py-2 space-y-2">
+                      <p className="text-muted-foreground">Relatório pai: <code className="bg-muted rounded px-1">SELECT pedido_id, cliente FROM PEDIDO WHERE ...</code></p>
+                      <p className="text-muted-foreground">Sub-relatório (SQL filho):</p>
+                      <pre className="bg-muted rounded p-2 text-[10px] font-mono text-foreground overflow-x-auto whitespace-pre-wrap">{`SELECT fp.descricao, p.valor
+FROM PAGAMENTO p
+JOIN FORMA_PAGAMENTO fp ON fp.id = p.fp_id
+WHERE p.pedido_id = {pedido_id}  -- parâmetro do pai
+AND p.excluido = false`}</pre>
+                      <p className="text-muted-foreground">Vínculo: <strong>Campo do Pai</strong> = <code className="bg-muted rounded px-1">pedido_id</code> → <strong>Parâmetro Filho</strong> = <code className="bg-muted rounded px-1">pedido_id</code></p>
+                    </div>
+                  </div>
+
+                  <div className="border border-border rounded-lg overflow-hidden">
+                    <div className="bg-orange-50 px-3 py-1.5 font-semibold text-orange-700">⚠️ Atenção — Performance</div>
+                    <div className="px-3 py-2 text-muted-foreground">
+                      O sub-relatório executa <strong>uma query por linha</strong> do relatório pai. Para relatórios com muitos registros (ex: 500+ linhas), o tempo de geração pode aumentar. Prefira filtrar os dados do pai para um volume razoável antes de executar.
+                    </div>
+                  </div>
                 </div>
               </section>
 
