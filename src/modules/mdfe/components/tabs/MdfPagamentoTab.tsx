@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { formatCurrency, parseCurrency } from "@/lib/validators";
 
 interface IProps {
   mdfManifestoId: number | null;
@@ -12,8 +13,8 @@ const MdfPagamentoTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdit
   const [rec, setRec] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
-    vl_contrato: "0", forma_pagto: "PIX", banco: "", agencia: "",
-    cnpjipef: "", chave_pix: "", adiantamento: "0",
+    vl_contrato: "0,00", forma_pagto: "PIX", banco: "", agencia: "",
+    cnpjipef: "", chave_pix: "", adiantamento: "0,00",
   });
 
   const load = useCallback(async () => {
@@ -27,11 +28,11 @@ const MdfPagamentoTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdit
     if (data) {
       setRec(data);
       setForm({
-        vl_contrato: String(data.vl_contrato || 0),
+        vl_contrato: formatCurrency(data.vl_contrato || 0),
         forma_pagto: data.forma_pagto || "PIX",
         banco: data.banco || "", agencia: data.agencia || "",
         cnpjipef: data.cnpjipef || "", chave_pix: data.chave_pix || "",
-        adiantamento: String(data.adiantamento || 0),
+        adiantamento: formatCurrency(data.adiantamento || 0),
       });
     }
   }, [mdfManifestoId]);
@@ -40,7 +41,9 @@ const MdfPagamentoTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdit
 
   const handleSave = async () => {
     if (!mdfManifestoId) { toast.warning("Salve o cabeçalho primeiro."); return; }
-    if (Number(form.vl_contrato) <= 0) { toast.warning("Valor do contrato deve ser maior que zero."); return; }
+    const valContrato = parseCurrency(form.vl_contrato);
+    const adiantamento = parseCurrency(form.adiantamento);
+    if (valContrato <= 0) { toast.warning("Valor do contrato deve ser maior que zero."); return; }
     if (form.forma_pagto === "PIX" && !form.chave_pix.trim()) { toast.warning("Para PIX, informe a chave PIX."); return; }
     if (form.forma_pagto === "BANCO" && (!form.banco.trim() || !form.agencia.trim())) { toast.warning("Para pagamento bancário, informe banco e agência."); return; }
     setLoading(true);
@@ -48,11 +51,11 @@ const MdfPagamentoTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdit
       const payload = {
         mdf_manifesto_id: mdfManifestoId,
         empresa_id: empresaId,
-        vl_contrato: Number(form.vl_contrato),
+        vl_contrato: valContrato,
         forma_pagto: form.forma_pagto,
         banco: form.banco, agencia: form.agencia,
         cnpjipef: form.cnpjipef, chave_pix: form.chave_pix,
-        adiantamento: Number(form.adiantamento),
+        adiantamento: adiantamento,
         dt_alteracao: new Date().toISOString(),
       };
       if (rec) {
@@ -80,12 +83,12 @@ const MdfPagamentoTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdit
         <div className="grid grid-cols-12 gap-3 items-end">
           <div className="col-span-3">
             <label className="text-xs text-muted-foreground">Valor do Contrato (R$) <span className="text-destructive">*</span></label>
-            <input readOnly={ro} type="number" step="0.01" value={form.vl_contrato} onChange={e => setF("vl_contrato", e.target.value)}
+            <input readOnly={ro} value={form.vl_contrato} onChange={e => setF("vl_contrato", formatCurrency(e.target.value))}
               className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
           </div>
           <div className="col-span-3">
             <label className="text-xs text-muted-foreground">Adiantamento (R$)</label>
-            <input readOnly={ro} type="number" step="0.01" value={form.adiantamento} onChange={e => setF("adiantamento", e.target.value)}
+            <input readOnly={ro} value={form.adiantamento} onChange={e => setF("adiantamento", formatCurrency(e.target.value))}
               className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
           </div>
           <div className="col-span-3">

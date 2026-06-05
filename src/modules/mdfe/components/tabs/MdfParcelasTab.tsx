@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Trash2, Plus } from "lucide-react";
+import { formatCurrency, parseCurrency } from "@/lib/validators";
 
 interface IProps {
   mdfManifestoId: number | null;
@@ -13,7 +14,7 @@ const MdfParcelasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
   const [rows, setRows] = useState<any[]>([]);
   const [nrParcela, setNrParcela] = useState("1");
   const [dtVenc, setDtVenc] = useState("");
-  const [vlParcela, setVlParcela] = useState("0");
+  const [vlParcela, setVlParcela] = useState("0,00");
 
   const load = useCallback(async () => {
     if (!mdfManifestoId) return;
@@ -31,19 +32,20 @@ const MdfParcelasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
   const handleAdd = async () => {
     if (!mdfManifestoId) { toast.warning("Salve o cabeçalho primeiro."); return; }
     if (!dtVenc) { toast.warning("Informe a data de vencimento."); return; }
-    if (Number(vlParcela) <= 0) { toast.warning("Valor da parcela deve ser maior que zero."); return; }
+    const parsedVl = parseCurrency(vlParcela);
+    if (parsedVl <= 0) { toast.warning("Valor da parcela deve ser maior que zero."); return; }
     const { error } = await supabase.from("fiscal_mdf_pagtos").insert({
       mdf_manifesto_id: mdfManifestoId,
       empresa_id: empresaId,
       nr_parcela: Number(nrParcela),
       dt_vencimento: dtVenc,
-      vl_parcela: Number(vlParcela),
+      vl_parcela: parsedVl,
       dt_cadastro: new Date().toISOString(),
     });
     if (error) { toast.error("Erro ao adicionar: " + error.message); return; }
     toast.success("Parcela adicionada.");
     setNrParcela(String(rows.length + 2));
-    setDtVenc(""); setVlParcela("0");
+    setDtVenc(""); setVlParcela("0,00");
     load();
   };
 
@@ -76,7 +78,7 @@ const MdfParcelasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
           </div>
           <div className="col-span-3">
             <label className="text-xs text-muted-foreground">Valor (R$) <span className="text-destructive">*</span></label>
-            <input type="number" step="0.01" value={vlParcela} onChange={e => setVlParcela(e.target.value)}
+            <input value={vlParcela} onChange={e => setVlParcela(formatCurrency(e.target.value))}
               className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
           </div>
           <div className="col-span-2">

@@ -83,7 +83,7 @@ export function formatDateBR(XValue: string | null | undefined): string {
 /** Formats a string given a specific mask (e.g., 9.99.999.999) */
 export function formatMask(XValue: string, XMask: string): string {
   if (!XValue || !XMask) return XValue || "";
-  const XCleanValue = XValue.replace(/[\.\-\/]/g, ""); // Strip existing mask chars
+  const XCleanValue = XValue.replace(/[.-]/g, "").replace(/\//g, ""); // Strip existing mask chars
   let XFormatted = "";
   let XValIndex = 0;
 
@@ -102,4 +102,33 @@ export function formatMask(XValue: string, XMask: string): string {
   }
   return XFormatted;
 }
+
+export function formatCurrency(XValue: string | number | null | undefined): string {
+  if (XValue === undefined || XValue === null || XValue === "") return "0,00";
+  
+  if (typeof XValue === "number") {
+    return XValue.toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  }
+
+  const XClean = XValue.replace(/\D/g, "");
+  if (!XClean) return "0,00";
+
+  const XNumber = parseFloat(XClean) / 100;
+  return XNumber.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+export function parseCurrency(XValue: string | number | null | undefined): number {
+  if (XValue === undefined || XValue === null || XValue === "") return 0;
+  if (typeof XValue === "number") return XValue;
+  const XCleaned = XValue.replace(/\./g, "").replace(",", ".");
+  const XNum = parseFloat(XCleaned);
+  return isNaN(XNum) ? 0 : XNum;
+}
+
 

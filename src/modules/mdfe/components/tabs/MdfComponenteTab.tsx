@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Trash2, Plus } from "lucide-react";
+import { formatCurrency, parseCurrency } from "@/lib/validators";
 
 interface IProps {
   mdfManifestoId: number | null;
@@ -20,7 +21,7 @@ const TIPOS = [
 const MdfComponenteTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEditar }) => {
   const [rows, setRows] = useState<any[]>([]);
   const [tpComp, setTpComp] = useState("01");
-  const [vlComp, setVlComp] = useState("0");
+  const [vlComp, setVlComp] = useState("0,00");
   const [dsComp, setDsComp] = useState("");
   const [cnpjForn, setCnpjForn] = useState("");
   const [comprovante, setComprovante] = useState("");
@@ -40,7 +41,8 @@ const MdfComponenteTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
 
   const handleAdd = async () => {
     if (!mdfManifestoId) { toast.warning("Salve o cabeçalho primeiro."); return; }
-    if (Number(vlComp) <= 0) { toast.warning("Informe um valor maior que zero."); return; }
+    const parsedVl = parseCurrency(vlComp);
+    if (parsedVl <= 0) { toast.warning("Informe um valor maior que zero."); return; }
     
     // Validações específicas para Vale-Pedágio
     if (tpComp === "01") {
@@ -59,7 +61,7 @@ const MdfComponenteTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
       mdf_manifesto_id: mdfManifestoId,
       empresa_id: empresaId,
       tp_componente: tpComp,
-      vl_componente: Number(vlComp),
+      vl_componente: parsedVl,
       ds_componente: dsComp,
       cnpj_fornecedor: tpComp === "01" ? cnpjForn.replace(/\D/g, "") : null,
       comprovante: tpComp === "01" ? comprovante.trim() : null,
@@ -67,7 +69,7 @@ const MdfComponenteTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
     });
     if (error) { toast.error("Erro ao adicionar: " + error.message); return; }
     toast.success("Componente adicionado.");
-    setVlComp("0"); setDsComp("");
+    setVlComp("0,00"); setDsComp("");
     setCnpjForn(""); setComprovante("");
     load();
   };
@@ -105,7 +107,7 @@ const MdfComponenteTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
             </div>
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground font-semibold">Valor (R$)</label>
-              <input type="number" step="0.01" value={vlComp} onChange={e => setVlComp(e.target.value)}
+              <input value={vlComp} onChange={e => setVlComp(formatCurrency(e.target.value))}
                 className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
             </div>
             <div className="col-span-5">
