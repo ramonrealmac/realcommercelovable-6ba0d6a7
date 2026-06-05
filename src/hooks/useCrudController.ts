@@ -19,7 +19,9 @@ export interface ICrudConfig<T extends Record<string, any>> {
   XEmpresaId?: number;          // when set, filters/inserts using empresa_id
   XValidator?: ZodSchema<any>;
   XOnBeforeSave?: (rec: Partial<T>, mode: TFormMode) => Partial<T> | Promise<Partial<T>>;
+  XOnSave?: (rec: Partial<T>, mode: TFormMode) => Promise<T | Partial<T> | void>;
   XOnAfterSave?: (savedRec: Partial<T>, mode: TFormMode) => void | Promise<void>;
+  XOnDelete?: (rec: T) => void | Promise<void>;
   XOnAfterLoad?: (data: T[]) => void;
   XApplyFilter?: (query: any) => any; // custom filter (e.g. matriz, st_privado)
   XSoftDelete?: boolean;             // default true (uses excluido = true)
@@ -133,7 +135,15 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
     }
 
     let savedRec: Partial<T> = payload;
-    if (XFormMode === "insert") {
+    if (config.XOnSave) {
+      try {
+        const res = await config.XOnSave(payload, XFormMode);
+        if (res) savedRec = res as Partial<T>;
+      } catch (e: any) {
+        toast.error(e?.message || "Erro ao salvar.");
+        return;
+      }
+    } else if (XFormMode === "insert") {
       const { data: ins, error } = await db.from(config.XTableName).insert(payload).select().single();
       if (error) { toast.error("Erro: " + error.message); return; }
       savedRec = (ins || payload) as Partial<T>;
@@ -176,23 +186,33 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
     if (!XCurrentRecord) return;
     if (!confirm("Deseja realmente excluir este registro?")) return;
 
-    let error;
-    if (config.XSoftDelete === false) {
-      // Hard delete
-      const { error: err } = await db.from(config.XTableName)
-        .delete()
-        .eq(config.XPrimaryKey, XCurrentRecord[config.XPrimaryKey]);
-      error = err;
+    if (config.XOnDelete) {
+      try {
+        await config.XOnDelete(XCurrentRecord);
+        toast.success("Registro excluído.");
+      } catch (e: any) {
+        toast.error(e?.message || "Erro ao excluir.");
+        return;
+      }
     } else {
-      // Soft delete (default)
-      const { error: err } = await db.from(config.XTableName)
-        .update({ excluido: true, dt_alteracao: new Date().toISOString() })
-        .eq(config.XPrimaryKey, XCurrentRecord[config.XPrimaryKey]);
-      error = err;
-    }
+      let error;
+      if (config.XSoftDelete === false) {
+        // Hard delete
+        const { error: err } = await db.from(config.XTableName)
+          .delete()
+          .eq(config.XPrimaryKey, XCurrentRecord[config.XPrimaryKey]);
+        error = err;
+      } else {
+        // Soft delete (default)
+        const { error: err } = await db.from(config.XTableName)
+          .update({ excluido: true, dt_alteracao: new Date().toISOString() })
+          .eq(config.XPrimaryKey, XCurrentRecord[config.XPrimaryKey]);
+        error = err;
+      }
 
-    if (error) { toast.error("Erro: " + error.message); return; }
-    toast.success("Registro excluído.");
+      if (error) { toast.error("Erro: " + error.message); return; }
+      toast.success("Registro excluído.");
+    }
     
     // Invalida o cache
     await queryClient.invalidateQueries({ queryKey: [config.XTableName] });

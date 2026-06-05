@@ -40,33 +40,174 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
   const [XEmpresaSelecionada, setXEmpresaSelecionada] = useState<number | null>(null);
   const [XEmpresaConfirmada, setXEmpresaConfirmada] = useState(false);
 
+  // Self-signup state
+  const [nmUsuario, setNmUsuario] = useState("");
+  const [dsLogin, setDsLogin] = useState("");
+  const [cnpj, setCnpj] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+
   const { XLogomarca } = useThemeColors(XEmpresaConfirmada ? 0 : 1);
+
+  const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value.replace(/\D/g, "");
+    if (val.length > 14) val = val.substring(0, 14);
+    
+    // Formata como XX.XXX.XXX/XXXX-XX
+    if (val.length > 12) {
+      val = val.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2}).*/, "$1.$2.$3/$4-$5");
+    } else if (val.length > 8) {
+      val = val.replace(/^(\d{2})(\d{3})(\d{3})(\d{0,4})/, "$1.$2.$3/$4");
+    } else if (val.length > 5) {
+      val = val.replace(/^(\d{2})(\d{3})(\d{0,3})/, "$1.$2.$3");
+    } else if (val.length > 2) {
+      val = val.replace(/^(\d{2})(\d{0,3})/, "$1.$2");
+    }
+    setCnpj(val);
+  };
+
+  const isValidCNPJ = (val: string): boolean => {
+    const cleanVal = val.replace(/[^\d]+/g, "");
+    if (cleanVal.length !== 14) return false;
+    if (/^(\d)\1{13}$/.test(cleanVal)) return false;
+
+    let tamanho = cleanVal.length - 2;
+    let numeros = cleanVal.substring(0, tamanho);
+    const digitos = cleanVal.substring(tamanho);
+    let soma = 0;
+    let pos = tamanho - 7;
+    for (let i = tamanho; i >= 1; i--) {
+      soma += Number(numeros.charAt(tamanho - i)) * pos--;
+      if (pos < 2) pos = 9;
+    }
+    let resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+    if (resultado !== Number(digitos.charAt(0))) return false;
+
+    tamanho = tamanho + 1;
+    numeros = cleanVal.substring(0, tamanho);
+    soma = 0;
+    pos = tamanho - 7;
+    for (let i = tamanho; i >= 1; i--) {
+      soma += Number(numeros.charAt(tamanho - i)) * pos--;
+      if (pos < 2) pos = 9;
+    }
+    resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+    if (resultado !== Number(digitos.charAt(1))) return false;
+
+    return true;
+  };
+
+  const checkUserAuthorized = async (userId: string): Promise<boolean> => {
+    // Timeout de segurança de 4 segundos para a consulta do banco
+    const timeoutPromise = new Promise<boolean>((resolve) =>
+      setTimeout(() => {
+        console.warn("[AuthGate] A consulta de autorização excedeu o limite de 4s. Fallback para não autorizado.");
+        resolve(false);
+      }, 4000)
+    );
+
+    const queryPromise = (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("fl_autorizado")
+          .eq("id", userId)
+          .single();
+        if (error) {
+          console.error("Erro ao verificar autorização:", error);
+          return false;
+        }
+        return data?.fl_autorizado ?? false;
+      } catch (err) {
+        console.error("Exceção na consulta de autorização:", err);
+        return false;
+      }
+    })();
+
+    return Promise.race([queryPromise, timeoutPromise]);
+  };
+
+  const handleSessionChange = async (s: Session | null) => {
+    try {
+      if (s) {
+        const isAuthorized = await checkUserAuthorized(s.user.id);
+        if (!isAuthorized) {
+          toast.error("Acesso pendente de liberação pelo administrador.");
+          setAuthError("Seu acesso foi criado com sucesso, mas está aguardando a liberação de um administrador da sua empresa para entrar.");
+          // Executa signOut em background para não bloquear o fluxo da UI
+          supabase.auth.signOut().catch((err) => {
+            console.error("Erro ao desconectar usuário não autorizado:", err);
+          });
+          setSession(null);
+          return;
+        }
+        setAuthError(null);
+        setSession(s);
+      } else {
+        setSession(null);
+      }
+    } catch (err) {
+      console.error("Erro ao processar alteração de sessão:", err);
+      setSession(null);
+    }
+  };
 
   useEffect(() => {
     let active = true;
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!active) return;
-      setSession(data.session);
-      setLoadingSession(false);
-    });
+    // Timeout geral de 3 segundos para garantir que o loader desapareça
+    const fallbackTimer = setTimeout(() => {
+      if (active) {
+        console.warn("[AuthGate] Timeout geral de inicialização de sessão atingido. Desativando loader.");
+        setLoadingSession(false);
+      }
+    }, 3000);
 
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!active) return;
+      try {
+        if (data.session) {
+          await handleSessionChange(data.session);
+        }
+      } catch (err) {
+        console.error("Erro no getSession inicial:", err);
+      } finally {
+        clearTimeout(fallbackTimer);
+        setLoadingSession(false);
+      }
+    }).catch((err) => {
+      console.error("Erro catastrófico ao obter sessão inicial:", err);
+      clearTimeout(fallbackTimer);
+      if (active) setLoadingSession(false);
+    });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-      setLoadingSession(false);
-      // Reset empresa selection on logout
-      if (!nextSession) {
-        setXEmpresasVinculadas([]);
-        setXEmpresaSelecionada(null);
-        setXEmpresaConfirmada(false);
+    } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+      try {
+        if (nextSession) {
+          await handleSessionChange(nextSession);
+        } else {
+          setSession(null);
+        }
+      } catch (err) {
+        console.error("Erro no onAuthStateChange:", err);
+      } finally {
+        if (active) {
+          clearTimeout(fallbackTimer);
+          setLoadingSession(false);
+          // Reset empresa selection on logout
+          if (!nextSession) {
+            setXEmpresasVinculadas([]);
+            setXEmpresaSelecionada(null);
+            setXEmpresaConfirmada(false);
+          }
+        }
       }
     });
 
     return () => {
       active = false;
+      clearTimeout(fallbackTimer);
       subscription.unsubscribe();
     };
   }, []);
@@ -154,7 +295,19 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
       return;
     }
 
+    if (mode === "signup") {
+      if (!nmUsuario.trim() || !dsLogin.trim() || !cnpj.trim()) {
+        toast.error("Preencha todos os campos obrigatórios (Nome, Usuário e CNPJ).");
+        return;
+      }
+      if (!isValidCNPJ(cnpj)) {
+        toast.error("CNPJ inválido.");
+        return;
+      }
+    }
+
     setSubmitting(true);
+    setAuthError(null);
 
     try {
       if (mode === "signin") {
@@ -180,30 +333,38 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
         return;
       }
 
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-        options: {
-          emailRedirectTo: window.location.origin,
+      // MODO SIGNUP (AUTO-CADASTRO via Edge Function)
+      const { data: fnData, error: fnErr } = await supabase.functions.invoke("admin-create-user", {
+        body: {
+          action: "self-register",
+          email: email.trim(),
+          password,
+          nm_usuario: nmUsuario.trim(),
+          ds_login: dsLogin.trim(),
+          cnpj: cnpj.trim(),
         },
       });
 
-      if (error) {
-        toast.error(error.message);
+      if (fnErr || (fnData as any)?.error) {
+        console.error("Erro no self-register:", fnErr || (fnData as any)?.error);
+        toast.error(fnErr?.message || (fnData as any)?.error || "Erro no pós-cadastro. Fale com um administrador.");
         return;
       }
 
-      if (data.session) {
-        await (supabase as any).from("profiles").upsert({
-          id: data.session.user.id,
-          email: data.session.user.email,
-        }, { onConflict: "id" });
-        toast.success("Conta criada e autenticada com sucesso.");
-        return;
+      const isFirst = (fnData as any)?.is_first;
+      const isAuthorized = (fnData as any)?.fl_autorizado;
+
+      if (isFirst) {
+        toast.success("Conta criada! Você é o administrador desta empresa. Confirme seu e-mail para logar.");
+      } else {
+        toast.success("Conta criada! Seu acesso foi registrado e aguarda liberação de um administrador. Confirme seu e-mail.");
       }
 
-      toast.success("Conta criada. Confirme seu e-mail para entrar.");
       setMode("signin");
+      // Limpa os campos
+      setNmUsuario("");
+      setDsLogin("");
+      setCnpj("");
     } finally {
       setSubmitting(false);
     }
@@ -248,6 +409,49 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            {authError && (
+              <div className="p-3 text-xs bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 rounded border border-amber-200 dark:border-amber-900/50 leading-relaxed">
+                {authError}
+              </div>
+            )}
+
+            {mode === "signup" && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="auth-name">Nome Completo</Label>
+                  <Input
+                    id="auth-name"
+                    type="text"
+                    value={nmUsuario}
+                    onChange={(event) => setNmUsuario(event.target.value)}
+                    placeholder="Seu nome completo"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="auth-username">Nome de Usuário (Login)</Label>
+                  <Input
+                    id="auth-username"
+                    type="text"
+                    value={dsLogin}
+                    onChange={(event) => setDsLogin(event.target.value)}
+                    placeholder="ex: joao.silva"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="auth-cnpj">CNPJ da Empresa</Label>
+                  <Input
+                    id="auth-cnpj"
+                    type="text"
+                    value={cnpj}
+                    onChange={handleCnpjChange}
+                    placeholder="00.000.000/0000-00"
+                  />
+                </div>
+              </>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="auth-email">E-mail</Label>
               <Input
