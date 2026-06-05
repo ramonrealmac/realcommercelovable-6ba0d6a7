@@ -1260,7 +1260,7 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 console.log(`[FiscalLib] EnviarEvento MDFe ret=${ret} | UltimoRetorno: ${ultimoRetorno.substring(0, 200)}`);
 
                 const parsed = parsearRetornoMdfe(ultimoRetorno || xmlRetorno);
-                const sucesso = parsed.c_stat === '135' || parsed.c_stat === '100' || String(ultimoRetorno).includes('135');
+                const sucesso = ['135', '100', '631'].includes(String(parsed.c_stat)) || String(ultimoRetorno).includes('135') || String(ultimoRetorno).includes('631');
 
                 return {
                     sucesso,
