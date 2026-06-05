@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Trash2, Plus, Search } from "lucide-react";
 import CidadeSearchDialog, { ICidadeRow } from "@/components/shared/CidadeSearchDialog";
+import { areUFsNeighbors } from "../../services/ufBorders";
 
 const UF_LIST = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
 
@@ -224,6 +225,10 @@ const MdfPercursoTab: React.FC<IProps> = ({
       toast.warning("Salve os dados gerais do MDF-e primeiro.");
       return;
     }
+    if (record.ufini && record.uffim && areUFsNeighbors(record.ufini, record.uffim)) {
+      toast.warning("Não é permitido adicionar UF de percurso para UFs iguais ou que fazem divisa.");
+      return;
+    }
     if (percursoRows.some(r => r.uf === percursoUf)) {
       toast.warning("Esta UF já foi adicionada ao percurso.");
       return;
@@ -258,6 +263,7 @@ const MdfPercursoTab: React.FC<IProps> = ({
   };
 
   const ro = !isEditing;
+  const naoExigePercurso = !!(record.ufini && record.uffim && areUFsNeighbors(record.ufini, record.uffim));
 
   return (
     <div className="space-y-6">
@@ -350,23 +356,29 @@ const MdfPercursoTab: React.FC<IProps> = ({
             <label className="text-xs font-semibold text-muted-foreground">UF de Percurso</label>
             <div className="flex gap-2">
               <select
-                disabled={ro}
+                disabled={ro || naoExigePercurso}
                 value={percursoUf}
                 onChange={e => setPercursoUf(e.target.value)}
-                className="flex-1 border border-border rounded px-2 py-1.5 text-sm bg-card font-medium focus:ring-1 focus:ring-primary focus:border-primary"
+                className="flex-1 border border-border rounded px-2 py-1.5 text-sm bg-card font-medium focus:ring-1 focus:ring-primary focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="">— Selecione —</option>
                 {UF_LIST.map(uf => <option key={uf} value={uf}>{uf}</option>)}
               </select>
               {podeEditar && (
                 <button
+                  disabled={naoExigePercurso}
                   onClick={handleAddPercursoUf}
-                  className="flex items-center justify-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary/90 transition-colors font-medium"
+                  className="flex items-center justify-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary/90 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Plus className="w-4 h-4" /> Add
                 </button>
               )}
             </div>
+            {naoExigePercurso && (
+              <p className="text-[10px] text-yellow-600 dark:text-yellow-500 font-medium bg-yellow-500/10 px-2 py-1 rounded mt-1.5">
+                As UFs de início e fim são iguais ou fazem divisa. Não é permitido adicionar UFs de percurso.
+              </p>
+            )}
           </div>
 
           <div className="flex-1 flex flex-col space-y-2">

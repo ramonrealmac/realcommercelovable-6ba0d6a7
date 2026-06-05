@@ -6,6 +6,7 @@ import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import type { IGridColumn } from "@/components/grid/DataGrid";
 import { Send, Lock, XCircle } from "lucide-react";
 import { mdfeEmissaoService } from "../services/mdfeEmissaoService";
+import { areUFsNeighbors } from "../services/ufBorders";
 
 import MdfDocumentosTab from "./tabs/MdfDocumentosTab";
 import MdfVeiculosTab from "./tabs/MdfVeiculosTab";
@@ -182,11 +183,31 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
       // 1. Validar se o manifesto está pronto para transmissão
       const { data: manifesto, error: errMdf } = await supabase
         .from("fiscal_mdf_manifesto")
-        .select("tp_transportador, transp_cnpj_cpf, contratante_cnpj_cpf, contratante_nome")
+        .select("tp_transportador, transp_cnpj_cpf, contratante_cnpj_cpf, contratante_nome, ufini, uffim")
         .eq("mdf_manifesto_id", manifestoId)
         .single();
       
       if (errMdf || !manifesto) throw new Error("Manifesto não localizado.");
+
+      if (!manifesto.ufini?.trim()) {
+        throw new Error("UF Inicial é obrigatória. Preencha-a na aba Percurso.");
+      }
+      if (!manifesto.uffim?.trim()) {
+        throw new Error("UF Final é obrigatória. Preencha-a na aba Percurso.");
+      }
+
+      // Validar percurso se as UFs não fazem divisa
+      if (!areUFsNeighbors(manifesto.ufini, manifesto.uffim)) {
+        const { data: percursos } = await supabase
+          .from("fiscal_mdf_percurso")
+          .select("uf")
+          .eq("mdf_manifesto_id", manifestoId)
+          .or("excluido.is.null,excluido.eq.false");
+
+        if (!percursos || percursos.length === 0) {
+          throw new Error(`As UFs de início (${manifesto.ufini}) e fim (${manifesto.uffim}) não fazem divisa. É obrigatório cadastrar pelo menos uma UF de percurso na aba Percurso.`);
+        }
+      }
 
       if (manifesto.tp_transportador) {
         // Verificar se há veículo TRACAO cadastrado
@@ -277,8 +298,6 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         XDefaultRecord: { ...XDefault, empresa_id: XEmpresaId } as any,
         XOnBeforeSave: async (rec) => {
-          if (!rec.ufini?.trim()) throw new Error("UF Inicial é obrigatória.");
-          if (!rec.uffim?.trim()) throw new Error("UF Final é obrigatória.");
           if (!rec.dt_emissao)   throw new Error("Data de Emissão é obrigatória.");
           if (!rec.dt_viagem)    throw new Error("Data da Viagem é obrigatória.");
           if (!rec.hr_viagem)    throw new Error("Hora da Viagem é obrigatória.");

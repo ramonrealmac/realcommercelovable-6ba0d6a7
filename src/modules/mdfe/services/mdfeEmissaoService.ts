@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
 import { gerarIniMdfe } from "./gerarIniMdfe";
+import { areUFsNeighbors } from "./ufBorders";
 
 const db = supabase as any;
 
@@ -46,6 +47,21 @@ export const mdfeEmissaoService = {
       ]);
 
       if (!empresaRaw) throw new Error("Empresa não localizada.");
+
+      if (!manifesto.ufini?.trim()) {
+        throw new Error("UF Inicial é obrigatória. Preencha-a na aba Percurso.");
+      }
+      if (!manifesto.uffim?.trim()) {
+        throw new Error("UF Final é obrigatória. Preencha-a na aba Percurso.");
+      }
+
+      // Validar percurso se as UFs não fazem divisa
+      if (!areUFsNeighbors(manifesto.ufini, manifesto.uffim)) {
+        const activePercursos = (percurso || []).filter((p: any) => !p.excluido);
+        if (activePercursos.length === 0) {
+          throw new Error(`As UFs de início (${manifesto.ufini}) e fim (${manifesto.uffim}) não fazem divisa. É obrigatório cadastrar pelo menos uma UF de percurso na aba Percurso.`);
+        }
+      }
 
       // Coletar IDs de Cidades e Motoristas para buscas em lote na memória
       const cidadeIds = new Set<number>();
