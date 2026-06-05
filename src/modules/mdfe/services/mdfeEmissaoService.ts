@@ -31,7 +31,8 @@ export const mdfeEmissaoService = {
         { data: componentes },
         { data: parcelas },
         { data: fConfig },
-        { data: empresaRaw }
+        { data: empresaRaw },
+        { data: transportadorRaw }
       ] = await Promise.all([
         db.from("fiscal_mdf_carrega").select("*").eq("mdf_manifesto_id", mdfManifestoId).or("excluido.is.null,excluido.eq.false"),
         db.from("fiscal_mdf_descarrega").select("*").eq("mdf_manifesto_id", mdfManifestoId).or("excluido.is.null,excluido.eq.false"),
@@ -43,7 +44,10 @@ export const mdfeEmissaoService = {
         db.from("fiscal_mdf_componente").select("*").eq("mdf_manifesto_id", mdfManifestoId).or("excluido.is.null,excluido.eq.false"),
         db.from("fiscal_mdf_pagtos").select("*").eq("mdf_manifesto_id", mdfManifestoId).or("excluido.is.null,excluido.eq.false"),
         db.from("fiscal_config").select("*").eq("empresa_id", empresaId).single(),
-        db.from("empresa").select("*").eq("empresa_id", empresaId).maybeSingle()
+        db.from("empresa").select("*").eq("empresa_id", empresaId).maybeSingle(),
+        manifesto.transportador_id
+          ? db.from("cadastro").select("cnpj, rntrc, razao_social, tp_proprietario, uf_proprietario").eq("cadastro_id", manifesto.transportador_id).maybeSingle()
+          : Promise.resolve({ data: null })
       ]);
 
       if (!empresaRaw) throw new Error("Empresa não localizada.");
@@ -136,7 +140,8 @@ export const mdfeEmissaoService = {
         pagamentos: pagamentos || [],
         componentes: componentes || [],
         parcelas: parcelas || [],
-        fConfig
+        fConfig,
+        transportador: transportadorRaw
       };
 
       // 2. Gerar INI

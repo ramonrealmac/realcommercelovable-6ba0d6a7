@@ -6,7 +6,21 @@ const UF_MAP: Record<string, string> = {
 };
 
 export const gerarIniMdfe = (params: any): string => {
-  const { manifesto, empresa, carrega, descarrega, condutores, documentos, veiculos, percurso, pagamentos, componentes, parcelas, fConfig } = params;
+  const {
+    manifesto,
+    empresa,
+    carrega,
+    descarrega,
+    condutores,
+    documentos,
+    veiculos,
+    percurso,
+    pagamentos,
+    componentes,
+    parcelas,
+    fConfig,
+    transportador
+  } = params;
 
   const esc = (val: any) => String(val || '').replace(/\n/g, ' ');
   
@@ -170,7 +184,23 @@ export const gerarIniMdfe = (params: any): string => {
       ini += `capKG=${vTracao.capacidade_kg || 0}\n`;
       ini += `tpRod=${String(vTracao.tp_rodado || '01').padStart(2, '0')}\n`;
       ini += `tpCar=${String(vTracao.tp_carroceria || '00').padStart(2, '0')}\n`;
-      ini += `UF=${vTracao.uf || manifesto.ufini}\n\n`;
+      ini += `UF=${vTracao.uf || manifesto.ufini}\n`;
+
+      const tpTransp = String(manifesto.tp_transportador || "");
+      if (["1", "2", "3"].includes(tpTransp) && transportador) {
+        const docClean = String(transportador.cnpj || "").replace(/\D/g, "");
+        ini += `CNPJCPF=${docClean}\n`;
+        ini += `RNTRC=${transportador.rntrc || 'ISENTO'}\n`;
+        ini += `xNome=${esc(transportador.razao_social || "")}\n`;
+        ini += `IE=ISENTO\n`;
+        ini += `UFProp=${transportador.uf_proprietario || vTracao.uf || manifesto.ufini}\n`;
+
+        let tpProp = "0";
+        if (tpTransp === "2") tpProp = "1";
+        else if (tpTransp === "3") tpProp = "2";
+        ini += `tpProp=${tpProp}\n`;
+      }
+      ini += "\n";
     }
 
     const reboques = veiculos.filter((v: any) => v.tp_veiculo === 'REBOQUE');

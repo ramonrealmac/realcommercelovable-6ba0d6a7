@@ -100,8 +100,8 @@ const validarObrigatoriedadesTransporte = async (rec: any) => {
     }
   }
 
-  // Regras específicas de TAC (2)
-  if (tpTransp === "2") {
+  // Regras específicas de TAC (1, 2, 3)
+  if (["1", "2", "3"].includes(String(tpTransp || ""))) {
     // Contratante obrigatório
     if (!rec.contratante_cnpj_cpf || !rec.contratante_cnpj_cpf.trim()) {
       throw new Error("CNPJ/CPF do Contratante é obrigatório para TAC.");
@@ -110,6 +110,10 @@ const validarObrigatoriedadesTransporte = async (rec: any) => {
       throw new Error("Nome do Contratante é obrigatório para TAC.");
     }
 
+    // Transportador obrigatório
+    if (!rec.transportador_id) {
+      throw new Error("O Transportador é obrigatório para transportadores do tipo TAC.");
+    }
   }
 };
 
@@ -123,6 +127,7 @@ const XDefault = {
   ufini: "", uffim: "", unidade: "KG",
   peso_total: 0, valor_total: 0, qtd_nfe: 0, status: "D",
   ciot: "", ciot_cnpj_cpf: "", contratante_cnpj_cpf: "", contratante_nome: "", transp_cnpj_cpf: "",
+  transportador_id: null,
 };
 
 const isInfPagMandatory = (record: any) => {
@@ -152,6 +157,24 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
   const XRefreshRef = useRef<any>(null);
   const [selectedCadastroId, setSelectedCadastroId] = useState<number | null>(null);
   const [refreshMotoristasTrigger, setRefreshMotoristasTrigger] = useState(0);
+  const [transportadores, setTransportadores] = useState<{ cadastro_id: number; razao_social: string }[]>([]);
+
+  useEffect(() => {
+    if (!XEmpresaId) return;
+    const loadTransportadores = async () => {
+      const { data, error } = await supabase
+        .from("cadastro")
+        .select("cadastro_id, razao_social")
+        .eq("st_transportador", "S")
+        .eq("excluido", false)
+        .order("razao_social");
+      
+      if (!error && data) {
+        setTransportadores(data);
+      }
+    };
+    loadTransportadores();
+  }, [XEmpresaId]);
 
   useEffect(() => {
     if (!XEmpresaId) return;
@@ -170,11 +193,17 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
       // 1. Validar se o manifesto está pronto para transmissão
       const { data: manifesto, error: errMdf } = await supabase
         .from("fiscal_mdf_manifesto")
-        .select("tp_transportador, transp_cnpj_cpf, contratante_cnpj_cpf, contratante_nome, ufini, uffim")
+        .select("tp_transportador, transp_cnpj_cpf, contratante_cnpj_cpf, contratante_nome, ufini, uffim, transportador_id")
         .eq("mdf_manifesto_id", manifestoId)
         .single();
       
       if (errMdf || !manifesto) throw new Error("Manifesto não localizado.");
+
+      if (["1", "2", "3"].includes(String(manifesto.tp_transportador || ""))) {
+        if (!manifesto.transportador_id) {
+          throw new Error("O Transportador é obrigatório para transportadores do tipo TAC.");
+        }
+      }
 
       if (!manifesto.ufini?.trim()) {
         throw new Error("UF Inicial é obrigatória. Preencha-a na aba Percurso.");
@@ -289,7 +318,8 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
           if (!rec.dt_viagem)    throw new Error("Data da Viagem é obrigatória.");
           if (!rec.hr_viagem)    throw new Error("Hora da Viagem é obrigatória.");
           
-          if (rec.tp_transportador) {
+          const isTac = ["1", "2", "3"].includes(String(rec.tp_transportador || ""));
+          if (isTac) {
             // Contratante: Buscar da tabela 'empresa'
             const { data: empData } = await supabase
               .from("empresa")
@@ -302,38 +332,21 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
               rec.contratante_nome = empData.razao_social;
             }
 
-            // Transportador: Buscar a partir do veículo TRACAO do manifesto
-            if (rec.mdf_manifesto_id) {
-              const { data: veiculoTracao } = await supabase
-                .from("fiscal_mdf_veiculo")
-                .select("veiculo_id")
-                .eq("mdf_manifesto_id", rec.mdf_manifesto_id)
-                .eq("tp_veiculo", "TRACAO")
-                .eq("excluido", false)
+            // Transportador: Buscar a partir do cadastro do transportador selecionado
+            if (rec.transportador_id) {
+              const { data: cadastro } = await supabase
+                .from("cadastro")
+                .select("cnpj, rntrc")
+                .eq("cadastro_id", rec.transportador_id)
                 .maybeSingle();
 
-              if (veiculoTracao) {
-                const { data: cadVeiculo } = await supabase
-                  .from("cadastro_veiculo")
-                  .select("cadastro_id")
-                  .eq("veiculo_id", veiculoTracao.veiculo_id)
-                  .maybeSingle();
-
-                if (cadVeiculo && cadVeiculo.cadastro_id) {
-                  const { data: cadastro } = await supabase
-                    .from("cadastro")
-                    .select("cnpj, rntrc")
-                    .eq("cadastro_id", cadVeiculo.cadastro_id)
-                    .maybeSingle();
-
-                  if (cadastro) {
-                    if (cadastro.cnpj) rec.transp_cnpj_cpf = cadastro.cnpj;
-                    if (cadastro.rntrc) rec.rntrc = cadastro.rntrc;
-                  }
-                }
+              if (cadastro) {
+                if (cadastro.cnpj) rec.transp_cnpj_cpf = cadastro.cnpj;
+                if (cadastro.rntrc) rec.rntrc = cadastro.rntrc;
               }
             }
           } else {
+            rec.transportador_id = null;
             rec.transp_cnpj_cpf = null;
             rec.contratante_cnpj_cpf = null;
             rec.contratante_nome = null;
@@ -597,15 +610,57 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
                   Tipo Transportador {record.tp_emitente !== "2" && <span className="text-destructive">*</span>}
                 </label>
                 <select disabled={ro} value={record.tp_transportador ?? ""}
-                  onChange={e => setField("tp_transportador", e.target.value || null)}
+                  onChange={e => {
+                    const val = e.target.value || null;
+                    setField("tp_transportador", val);
+                    if (!["1", "2", "3"].includes(String(val))) {
+                      setField("transportador_id", null);
+                      setField("transp_cnpj_cpf", null);
+                      setField("rntrc", null);
+                    }
+                  }}
                   className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
                   <option value="">(Não Informado / Carga Própria)</option>
-                  <option value="1">1 - ETC (Empresa de Transporte de Cargas)</option>
-                  <option value="2">2 - TAC (Transportador Autônomo de Cargas)</option>
-                  <option value="3">3 - CTC (Cooperativa de Transporte de Cargas)</option>
+                  <option value="1">1 - TAC Agregado</option>
+                  <option value="2">2 - TAC Independente</option>
+                  <option value="3">3 - TAC Equiparado</option>
                 </select>
               </div>
             </div>
+
+            {/* ── Linha do Transportador (exibida e obrigatória para TAC) ── */}
+            {["1", "2", "3"].includes(String(record.tp_transportador || "")) && (
+              <div className="grid grid-cols-12 gap-3 items-end">
+                <div className="col-span-12">
+                  <label className="text-xs text-muted-foreground">Transportador <span className="text-destructive">*</span></label>
+                  <select disabled={ro} value={record.transportador_id ?? ""}
+                    onChange={async (e) => {
+                      const val = e.target.value ? Number(e.target.value) : null;
+                      setField("transportador_id", val);
+                      if (val) {
+                        const { data: cad } = await supabase
+                          .from("cadastro")
+                          .select("cnpj, rntrc")
+                          .eq("cadastro_id", val)
+                          .maybeSingle();
+                        if (cad) {
+                          if (cad.cnpj) setField("transp_cnpj_cpf", cad.cnpj);
+                          if (cad.rntrc) setField("rntrc", cad.rntrc);
+                        }
+                      } else {
+                        setField("transp_cnpj_cpf", null);
+                        setField("rntrc", null);
+                      }
+                    }}
+                    className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
+                    <option value="">— Selecione o Transportador —</option>
+                    {transportadores.map(t => (
+                      <option key={t.cadastro_id} value={t.cadastro_id}>{t.razao_social}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
 
 
 

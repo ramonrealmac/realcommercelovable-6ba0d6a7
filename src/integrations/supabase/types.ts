@@ -909,6 +909,9 @@ export type Database = {
           tp_cadastro_id: number | null
           tp_contribuinte: string | null
           tp_pessoa: string | null
+          rntrc: string | null
+          tp_proprietario: string | null
+          uf_proprietario: string | null
         }
         Insert: {
           cadastro_id?: number
@@ -982,6 +985,9 @@ export type Database = {
           tp_cadastro_id?: number | null
           tp_contribuinte?: string | null
           tp_pessoa?: string | null
+          rntrc?: string | null
+          tp_proprietario?: string | null
+          uf_proprietario?: string | null
         }
         Update: {
           cadastro_id?: number
@@ -1055,6 +1061,9 @@ export type Database = {
           tp_cadastro_id?: number | null
           tp_contribuinte?: string | null
           tp_pessoa?: string | null
+          rntrc?: string | null
+          tp_proprietario?: string | null
+          uf_proprietario?: string | null
         }
         Relationships: [
           {
@@ -3639,6 +3648,7 @@ export type Database = {
           ufini: string | null
           unidade: string | null
           valor_total: number | null
+          transportador_id: number | null
         }
         Insert: {
           chave_acesso?: string | null
@@ -3667,6 +3677,7 @@ export type Database = {
           ufini?: string | null
           unidade?: string | null
           valor_total?: number | null
+          transportador_id?: number | null
         }
         Update: {
           chave_acesso?: string | null
@@ -3695,6 +3706,7 @@ export type Database = {
           ufini?: string | null
           unidade?: string | null
           valor_total?: number | null
+          transportador_id?: number | null
         }
         Relationships: []
       }
