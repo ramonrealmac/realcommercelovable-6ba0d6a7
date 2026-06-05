@@ -165,6 +165,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
       const { data, error } = await supabase
         .from("cadastro")
         .select("cadastro_id, razao_social")
+        .eq("empresa_id", XEmpresaId)
         .eq("st_transportador", "S")
         .eq("excluido", false)
         .order("razao_social");
