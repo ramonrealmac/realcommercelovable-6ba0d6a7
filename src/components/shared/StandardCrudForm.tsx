@@ -41,10 +41,11 @@ interface StandardCrudFormProps<T extends Record<string, any>> {
   XToolbarExtras?: (ctx: { currentRecord: any; isEditing: boolean; setRecord: (r: any) => void; refresh: () => Promise<void>; setInnerTab: (tab: string) => void }) => React.ReactNode;
   XHiddenTabs?: string[] | ((record: any) => string[]);
   XCadastroLabel?: string;
+  XCtrl?: any;
 }
 
 function StandardCrudForm<T extends Record<string, any>>({
-  config, XGridCols, renderCadastro, XExtraTabs = [], XExportTitle, XAfterInsertTab, XRefreshRef, XInitialId, XToolbarExtras, XHiddenTabs = [], XCadastroLabel = "Cadastro"
+  config, XGridCols, renderCadastro, XExtraTabs = [], XExportTitle, XAfterInsertTab, XRefreshRef, XInitialId, XToolbarExtras, XHiddenTabs = [], XCadastroLabel = "Cadastro", XCtrl
 }: StandardCrudFormProps<T>) {
   const { closeTab, XTabs, XActiveTabId } = useAppContext();
   const [XInnerTab, setXInnerTab] = useState<string>("cadastro");
@@ -58,7 +59,7 @@ function StandardCrudForm<T extends Record<string, any>>({
     },
   }), [config, XAfterInsertTab]);
 
-  const ctrl = useCrudController<any>(wrappedConfig);
+  const ctrl = XCtrl || useCrudController<any>(wrappedConfig);
 
   const containerRef = useRef<HTMLDivElement>(null);
 

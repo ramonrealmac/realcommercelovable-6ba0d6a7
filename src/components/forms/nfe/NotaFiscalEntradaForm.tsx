@@ -42,6 +42,43 @@ const XDefault: Partial<INfeCabecalho> = {
   dt_entrada: new Date().toISOString().substring(0, 10),
 };
 
+const salvarVinculoProdutoFornecedor = async (
+  empresaId: number,
+  cadastroId: number,
+  produtoId: number,
+  cdProdFornec: string,
+  nmProdFornec: string,
+  fatorConversao: number
+) => {
+  if (!produtoId || !cdProdFornec || !cadastroId) return;
+  const { data: existing } = await db.from("produto_fornecedor")
+    .select("produto_fornecedor_id")
+    .eq("empresa_id", empresaId)
+    .eq("cadastro_id", cadastroId)
+    .eq("cd_prod_fornec", cdProdFornec)
+    .eq("excluido", false)
+    .maybeSingle();
+
+  if (existing) {
+    await db.from("produto_fornecedor").update({
+      produto_id: produtoId,
+      nm_prod_fornec: nmProdFornec || "",
+      fator_conversao: fatorConversao,
+      updated_at: new Date().toISOString(),
+    }).eq("produto_fornecedor_id", existing.produto_fornecedor_id);
+  } else {
+    await db.from("produto_fornecedor").insert({
+      empresa_id:     empresaId,
+      produto_id:     produtoId,
+      cadastro_id:    cadastroId,
+      cd_prod_fornec: cdProdFornec,
+      nm_prod_fornec: nmProdFornec || "",
+      fator_conversao: fatorConversao,
+      excluido:       false,
+    });
+  }
+};
+
 const NotaFiscalEntradaForm: React.FC = () => {
   const { XEmpresaId, XEmpresaMatrizId, openTab, closeTab, XTabs } = useAppContext();
 
@@ -122,27 +159,37 @@ const NotaFiscalEntradaForm: React.FC = () => {
       const fator = Number(vinculo?.fator_conversao || 1);
       const qtEstoque = Number(item.qt_entrada || 0) * fator;
 
-      // Atualiza estoque
+      // Garantir que existe o registro mestre na tabela estoque com saldo zero
       const { data: est } = await db.from("estoque")
-        .select("estoque_id,estoque_fisico")
+        .select("estoque_id")
         .eq("produto_id", item.produto_id)
         .eq("deposito_id", depositoId)
         .eq("excluido", false)
         .maybeSingle();
-      if (est) {
-        await db.from("estoque").update({
-          estoque_fisico: Number(est.estoque_fisico || 0) + qtEstoque,
-          updated_at: new Date().toISOString(),
-        }).eq("estoque_id", est.estoque_id);
-      } else {
+
+      if (!est) {
         await db.from("estoque").insert({
-          produto_id: item.produto_id, empresa_id: XEmpresaId,
+          produto_id: item.produto_id,
+          empresa_id: XEmpresaId,
           deposito_id: depositoId,
-          estoque_fisico: qtEstoque,
-          estoque_reservado: 0, estoque_disponivel: qtEstoque,
-          estoque_minimo: 0, estoque_padrao: 0,
+          estoque_fisico: 0,
+          estoque_reservado: 0,
+          estoque_minimo: 0,
+          estoque_padrao: 0,
         });
       }
+
+      // Gravar a movimentação no estoque_log, acionando a trigger que atualiza o estoque físico
+      await db.from("estoque_log").insert({
+        empresa_id: XEmpresaId,
+        produto_id: item.produto_id,
+        deposito_id: depositoId,
+        qt_movimento: qtEstoque,
+        usuario: null, // Deixa a trigger capturar via claims do JWT ou assume o padrão 'SISTEMA'
+        operacao: "ENTRADA",
+        origem: "NOTA_FISCAL_ENTRADA",
+        nr_doc: String(rec.nr_nota || ""),
+      });
 
       // Atualiza custos e impostos do produto
       const vl_compra = Number(item.vl_unit || 0);
@@ -163,14 +210,14 @@ const NotaFiscalEntradaForm: React.FC = () => {
       }
       // Grava vínculo produto_fornecedor (para reconhecimento automático em futuras NF-e)
       if (rec.cadastro_id && item.cd_prod_fornec) {
-        await db.from("produto_fornecedor").upsert({
-          empresa_id:     XEmpresaId,
-          produto_id:     item.produto_id,
-          cadastro_id:    rec.cadastro_id,
-          cd_prod_fornec: item.cd_prod_fornec,
-          nm_prod_fornec: item.nm_produto || "",
-          excluido:       false,
-        }, { onConflict: "empresa_id,cadastro_id,cd_prod_fornec", ignoreDuplicates: false });
+        await salvarVinculoProdutoFornecedor(
+          XEmpresaId,
+          rec.cadastro_id,
+          item.produto_id,
+          item.cd_prod_fornec,
+          item.nm_produto || "",
+          fator
+        );
       }
     }
 
@@ -377,18 +424,17 @@ const NotaFiscalEntradaForm: React.FC = () => {
               if (errItens) {
                 toast.error("Erro ao gravar itens: " + errItens.message);
               } else {
-                // Upsert produto_fornecedor para os itens vinculados
+                // Gravar os vínculos para os itens vinculados
                 for (const { item, produto_id, fator_conversao } of itensParaInserir) {
                   if (produto_id && item.cd_prod_fornec && rec.cadastro_id) {
-                    await db.from("produto_fornecedor").upsert({
-                      empresa_id:     XEmpresaId,
+                    await salvarVinculoProdutoFornecedor(
+                      XEmpresaId,
+                      rec.cadastro_id,
                       produto_id,
-                      cadastro_id:    rec.cadastro_id,
-                      cd_prod_fornec: item.cd_prod_fornec,
-                      nm_prod_fornec: item.nm_produto || "",
-                      fator_conversao,
-                      excluido:       false,
-                    }, { onConflict: "empresa_id,cadastro_id,cd_prod_fornec", ignoreDuplicates: false });
+                      item.cd_prod_fornec,
+                      item.nm_produto || "",
+                      fator_conversao
+                    );
                   }
                 }
                 toast.success(`${payloads.length} item(s) gravado(s) na NF-e.`);
