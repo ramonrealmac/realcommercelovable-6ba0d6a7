@@ -114,6 +114,46 @@ const validarObrigatoriedadesTransporte = async (rec: any) => {
     if (!rec.transportador_id) {
       throw new Error("O Transportador é obrigatório para transportadores do tipo TAC.");
     }
+
+    // RNTRC obrigatório
+    if (!rec.rntrc || !rec.rntrc.trim()) {
+      throw new Error("O RNTRC do transportador é obrigatório para TAC.");
+    }
+
+    // Validar CIOT se preenchido
+    if (rec.ciot && rec.ciot.trim()) {
+      const cleanCiot = rec.ciot.replace(/\D/g, "");
+      if (cleanCiot.length !== 12) {
+        throw new Error("O CIOT deve conter exatamente 12 dígitos.");
+      }
+      if (!rec.ciot_cnpj_cpf || !rec.ciot_cnpj_cpf.trim()) {
+        throw new Error("O CNPJ/CPF do responsável pelo CIOT é obrigatório quando o CIOT é informado.");
+      }
+      const cleanCiotDoc = rec.ciot_cnpj_cpf.replace(/\D/g, "");
+      if (cleanCiotDoc.length !== 11 && cleanCiotDoc.length !== 14) {
+        throw new Error("O CNPJ/CPF do responsável pelo CIOT deve ser válido (11 ou 14 dígitos).");
+      }
+    }
+
+    // Se já salvo, validar componentes de pagamento e vale-pedágio no banco
+    if (rec.mdf_manifesto_id) {
+      const { data: componentes } = await supabase
+        .from("fiscal_mdf_componente")
+        .select("tp_componente")
+        .eq("mdf_manifesto_id", rec.mdf_manifesto_id)
+        .eq("excluido", false);
+
+      if (!componentes || componentes.length === 0) {
+        throw new Error("É obrigatório informar ao menos um componente de pagamento (aba Componentes) para TAC.");
+      }
+
+      if (rec.possui_pedagio) {
+        const temPedagioComp = componentes.some((c: any) => c.tp_componente === "01");
+        if (!temPedagioComp) {
+          throw new Error("A rota/manifesto possui pedágio. É obrigatório adicionar ao menos um componente do tipo '01 - Vale Pedágio' na aba Componentes.");
+        }
+      }
+    }
   }
 };
 
@@ -128,23 +168,14 @@ const XDefault = {
   peso_total: 0, valor_total: 0, qtd_nfe: 0, status: "D",
   ciot: "", ciot_cnpj_cpf: "", contratante_cnpj_cpf: "", contratante_nome: "", transp_cnpj_cpf: "",
   transportador_id: null,
+  rota_id: null,
+  possui_pedagio: false,
 };
 
 const isInfPagMandatory = (record: any) => {
   if (!record) return false;
-  const modal = record.modalidade ?? "1"; // "1" = Rodoviário
-  const qtdDfe = Number(record.qtd_nfe ?? 0);
-  const tpEmit = Number(record.tp_emitente ?? 1);
-  const tpTransp = record.tp_transportador;
-
-  if (modal !== "1") return false;
-  if (qtdDfe !== 1) return false;
-
-  if (tpEmit === 1) return true;
-  if (tpEmit === 2 && tpTransp && String(tpTransp).trim() !== "") return true;
-  if (tpEmit === 3) return true;
-
-  return false;
+  const tpTransp = String(record.tp_transportador || "");
+  return ["1", "2", "3"].includes(tpTransp);
 };
 
 interface IProps {
@@ -158,6 +189,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
   const [selectedCadastroId, setSelectedCadastroId] = useState<number | null>(null);
   const [refreshMotoristasTrigger, setRefreshMotoristasTrigger] = useState(0);
   const [transportadores, setTransportadores] = useState<{ cadastro_id: number; razao_social: string }[]>([]);
+  const [rotas, setRotas] = useState<{ rota_id: number; descricao: string; possui_pedagio: boolean }[]>([]);
 
   useEffect(() => {
     if (!XEmpresaId) return;
@@ -175,6 +207,23 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
       }
     };
     loadTransportadores();
+  }, [XEmpresaId]);
+
+  useEffect(() => {
+    if (!XEmpresaId) return;
+    const loadRotas = async () => {
+      const { data, error } = await supabase
+        .from("rota")
+        .select("rota_id, descricao, possui_pedagio")
+        .eq("empresa_id", XEmpresaId)
+        .eq("excluido", false)
+        .order("descricao");
+      
+      if (!error && data) {
+        setRotas(data);
+      }
+    };
+    loadRotas();
   }, [XEmpresaId]);
 
   useEffect(() => {
@@ -352,6 +401,10 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
             rec.contratante_cnpj_cpf = null;
             rec.contratante_nome = null;
             rec.rntrc = null;
+            rec.ciot = null;
+            rec.ciot_cnpj_cpf = null;
+            rec.rota_id = null;
+            rec.possui_pedagio = false;
           }
 
           await validarObrigatoriedadesTransporte(rec);
@@ -629,36 +682,87 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
               </div>
             </div>
 
-            {/* ── Linha do Transportador (exibida e obrigatória para TAC) ── */}
+            {/* ── Seção do Transportador TAC (exibida e obrigatória para TAC) ── */}
             {["1", "2", "3"].includes(String(record.tp_transportador || "")) && (
-              <div className="grid grid-cols-12 gap-3 items-end">
-                <div className="col-span-12">
-                  <label className="text-xs text-muted-foreground">Transportador <span className="text-destructive">*</span></label>
-                  <select disabled={ro} value={record.transportador_id ?? ""}
-                    onChange={async (e) => {
-                      const val = e.target.value ? Number(e.target.value) : null;
-                      setField("transportador_id", val);
-                      if (val) {
-                        const { data: cad } = await supabase
-                          .from("cadastro")
-                          .select("cnpj, rntrc")
-                          .eq("cadastro_id", val)
-                          .maybeSingle();
-                        if (cad) {
-                          if (cad.cnpj) setField("transp_cnpj_cpf", cad.cnpj);
-                          if (cad.rntrc) setField("rntrc", cad.rntrc);
+              <div className="border border-border rounded p-3 bg-accent/10 space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Dados de TAC (Transportador Autônomo)</p>
+                
+                <div className="grid grid-cols-12 gap-3 items-end">
+                  <div className="col-span-12">
+                    <label className="text-xs text-muted-foreground">Transportador <span className="text-destructive">*</span></label>
+                    <select disabled={ro} value={record.transportador_id ?? ""}
+                      onChange={async (e) => {
+                        const val = e.target.value ? Number(e.target.value) : null;
+                        setField("transportador_id", val);
+                        if (val) {
+                          const { data: cad } = await supabase
+                            .from("cadastro")
+                            .select("cnpj, rntrc")
+                            .eq("cadastro_id", val)
+                            .maybeSingle();
+                          if (cad) {
+                            if (cad.cnpj) setField("transp_cnpj_cpf", cad.cnpj);
+                            if (cad.rntrc) setField("rntrc", cad.rntrc);
+                          }
+                        } else {
+                          setField("transp_cnpj_cpf", null);
+                          setField("rntrc", null);
                         }
-                      } else {
-                        setField("transp_cnpj_cpf", null);
-                        setField("rntrc", null);
-                      }
-                    }}
-                    className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
-                    <option value="">— Selecione o Transportador —</option>
-                    {transportadores.map(t => (
-                      <option key={t.cadastro_id} value={t.cadastro_id}>{t.razao_social}</option>
-                    ))}
-                  </select>
+                      }}
+                      className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
+                      <option value="">— Selecione o Transportador —</option>
+                      {transportadores.map(t => (
+                        <option key={t.cadastro_id} value={t.cadastro_id}>{t.razao_social}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-12 gap-3 items-center">
+                  <div className="col-span-8">
+                    <label className="text-xs text-muted-foreground font-semibold">Rota do MDF-e</label>
+                    <select disabled={ro} value={record.rota_id ?? ""}
+                      onChange={e => {
+                        const val = e.target.value ? Number(e.target.value) : null;
+                        setField("rota_id", val);
+                        const selectedRoute = rotas.find(r => r.rota_id === val);
+                        if (selectedRoute) {
+                          setField("possui_pedagio", selectedRoute.possui_pedagio);
+                        } else {
+                          setField("possui_pedagio", false);
+                        }
+                      }}
+                      className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
+                      <option value="">— Selecione a Rota (Opcional) —</option>
+                      {rotas.map(r => (
+                        <option key={r.rota_id} value={r.rota_id}>{r.descricao}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-span-4 flex items-center gap-2 mt-4">
+                    <input type="checkbox" id="possui_pedagio" disabled={ro}
+                      checked={!!record.possui_pedagio}
+                      onChange={e => setField("possui_pedagio", e.target.checked)}
+                      className="rounded border-border" />
+                    <label htmlFor="possui_pedagio" className="text-xs font-semibold text-muted-foreground select-none cursor-pointer">Possui Pedágio</label>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-12 gap-3 items-end">
+                  <div className="col-span-6">
+                    <label className="text-xs text-muted-foreground font-semibold">Número do CIOT</label>
+                    <input type="text" disabled={ro} value={record.ciot ?? ""}
+                      onChange={e => setField("ciot", e.target.value)}
+                      placeholder="Ex: 123456789012" maxLength={12}
+                      className="w-full border border-border rounded px-2 py-1 text-sm bg-card" />
+                  </div>
+                  <div className="col-span-6">
+                    <label className="text-xs text-muted-foreground font-semibold">CPF/CNPJ Resp. pelo CIOT</label>
+                    <input type="text" disabled={ro} value={record.ciot_cnpj_cpf ?? ""}
+                      onChange={e => setField("ciot_cnpj_cpf", e.target.value)}
+                      placeholder="Ex: CPF ou CNPJ" maxLength={14}
+                      className="w-full border border-border rounded px-2 py-1 text-sm bg-card" />
+                  </div>
                 </div>
               </div>
             )}

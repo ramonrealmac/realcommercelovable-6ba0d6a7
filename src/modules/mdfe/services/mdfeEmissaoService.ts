@@ -67,6 +67,59 @@ export const mdfeEmissaoService = {
         }
       }
 
+      // Validar regras de TAC
+      const tpTransp = String(manifesto.tp_transportador || "");
+      if (["1", "2", "3"].includes(tpTransp)) {
+        if (!manifesto.transportador_id) {
+          throw new Error("O Transportador é obrigatório para transportadores do tipo TAC.");
+        }
+        if (!manifesto.rntrc || !manifesto.rntrc.trim()) {
+          throw new Error("O RNTRC do transportador é obrigatório para TAC.");
+        }
+        
+        // Validar CIOT
+        if (manifesto.ciot && manifesto.ciot.trim()) {
+          const cleanCiot = manifesto.ciot.replace(/\D/g, "");
+          if (cleanCiot.length !== 12) {
+            throw new Error("O CIOT deve conter exatamente 12 dígitos.");
+          }
+          if (!manifesto.ciot_cnpj_cpf || !manifesto.ciot_cnpj_cpf.trim()) {
+            throw new Error("O CNPJ/CPF do responsável pelo CIOT é obrigatório quando o CIOT é informado.");
+          }
+          const cleanCiotDoc = manifesto.ciot_cnpj_cpf.replace(/\D/g, "");
+          if (cleanCiotDoc.length !== 11 && cleanCiotDoc.length !== 14) {
+            throw new Error("O CNPJ/CPF do responsável pelo CIOT deve ser válido (11 ou 14 dígitos).");
+          }
+        }
+
+        // Validar componentes de pagamento
+        const activeComponents = (componentes || []).filter((c: any) => !c.excluido);
+        if (activeComponents.length === 0) {
+          throw new Error("É obrigatório informar ao menos um componente de pagamento (aba Componentes) para TAC.");
+        }
+
+        // Validar Vale-Pedágio se houver pedágio
+        if (manifesto.possui_pedagio) {
+          const temPedagio = activeComponents.some((c: any) => c.tp_componente === "01");
+          if (!temPedagio) {
+            throw new Error("A rota/manifesto possui pedágio. É obrigatório adicionar ao menos um componente do tipo '01 - Vale Pedágio' na aba Componentes.");
+          }
+        }
+
+        // Validar que cada componente 01 possua fornecedor e comprovante preenchidos
+        activeComponents.forEach((c: any) => {
+          if (c.tp_componente === "01") {
+            const cleanForn = String(c.cnpj_fornecedor || "").replace(/\D/g, "");
+            if (cleanForn.length !== 14) {
+              throw new Error("Para componentes do tipo '01 - Vale Pedágio', é obrigatório informar um CNPJ de Fornecedor válido (14 dígitos).");
+            }
+            if (!String(c.comprovante || "").trim()) {
+              throw new Error("Para componentes do tipo '01 - Vale Pedágio', é obrigatório informar o número do comprovante.");
+            }
+          }
+        });
+      }
+
       // Coletar IDs de Cidades e Motoristas para buscas em lote na memória
       const cidadeIds = new Set<number>();
       (carregaRaw || []).forEach((c: any) => { if (c.cidade_id) cidadeIds.add(Number(c.cidade_id)); });

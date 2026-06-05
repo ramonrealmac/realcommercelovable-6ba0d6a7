@@ -22,6 +22,8 @@ const MdfComponenteTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
   const [tpComp, setTpComp] = useState("01");
   const [vlComp, setVlComp] = useState("0");
   const [dsComp, setDsComp] = useState("");
+  const [cnpjForn, setCnpjForn] = useState("");
+  const [comprovante, setComprovante] = useState("");
 
   const load = useCallback(async () => {
     if (!mdfManifestoId) return;
@@ -39,17 +41,34 @@ const MdfComponenteTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
   const handleAdd = async () => {
     if (!mdfManifestoId) { toast.warning("Salve o cabeçalho primeiro."); return; }
     if (Number(vlComp) <= 0) { toast.warning("Informe um valor maior que zero."); return; }
+    
+    // Validações específicas para Vale-Pedágio
+    if (tpComp === "01") {
+      const cleanCNPJ = cnpjForn.replace(/\D/g, "");
+      if (cleanCNPJ.length !== 14) {
+        toast.warning("Para Vale-Pedágio, informe um CNPJ de Fornecedor válido (14 dígitos).");
+        return;
+      }
+      if (!comprovante.trim()) {
+        toast.warning("Para Vale-Pedágio, informe o número do comprovante.");
+        return;
+      }
+    }
+
     const { error } = await supabase.from("fiscal_mdf_componente").insert({
       mdf_manifesto_id: mdfManifestoId,
       empresa_id: empresaId,
       tp_componente: tpComp,
       vl_componente: Number(vlComp),
       ds_componente: dsComp,
+      cnpj_fornecedor: tpComp === "01" ? cnpjForn.replace(/\D/g, "") : null,
+      comprovante: tpComp === "01" ? comprovante.trim() : null,
       dt_cadastro: new Date().toISOString(),
     });
     if (error) { toast.error("Erro ao adicionar: " + error.message); return; }
     toast.success("Componente adicionado.");
     setVlComp("0"); setDsComp("");
+    setCnpjForn(""); setComprovante("");
     load();
   };
 
@@ -69,28 +88,61 @@ const MdfComponenteTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
   return (
     <div className="space-y-4 p-2">
       {podeEditar && (
-        <div className="grid grid-cols-12 gap-3 items-end border border-border rounded p-3 bg-card">
-          <div className="col-span-3">
-            <label className="text-xs text-muted-foreground">Tipo</label>
-            <select value={tpComp} onChange={e => setTpComp(e.target.value)} className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
-              {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
+        <div className="border border-border rounded p-3 bg-card space-y-3">
+          <div className="grid grid-cols-12 gap-3 items-end">
+            <div className="col-span-3">
+              <label className="text-xs text-muted-foreground font-semibold">Tipo</label>
+              <select value={tpComp} onChange={e => {
+                const val = e.target.value;
+                setTpComp(val);
+                if (val !== "01") {
+                  setCnpjForn("");
+                  setComprovante("");
+                }
+              }} className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
+                {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="text-xs text-muted-foreground font-semibold">Valor (R$)</label>
+              <input type="number" step="0.01" value={vlComp} onChange={e => setVlComp(e.target.value)}
+                className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
+            </div>
+            <div className="col-span-5">
+              <label className="text-xs text-muted-foreground font-semibold">Descrição</label>
+              <input value={dsComp} onChange={e => setDsComp(e.target.value)}
+                className="w-full border border-border rounded px-2 py-1 text-sm" />
+            </div>
+            {tpComp !== "01" && (
+              <div className="col-span-2">
+                <button onClick={handleAdd} className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm w-full justify-center hover:bg-primary/90">
+                  <Plus className="w-4 h-4" /> Adicionar
+                </button>
+              </div>
+            )}
           </div>
-          <div className="col-span-2">
-            <label className="text-xs text-muted-foreground">Valor (R$)</label>
-            <input type="number" step="0.01" value={vlComp} onChange={e => setVlComp(e.target.value)}
-              className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
-          </div>
-          <div className="col-span-4">
-            <label className="text-xs text-muted-foreground">Descrição</label>
-            <input value={dsComp} onChange={e => setDsComp(e.target.value)}
-              className="w-full border border-border rounded px-2 py-1 text-sm" />
-          </div>
-          <div className="col-span-2">
-            <button onClick={handleAdd} className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm w-full justify-center hover:bg-primary/90">
-              <Plus className="w-4 h-4" /> Adicionar
-            </button>
-          </div>
+
+          {tpComp === "01" && (
+            <div className="grid grid-cols-12 gap-3 items-end border-t border-border/50 pt-2">
+              <div className="col-span-5">
+                <label className="text-xs text-muted-foreground font-semibold">CNPJ Fornecedor Vale-Pedágio <span className="text-destructive">*</span></label>
+                <input value={cnpjForn} onChange={e => setCnpjForn(e.target.value)}
+                  placeholder="Ex: 00000000000000" maxLength={14}
+                  className="w-full border border-border rounded px-2 py-1 text-sm" />
+              </div>
+              <div className="col-span-5">
+                <label className="text-xs text-muted-foreground font-semibold">Número do Comprovante <span className="text-destructive">*</span></label>
+                <input value={comprovante} onChange={e => setComprovante(e.target.value)}
+                  placeholder="Ex: Número do comprovante/recibo" maxLength={20}
+                  className="w-full border border-border rounded px-2 py-1 text-sm" />
+              </div>
+              <div className="col-span-2">
+                <button onClick={handleAdd} className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm w-full justify-center hover:bg-primary/90">
+                  <Plus className="w-4 h-4" /> Adicionar
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
       <table className="w-full text-sm border-collapse">
@@ -108,7 +160,14 @@ const MdfComponenteTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
               <td className="px-3 py-1.5 border border-border">
                 {TIPOS.find(t => t.value === r.tp_componente)?.label || r.tp_componente}
               </td>
-              <td className="px-3 py-1.5 border border-border">{r.ds_componente}</td>
+              <td className="px-3 py-1.5 border border-border">
+                <div>{r.ds_componente}</div>
+                {r.tp_componente === "01" && r.cnpj_fornecedor && (
+                  <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                    Forn: {r.cnpj_fornecedor} | Comp: {r.comprovante}
+                  </div>
+                )}
+              </td>
               <td className="px-3 py-1.5 border border-border text-right">{Number(r.vl_componente || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
               {podeEditar && (
                 <td className="px-3 py-1.5 border border-border text-center">

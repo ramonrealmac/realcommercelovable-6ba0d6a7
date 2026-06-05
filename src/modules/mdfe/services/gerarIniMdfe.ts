@@ -275,17 +275,10 @@ export const gerarIniMdfe = (params: any): string => {
     ini += `UFPer=${p.uf}\n\n`;
   });
 
-  // Informações de Pagamento (infPag) - Obrigatório para Carga Lotação no Modal Rodoviário
-  const qtdDfe = qNFe + qCTe;
-  const tpEmitNum = Number(tpEmit || 1);
-
+  // Informações de Pagamento (infPag) - Obrigatório para TAC no Modal Rodoviário
   const isInfPagMandatoryVal = () => {
-    if (manifesto.modalidade !== '1') return false;
-    if (qtdDfe !== 1) return false;
-    if (tpEmitNum === 1) return true;
-    if (tpEmitNum === 2 && tpTransp && String(tpTransp).trim() !== "" && !skipTpTransp) return true;
-    if (tpEmitNum === 3) return true;
-    return false;
+    const tpTranspStr = String(manifesto.tp_transportador || "");
+    return ["1", "2", "3"].includes(tpTranspStr);
   };
 
   if (isInfPagMandatoryVal()) {
@@ -322,6 +315,23 @@ export const gerarIniMdfe = (params: any): string => {
       ini += "[Comp001001]\n";
       ini += "tpComp=04\n";
       ini += `vComp=${manifesto.valor_total || pag?.vl_contrato || 0}\n\n`;
+    }
+
+    // Vale-Pedágio detalhado (se houver componentes do tipo '01')
+    const pedagios = (componentes || []).filter((comp: any) => comp.tp_componente === "01");
+    if (pedagios.length > 0) {
+      pedagios.forEach((vp: any, idx: number) => {
+        const vpIdx = String(idx + 1).padStart(3, '0');
+        const fornClean = String(vp.cnpj_fornecedor || "").replace(/\D/g, "");
+        const pagClean = String(manifesto.contratante_cnpj_cpf || "").replace(/\D/g, "") 
+          || String(empresa.cnpj || "").replace(/\D/g, "");
+
+        ini += `[valePed001${vpIdx}]\n`;
+        ini += `CNPJForn=${fornClean || '00000000000000'}\n`;
+        ini += `CNPJPag=${pagClean || '00000000000000'}\n`;
+        ini += `nCompra=${vp.comprovante || '0'}\n`;
+        ini += `vValePed=${vp.vl_componente || 0}\n\n`;
+      });
     }
 
     // Parcelas a prazo
