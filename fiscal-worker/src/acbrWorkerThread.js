@@ -1240,7 +1240,7 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                     retorno_completo: ultimoRetorno || xmlRetorno,
                     erro: sucesso ? null : (parsed.x_motivo || ultimoRetorno)
                 };
-            }, 'MDFE');
+            }, 'MDFe');
 
         case 'ENCERRAR_MDFE':
             return executarNaDLL(libMDFe, config, async (handle) => {
@@ -1271,15 +1271,15 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                     retorno_completo: ultimoRetorno || xmlRetorno,
                     erro: sucesso ? null : (parsed.x_motivo || ultimoRetorno)
                 };
-            }, 'MDFE');
+            }, 'MDFe');
 
         case 'IMPRIMIR_MDFE':
             return executarNaDLL(libMDFe, config, async (handle) => {
                 libMDFe.LimparLista(handle);
                 const ret = libMDFe.CarregarXML(handle, dados);
                 if (ret !== 0) return { sucesso: false, erro: '[IMPRIMIR_MDFE] CarregarXML: ' + lerRetornoACBr(libMDFe, handle), pdf_path: null };
-                return tentarImprimirDAMDFE(libMDFe, handle, jsonPayload.print_config, 'MDFE', jsonPayload.chave, config);
-            }, 'MDFE');
+                return tentarImprimirDAMDFE(libMDFe, handle, jsonPayload.print_config, 'MDFe', jsonPayload.chave, config);
+            }, 'MDFe');
 
         case 'IMPRIMIR_NFE':
         case 'IMPRIMIR_NFCE':

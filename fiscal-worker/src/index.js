@@ -293,9 +293,35 @@ const processarEvento = async (evento) => {
             const closeUfAbbr = String(payload.cUF || companyUfAbbr).toUpperCase();
             const closeUfCode = UF_IBGE_MAP[closeUfAbbr] || cOrgaoCode;
 
-            let formattedDtEnc = String(payload.dtEnc || '').substring(0, 10);
+            let formattedDtEnc = '';
+            if (payload.dtEnc) {
+                const parts = String(payload.dtEnc).substring(0, 10).split('-');
+                if (parts.length === 3) {
+                    formattedDtEnc = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                }
+            }
             if (!formattedDtEnc) {
-                formattedDtEnc = `${y}-${m}-${d}`;
+                formattedDtEnc = `${d}/${m}/${y}`;
+            }
+
+            let nProt = payload.nProt || '';
+            const mdfId = evento.mdf_manifesto_id || payload.mdf_manifesto_id;
+            if (!nProt && mdfId) {
+                try {
+                    const { data: mdf } = await supabase
+                        .from('fiscal_mdf_manifesto')
+                        .select('numero_protocolo')
+                        .eq('mdf_manifesto_id', mdfId)
+                        .maybeSingle();
+                    if (mdf && mdf.numero_protocolo) {
+                        nProt = mdf.numero_protocolo;
+                        logger.info(`[MDF-e Encerramento] Protocolo do MDF-e #${mdfId} recuperado: ${nProt}`);
+                    } else {
+                        logger.warn(`[MDF-e Encerramento] Protocolo do MDF-e #${mdfId} não encontrado no banco.`);
+                    }
+                } catch (e) {
+                    logger.warn(`[MDF-e Encerramento] Falha ao consultar protocolo do MDF-e: ${e.message}`);
+                }
             }
 
             const iniContent = `[EVENTO]\r\n` +
@@ -308,7 +334,8 @@ const processarEvento = async (evento) => {
                 `nSeqEvento=1\r\n` +
                 `dtEnc=${formattedDtEnc}\r\n` +
                 `cUF=${closeUfCode}\r\n` +
-                `cMun=${payload.cMun}`;
+                `cMun=${payload.cMun}\r\n` +
+                `nProt=${nProt}`;
 
             payload.dados = iniContent;
             logger.info(`[MDF-e Encerramento] Gerado INI de encerramento:\n${iniContent}`);
