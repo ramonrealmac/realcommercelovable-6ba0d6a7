@@ -110,19 +110,6 @@ const validarObrigatoriedadesTransporte = async (rec: any) => {
       throw new Error("Nome do Contratante é obrigatório para TAC.");
     }
 
-    // Vale-Pedágio obrigatório
-    if (rec.mdf_manifesto_id) {
-      const { data: vales } = await supabase
-        .from("fiscal_mdf_componente")
-        .select("mdf_componente_id")
-        .eq("mdf_manifesto_id", rec.mdf_manifesto_id)
-        .eq("tp_componente", "01")
-        .eq("excluido", false);
-      
-      if (!vales || vales.length === 0) {
-        throw new Error("Vale-Pedágio (Componente de Pagamento '01') é obrigatório para TAC.");
-      }
-    }
   }
 };
 
