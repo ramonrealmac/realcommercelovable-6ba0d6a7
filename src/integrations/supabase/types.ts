@@ -3421,6 +3421,8 @@ export type Database = {
           mdf_manifesto_id: number
           tp_componente: string | null
           vl_componente: number | null
+          cnpj_fornecedor: string | null
+          comprovante: string | null
         }
         Insert: {
           ds_componente?: string | null
@@ -3429,6 +3431,8 @@ export type Database = {
           mdf_manifesto_id: number
           tp_componente?: string | null
           vl_componente?: number | null
+          cnpj_fornecedor?: string | null
+          comprovante?: string | null
         }
         Update: {
           ds_componente?: string | null
@@ -3437,6 +3441,8 @@ export type Database = {
           mdf_manifesto_id?: number
           tp_componente?: string | null
           vl_componente?: number | null
+          cnpj_fornecedor?: string | null
+          comprovante?: string | null
         }
         Relationships: []
       }
@@ -3649,6 +3655,8 @@ export type Database = {
           unidade: string | null
           valor_total: number | null
           transportador_id: number | null
+          rota_id: number | null
+          possui_pedagio: boolean | null
         }
         Insert: {
           chave_acesso?: string | null
@@ -3678,6 +3686,8 @@ export type Database = {
           unidade?: string | null
           valor_total?: number | null
           transportador_id?: number | null
+          rota_id?: number | null
+          possui_pedagio?: boolean | null
         }
         Update: {
           chave_acesso?: string | null
@@ -3707,6 +3717,8 @@ export type Database = {
           unidade?: string | null
           valor_total?: number | null
           transportador_id?: number | null
+          rota_id?: number | null
+          possui_pedagio?: boolean | null
         }
         Relationships: []
       }
@@ -7065,6 +7077,36 @@ export type Database = {
             referencedColumns: ["rpb_conexao_id"]
           },
         ]
+      }
+      rota: {
+        Row: {
+          rota_id: number
+          descricao: string
+          possui_pedagio: boolean
+          excluido: boolean
+          empresa_id: number
+          dt_cadastro: string | null
+          dt_alteracao: string | null
+        }
+        Insert: {
+          rota_id?: number
+          descricao: string
+          possui_pedagio?: boolean
+          excluido?: boolean
+          empresa_id?: number
+          dt_cadastro?: string | null
+          dt_alteracao?: string | null
+        }
+        Update: {
+          rota_id?: number
+          descricao?: string
+          possui_pedagio?: boolean
+          excluido?: boolean
+          empresa_id?: number
+          dt_cadastro?: string | null
+          dt_alteracao?: string | null
+        }
+        Relationships: []
       }
       sistema_versoes: {
         Row: {
