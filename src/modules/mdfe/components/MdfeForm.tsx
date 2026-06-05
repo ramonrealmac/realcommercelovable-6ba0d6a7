@@ -31,7 +31,7 @@ const ST_COLORS: Record<TMdfSt, string> = {
   D: "!text-yellow-600",
   G: "!text-blue-600",
   A: "!text-green-600",
-  E: "!text-purple-600",
+  E: "!text-blue-600",
   C: "!text-red-600",
   R: "!text-red-600",
 };
@@ -507,7 +507,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
                   onChange={e => setField("modelo", e.target.value)}
                   className="w-full border border-border rounded px-2 py-1 text-sm text-center" />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-3">
                 <label className="text-xs text-muted-foreground">Número</label>
                 <input readOnly
                   value={record.numero ?? ""}
@@ -521,32 +521,18 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
                   placeholder="Auto"
                   className="w-full border border-border rounded px-2 py-1 text-sm text-center bg-secondary" />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-3">
                 <label className="text-xs text-muted-foreground">Dt. Emissão <span className="text-destructive">*</span></label>
                 <input type="date" readOnly={ro}
                   value={String(record.dt_emissao || "").substring(0, 10)}
                   onChange={e => setField("dt_emissao", e.target.value)}
                   className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-3">
                 <label className="text-xs text-muted-foreground">Status</label>
                 <div className={`w-full border border-border rounded px-2 py-[5px] text-sm font-semibold bg-secondary ${ST_COLORS[st] || ""}`}>
                   {ST_LABELS[st] || st}
                 </div>
-              </div>
-              <div className="col-span-3 flex gap-2 items-end flex-wrap">
-                {podeEncerrar && (
-                  <button onClick={() => handleEncerrar(mdfId!)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded bg-blue-600 text-white text-xs hover:bg-blue-700">
-                    <Lock className="w-3.5 h-3.5" /> Encerrar
-                  </button>
-                )}
-                {podeCancelar && (
-                  <button onClick={() => handleCancelar(mdfId!)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded bg-red-600 text-white text-xs hover:bg-red-700">
-                    <XCircle className="w-3.5 h-3.5" /> Cancelar
-                  </button>
-                )}
               </div>
             </div>
 

@@ -69,7 +69,7 @@ const XGridCols: IGridColumn[] = [
         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
           r.status === "A" ? "bg-green-100 text-green-700" :
           r.status === "C" ? "bg-red-100 text-red-700" :
-          r.status === "E" ? "bg-purple-100 text-purple-700" : 
+          r.status === "E" ? "bg-blue-100 text-blue-700" : 
           r.status === "R" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"
         }`}>
           {label}
@@ -222,6 +222,27 @@ const ListaMdfeForm: React.FC = () => {
     }
   };
 
+  const handleCancelar = async (row: any) => {
+    const just = prompt("Informe a justificativa do cancelamento (mín. 15 caracteres):");
+    if (!just || just.length < 15) { 
+      toast.warning("Justificativa inválida (mín. 15 caracteres)."); 
+      return; 
+    }
+    
+    try {
+      const { error } = await supabase
+        .from("fiscal_mdf_manifesto")
+        .update({ status: "C", dt_alteracao: new Date().toISOString() })
+        .eq("mdf_manifesto_id", row.mdf_manifesto_id);
+
+      if (error) throw error;
+      toast.success("MDF-e cancelado!");
+      loadData();
+    } catch (e: any) {
+      toast.error("Erro ao cancelar: " + e.message);
+    }
+  };
+
   const handleExcluir = async (row: any) => {
     if (["A", "C", "E"].includes(row.status)) {
       toast.error("Não é possível excluir um manifesto com status " + (row.status === "A" ? "Autorizado" : row.status === "E" ? "Encerrado" : "Cancelado") + ".");
@@ -289,7 +310,10 @@ const ListaMdfeForm: React.FC = () => {
                         <Send className="w-4 h-4 mr-2 text-blue-500" /> Transmitir SEFAZ
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleOpenCloseDialog(r)} disabled={r.status !== "A"}>
-                        <Lock className="w-4 h-4 mr-2 text-purple-500" /> Encerrar MDF-e
+                        <Lock className="w-4 h-4 mr-2 text-blue-500" /> Encerrar MDF-e
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleCancelar(r)} disabled={r.status !== "A"}>
+                        <XCircle className="w-4 h-4 mr-2 text-red-500" /> Cancelar MDF-e
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => { setXLogMdfId(r.mdf_manifesto_id); setXLogDialogOpen(true); }}>
                         <Terminal className="w-4 h-4 mr-2 text-indigo-500" /> Log de Transmissão
@@ -343,6 +367,7 @@ const ListaMdfeForm: React.FC = () => {
       onConfirm={handleConfirmClose}
       loading={XClosing}
       empresaId={XEmpresaId || 0}
+      mdfManifestoId={XCloseTarget?.mdf_manifesto_id ?? null}
     />
 
     <MonitorFiscalLogDialog 

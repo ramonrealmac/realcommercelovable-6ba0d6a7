@@ -268,12 +268,60 @@ const processarEvento = async (evento) => {
             }
         }
 
+        const isEncerramentoMdfe = evento.comando === 'ENCERRAR_MDFE';
+
+        if (isEncerramentoMdfe) {
+            const UF_IBGE_MAP = {
+                'AC': '12', 'AL': '27', 'AP': '16', 'AM': '13', 'BA': '29', 'CE': '23', 'DF': '53', 'ES': '32', 'GO': '52',
+                'MA': '21', 'MT': '51', 'MS': '50', 'MG': '31', 'PA': '15', 'PB': '25', 'PR': '41', 'PE': '26', 'PI': '22',
+                'RJ': '33', 'RN': '24', 'RS': '43', 'RO': '11', 'RR': '14', 'SC': '42', 'SP': '35', 'SE': '28', 'TO': '17'
+            };
+
+            const now = new Date();
+            const d = String(now.getDate()).padStart(2, '0');
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const y = now.getFullYear();
+            const h = String(now.getHours()).padStart(2, '0');
+            const i = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            const dhEvento = `${d}/${m}/${y} ${h}:${i}:${s}`;
+
+            const cleanCnpj = String(empresaRaw?.cnpj || '').replace(/\D/g, '');
+            const companyUfAbbr = payload.config?.uf || 'SP';
+            const cOrgaoCode = UF_IBGE_MAP[companyUfAbbr] || '35';
+            
+            const closeUfAbbr = String(payload.cUF || companyUfAbbr).toUpperCase();
+            const closeUfCode = UF_IBGE_MAP[closeUfAbbr] || cOrgaoCode;
+
+            let formattedDtEnc = String(payload.dtEnc || '').substring(0, 10);
+            if (!formattedDtEnc) {
+                formattedDtEnc = `${y}-${m}-${d}`;
+            }
+
+            const iniContent = `[EVENTO]\r\n` +
+                `idLote=1\r\n` +
+                `[EVENTO001]\r\n` +
+                `chMDFe=${payload.chave}\r\n` +
+                `CNPJ=${cleanCnpj}\r\n` +
+                `dhEvento=${dhEvento}\r\n` +
+                `tpEvento=110112\r\n` +
+                `nSeqEvento=1\r\n` +
+                `dtEnc=${formattedDtEnc}\r\n` +
+                `cUF=${closeUfCode}\r\n` +
+                `cMun=${payload.cMun}`;
+
+            payload.dados = iniContent;
+            logger.info(`[MDF-e Encerramento] Gerado INI de encerramento:\n${iniContent}`);
+            
+            // Grava o payload atualizado no evento para histórico
+            await supabase.from('fiscal_evento').update({ payload }).eq('id', evento.id);
+        }
+
         // 3. Chama a biblioteca nativa passando o JSON payload atualizado
         const resultado = await executarComandoFiscal(evento.comando, payload);
 
         const isCancelamento = ['CANCELAR_NFE', 'CANCELAR_NFCE'].includes(evento.comando);
         const isInutilizacao = ['INUTILIZAR_NFE', 'INUTILIZAR_NFCE'].includes(evento.comando);
-        const isEncerramentoMdfe = evento.comando === 'ENCERRAR_MDFE';
 
         // 4. PRIMEIRO: atualizar fiscal_nfe_cabecalho se foi emissão ou cancelamento
         if (nfeCabecalhoId) {
