@@ -184,7 +184,7 @@ export const mdfeEmissaoService = {
         { data: motoristasData }
       ] = await Promise.all([
         cidadeIds.size > 0
-          ? db.from("cidade").select("cidade_id, cd_ibge, descricao, estado_id").in("cidade_id", Array.from(cidadeIds))
+          ? db.from("cidade").select("cidade_id, cd_ibge, descricao, estado_id, cep").in("cidade_id", Array.from(cidadeIds))
           : Promise.resolve({ data: [] }),
         motoristaIds.size > 0
           ? db.from("cadastro_motorista").select("motorista_id, cpf, nome").in("motorista_id", Array.from(motoristaIds))
@@ -244,20 +244,26 @@ export const mdfeEmissaoService = {
         const cidadeDescarrega = documentos[0]?.cidade;
 
         if (cidadeCarrega) {
-          const cep = await fetchCepForCity(cidadeCarrega.estado_id, cidadeCarrega.descricao);
-          if (cep) {
-            cepCarrega = cep;
-          } else {
-            throw new Error(`Não foi possível localizar o CEP automático para o município de carregamento: ${cidadeCarrega.descricao} (${cidadeCarrega.estado_id}). Verifique a conexão com a internet.`);
+          cepCarrega = cidadeCarrega.cep ? String(cidadeCarrega.cep).replace(/\D/g, "") : "";
+          if (!cepCarrega) {
+            const cep = await fetchCepForCity(cidadeCarrega.estado_id, cidadeCarrega.descricao);
+            if (cep) {
+              cepCarrega = cep;
+            } else {
+              throw new Error(`Não foi possível localizar o CEP automático para o município de carregamento: ${cidadeCarrega.descricao} (${cidadeCarrega.estado_id}). Verifique a conexão com a internet.`);
+            }
           }
         }
 
         if (cidadeDescarrega) {
-          const cep = await fetchCepForCity(cidadeDescarrega.estado_id, cidadeDescarrega.descricao);
-          if (cep) {
-            cepDescarrega = cep;
-          } else {
-            throw new Error(`Não foi possível localizar o CEP automático para o município de descarregamento: ${cidadeDescarrega.descricao} (${cidadeDescarrega.estado_id}). Verifique a conexão com a internet.`);
+          cepDescarrega = cidadeDescarrega.cep ? String(cidadeDescarrega.cep).replace(/\D/g, "") : "";
+          if (!cepDescarrega) {
+            const cep = await fetchCepForCity(cidadeDescarrega.estado_id, cidadeDescarrega.descricao);
+            if (cep) {
+              cepDescarrega = cep;
+            } else {
+              throw new Error(`Não foi possível localizar o CEP automático para o município de descarregamento: ${cidadeDescarrega.descricao} (${cidadeDescarrega.estado_id}). Verifique a conexão com a internet.`);
+            }
           }
         }
       }
