@@ -19,7 +19,9 @@ export const gerarIniMdfe = (params: any): string => {
     componentes,
     parcelas,
     fConfig,
-    transportador
+    transportador,
+    cepCarrega,
+    cepDescarrega
   } = params;
 
   const esc = (val: any) => String(val || '').replace(/\n/g, ' ');
@@ -122,10 +124,10 @@ export const gerarIniMdfe = (params: any): string => {
 
   // Emitente (Emit) - Obrigatório para MDF-e
   ini += "[emit]\n";
-  const cnpjEmit = String(empresa?.cnpj || '').replace(/\D/g, '');
+  const cnpjEmit = String(empresa?.cnpj || '').replace(/\D/g, '').substring(0, 14);
   ini += `CNPJCPF=${cnpjEmit}\n`;
-  ini += `IE=${String(empresa?.ie || empresa?.inscricao_estadual || '').replace(/\D/g, '')}\n`;
-  ini += `xNome=${esc(empresa?.razao_social || '')}\n`;
+  ini += `IE=${String(empresa?.ie || empresa?.inscricao_estadual || '').replace(/\D/g, '').substring(0, 14)}\n`;
+  ini += `xNome=${esc(empresa?.razao_social || '').substring(0, 60)}\n`;
   if (empresa?.nome_fantasia) {
     ini += `xFant=${esc(empresa.nome_fantasia)}\n`;
   }
@@ -153,12 +155,25 @@ export const gerarIniMdfe = (params: any): string => {
     ini += "versaoModal=3.00\n\n";
     
     ini += "[rodo]\n";
-    ini += `RNTRC=${manifesto.rntrc || 'ISENTO'}\n\n`;
+    const cleanRntrc = manifesto.rntrc ? String(manifesto.rntrc).replace(/\D/g, "").substring(0, 8) : "";
+    ini += `RNTRC=${cleanRntrc || 'ISENTO'}\n\n`;
+
+    ini += "[prodPred]\n";
+    ini += "tpCarga=05\n";
+    ini += "xProd=CARGA GERAL\n";
+    ini += "NCM=00000000\n\n";
+
+    if (cepCarrega && cepDescarrega) {
+      ini += "[infLocalCarrega]\n";
+      ini += `CEP=${cepCarrega}\n\n`;
+      ini += "[infLocalDescarrega]\n";
+      ini += `CEP=${cepDescarrega}\n\n`;
+    }
 
     // CIOT
     if (manifesto.ciot && String(manifesto.ciot).trim() !== "") {
-      const ciotClean = String(manifesto.ciot).replace(/\D/g, "");
-      const ciotCnpjCpfClean = manifesto.ciot_cnpj_cpf ? String(manifesto.ciot_cnpj_cpf).replace(/\D/g, "") : "";
+      const ciotClean = String(manifesto.ciot).replace(/\D/g, "").substring(0, 12);
+      const ciotCnpjCpfClean = manifesto.ciot_cnpj_cpf ? String(manifesto.ciot_cnpj_cpf).replace(/\D/g, "").substring(0, 14) : "";
       ini += "[infCIOT001]\n";
       ini += `CIOT=${ciotClean}\n`;
       ini += `CNPJCPF=${ciotCnpjCpfClean || '00000000000000'}\n\n`;
@@ -166,8 +181,8 @@ export const gerarIniMdfe = (params: any): string => {
 
     // Contratante
     if (manifesto.contratante_cnpj_cpf && String(manifesto.contratante_cnpj_cpf).trim() !== "") {
-      const contrCnpjCpfClean = String(manifesto.contratante_cnpj_cpf).replace(/\D/g, "");
-      const contrNomeClean = esc(manifesto.contratante_nome || "");
+      const contrCnpjCpfClean = String(manifesto.contratante_cnpj_cpf).replace(/\D/g, "").substring(0, 14);
+      const contrNomeClean = esc(manifesto.contratante_nome || "").substring(0, 60);
       ini += "[infContratante001]\n";
       ini += `CNPJCPF=${contrCnpjCpfClean}\n`;
       ini += `xNome=${contrNomeClean}\n\n`;
@@ -178,8 +193,8 @@ export const gerarIniMdfe = (params: any): string => {
     if (vTracao) {
       ini += "[veicTracao]\n";
       ini += `cInt=${vTracao.veiculo_id}\n`;
-      ini += `placa=${vTracao.placa}\n`;
-      ini += `RENAVAM=${vTracao.renavam || ''}\n`;
+      ini += `placa=${String(vTracao.placa || '').replace(/[^A-Za-z0-9]/g, "").toUpperCase().substring(0, 7)}\n`;
+      ini += `RENAVAM=${String(vTracao.renavam || '').replace(/\D/g, "").substring(0, 11)}\n`;
       ini += `tara=${vTracao.tara || 0}\n`;
       ini += `capKG=${vTracao.capacidade_kg || 0}\n`;
       ini += `tpRod=${String(vTracao.tp_rodado || '01').padStart(2, '0')}\n`;
@@ -188,10 +203,11 @@ export const gerarIniMdfe = (params: any): string => {
 
       const tpTransp = String(manifesto.tp_transportador || "");
       if (["1", "2", "3"].includes(tpTransp) && transportador) {
-        const docClean = String(transportador.cnpj || "").replace(/\D/g, "");
+        const docClean = String(transportador.cnpj || "").replace(/\D/g, "").substring(0, 14);
         ini += `CNPJCPF=${docClean}\n`;
-        ini += `RNTRC=${transportador.rntrc || 'ISENTO'}\n`;
-        ini += `xNome=${esc(transportador.razao_social || "")}\n`;
+        const cleanTranspRntrc = transportador.rntrc ? String(transportador.rntrc).replace(/\D/g, "").substring(0, 8) : "";
+        ini += `RNTRC=${cleanTranspRntrc || 'ISENTO'}\n`;
+        ini += `xNome=${esc(transportador.razao_social || "").substring(0, 60)}\n`;
         ini += `IE=ISENTO\n`;
         ini += `UFProp=${transportador.uf_proprietario || vTracao.uf || manifesto.ufini}\n`;
 
@@ -208,8 +224,8 @@ export const gerarIniMdfe = (params: any): string => {
       const idx = String(i + 1).padStart(3, '0');
       ini += `[veicReboque${idx}]\n`;
       ini += `cInt=${v.veiculo_id}\n`;
-      ini += `placa=${v.placa}\n`;
-      ini += `RENAVAM=${v.renavam || ''}\n`;
+      ini += `placa=${String(v.placa || '').replace(/[^A-Za-z0-9]/g, "").toUpperCase().substring(0, 7)}\n`;
+      ini += `RENAVAM=${String(v.renavam || '').replace(/\D/g, "").substring(0, 11)}\n`;
       ini += `tara=${v.tara || 0}\n`;
       ini += `capKG=${v.capacidade_kg || 0}\n`;
       ini += `tpCar=${String(v.tp_carroceria || '00').padStart(2, '0')}\n`;
@@ -220,8 +236,8 @@ export const gerarIniMdfe = (params: any): string => {
     condutores.forEach((c: any, i: number) => {
       const idx = String(i + 1).padStart(3, '0');
       ini += `[moto${idx}]\n`;
-      ini += `xNome=${esc(c.nome)}\n`;
-      ini += `CPF=${c.cpf}\n\n`;
+      ini += `xNome=${esc(c.nome || "").substring(0, 60)}\n`;
+      ini += `CPF=${String(c.cpf || "").replace(/\D/g, "").substring(0, 11)}\n\n`;
     });
   }
 
@@ -286,8 +302,8 @@ export const gerarIniMdfe = (params: any): string => {
     const temParcelas = parcelas && parcelas.length > 0;
     const indPag = temParcelas ? "1" : "0";
     const cnpjipefClean = pag?.cnpjipef 
-      ? String(pag.cnpjipef).replace(/\D/g, "") 
-      : (manifesto.transp_cnpj_cpf ? String(manifesto.transp_cnpj_cpf).replace(/\D/g, "") : "");
+      ? String(pag.cnpjipef).replace(/\D/g, "").substring(0, 14)
+      : (manifesto.transp_cnpj_cpf ? String(manifesto.transp_cnpj_cpf).replace(/\D/g, "").substring(0, 14) : "");
 
     ini += "[infPag001]\n";
     ini += `CNPJCPF=${cnpjipefClean || '00000000000000'}\n`;
@@ -298,6 +314,25 @@ export const gerarIniMdfe = (params: any): string => {
     }
     ini += "\n";
 
+    // Informações bancárias (infBanc)
+    const hasBanco = pag?.banco && String(pag.banco).trim() !== "";
+    const hasAgencia = pag?.agencia && String(pag.agencia).trim() !== "";
+    const hasPix = pag?.chave_pix && String(pag.chave_pix).trim() !== "";
+    const hasIpef = pag?.cnpjipef && String(pag.cnpjipef).trim() !== "";
+
+    if (hasBanco || hasPix || hasIpef) {
+      ini += "[infBanc001]\n";
+      if (hasBanco && hasAgencia) {
+        ini += `codBanco=${String(pag.banco).trim().substring(0, 4)}\n`;
+        ini += `codAgencia=${String(pag.agencia).trim().substring(0, 10)}\n`;
+      } else if (hasPix) {
+        ini += `PIX=${String(pag.chave_pix).trim().substring(0, 60)}\n`;
+      } else if (hasIpef) {
+        ini += `CNPJIPEF=${String(pag.cnpjipef).replace(/\D/g, "").substring(0, 14)}\n`;
+      }
+      ini += "\n";
+    }
+
     // Componentes de pagamento
     if (componentes && componentes.length > 0) {
       componentes.forEach((comp: any, idx: number) => {
@@ -306,7 +341,7 @@ export const gerarIniMdfe = (params: any): string => {
         ini += `tpComp=${comp.tp_componente || '99'}\n`;
         ini += `vComp=${comp.vl_componente || 0}\n`;
         if (comp.tp_componente === '99') {
-          ini += `xComp=${esc(comp.ds_componente || 'Outros')}\n`;
+          ini += `xComp=${esc(comp.ds_componente || 'Outros').substring(0, 60)}\n`;
         }
         ini += "\n";
       });
@@ -322,14 +357,14 @@ export const gerarIniMdfe = (params: any): string => {
     if (pedagios.length > 0) {
       pedagios.forEach((vp: any, idx: number) => {
         const vpIdx = String(idx + 1).padStart(3, '0');
-        const fornClean = String(vp.cnpj_fornecedor || "").replace(/\D/g, "");
-        const pagClean = String(manifesto.contratante_cnpj_cpf || "").replace(/\D/g, "") 
-          || String(empresa.cnpj || "").replace(/\D/g, "");
+        const fornClean = String(vp.cnpj_fornecedor || "").replace(/\D/g, "").substring(0, 14);
+        const pagClean = (String(manifesto.contratante_cnpj_cpf || "").replace(/\D/g, "") 
+          || String(empresa.cnpj || "").replace(/\D/g, "")).substring(0, 14);
 
         ini += `[valePed001${vpIdx}]\n`;
         ini += `CNPJForn=${fornClean || '00000000000000'}\n`;
         ini += `CNPJPag=${pagClean || '00000000000000'}\n`;
-        ini += `nCompra=${vp.comprovante || '0'}\n`;
+        ini += `nCompra=${String(vp.comprovante || '0').substring(0, 20)}\n`;
         ini += `vValePed=${vp.vl_componente || 0}\n\n`;
       });
     }

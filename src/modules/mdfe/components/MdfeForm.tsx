@@ -119,6 +119,8 @@ const validarObrigatoriedadesTransporte = async (rec: any) => {
     if (!rec.rntrc || !rec.rntrc.trim()) {
       throw new Error("O RNTRC do transportador é obrigatório para TAC.");
     }
+    const cleanRntrc = rec.rntrc.replace(/\D/g, "").substring(0, 8);
+    rec.rntrc = cleanRntrc;
 
     // Validar CIOT se preenchido
     if (rec.ciot && rec.ciot.trim()) {
@@ -135,7 +137,7 @@ const validarObrigatoriedadesTransporte = async (rec: any) => {
       }
     }
 
-    // Se já salvo, validar componentes de pagamento e vale-pedágio no banco
+    // Se já salvo, validar componentes de pagamento, vale-pedágio e parcelas no banco
     if (rec.mdf_manifesto_id) {
       const { data: componentes } = await supabase
         .from("fiscal_mdf_componente")
@@ -151,6 +153,42 @@ const validarObrigatoriedadesTransporte = async (rec: any) => {
         const temPedagioComp = componentes.some((c: any) => c.tp_componente === "01");
         if (!temPedagioComp) {
           throw new Error("A rota/manifesto possui pedágio. É obrigatório adicionar ao menos um componente do tipo '01 - Vale Pedágio' na aba Componentes.");
+        }
+      }
+
+      // Validar se há informações de pagamento salvas e corretas
+      const { data: pag } = await supabase
+        .from("fiscal_mdf_pagamento")
+        .select("forma_pagto, banco, agencia, cnpjipef")
+        .eq("mdf_manifesto_id", rec.mdf_manifesto_id)
+        .eq("excluido", false)
+        .maybeSingle();
+
+      if (!pag) {
+        throw new Error("As informações de pagamento não foram cadastradas na aba Pagamento.");
+      }
+
+      const temBanco = pag.banco && String(pag.banco).trim() !== "";
+      const temIpef = pag.cnpjipef && String(pag.cnpjipef).trim() !== "";
+
+      if (!temBanco && !temIpef) {
+        throw new Error("Informe os dados do Banco/Agência ou o CNPJ da IPEF na aba Pagamento.");
+      }
+
+      if (temBanco && (!pag.agencia || String(pag.agencia).trim() === "")) {
+        throw new Error("Como o Banco foi informado, a Agência também deve ser preenchida na aba Pagamento.");
+      }
+
+      // Validar parcelas se forma de pagamento for a prazo (1)
+      if (pag.forma_pagto === "1") {
+        const { data: parcelas } = await supabase
+          .from("fiscal_mdf_pagtos")
+          .select("mdf_pagtos_id")
+          .eq("mdf_manifesto_id", rec.mdf_manifesto_id)
+          .eq("excluido", false);
+
+        if (!parcelas || parcelas.length === 0) {
+          throw new Error("Para Pagamento à Prazo, é obrigatório lançar pelo menos 1 parcela na aba Parcelas.");
         }
       }
     }
@@ -189,7 +227,31 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
   const [selectedCadastroId, setSelectedCadastroId] = useState<number | null>(null);
   const [refreshMotoristasTrigger, setRefreshMotoristasTrigger] = useState(0);
   const [transportadores, setTransportadores] = useState<{ cadastro_id: number; razao_social: string }[]>([]);
+  const [selectedManifestoId, setSelectedManifestoId] = useState<number | null>(null);
+  const [formaPagto, setFormaPagto] = useState<string>("0");
   const [rotas, setRotas] = useState<{ rota_id: number; descricao: string; possui_pedagio: boolean }[]>([]);
+
+  useEffect(() => {
+    const loadFormaPagto = async () => {
+      if (!selectedManifestoId) {
+        setFormaPagto("0");
+        return;
+      }
+      const { data, error } = await supabase
+        .from("fiscal_mdf_pagamento")
+        .select("forma_pagto")
+        .eq("mdf_manifesto_id", selectedManifestoId)
+        .eq("excluido", false)
+        .maybeSingle();
+
+      if (!error && data) {
+        setFormaPagto(data.forma_pagto || "0");
+      } else {
+        setFormaPagto("0");
+      }
+    };
+    loadFormaPagto();
+  }, [selectedManifestoId]);
 
   useEffect(() => {
     if (!XEmpresaId) return;
@@ -392,7 +454,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
 
               if (cadastro) {
                 if (cadastro.cnpj) rec.transp_cnpj_cpf = cadastro.cnpj;
-                if (cadastro.rntrc) rec.rntrc = cadastro.rntrc;
+                if (cadastro.rntrc) rec.rntrc = cadastro.rntrc.replace(/\D/g, "").substring(0, 8);
               }
             }
           } else {
@@ -459,9 +521,14 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
       XRefreshRef={XRefreshRef}
       XAfterInsertTab="percurso"
       XCadastroLabel="Dados Gerais"
+      XToolbarExtras={({ currentRecord }) => (
+        <MdfIdSync currentRecord={currentRecord} onIdChange={setSelectedManifestoId} />
+      )}
       XHiddenTabs={(rec) => {
         const mandatory = isInfPagMandatory(rec);
-        return !mandatory ? ["pagamento", "componentes", "parcelas"] : [];
+        if (!mandatory) return ["pagamento", "componentes", "parcelas"];
+        if (formaPagto === "0") return ["parcelas"];
+        return [];
       }}
       XExtraTabs={[
         {
@@ -521,6 +588,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
               mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
               empresaId={XEmpresaId}
               podeEditar={!currentRecord?.status || ["D", "R"].includes(String(currentRecord?.status))}
+              onFormaPagtoChange={setFormaPagto}
             />
           ),
         },
@@ -559,7 +627,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
         const ro = !isEditing;
         const st = (record.status || "D") as TMdfSt;
         const mdfId = currentRecord?.mdf_manifesto_id ?? null;
-        const podeTransmitir = mdfId && st === "D" && !isEditing;
+        const podeTransmitir = mdfId && (!st || st === "D" || st === "R") && !isEditing;
         const podeEncerrar   = mdfId && st === "A" && !isEditing;
         const podeCancelar   = mdfId && (st === "A" || st === "E") && !isEditing;
 
@@ -580,7 +648,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
                   onChange={e => setField("modelo", e.target.value)}
                   className="w-full border border-border rounded px-2 py-1 text-sm text-center" />
               </div>
-              <div className="col-span-3">
+              <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Número</label>
                 <input readOnly
                   value={record.numero ?? ""}
@@ -594,18 +662,32 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
                   placeholder="Auto"
                   className="w-full border border-border rounded px-2 py-1 text-sm text-center bg-secondary" />
               </div>
-              <div className="col-span-3">
+              <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Dt. Emissão <span className="text-destructive">*</span></label>
                 <input type="date" readOnly={ro}
                   value={String(record.dt_emissao || "").substring(0, 10)}
                   onChange={e => setField("dt_emissao", e.target.value)}
                   className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
-              <div className="col-span-3">
+              <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Status</label>
                 <div className={`w-full border border-border rounded px-2 py-[5px] text-sm font-semibold bg-secondary ${ST_COLORS[st] || ""}`}>
                   {ST_LABELS[st] || st}
                 </div>
+              </div>
+              <div className="col-span-3">
+                <label className="text-xs text-muted-foreground">&nbsp;</label>
+                {podeTransmitir ? (
+                  <button
+                    type="button"
+                    onClick={() => handleTransmitir(record.mdf_manifesto_id)}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-sm shadow transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    <Send className="w-3.5 h-3.5" /> Transmitir MDF-e
+                  </button>
+                ) : (
+                  <div className="h-[30px]" />
+                )}
               </div>
             </div>
 
@@ -702,7 +784,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
                             .maybeSingle();
                           if (cad) {
                             if (cad.cnpj) setField("transp_cnpj_cpf", cad.cnpj);
-                            if (cad.rntrc) setField("rntrc", cad.rntrc);
+                            if (cad.rntrc) setField("rntrc", cad.rntrc.replace(/\D/g, "").substring(0, 8));
                           }
                         } else {
                           setField("transp_cnpj_cpf", null);
@@ -814,24 +896,24 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
               </div>
             )}
 
-            {/* ── Botão Transmitir ── */}
-            {!isEditing && record.mdf_manifesto_id && (record.status === "D" || record.status === "R" || !record.status) && (
-              <div className="flex justify-end pt-3">
-                <button
-                  type="button"
-                  onClick={() => handleTransmitir(record.mdf_manifesto_id)}
-                  className="flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow-md transition-all hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  <Send className="w-3.5 h-3.5" /> TRANSMITIR MDF-e PARA SEFAZ
-                </button>
-              </div>
-            )}
+
 
           </div>
         );
       }}
     />
   );
+};
+
+const MdfIdSync: React.FC<{
+  currentRecord: { mdf_manifesto_id?: number } | null | undefined;
+  onIdChange: (id: number | null) => void;
+}> = ({ currentRecord, onIdChange }) => {
+  const id = currentRecord?.mdf_manifesto_id ?? null;
+  useEffect(() => {
+    onIdChange(id);
+  }, [id, onIdChange]);
+  return null;
 };
 
 export default MdfeForm;

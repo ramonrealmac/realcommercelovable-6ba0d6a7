@@ -44,6 +44,11 @@ const MdfComponenteTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
     const parsedVl = parseCurrency(vlComp);
     if (parsedVl <= 0) { toast.warning("Informe um valor maior que zero."); return; }
     
+    if (dsComp.trim().length > 60) {
+      toast.warning("A descrição do componente deve ter no máximo 60 caracteres.");
+      return;
+    }
+    
     // Validações específicas para Vale-Pedágio
     if (tpComp === "01") {
       const cleanCNPJ = cnpjForn.replace(/\D/g, "");
@@ -113,7 +118,7 @@ const MdfComponenteTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
             <div className="col-span-5">
               <label className="text-xs text-muted-foreground font-semibold">Descrição</label>
               <input value={dsComp} onChange={e => setDsComp(e.target.value)}
-                className="w-full border border-border rounded px-2 py-1 text-sm" />
+                maxLength={60} className="w-full border border-border rounded px-2 py-1 text-sm" />
             </div>
             {tpComp !== "01" && (
               <div className="col-span-2">

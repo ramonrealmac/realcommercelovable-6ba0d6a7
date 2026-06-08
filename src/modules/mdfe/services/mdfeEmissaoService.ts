@@ -5,6 +5,25 @@ import { areUFsNeighbors } from "./ufBorders";
 
 const db = supabase as any;
 
+const fetchCepForCity = async (uf: string, cityName: string): Promise<string | null> => {
+  try {
+    const sanitizedCity = encodeURIComponent(cityName.trim());
+    const response = await fetch(`https://viacep.com.br/ws/${uf}/${sanitizedCity}/json/`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (Array.isArray(data) && data.length > 0) {
+      const firstValid = data.find((item: any) => item.cep);
+      if (firstValid) {
+        return firstValid.cep.replace(/\D/g, "");
+      }
+    }
+    return null;
+  } catch (err) {
+    console.error(`Erro ao buscar CEP para a cidade ${cityName} (${uf}):`, err);
+    return null;
+  }
+};
+
 export const mdfeEmissaoService = {
   /**
    * Enfileira a emissão de um MDF-e via fiscal_evento.
@@ -76,6 +95,8 @@ export const mdfeEmissaoService = {
         if (!manifesto.rntrc || !manifesto.rntrc.trim()) {
           throw new Error("O RNTRC do transportador é obrigatório para TAC.");
         }
+        const cleanRntrc = String(manifesto.rntrc).replace(/\D/g, "").substring(0, 8);
+        manifesto.rntrc = cleanRntrc;
         
         // Validar CIOT
         if (manifesto.ciot && manifesto.ciot.trim()) {
@@ -118,6 +139,35 @@ export const mdfeEmissaoService = {
             }
           }
         });
+
+        // Validar se há informações de pagamento salvas e corretas
+        const pag = (pagamentos || []).find((p: any) => !p.excluido);
+        if (!pag) {
+          throw new Error("As informações de pagamento não foram cadastradas na aba Pagamento.");
+        }
+
+        const temBanco = pag.banco && String(pag.banco).trim() !== "";
+        const temAgencia = pag.agencia && String(pag.agencia).trim() !== "";
+        const temPix = pag.chave_pix && String(pag.chave_pix).trim() !== "";
+        const temIpef = pag.cnpjipef && String(pag.cnpjipef).trim() !== "";
+
+        if (temBanco && !temAgencia) {
+          throw new Error("Como o Banco foi informado, a Agência também deve ser preenchida na aba Pagamento.");
+        }
+
+        if (!temBanco) {
+          if (!temPix && !temIpef) {
+            throw new Error("Informe os dados do Banco/Agência, a Chave PIX ou o CNPJ da IPEF na aba Pagamento.");
+          }
+        }
+
+        // Validar parcelas se forma de pagamento for a prazo (1)
+        if (pag.forma_pagto === "1") {
+          const activeParcelas = (parcelas || []).filter((p: any) => !p.excluido);
+          if (activeParcelas.length === 0) {
+            throw new Error("Para Pagamento à Prazo, é obrigatório lançar pelo menos 1 parcela na aba Parcelas.");
+          }
+        }
       }
 
       // Coletar IDs de Cidades e Motoristas para buscas em lote na memória
@@ -181,6 +231,37 @@ export const mdfeEmissaoService = {
         empresa = { ...empresaRaw, cidade };
       }
 
+      // Determinar CEPs de Carregamento e Descarregamento se for Carga Lotação (1 origem e 1 destino único)
+      let cepCarrega = "";
+      let cepDescarrega = "";
+
+      const qOrigens = carrega.length;
+      const cidadesDesc = Array.from(new Set(documentos.map((d: any) => d.cidade_id)));
+      const qDestinos = cidadesDesc.length;
+
+      if (qOrigens === 1 && qDestinos === 1) {
+        const cidadeCarrega = carrega[0].cidade;
+        const cidadeDescarrega = documentos[0]?.cidade;
+
+        if (cidadeCarrega) {
+          const cep = await fetchCepForCity(cidadeCarrega.estado_id, cidadeCarrega.descricao);
+          if (cep) {
+            cepCarrega = cep;
+          } else {
+            throw new Error(`Não foi possível localizar o CEP automático para o município de carregamento: ${cidadeCarrega.descricao} (${cidadeCarrega.estado_id}). Verifique a conexão com a internet.`);
+          }
+        }
+
+        if (cidadeDescarrega) {
+          const cep = await fetchCepForCity(cidadeDescarrega.estado_id, cidadeDescarrega.descricao);
+          if (cep) {
+            cepDescarrega = cep;
+          } else {
+            throw new Error(`Não foi possível localizar o CEP automático para o município de descarregamento: ${cidadeDescarrega.descricao} (${cidadeDescarrega.estado_id}). Verifique a conexão com a internet.`);
+          }
+        }
+      }
+
       const params = {
         manifesto,
         empresa,
@@ -194,7 +275,9 @@ export const mdfeEmissaoService = {
         componentes: componentes || [],
         parcelas: parcelas || [],
         fConfig,
-        transportador: transportadorRaw
+        transportador: transportadorRaw,
+        cepCarrega,
+        cepDescarrega
       };
 
       // 2. Gerar INI

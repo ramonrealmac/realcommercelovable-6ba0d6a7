@@ -129,11 +129,12 @@ const MdfVeiculosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
         .maybeSingle();
 
       if (cadastro) {
+        const cleanRntrc = cadastro.rntrc ? String(cadastro.rntrc).replace(/\D/g, "").substring(0, 8) : null;
         await supabase
           .from("fiscal_mdf_manifesto")
           .update({ 
             transp_cnpj_cpf: cadastro.cnpj || null,
-            rntrc: cadastro.rntrc || null
+            rntrc: cleanRntrc
           })
           .eq("mdf_manifesto_id", mdfManifestoId);
       }
