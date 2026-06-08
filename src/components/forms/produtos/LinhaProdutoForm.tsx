@@ -6,12 +6,13 @@ import { IGridColumn } from "@/components/grid/DataGrid";
 
 interface ILinhaProduto {
   linha_id: number;
+  cd_linha?: number | null;
   nome: string;
   empresa_id: number;
 }
 
 const XGridCols: IGridColumn[] = [
-  { key: "linha_id", label: "Código", width: "80px", align: "right" },
+  { key: "cd_linha", label: "Código", width: "80px", align: "right" },
   { key: "nome", label: "Nome", width: "1fr" },
 ];
 
@@ -24,7 +25,8 @@ const LinhaProdutoForm: React.FC = () => {
     XTableName: "linha_produto",
     XPrimaryKey: "linha_id",
     XTitle: "Linhas de Produtos",
-    XOrderBy: "linha_id",
+    XOrderBy: "cd_linha",
+    XSelectCols: "linha_id,cd_linha,nome,empresa_id",
     XEmpresaId: XEmpresaMatrizId,
     XDefaultRecord: { nome: "", empresa_id: XEmpresaMatrizId },
     XOnBeforeSave: (rec) => {
@@ -48,7 +50,7 @@ const LinhaProdutoForm: React.FC = () => {
           <div className="w-full md:w-32">
             <label className="block text-xs font-medium text-muted-foreground mb-1">Código</label>
             <input type="text" readOnly
-              value={mode === "insert" ? "(Novo)" : currentRecord?.linha_id ?? ""}
+              value={mode === "insert" ? "(Novo)" : record.cd_linha ?? ""}
               className="w-full border border-border rounded px-3 py-1.5 text-sm bg-secondary text-right" />
           </div>
           <div className="flex-1">

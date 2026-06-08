@@ -42,7 +42,7 @@ const fmtInput4 = (v: any) => {
 
 /* ─── Search columns ─── */
 const XLocalizarColumns: IGridColumn[] = [
-  { key: "produto_id", label: "Código", width: "80px", align: "right" },
+  { key: "cd_produto", label: "Código", width: "80px", align: "right" },
   { key: "nome", label: "Descrição", width: "2fr" },
   { key: "grupo_nome", label: "Grupo", width: "1fr" },
   { key: "subgrupo_nome", label: "Subgrupo", width: "1fr" },
@@ -220,15 +220,15 @@ const ProdutoForm: React.FC = () => {
         .eq("excluido", false);
 
       if (filters && Object.keys(filters).length > 0) {
-        const filterProductId = filters["produto_id"];
+        const filterCdProduto = filters["cd_produto"];
         const filterNome = filters["nome"];
         const filterNomeReduzido = filters["nome_reduzido"];
         const filterGtin = filters["gtin"];
 
-        if (filterProductId && filterProductId.trim()) {
-          const num = Number(filterProductId.trim());
+        if (filterCdProduto && filterCdProduto.trim()) {
+          const num = Number(filterCdProduto.trim());
           if (!isNaN(num)) {
-            query = query.eq("produto_id", num);
+            query = query.eq("cd_produto", num);
           }
         }
         if (filterNome && filterNome.trim()) {
@@ -243,7 +243,7 @@ const ProdutoForm: React.FC = () => {
         
         query = query.order("nome").limit(pesquisaProdLimite);
       } else {
-        query = query.order("produto_id", { ascending: false }).limit(1000);
+        query = query.order("cd_produto", { ascending: false }).limit(1000);
       }
 
       const { data: XRows, error } = await query;
@@ -336,7 +336,7 @@ const ProdutoForm: React.FC = () => {
 
     const hasSearch = Object.entries(XSearchFilters).some(([key, val]) => {
       if (!val || !val.trim()) return false;
-      if (["produto_id", "nome", "nome_reduzido", "gtin"].includes(key)) {
+      if (["cd_produto", "nome", "nome_reduzido", "gtin"].includes(key)) {
         return val.trim().length >= pesquisaProdMinLetras;
       }
       return false;
@@ -921,7 +921,7 @@ const ProdutoForm: React.FC = () => {
             <div className="grid grid-cols-1 md:flex md:gap-4 gap-3">
               <div className="w-full md:w-28">
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Código</label>
-                <input type="text" value={XFormMode === "insert" ? "(Novo)" : XCurrentRecord?.produto_id ?? ""} readOnly className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XBgRead} text-right`} />
+                <input type="text" value={XFormMode === "insert" ? "(Novo)" : XCurrentRecord?.cd_produto ?? ""} readOnly className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XBgRead} text-right`} />
               </div>
               <div className="w-full md:w-[13.5rem]">
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Emp. Matriz</label>

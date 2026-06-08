@@ -1,6 +1,7 @@
 export interface IPdvCaixa {
   funcionario_id: number;
   nome: string;
+  cd_funcionario?: number | null;
   tamanho_fonte_pedidos?: number;
   tamanho_fonte_produtos?: number;
   tamanho_fonte_totais?: number;

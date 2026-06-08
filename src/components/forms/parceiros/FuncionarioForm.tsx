@@ -14,6 +14,7 @@ type TFormMode = "view" | "edit" | "insert";
 
 interface IFuncionario {
   funcionario_id: number;
+  cd_funcionario: number;
   empresa_id: number | null;
   nome: string | null;
   usr_id: number | null;
@@ -37,7 +38,7 @@ interface IFuncionario {
 }
 
 const XLocalizarColumns: IGridColumn[] = [
-  { key: "funcionario_id", label: "Código", width: "80px", align: "right" },
+  { key: "cd_funcionario", label: "Código", width: "80px", align: "right" },
   { key: "nome", label: "Nome", width: "2fr" },
   { key: "vendedor", label: "Vend.", width: "60px", align: "center" },
   { key: "caixa", label: "Caixa", width: "60px", align: "center" },
@@ -139,7 +140,7 @@ const FuncionarioForm: React.FC = () => {
       .from("funcionario")
       .select("*")
       .eq("empresa_id", XEmpresaId)
-      .order("funcionario_id");
+      .order("cd_funcionario");
     setXData(XRows || []);
     setXLoading(false);
   }, [XEmpresaId]);
@@ -390,7 +391,7 @@ const FuncionarioForm: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
               <div className="md:col-span-2">
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Código</label>
-                <input type="text" value={XFormMode === "insert" ? "(Novo)" : XCurrentRecord?.funcionario_id ?? ""} readOnly className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XFieldBgRead} text-right`} />
+                <input type="text" value={XFormMode === "insert" ? "(Novo)" : XCurrentRecord?.cd_funcionario ?? ""} readOnly className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XFieldBgRead} text-right`} />
               </div>
               <div className="md:col-span-10">
                 {renderField("Nome do Funcionário", "nome", { required: true })}

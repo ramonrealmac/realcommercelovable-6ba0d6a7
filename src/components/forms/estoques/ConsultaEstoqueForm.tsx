@@ -19,6 +19,7 @@ const ConsultaEstoqueForm: React.FC = () => {
   const [XDtIni, setXDtIni] = useState(format(new Date(), 'yyyy-MM-01')); // Primeiro dia do mês corrente
   const [XDtFim, setXDtFim] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [XSelectedProdutoId, setXSelectedProdutoId] = useState<number | "">("");
+  const [XSelectedProdutoCd, setXSelectedProdutoCd] = useState<string>("");
   const [XSelectedProdutoNome, setXSelectedProdutoNome] = useState("");
   const [XSelectedDepositoId, setXSelectedDepositoId] = useState<number | "">("");
   const [XOpenProduto, setXOpenProduto] = useState(false);
@@ -47,7 +48,7 @@ const ConsultaEstoqueForm: React.FC = () => {
         .from("estoque_log")
         .select(`
           *,
-          produto:produto_id(nome),
+          produto:produto_id(nome, cd_produto),
           deposito:deposito_id(nome)
         `)
         .eq("empresa_id", XEmpresaId)
@@ -91,8 +92,8 @@ const ConsultaEstoqueForm: React.FC = () => {
       key: "produto", 
       label: "Cód. Prod.", 
       width: "100px",
-      render: (r: any) => r.produto_id,
-      getValue: (r: any) => r.produto_id
+      render: (r: any) => r.produto?.cd_produto || r.produto_id,
+      getValue: (r: any) => r.produto?.cd_produto || r.produto_id
     },
     { 
       key: "deposito", 
@@ -197,7 +198,7 @@ const ConsultaEstoqueForm: React.FC = () => {
                 className="bg-card border border-border rounded-md px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-primary/20 w-64 cursor-pointer flex justify-between items-center"
               >
                 <span className={XSelectedProdutoId ? "text-foreground" : "text-muted-foreground"}>
-                  {XSelectedProdutoId ? `${XSelectedProdutoId} - ${XSelectedProdutoNome}` : "Todos os Produtos"}
+                  {XSelectedProdutoId ? `${XSelectedProdutoCd || XSelectedProdutoId} - ${XSelectedProdutoNome}` : "Todos os Produtos"}
                 </span>
                 {XSelectedProdutoId && (
                   <X 
@@ -205,6 +206,7 @@ const ConsultaEstoqueForm: React.FC = () => {
                     onClick={(e) => {
                       e.stopPropagation();
                       setXSelectedProdutoId("");
+                      setXSelectedProdutoCd("");
                       setXSelectedProdutoNome("");
                     }}
                   />
@@ -272,6 +274,7 @@ const ConsultaEstoqueForm: React.FC = () => {
         onClose={() => setXOpenProduto(false)}
         onSelect={(p: IProdutoRow) => {
           setXSelectedProdutoId(p.produto_id);
+          setXSelectedProdutoCd(p.cd_produto ? String(p.cd_produto) : String(p.produto_id));
           setXSelectedProdutoNome(p.nome);
         }}
       />

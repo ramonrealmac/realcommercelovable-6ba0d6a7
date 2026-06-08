@@ -6508,10 +6508,10 @@ export type Database = {
           },
           {
             foreignKeyName: "fk_produto_unidade"
-            columns: ["unidade_id"]
+            columns: ["unidade_id", "empresa_id"]
             isOneToOne: false
             referencedRelation: "unidade"
-            referencedColumns: ["unidade_id"]
+            referencedColumns: ["unidade_id", "empresa_id"]
           },
         ]
       }

@@ -22,6 +22,7 @@ type TFormMode = "view" | "edit" | "insert";
 
 interface ICadastro {
   cadastro_id: number;
+  cd_cadastro: number;
   empresa_id: number;
   cnpj: string;
   inscricao_estadual: string;
@@ -95,7 +96,7 @@ export interface ICadastroFormConfig {
 }
 
 const XLocalizarColumns: IGridColumn[] = [
-  { key: "cadastro_id", label: "Código", width: "80px", align: "right" },
+  { key: "cd_cadastro", label: "Código", width: "80px", align: "right" },
   { key: "razao_social", label: "Razão Social", width: "2fr" },
   { key: "nome_fantasia", label: "Fantasia", width: "1fr" },
   { key: "cnpj", label: "CPF/CNPJ", width: "140px", render: (r) => r.cnpj ? formatCPFCNPJ(r.cnpj) : "" },
@@ -192,7 +193,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
 
     let XQuery = db
       .from("cadastro")
-      .select("cadastro_id, razao_social")
+      .select("cadastro_id, cd_cadastro, razao_social")
       .eq("empresa_id", XEmpresaMatrizId)
       .eq("cnpj", XDigits)
       .eq("excluido", false);
@@ -206,7 +207,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
 
     if (XExisting && XExisting.length > 0) {
       const XWantView = confirm(
-        `Já existe um cadastro com este documento:\n"${XExisting[0].razao_social}" (Cód. ${XExisting[0].cadastro_id})\n\nDeseja visualizar o cadastro existente?`
+        `Já existe um cadastro com este documento:\n"${XExisting[0].razao_social}" (Cód. ${XExisting[0].cd_cadastro ?? XExisting[0].cadastro_id})\n\nDeseja visualizar o cadastro existente?`
       );
       if (XWantView) {
         const XIdx = XData.findIndex(r => r.cadastro_id === XExisting[0].cadastro_id);
@@ -606,7 +607,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
     if (XCpfCnpj) {
       let XDupQuery = db
         .from("cadastro")
-        .select("cadastro_id, razao_social")
+        .select("cadastro_id, cd_cadastro, razao_social")
         .eq("empresa_id", XEmpresaMatrizId)
         .eq("cnpj", XCpfCnpj)
         .eq("excluido", false);
@@ -615,7 +616,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
       }
       const { data: XDup } = await XDupQuery.limit(1);
       if (XDup && XDup.length > 0) {
-        toast.error(`CPF/CNPJ já cadastrado para "${XDup[0].razao_social}" (Cód. ${XDup[0].cadastro_id}). Não é permitido duplicidade.`);
+        toast.error(`CPF/CNPJ já cadastrado para "${XDup[0].razao_social}" (Cód. ${XDup[0].cd_cadastro ?? XDup[0].cadastro_id}). Não é permitido duplicidade.`);
         return;
       }
     }
@@ -982,7 +983,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Código</label>
                 <input
                   type="text"
-                  value={XFormMode === "insert" ? "(Novo)" : XCurrentRecord?.cadastro_id ?? ""}
+                  value={XFormMode === "insert" ? "(Novo)" : XCurrentRecord?.cd_cadastro ?? ""}
                   readOnly
                   className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XFieldBgRead} text-right`}
                 />

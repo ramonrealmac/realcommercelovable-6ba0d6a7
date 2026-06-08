@@ -36,7 +36,7 @@ const SelecionarCaixaDialog: React.FC<IProps> = ({ onEntrar, onCancelar }) => {
     setXLoadingCaixas(true);
     const { data: funcs, error: funcError } = await db.from("funcionario")
       .select(`
-        funcionario_id, nome, tamanho_fonte_pedidos, tamanho_fonte_produtos, tempo_refresh_pdv, 
+        funcionario_id, cd_funcionario, nome, tamanho_fonte_pedidos, tamanho_fonte_produtos, tempo_refresh_pdv, 
         caixa_inf_vend, caixa_cnc_venda, caixa_edit_venda,
         nfe_config_item, nfce_config_item
       `)
@@ -138,7 +138,9 @@ const SelecionarCaixaDialog: React.FC<IProps> = ({ onEntrar, onCancelar }) => {
           >
             <option value={0}>{XLoadingCaixas ? "Carregando..." : "-- Selecione --"}</option>
             {XCaixas.map(c => (
-              <option key={c.funcionario_id} value={c.funcionario_id}>{c.nome}</option>
+              <option key={c.funcionario_id} value={c.funcionario_id}>
+                {c.cd_funcionario ?? c.funcionario_id} - {c.nome}
+              </option>
             ))}
           </select>
           {!XLoadingCaixas && XCaixas.length === 0 && (

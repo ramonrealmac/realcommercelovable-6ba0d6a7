@@ -20,6 +20,7 @@ const hoje = () => new Date().toISOString().slice(0, 10);
 
 interface ICaixaFunc {
   funcionario_id: number;
+  cd_funcionario: number;
   nome: string;
 }
 
@@ -59,7 +60,7 @@ const AberturaCaixaForm: React.FC<IProps> = ({
     setXLoadingCaixas(true);
     const { data, error } = await db
       .from("funcionario")
-      .select("funcionario_id, nome")
+      .select("funcionario_id, cd_funcionario, nome")
       .eq("empresa_id", XEmpresaId)
       .eq("caixa", "S")
       .order("nome");
@@ -200,7 +201,7 @@ const AberturaCaixaForm: React.FC<IProps> = ({
             <option value={0}>{XLoadingCaixas ? "Carregando..." : "-- Selecione --"}</option>
             {XCaixas.map((c) => (
               <option key={c.funcionario_id} value={c.funcionario_id}>
-                {c.nome}
+                {c.cd_funcionario ?? c.funcionario_id} - {c.nome}
               </option>
             ))}
           </select>

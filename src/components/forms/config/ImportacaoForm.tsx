@@ -163,7 +163,7 @@ const TABLE_DEFINITIONS: TableDefinition[] = [
     primaryKey: "produto_id",
     description: "Cadastro de mercadorias e insumos para venda e estoque.",
     columns: [
-      { name: "cd_produto", label: "Código do Produto (cd_produto)", type: "string", required: true, description: "Código de identificação único do produto por empresa." },
+      { name: "cd_produto", label: "Código do Produto (cd_produto)", type: "string", required: false, description: "Código de identificação único do produto por empresa." },
       { name: "nome", label: "Nome do Produto", type: "string", required: true, description: "Nome comercial do produto." },
       { name: "nome_reduzido", label: "Nome Reduzido", type: "string", required: false, description: "Nome abreviado." },
       { name: "referencia", label: "Referência", type: "string", required: false, description: "Código de referência interna." },
@@ -194,7 +194,7 @@ const TABLE_DEFINITIONS: TableDefinition[] = [
     primaryKey: "produto_grupo_id",
     description: "Estrutura principal de categorização de produtos.",
     columns: [
-      { name: "cd_produto_grupo", label: "Código do Grupo (cd_produto_grupo)", type: "string", required: true, description: "Código de identificação único do grupo por empresa." },
+      { name: "cd_produto_grupo", label: "Código do Grupo (cd_produto_grupo)", type: "string", required: false, description: "Código de identificação único do grupo por empresa." },
       { name: "nome", label: "Nome do Grupo", type: "string", required: true, description: "Título descritivo do grupo." }
     ]
   },
@@ -205,7 +205,7 @@ const TABLE_DEFINITIONS: TableDefinition[] = [
     primaryKey: "produto_subgrupo_id",
     description: "Subdivisões ligadas a um grupo específico.",
     columns: [
-      { name: "cd_produto_subgrupo", label: "Código do Subgrupo (cd_produto_subgrupo)", type: "string", required: true, description: "Código de identificação único do subgrupo por empresa." },
+      { name: "cd_produto_subgrupo", label: "Código do Subgrupo (cd_produto_subgrupo)", type: "string", required: false, description: "Código de identificação único do subgrupo por empresa." },
       { name: "nome", label: "Nome do Subgrupo", type: "string", required: true, description: "Título do subgrupo." },
       { name: "produto_grupo_id", label: "ID do Grupo de Produtos", type: "number", required: true, description: "ID do grupo pai associado." }
     ]
@@ -217,7 +217,7 @@ const TABLE_DEFINITIONS: TableDefinition[] = [
     primaryKey: "linha_id",
     description: "Classificações adicionais como marcas ou coleções.",
     columns: [
-      { name: "cd_linha", label: "Código da Linha (cd_linha)", type: "string", required: true, description: "Código de identificação único da linha por empresa." },
+      { name: "cd_linha", label: "Código da Linha (cd_linha)", type: "string", required: false, description: "Código de identificação único da linha por empresa." },
       { name: "nome", label: "Nome da Linha", type: "string", required: true, description: "Título da linha." }
     ]
   },
@@ -240,7 +240,7 @@ const TABLE_DEFINITIONS: TableDefinition[] = [
     description: "Cadastro geral de parceiros de negócios (Clientes, Fornecedores, etc).",
     defaultValues: { st_cliente: "S", st_fornecedor: "N", st_transportador: "N" },
     columns: [
-      { name: "cd_cadastro", label: "Código do Cadastro (cd_cadastro)", type: "string", required: true, description: "Código de identificação único do cadastro por empresa." },
+      { name: "cd_cadastro", label: "Código do Cadastro (cd_cadastro)", type: "string", required: false, description: "Código de identificação único do cadastro por empresa." },
       { name: "razao_social", label: "Razão Social / Nome Completo", type: "string", required: true, description: "Nome científico ou civil completo." },
       { name: "nome_fantasia", label: "Nome Fantasia", type: "string", required: false, description: "Nome fantasia / apelido." },
       { name: "cnpj", label: "CNPJ / CPF", type: "string", required: false, description: "Documento nacional de identificação." },
@@ -264,7 +264,7 @@ const TABLE_DEFINITIONS: TableDefinition[] = [
     description: "Cadastro de fornecedores de insumos ou mercadorias.",
     defaultValues: { st_cliente: "N", st_fornecedor: "S", st_transportador: "N" },
     columns: [
-      { name: "cd_cadastro", label: "Código do Cadastro (cd_cadastro)", type: "string", required: true, description: "Código de identificação único do cadastro por empresa." },
+      { name: "cd_cadastro", label: "Código do Cadastro (cd_cadastro)", type: "string", required: false, description: "Código de identificação único do cadastro por empresa." },
       { name: "razao_social", label: "Razão Social / Nome", type: "string", required: true, description: "Nome jurídico ou civil completo." },
       { name: "nome_fantasia", label: "Nome Fantasia", type: "string", required: false, description: "Nome fantasia." },
       { name: "cnpj", label: "CNPJ / CPF", type: "string", required: false, description: "Documento de identificação." },
@@ -280,7 +280,7 @@ const TABLE_DEFINITIONS: TableDefinition[] = [
     description: "Cadastro de transportadores credenciados.",
     defaultValues: { st_cliente: "N", st_fornecedor: "N", st_transportador: "S" },
     columns: [
-      { name: "cd_cadastro", label: "Código do Cadastro (cd_cadastro)", type: "string", required: true, description: "Código de identificação único do cadastro por empresa." },
+      { name: "cd_cadastro", label: "Código do Cadastro (cd_cadastro)", type: "string", required: false, description: "Código de identificação único do cadastro por empresa." },
       { name: "razao_social", label: "Razão Social", type: "string", required: true, description: "Nome da transportadora." },
       { name: "nome_fantasia", label: "Nome Fantasia", type: "string", required: false, description: "Nome comercial." },
       { name: "cnpj", label: "CNPJ", type: "string", required: false, description: "CNPJ da transportadora." },
@@ -297,7 +297,8 @@ const TABLE_DEFINITIONS: TableDefinition[] = [
     columns: [
       { name: "cd_cadastro_veiculo", label: "Código do Veículo (cd_cadastro_veiculo)", type: "string", required: true, description: "Código de identificação único do veículo por empresa." },
       { name: "placa", label: "Placa", type: "string", required: true, description: "Placa única do veículo (ex: ABC1234)." },
-      { name: "cadastro_id", label: "ID do Proprietário", type: "number", required: true, description: "ID de cadastro associado (proprietário/motorista)." },
+      { name: "cadastro_id", label: "ID do Proprietário", type: "number", required: false, description: "ID de cadastro associado (proprietário/motorista)." },
+      { name: "cd_cadastro", label: "Código do Proprietário (cd_cadastro)", type: "string", required: false, description: "Código do proprietário para buscar o ID correspondente." },
       { name: "marca", label: "Marca", type: "string", required: false, description: "Fabricante do veículo (ex: Volvo, Ford)." },
       { name: "modelo", label: "Modelo", type: "string", required: false, description: "Modelo específico." },
       { name: "uf", label: "UF da Placa", type: "string", required: false, description: "Estado da licença do veículo (ex: SP, RJ)." },
@@ -311,7 +312,7 @@ const TABLE_DEFINITIONS: TableDefinition[] = [
     primaryKey: "cadastro_grupo_id",
     description: "Grupos e classificações de clientes e fornecedores (Parceiros de negócios).",
     columns: [
-      { name: "cd_cadastro_grupo", label: "Código do Grupo (cd_cadastro_grupo)", type: "number", required: true, description: "Código de identificação numérico exclusivo do grupo por empresa." },
+      { name: "cd_cadastro_grupo", label: "Código do Grupo (cd_cadastro_grupo)", type: "number", required: false, description: "Código de identificação numérico exclusivo do grupo por empresa." },
       { name: "nome", label: "Nome do Grupo", type: "string", required: true, description: "Nome comercial ou descrição do grupo." }
     ]
   },
@@ -325,6 +326,7 @@ const TABLE_DEFINITIONS: TableDefinition[] = [
       { name: "tp_movimento", label: "Tipo do Movimento (E/S)", type: "string", required: false, description: "'E' para Entradas ou 'S' para Saídas." },
       { name: "nr_movimento", label: "Número do Movimento", type: "number", required: false, description: "Número sequencial ou fiscal." },
       { name: "cadastro_id", label: "ID do Parceiro", type: "number", required: false, description: "ID do cliente ou fornecedor associado." },
+      { name: "cd_cadastro", label: "Código do Parceiro (cd_cadastro)", type: "string", required: false, description: "Código do parceiro para buscar o ID correspondente." },
       { name: "dt_emissao", label: "Data de Emissão", type: "string", required: false, description: "Data de emissão (AAAA-MM-DD)." },
       { name: "vl_movimento", label: "Valor Total", type: "number", required: false, description: "Valor monetário total do movimento." },
       { name: "status", label: "Status", type: "string", required: false, description: "Situação do movimento (ex: ABERTO, FATURADO)." },
@@ -358,6 +360,7 @@ const TABLE_DEFINITIONS: TableDefinition[] = [
       { name: "dt_emissao", label: "Data de Emissão", type: "string", required: false, description: "Data do lançamento (AAAA-MM-DD)." },
       { name: "dt_vencto", label: "Data de Vencimento", type: "string", required: false, description: "Data limite de liquidação." },
       { name: "cadastro_id", label: "ID do Parceiro", type: "number", required: false, description: "Código do cliente/fornecedor vinculado." },
+      { name: "cd_cadastro", label: "Código do Parceiro (cd_cadastro)", type: "string", required: false, description: "Código do parceiro para buscar o ID correspondente." },
       { name: "observacao1", label: "Observações", type: "string", required: false, description: "Comentários adicionais." }
     ]
   },
@@ -874,6 +877,51 @@ const ImportacaoForm: React.FC = () => {
     const groupMap: Record<string, number> = {};
     const subgrupoMap: Record<string, number> = {};
     const linhaMap: Record<string, number> = {};
+    const cadastroMap: Record<string, number> = {};
+
+    if (["movimento", "financeiro", "cadastro_veiculo"].includes(selectedTableId)) {
+      const lookupCompanyId = matrizCompanyId;
+
+      const extractCodes = (colName: string): string[] => {
+        const mapping = mappings[colName];
+        if (!mapping) return [];
+        const codesSet = new Set<string>();
+        if (mapping.type === "static" && mapping.staticValue) {
+          codesSet.add(mapping.staticValue.trim());
+        } else if (mapping.type === "file" && mapping.fileIndex !== undefined) {
+          parsedRows.forEach(row => {
+            const val = row[mapping.fileIndex!];
+            if (val && val.trim()) {
+              codesSet.add(val.trim());
+            }
+          });
+        }
+        return Array.from(codesSet);
+      };
+
+      const cadastroCodes = extractCodes("cd_cadastro");
+
+      if (cadastroCodes.length > 0) {
+        try {
+          const { data, error } = await supabase
+            .from("cadastro")
+            .select("cadastro_id, cd_cadastro")
+            .eq("empresa_id", lookupCompanyId)
+            .in("cd_cadastro", cadastroCodes);
+          if (error) {
+            console.error("Erro ao buscar cadastro:", error);
+          } else if (data) {
+            (data as Array<{ cd_cadastro: string | number | null; cadastro_id: number }>).forEach((row) => {
+              if (row.cd_cadastro) {
+                cadastroMap[String(row.cd_cadastro).trim()] = row.cadastro_id;
+              }
+            });
+          }
+        } catch (e) {
+          console.error("Erro ao pré-carregar mapeamento de cadastro_id:", e);
+        }
+      }
+    }
 
     if (selectedTableId === "produto") {
       const lookupCompanyId = matrizCompanyId;
@@ -1282,6 +1330,15 @@ const ImportacaoForm: React.FC = () => {
         delete record.cd_produto_grupo;
         delete record.cd_produto_subgrupo;
         delete record.cd_linha;
+      }
+
+      if (["movimento", "financeiro", "cadastro_veiculo"].includes(selectedTableId)) {
+        const cdCadastro = record.cd_cadastro ? String(record.cd_cadastro).trim() : "";
+        if (cdCadastro) {
+          record.cadastro_id = cadastroMap[cdCadastro] !== undefined ? cadastroMap[cdCadastro] : null;
+        }
+        // Exclude temporary code column from insert payload
+        delete record.cd_cadastro;
       }
 
       return { record, rowIndex: rowIndex + 2 };

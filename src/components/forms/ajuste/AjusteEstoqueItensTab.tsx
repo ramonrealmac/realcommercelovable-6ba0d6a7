@@ -173,7 +173,7 @@ export default function AjusteEstoqueItensTab({ pedido, podeEditar, onItemsChang
     setXEdit(prev => ({
       ...(prev || {}),
       produto_id: p.produto_id,
-      cd_produto: String(p.produto_id),
+      cd_produto: String(p.cd_produto ?? p.produto_id),
       nm_produto: p.nome,
       unidade_id: p.unidade_id,
       vl_und_produto: 0,
@@ -183,7 +183,7 @@ export default function AjusteEstoqueItensTab({ pedido, podeEditar, onItemsChang
       ...(deposito_id ? { deposito_id } : {}),
     }));
     setXEditEstoque({ disp: p.estoque_disponivel, res: p.estoque_reservado });
-    setXCodigo(String(p.produto_id));
+    setXCodigo(String(p.cd_produto ?? p.produto_id));
     carregarEstoquePorDeposito(p.produto_id);
     
     // Foco imediato na quantidade

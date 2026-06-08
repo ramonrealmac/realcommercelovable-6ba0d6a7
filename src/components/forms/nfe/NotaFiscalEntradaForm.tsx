@@ -17,7 +17,7 @@ import { setPendingSupplier } from "@/utils/nfePendingStore";
 
 const db = supabase as any;
 
-interface IFornecedorInfo { id: number; cnpj: string; razao: string; }
+interface IFornecedorInfo { id: number; cnpj: string; razao: string; cd_cadastro?: number | null; }
 
 const XGridCols: IGridColumn[] = [
   { key: "nfe_cabecalho_id", label: "Nº", width: "70px", align: "right" },
@@ -126,13 +126,13 @@ const NotaFiscalEntradaForm: React.FC = () => {
     const faltando = ids.filter(id => id && !XFornCacheRef.current[id]);
     if (!faltando.length) return;
     const { data } = await db.from("cadastro")
-      .select("cadastro_id,cnpj,razao_social")
+      .select("cadastro_id,cd_cadastro,cnpj,razao_social")
       .in("cadastro_id", faltando);
     if (data) {
       setXFornCache(prev => {
         const next = { ...prev };
         for (const c of data as any[]) {
-          next[c.cadastro_id] = { id: c.cadastro_id, cnpj: c.cnpj || "", razao: c.razao_social || "" };
+          next[c.cadastro_id] = { id: c.cadastro_id, cd_cadastro: c.cd_cadastro, cnpj: c.cnpj || "", razao: c.razao_social || "" };
         }
         return next;
       });
@@ -324,7 +324,11 @@ const NotaFiscalEntradaForm: React.FC = () => {
 
 
   const gridCols = useMemo(() => XGridCols.map(c =>
-    c.key === "_forn" ? { ...c, getValue: (r: any) => XFornCache[r.cadastro_id]?.razao || "" } : c
+    c.key === "_forn" ? { 
+      ...c, 
+      getValue: (r: any) => XFornCache[r.cadastro_id]?.razao || "",
+      render: (r: any) => r._forn_razao || (r.cadastro_id ? (XFornCache[r.cadastro_id]?.razao || `#${XFornCache[r.cadastro_id]?.cd_cadastro ?? r.cadastro_id}`) : "")
+    } : c
   ), [XFornCache]);
 
   const fmt2 = (v: number) => Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
@@ -561,7 +565,7 @@ const NotaFiscalEntradaForm: React.FC = () => {
                   <div className="flex gap-1">
                     <input
                       readOnly
-                      value={record.cadastro_id ? (XFornCache[record.cadastro_id]?.razao || `#${record.cadastro_id}`) : ""}
+                      value={record.cadastro_id ? (XFornCache[record.cadastro_id]?.razao || `#${XFornCache[record.cadastro_id]?.cd_cadastro ?? record.cadastro_id}`) : ""}
                       placeholder="Selecione o fornecedor..."
                       className="flex-1 border border-border rounded px-2 py-1 text-sm bg-secondary"
                     />
@@ -572,22 +576,27 @@ const NotaFiscalEntradaForm: React.FC = () => {
                           const val = prompt("Digite o CNPJ ou parte da Razão Social:");
                           if (!val) return;
                           const digits = val.replace(/\D/g, "");
-                          let q = db.from("cadastro").select("cadastro_id,cnpj,razao_social")
+                          let q = db.from("cadastro").select("cadastro_id,cd_cadastro,cnpj,razao_social")
                             .eq("empresa_id", XEmpresaMatrizId).eq("excluido", false)
                             .eq("st_fornecedor", "S");
-                          if (digits.length >= 8) q = q.ilike("cnpj", `%${digits}%`);
-                          else q = q.ilike("razao_social", `%${val}%`);
+                          if (/^\d+$/.test(val) && val.length < 8) {
+                            q = q.eq("cd_cadastro", parseInt(val));
+                          } else if (digits.length >= 8) {
+                            q = q.ilike("cnpj", `%${digits}%`);
+                          } else {
+                            q = q.ilike("razao_social", `%${val}%`);
+                          }
                           const { data } = await q.limit(10);
                           if (!data?.length) { toast.warning("Nenhum fornecedor encontrado."); return; }
-                          const opcoes = data.map((c: any) => `${c.cadastro_id} — ${formatCPFCNPJ(c.cnpj)} — ${c.razao_social}`).join("\n");
+                          const opcoes = data.map((c: any) => `${c.cd_cadastro ?? c.cadastro_id} — ${formatCPFCNPJ(c.cnpj)} — ${c.razao_social}`).join("\n");
                           const escolha = prompt(`Escolha (informe o código):\n${opcoes}`);
                           if (!escolha) return;
                           const id = parseInt(escolha);
                           if (!id) return;
-                          const found = data.find((c: any) => c.cadastro_id === id);
+                          const found = data.find((c: any) => c.cd_cadastro === id || c.cadastro_id === id);
                           if (found) {
-                            setXFornCache(prev => ({ ...prev, [id]: { id, cnpj: found.cnpj, razao: found.razao_social } }));
-                            setField("cadastro_id" as any, id);
+                            setXFornCache(prev => ({ ...prev, [found.cadastro_id]: { id: found.cadastro_id, cd_cadastro: found.cd_cadastro, cnpj: found.cnpj, razao: found.razao_social } }));
+                            setField("cadastro_id" as any, found.cadastro_id);
                           }
                         }}
                         className="px-2 py-1 border border-border rounded bg-card hover:bg-accent"

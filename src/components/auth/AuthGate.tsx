@@ -97,21 +97,35 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
   };
 
   const checkUserAuthorized = async (userId: string): Promise<boolean> => {
-    // Timeout de segurança de 4 segundos para a consulta do banco
+    // Timeout de segurança de 6 segundos para a consulta do banco (aumentado para comportar retentativa)
     const timeoutPromise = new Promise<boolean>((resolve) =>
       setTimeout(() => {
-        console.warn("[AuthGate] A consulta de autorização excedeu o limite de 4s. Fallback para não autorizado.");
+        console.warn("[AuthGate] A consulta de autorização excedeu o limite de 6s. Fallback para não autorizado.");
         resolve(false);
-      }, 4000)
+      }, 6000)
     );
 
     const queryPromise = (async () => {
       try {
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from("profiles")
           .select("fl_autorizado")
           .eq("id", userId)
           .single();
+        
+        // Se falhar (por exemplo, race condition onde o cabeçalho de autenticação do token do cliente ainda está sendo configurado)
+        if (error) {
+          console.warn("[AuthGate] Falha na primeira tentativa de verificar autorização, tentando novamente em 500ms...", error.message);
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          const retry = await supabase
+            .from("profiles")
+            .select("fl_autorizado")
+            .eq("id", userId)
+            .single();
+          data = retry.data;
+          error = retry.error;
+        }
+
         if (error) {
           console.error("Erro ao verificar autorização:", error);
           return false;
