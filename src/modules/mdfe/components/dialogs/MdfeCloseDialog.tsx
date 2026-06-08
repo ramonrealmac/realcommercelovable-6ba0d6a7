@@ -11,23 +11,80 @@ interface IProps {
   onConfirm: (params: { uf: string; cidade_cod: string; dt: string }) => void;
   loading: boolean;
   empresaId: number;
+  mdfManifestoId: number | null;
 }
 
-const MdfeCloseDialog: React.FC<IProps> = ({ isOpen, onClose, onConfirm, loading, empresaId }) => {
+const MdfeCloseDialog: React.FC<IProps> = ({ isOpen, onClose, onConfirm, loading, empresaId, mdfManifestoId }) => {
   const [uf, setUf] = useState("SP");
   const [cidadeCod, setCidadeCod] = useState("");
   const [dt, setDt] = useState(new Date().toISOString().substring(0, 10));
 
   useEffect(() => {
     if (isOpen) {
-      // Tentar buscar UF da empresa como padrão
-      const fetchEmpresa = async () => {
-        const { data } = await supabase.from("empresa").select("endereco_uf").eq("empresa_id", empresaId).single();
-        if (data?.endereco_uf) setUf(data.endereco_uf);
+      const fetchDischargeAndDefault = async () => {
+        let defaultUf = "SP";
+        let defaultIbge = "";
+
+        // 1. Tentar buscar UF da empresa como padrão/fallback
+        try {
+          const { data: empData } = await supabase
+            .from("empresa")
+            .select("endereco_uf")
+            .eq("empresa_id", empresaId)
+            .maybeSingle();
+          if (empData?.endereco_uf) {
+            defaultUf = empData.endereco_uf;
+          }
+        } catch (err) {
+          console.error("Erro ao obter UF da empresa:", err);
+        }
+
+        // 2. Se temos o manifesto ID, buscar a cidade de descarregamento
+        if (mdfManifestoId) {
+          try {
+            const { data: descarregaData } = await supabase
+              .from("fiscal_mdf_descarrega")
+              .select("cidade_id")
+              .eq("mdf_manifesto_id", mdfManifestoId)
+              .or("excluido.is.null,excluido.eq.false")
+              .order("mdf_descarrega_id")
+              .limit(1)
+              .maybeSingle();
+
+            if (descarregaData?.cidade_id) {
+              const { data: cidadeData } = await supabase
+                .from("cidade")
+                .select("estado_id, cd_ibge")
+                .eq("cidade_id", descarregaData.cidade_id)
+                .maybeSingle();
+
+              if (cidadeData) {
+                if (cidadeData.estado_id) defaultUf = cidadeData.estado_id;
+                if (cidadeData.cd_ibge) defaultIbge = cidadeData.cd_ibge;
+              }
+            } else {
+              // Se não achou na descarrega, tenta uffim do manifesto
+              const { data: manifestoData } = await supabase
+                .from("fiscal_mdf_manifesto")
+                .select("uffim")
+                .eq("mdf_manifesto_id", mdfManifestoId)
+                .maybeSingle();
+              if (manifestoData?.uffim) {
+                defaultUf = manifestoData.uffim;
+              }
+            }
+          } catch (err) {
+            console.error("Erro ao buscar dados do descarregamento:", err);
+          }
+        }
+
+        setUf(defaultUf);
+        setCidadeCod(defaultIbge);
       };
-      fetchEmpresa();
+
+      fetchDischargeAndDefault();
     }
-  }, [isOpen, empresaId]);
+  }, [isOpen, empresaId, mdfManifestoId]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>

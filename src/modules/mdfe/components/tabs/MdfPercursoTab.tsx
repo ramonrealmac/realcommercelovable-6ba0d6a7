@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Trash2, Plus, Search } from "lucide-react";
 import CidadeSearchDialog, { ICidadeRow } from "@/components/shared/CidadeSearchDialog";
+import { areUFsNeighbors } from "../../services/ufBorders";
 
 const UF_LIST = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
 
@@ -224,6 +225,10 @@ const MdfPercursoTab: React.FC<IProps> = ({
       toast.warning("Salve os dados gerais do MDF-e primeiro.");
       return;
     }
+    if (record.ufini && record.uffim && areUFsNeighbors(record.ufini, record.uffim)) {
+      toast.warning("Não é permitido adicionar UF de percurso para UFs iguais ou que fazem divisa.");
+      return;
+    }
     if (percursoRows.some(r => r.uf === percursoUf)) {
       toast.warning("Esta UF já foi adicionada ao percurso.");
       return;
@@ -258,6 +263,7 @@ const MdfPercursoTab: React.FC<IProps> = ({
   };
 
   const ro = !isEditing;
+  const naoExigePercurso = !!(record.ufini && record.uffim && areUFsNeighbors(record.ufini, record.uffim));
 
   return (
     <div className="space-y-6">
@@ -286,12 +292,12 @@ const MdfPercursoTab: React.FC<IProps> = ({
           <div className="flex-1 flex flex-col space-y-2">
             <div className="flex justify-between items-center">
               <label className="text-xs font-semibold text-muted-foreground">Municípios de Carregamento</label>
-              {podeEditar && (
+              {podeEditar && record.ufini && (
                 <button
                   onClick={() => handleOpenSearch("carrega")}
                   className="flex items-center gap-1 px-2 py-1 rounded bg-secondary hover:bg-secondary/80 text-secondary-foreground text-xs font-medium transition-colors"
                 >
-                  <Search className="w-3.5 h-3.5" /> Pesquisar
+                  <Search className="w-3.5 h-3.5" /> Pesquisa Municipio
                 </button>
               )}
             </div>
@@ -339,83 +345,10 @@ const MdfPercursoTab: React.FC<IProps> = ({
           </div>
         </div>
 
-        {/* === COLUNA 2: TRÂNSITO / PERCURSO === */}
+        {/* === COLUNA 2: DESCARREGAMENTO === */}
         <div className="border border-border rounded-lg p-4 bg-card flex flex-col space-y-4 shadow-sm hover:shadow-md transition-shadow">
           <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-primary">2. Trânsito</h3>
-            <p className="text-[10px] text-muted-foreground">UFs de Percurso Intermediárias</p>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-muted-foreground">UF de Percurso</label>
-            <div className="flex gap-2">
-              <select
-                disabled={ro}
-                value={percursoUf}
-                onChange={e => setPercursoUf(e.target.value)}
-                className="flex-1 border border-border rounded px-2 py-1.5 text-sm bg-card font-medium focus:ring-1 focus:ring-primary focus:border-primary"
-              >
-                <option value="">— Selecione —</option>
-                {UF_LIST.map(uf => <option key={uf} value={uf}>{uf}</option>)}
-              </select>
-              {podeEditar && (
-                <button
-                  onClick={handleAddPercursoUf}
-                  className="flex items-center justify-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary/90 transition-colors font-medium"
-                >
-                  <Plus className="w-4 h-4" /> Add
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="flex-1 flex flex-col space-y-2">
-            <label className="text-xs font-semibold text-muted-foreground">UFs do Percurso (Ordem de Trânsito)</label>
-            <div className="border border-border rounded overflow-hidden flex-1 bg-background/50 min-h-[200px]">
-              <table className="w-full text-xs border-collapse">
-                <thead>
-                  <tr className="bg-secondary/40 text-left border-b border-border">
-                    <th className="px-3 py-2 font-semibold w-16 text-right">Ordem</th>
-                    <th className="px-3 py-2 font-semibold">UF</th>
-                    {podeEditar && <th className="w-10"></th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {percursoRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={podeEditar ? 3 : 2} className="px-3 py-8 text-center text-muted-foreground">
-                        Nenhuma UF de percurso informada.
-                      </td>
-                    </tr>
-                  ) : (
-                    percursoRows.map((r, i) => (
-                      <tr key={r.mdf_percurso_id} className="border-b border-border/50 hover:bg-accent/20">
-                        <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">{i + 1}</td>
-                        <td className="px-3 py-1.5 font-bold uppercase text-primary">{r.uf}</td>
-                        {podeEditar && (
-                          <td className="px-1 py-1.5 text-center">
-                            <button
-                              onClick={() => handleRemovePercursoUf(r.mdf_percurso_id)}
-                              className="p-1 text-destructive hover:bg-destructive/10 rounded transition-colors"
-                              title="Remover"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        )}
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* === COLUNA 3: DESCARREGAMENTO === */}
-        <div className="border border-border rounded-lg p-4 bg-card flex flex-col space-y-4 shadow-sm hover:shadow-md transition-shadow">
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-primary">3. Descarregamento</h3>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-primary">2. Descarregamento</h3>
             <p className="text-[10px] text-muted-foreground">UF Final e Municípios de Entrega</p>
           </div>
 
@@ -435,12 +368,12 @@ const MdfPercursoTab: React.FC<IProps> = ({
           <div className="flex-1 flex flex-col space-y-2">
             <div className="flex justify-between items-center">
               <label className="text-xs font-semibold text-muted-foreground">Municípios de Descarregamento</label>
-              {podeEditar && (
+              {podeEditar && record.uffim && (
                 <button
                   onClick={() => handleOpenSearch("descarrega")}
                   className="flex items-center gap-1 px-2 py-1 rounded bg-secondary hover:bg-secondary/80 text-secondary-foreground text-xs font-medium transition-colors"
                 >
-                  <Search className="w-3.5 h-3.5" /> Pesquisar
+                  <Search className="w-3.5 h-3.5" /> Pesquisa Municipio
                 </button>
               )}
             </div>
@@ -472,6 +405,85 @@ const MdfPercursoTab: React.FC<IProps> = ({
                           <td className="px-1 py-1.5 text-center">
                             <button
                               onClick={() => handleRemoveDescarregamento(r.mdf_descarrega_id)}
+                              className="p-1 text-destructive hover:bg-destructive/10 rounded transition-colors"
+                              title="Remover"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* === COLUNA 3: TRÂNSITO / PERCURSO === */}
+        <div className="border border-border rounded-lg p-4 bg-card flex flex-col space-y-4 shadow-sm hover:shadow-md transition-shadow">
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-primary">3. Trânsito</h3>
+            <p className="text-[10px] text-muted-foreground">UFs de Percurso Intermediárias</p>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-muted-foreground">UF de Percurso</label>
+            <div className="flex gap-2">
+              <select
+                disabled={ro || naoExigePercurso}
+                value={percursoUf}
+                onChange={e => setPercursoUf(e.target.value)}
+                className="flex-1 border border-border rounded px-2 py-1.5 text-sm bg-card font-medium focus:ring-1 focus:ring-primary focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="">— Selecione —</option>
+                {UF_LIST.map(uf => <option key={uf} value={uf}>{uf}</option>)}
+              </select>
+              {podeEditar && (
+                <button
+                  disabled={naoExigePercurso}
+                  onClick={handleAddPercursoUf}
+                  className="flex items-center justify-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary/90 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Plus className="w-4 h-4" /> Add
+                </button>
+              )}
+            </div>
+            {naoExigePercurso && (
+              <p className="text-[10px] text-yellow-600 dark:text-yellow-500 font-medium bg-yellow-500/10 px-2 py-1 rounded mt-1.5">
+                As UFs de início e fim são iguais ou fazem divisa. Não é permitido adicionar UFs de percurso.
+              </p>
+            )}
+          </div>
+
+          <div className="flex-1 flex flex-col space-y-2">
+            <label className="text-xs font-semibold text-muted-foreground">UFs do Percurso (Ordem de Trânsito)</label>
+            <div className="border border-border rounded overflow-hidden flex-1 bg-background/50 min-h-[200px]">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-secondary/40 text-left border-b border-border">
+                    <th className="px-3 py-2 font-semibold w-16 text-right">Ordem</th>
+                    <th className="px-3 py-2 font-semibold">UF</th>
+                    {podeEditar && <th className="w-10"></th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {percursoRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={podeEditar ? 3 : 2} className="px-3 py-8 text-center text-muted-foreground">
+                        Nenhuma UF de percurso informada.
+                      </td>
+                    </tr>
+                  ) : (
+                    percursoRows.map((r, i) => (
+                      <tr key={r.mdf_percurso_id} className="border-b border-border/50 hover:bg-accent/20">
+                        <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">{i + 1}</td>
+                        <td className="px-3 py-1.5 font-bold uppercase text-primary">{r.uf}</td>
+                        {podeEditar && (
+                          <td className="px-1 py-1.5 text-center">
+                            <button
+                              onClick={() => handleRemovePercursoUf(r.mdf_percurso_id)}
                               className="p-1 text-destructive hover:bg-destructive/10 rounded transition-colors"
                               title="Remover"
                             >

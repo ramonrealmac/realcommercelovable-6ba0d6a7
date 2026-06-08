@@ -211,6 +211,8 @@ const processarEvento = async (evento) => {
                 .eq('id', evento.id);
         }
 
+        const isEmissaoMdfe = evento.comando === 'EMITIR_MDFE';
+
         // 2.b Buscar config de impressão (tp_imp_*, nm_impressora_*) baseado no documento referenciado
         if (isEmissao && nfeCabecalhoId && !payload.print_config) {
             try {
@@ -238,6 +240,108 @@ const processarEvento = async (evento) => {
             } catch (e) {
                 logger.warn(`Falha ao buscar config de impressão: ${e.message}`);
             }
+        } else if (isEmissaoMdfe && evento.mdf_manifesto_id && !payload.print_config) {
+            try {
+                const { data: mdf } = await supabase
+                    .from('fiscal_mdf_manifesto')
+                    .select('modelo, serie, empresa_id')
+                    .eq('mdf_manifesto_id', evento.mdf_manifesto_id)
+                    .maybeSingle();
+                if (mdf) {
+                    const { data: ci } = await supabase
+                        .from('fiscal_config_item')
+                        .select('tp_imp, nm_impressora')
+                        .eq('empresa_id', mdf.empresa_id)
+                        .eq('modelo', String(mdf.modelo || '58'))
+                        .eq('serie', String(mdf.serie || '1'))
+                        .maybeSingle();
+                    if (ci) {
+                        payload.print_config = {
+                            tp_imp: ci.tp_imp || 'PDF',
+                            nm_impressora: ci.nm_impressora || ''
+                        };
+                        logger.info(`[MDF-e] Config de impressão: tp_imp=${payload.print_config.tp_imp} impressora=${payload.print_config.nm_impressora}`);
+                    }
+                }
+            } catch (e) {
+                logger.warn(`Falha ao buscar config de impressão MDF-e: ${e.message}`);
+            }
+        }
+
+        const isEncerramentoMdfe = evento.comando === 'ENCERRAR_MDFE';
+
+        if (isEncerramentoMdfe) {
+            const UF_IBGE_MAP = {
+                'AC': '12', 'AL': '27', 'AP': '16', 'AM': '13', 'BA': '29', 'CE': '23', 'DF': '53', 'ES': '32', 'GO': '52',
+                'MA': '21', 'MT': '51', 'MS': '50', 'MG': '31', 'PA': '15', 'PB': '25', 'PR': '41', 'PE': '26', 'PI': '22',
+                'RJ': '33', 'RN': '24', 'RS': '43', 'RO': '11', 'RR': '14', 'SC': '42', 'SP': '35', 'SE': '28', 'TO': '17'
+            };
+
+            const now = new Date();
+            const d = String(now.getDate()).padStart(2, '0');
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const y = now.getFullYear();
+            const h = String(now.getHours()).padStart(2, '0');
+            const i = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            const dhEvento = `${d}/${m}/${y} ${h}:${i}:${s}`;
+
+            const cleanCnpj = String(empresaRaw?.cnpj || '').replace(/\D/g, '');
+            const companyUfAbbr = payload.config?.uf || 'SP';
+            const cOrgaoCode = UF_IBGE_MAP[companyUfAbbr] || '35';
+            
+            const closeUfAbbr = String(payload.cUF || companyUfAbbr).toUpperCase();
+            const closeUfCode = UF_IBGE_MAP[closeUfAbbr] || cOrgaoCode;
+
+            let formattedDtEnc = '';
+            if (payload.dtEnc) {
+                const parts = String(payload.dtEnc).substring(0, 10).split('-');
+                if (parts.length === 3) {
+                    formattedDtEnc = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                }
+            }
+            if (!formattedDtEnc) {
+                formattedDtEnc = `${d}/${m}/${y}`;
+            }
+
+            let nProt = payload.nProt || '';
+            const mdfId = evento.mdf_manifesto_id || payload.mdf_manifesto_id;
+            if (!nProt && mdfId) {
+                try {
+                    const { data: mdf } = await supabase
+                        .from('fiscal_mdf_manifesto')
+                        .select('numero_protocolo')
+                        .eq('mdf_manifesto_id', mdfId)
+                        .maybeSingle();
+                    if (mdf && mdf.numero_protocolo) {
+                        nProt = mdf.numero_protocolo;
+                        logger.info(`[MDF-e Encerramento] Protocolo do MDF-e #${mdfId} recuperado: ${nProt}`);
+                    } else {
+                        logger.warn(`[MDF-e Encerramento] Protocolo do MDF-e #${mdfId} não encontrado no banco.`);
+                    }
+                } catch (e) {
+                    logger.warn(`[MDF-e Encerramento] Falha ao consultar protocolo do MDF-e: ${e.message}`);
+                }
+            }
+
+            const iniContent = `[EVENTO]\r\n` +
+                `idLote=1\r\n` +
+                `[EVENTO001]\r\n` +
+                `chMDFe=${payload.chave}\r\n` +
+                `CNPJ=${cleanCnpj}\r\n` +
+                `dhEvento=${dhEvento}\r\n` +
+                `tpEvento=110112\r\n` +
+                `nSeqEvento=1\r\n` +
+                `dtEnc=${formattedDtEnc}\r\n` +
+                `cUF=${closeUfCode}\r\n` +
+                `cMun=${payload.cMun}\r\n` +
+                `nProt=${nProt}`;
+
+            payload.dados = iniContent;
+            logger.info(`[MDF-e Encerramento] Gerado INI de encerramento:\n${iniContent}`);
+            
+            // Grava o payload atualizado no evento para histórico
+            await supabase.from('fiscal_evento').update({ payload }).eq('id', evento.id);
         }
 
         // 3. Chama a biblioteca nativa passando o JSON payload atualizado
@@ -291,6 +395,27 @@ const processarEvento = async (evento) => {
             logger.info(`Inutilização #${payload.inutilizacao_id} atualizada: ${stInu} (c_stat=${resultado.c_stat}).`);
         }
 
+        // 4c. Atualizar fiscal_mdf_manifesto se for emissão ou encerramento de MDF-e
+        if (evento.mdf_manifesto_id) {
+            if (isEmissaoMdfe) {
+                const updateMdfe = {
+                    status: resultado.sucesso ? 'A' : 'R', // A=Autorizado, R=Rejeitado
+                    chave_acesso: resultado.chave_mdfe || null,
+                    numero_protocolo: resultado.nr_protocolo || null,
+                    dt_alteracao: new Date().toISOString()
+                };
+                await supabase.from('fiscal_mdf_manifesto').update(updateMdfe).eq('mdf_manifesto_id', evento.mdf_manifesto_id);
+                logger.info(`MDF-e #${evento.mdf_manifesto_id} atualizado (Emissão) - Status: ${updateMdfe.status}`);
+            } else if (isEncerramentoMdfe && resultado.sucesso) {
+                const updateMdfe = {
+                    status: 'E', // E=Encerrado
+                    dt_alteracao: new Date().toISOString()
+                };
+                await supabase.from('fiscal_mdf_manifesto').update(updateMdfe).eq('mdf_manifesto_id', evento.mdf_manifesto_id);
+                logger.info(`MDF-e #${evento.mdf_manifesto_id} atualizado (Encerramento) - Status: E`);
+            }
+        }
+
         // 5. Impressão pós-processamento: executada antes de marcar o evento como finalizado
         // para que a resposta já contenha o PDF/caminho de impressão se configurado.
         let respostaFinal = { ...resultado };
@@ -316,6 +441,27 @@ const processarEvento = async (evento) => {
             } catch (e) {
                 logger.warn(`Evento #${evento.id}: falha na impressão automática: ${e.message}`);
             }
+        } else if (isEmissaoMdfe && resultado.sucesso && payload.print_config) {
+            try {
+                const xmlParaImpressao = resultado.xml_mdfe || '';
+                if (xmlParaImpressao) {
+                    const impressao = await executarComandoFiscal('IMPRIMIR_MDFE', {
+                        config: payload.config,
+                        print_config: payload.print_config,
+                        dados: xmlParaImpressao,
+                        chave: resultado.chave_mdfe,
+                    });
+                    logger.info(`Evento #${evento.id}: impressão automática MDF-e ${impressao.sucesso ? 'OK' : 'falhou'}`);
+                    respostaFinal = { 
+                        ...resultado, 
+                        impressao, 
+                        pdf_base64: impressao.pdf_base64 || resultado.pdf_base64,
+                        pdf_path: impressao.pdf_path || resultado.pdf_path || null 
+                    };
+                }
+            } catch (e) {
+                logger.warn(`Evento #${evento.id}: falha na impressão automática MDF-e: ${e.message}`);
+            }
         }
 
         // 6. Salva o resultado final (JSON) e marca status final do evento.
@@ -328,7 +474,7 @@ const processarEvento = async (evento) => {
                 status: statusFinal,
                 ambiente: payload.config?.ambiente,
                 resposta: JSON.stringify(respostaFinal),
-                xml_retorno: resultado.xml_retorno || resultado.xml_nfe || null,
+                xml_retorno: resultado.xml_retorno || resultado.xml_nfe || resultado.xml_mdfe || null,
                 mensagem_erro: resultado.sucesso ? null : (resultado.erro || "Falha na execução do comando"),
                 updated_at: new Date().toISOString()
             })
@@ -345,6 +491,7 @@ const processarEvento = async (evento) => {
         const isEmissaoIni = ['EMITIR_NFE', 'EMITIR_NFCE'].includes(evento.comando);
         const isEmissaoXml = ['EMITIR_XML_NFE', 'EMITIR_XML_NFCE'].includes(evento.comando);
         const isEmissao = isEmissaoIni || isEmissaoXml;
+        const isEmissaoMdfe = evento.comando === 'EMITIR_MDFE';
 
         if (nfeCabecalhoId && isEmissao) {
             try {
@@ -356,6 +503,18 @@ const processarEvento = async (evento) => {
                 logger.info(`NF-e #${nfeCabecalhoId} marcada como Rejeitada (R) devido a falha crítica.`);
             } catch (updateErr) {
                 logger.error(`Não foi possível atualizar cabeçalho da NF-e após falha: ${updateErr.message}`);
+            }
+        }
+
+        if (evento.mdf_manifesto_id && isEmissaoMdfe) {
+            try {
+                await supabase.from('fiscal_mdf_manifesto').update({
+                    status: 'R',
+                    dt_alteracao: new Date().toISOString()
+                }).eq('mdf_manifesto_id', evento.mdf_manifesto_id);
+                logger.info(`MDF-e #${evento.mdf_manifesto_id} marcado como Rejeitado (R) devido a falha crítica.`);
+            } catch (updateErr) {
+                logger.error(`Não foi possível atualizar manifesto do MDF-e após falha: ${updateErr.message}`);
             }
         }
 

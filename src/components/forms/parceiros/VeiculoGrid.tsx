@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
@@ -81,6 +81,10 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({
   const [XEditUf, setXEditUf] = useState("");
   const [XEditTpVeiculo, setXEditTpVeiculo] = useState("TRACAO");
   const [XEditAtivo, setXEditAtivo] = useState(true);
+
+  const placaInputRef = useRef<HTMLInputElement>(null);
+  const ufInputRef = useRef<HTMLInputElement>(null);
+  const renavamInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = useCallback(async () => {
     if (!XCadastroId) return;
@@ -166,22 +170,48 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({
   };
 
   const handleSalvar = async () => {
-    if (!XEditPlaca.trim()) {
+    const placaClean = XEditPlaca.toUpperCase().trim().replace(/[^A-Z0-9]/g, "");
+    if (!placaClean) {
       toast.error("A placa do veículo é obrigatória.");
+      placaInputRef.current?.focus();
+      return;
+    }
+    if (placaClean.length !== 7) {
+      toast.error("A Placa deve ter exatamente 7 caracteres (letras e números).");
+      placaInputRef.current?.focus();
+      return;
+    }
+
+    const ufClean = XEditUf.toUpperCase().trim().replace(/[^A-Z]/g, "");
+    if (!ufClean) {
+      toast.error("A UF de licenciamento do veículo é obrigatória.");
+      ufInputRef.current?.focus();
+      return;
+    }
+    if (ufClean.length !== 2) {
+      toast.error("A UF deve ter exatamente 2 letras.");
+      ufInputRef.current?.focus();
+      return;
+    }
+
+    const renavamClean = XEditRenavam.trim();
+    if (renavamClean && renavamClean.length !== 11) {
+      toast.error("O RENAVAM deve ter exatamente 11 dígitos (ou ser deixado em branco).");
+      renavamInputRef.current?.focus();
       return;
     }
 
     const XPayload = {
-      placa: XEditPlaca.toUpperCase().trim(),
+      placa: placaClean,
       descricao: XEditDescricao.toUpperCase().trim(),
       marca: XEditMarca.toUpperCase().trim(),
       modelo: XEditModelo.toUpperCase().trim(),
-      renavam: XEditRenavam.trim(),
+      renavam: renavamClean,
       tara: parseInt(XEditTara) || 0,
       capacidade_kg: parseInt(XEditCapacidade) || 0,
       tp_rodado: XEditTpRodado,
       tp_carroceria: XEditTpCarroceria,
-      uf: XEditUf.toUpperCase().trim(),
+      uf: ufClean,
       tp_veiculo: XEditTpVeiculo,
       ativo: XEditAtivo,
       cadastro_id: XCadastroId || 0,
@@ -284,20 +314,22 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({
             <div className="flex flex-col gap-0.5">
               <label className="text-[10px] text-muted-foreground">Placa *</label>
               <input
+                ref={placaInputRef}
                 type="text"
                 value={XEditPlaca}
-                onChange={(e) => setXEditPlaca(e.target.value.toUpperCase())}
-                maxLength={10}
+                onChange={(e) => setXEditPlaca(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+                maxLength={7}
                 className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-28"
                 autoFocus
               />
             </div>
             <div className="flex flex-col gap-0.5">
-              <label className="text-[10px] text-muted-foreground">UF</label>
+              <label className="text-[10px] text-muted-foreground">UF *</label>
               <input
+                ref={ufInputRef}
                 type="text"
                 value={XEditUf}
-                onChange={(e) => setXEditUf(e.target.value.toUpperCase())}
+                onChange={(e) => setXEditUf(e.target.value.toUpperCase().replace(/[^A-Z]/g, ""))}
                 maxLength={2}
                 className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-12 text-center"
               />
@@ -315,6 +347,7 @@ const VeiculoGrid: React.FC<VeiculoGridProps> = ({
             <div className="flex flex-col gap-0.5">
               <label className="text-[10px] text-muted-foreground">RENAVAM</label>
               <input
+                ref={renavamInputRef}
                 type="text"
                 value={XEditRenavam}
                 onChange={(e) => setXEditRenavam(e.target.value.replace(/\D/g, ""))}

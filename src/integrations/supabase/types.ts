@@ -909,6 +909,9 @@ export type Database = {
           tp_cadastro_id: number | null
           tp_contribuinte: string | null
           tp_pessoa: string | null
+          rntrc: string | null
+          tp_proprietario: string | null
+          uf_proprietario: string | null
         }
         Insert: {
           cadastro_id?: number
@@ -982,6 +985,9 @@ export type Database = {
           tp_cadastro_id?: number | null
           tp_contribuinte?: string | null
           tp_pessoa?: string | null
+          rntrc?: string | null
+          tp_proprietario?: string | null
+          uf_proprietario?: string | null
         }
         Update: {
           cadastro_id?: number
@@ -1055,6 +1061,9 @@ export type Database = {
           tp_cadastro_id?: number | null
           tp_contribuinte?: string | null
           tp_pessoa?: string | null
+          rntrc?: string | null
+          tp_proprietario?: string | null
+          uf_proprietario?: string | null
         }
         Relationships: [
           {
@@ -3412,6 +3421,8 @@ export type Database = {
           mdf_manifesto_id: number
           tp_componente: string | null
           vl_componente: number | null
+          cnpj_fornecedor: string | null
+          comprovante: string | null
         }
         Insert: {
           ds_componente?: string | null
@@ -3420,6 +3431,8 @@ export type Database = {
           mdf_manifesto_id: number
           tp_componente?: string | null
           vl_componente?: number | null
+          cnpj_fornecedor?: string | null
+          comprovante?: string | null
         }
         Update: {
           ds_componente?: string | null
@@ -3428,6 +3441,8 @@ export type Database = {
           mdf_manifesto_id?: number
           tp_componente?: string | null
           vl_componente?: number | null
+          cnpj_fornecedor?: string | null
+          comprovante?: string | null
         }
         Relationships: []
       }
@@ -3639,6 +3654,9 @@ export type Database = {
           ufini: string | null
           unidade: string | null
           valor_total: number | null
+          transportador_id: number | null
+          rota_id: number | null
+          possui_pedagio: boolean | null
         }
         Insert: {
           chave_acesso?: string | null
@@ -3667,6 +3685,9 @@ export type Database = {
           ufini?: string | null
           unidade?: string | null
           valor_total?: number | null
+          transportador_id?: number | null
+          rota_id?: number | null
+          possui_pedagio?: boolean | null
         }
         Update: {
           chave_acesso?: string | null
@@ -3695,6 +3716,9 @@ export type Database = {
           ufini?: string | null
           unidade?: string | null
           valor_total?: number | null
+          transportador_id?: number | null
+          rota_id?: number | null
+          possui_pedagio?: boolean | null
         }
         Relationships: []
       }
@@ -7053,6 +7077,36 @@ export type Database = {
             referencedColumns: ["rpb_conexao_id"]
           },
         ]
+      }
+      rota: {
+        Row: {
+          rota_id: number
+          descricao: string
+          possui_pedagio: boolean
+          excluido: boolean
+          empresa_id: number
+          dt_cadastro: string | null
+          dt_alteracao: string | null
+        }
+        Insert: {
+          rota_id?: number
+          descricao: string
+          possui_pedagio?: boolean
+          excluido?: boolean
+          empresa_id?: number
+          dt_cadastro?: string | null
+          dt_alteracao?: string | null
+        }
+        Update: {
+          rota_id?: number
+          descricao?: string
+          possui_pedagio?: boolean
+          excluido?: boolean
+          empresa_id?: number
+          dt_cadastro?: string | null
+          dt_alteracao?: string | null
+        }
+        Relationships: []
       }
       sistema_versoes: {
         Row: {

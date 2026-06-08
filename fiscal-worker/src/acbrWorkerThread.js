@@ -108,6 +108,28 @@ const loadLibrary = (path, prefix) => {
                 }
             }
 
+            // Funções de impressão (apenas MDFE)
+            if (prefix === 'MDFE') {
+                try {
+                    funcoes.ImprimirDANFEPDF = lib.func('int __cdecl MDFE_ImprimirPDF(void* handle)');
+                } catch (e) {
+                    console.warn('[FiscalLib] MDFE_ImprimirPDF indisponível:', e.message);
+                }
+                try {
+                    funcoes.ImprimirDANFE = lib.func('int __cdecl MDFE_Imprimir(void* handle, const char* eImpressora, int nCopias, const char* eProtocolo, bool bMostrarPreview, const char* eMarcaDagua)');
+                } catch (e) {
+                    console.warn('[FiscalLib] MDFE_Imprimir indisponível:', e.message);
+                }
+                try {
+                    funcoes.SalvarPDF = lib.func('int __cdecl MDFE_SalvarPDF(void* handle, _Out_ char* sResposta, _Out_ int* esTamanho)');
+                } catch (e) { /* opcional */ }
+                try {
+                    funcoes.ImprimirEventoPDF = lib.func('int __cdecl MDFE_ImprimirEventoPDF(void* handle, const char* eArquivoXmlEvento, const char* eArquivoXmlMDFe)');
+                } catch (e) {
+                    console.warn('[FiscalLib] MDFE_ImprimirEventoPDF indisponível:', e.message);
+                }
+            }
+
             // Funções específicas da NFe
             // IMPORTANTE: A DLL não tem NFE_DistribuicaoDFe genérica!
             // As funções corretas são as três variantes abaixo, com AcUFAutor como INT.
@@ -192,6 +214,44 @@ const parsearRetornoNfe = (retorno) => {
     }
 
     return { chave_nfe, nr_protocolo: nr_prot, c_stat, x_motivo, recibo_sefaz: recibo };
+};
+
+/**
+ * Extrai dados estruturados do retorno textual do ACBr para MDF-e.
+ * Retorna: { chave_mdfe, nr_protocolo, c_stat, x_motivo }
+ */
+const parsearRetornoMdfe = (retorno) => {
+    if (!retorno) return { chave_mdfe: null, nr_protocolo: null, c_stat: null, x_motivo: null };
+
+    const extrair = (chave) => {
+        const regex = new RegExp(`${chave}[=:]\\s*"?([^\\r\\n",}]+)"?`, 'i');
+        const m = retorno.match(regex);
+        return m ? m[1].trim() : null;
+    };
+
+    let c_stat = extrair('cStat') || extrair('CStat');
+    let x_motivo = extrair('xMotivo') || extrair('XMotivo');
+    let chave_mdfe = extrair('chMDFe') || extrair('ChaveMDFe') || extrair('chDFe') || extrair('Chave');
+    let nr_prot = extrair('nProt') || extrair('NProt') || extrair('Protocolo');
+
+    if (!chave_mdfe) {
+        const mChave = retorno.match(/chMDFe="([^"]{44})"/i) || retorno.match(/<chMDFe>([^<]{44})<\/chMDFe>/i);
+        if (mChave) chave_mdfe = mChave[1];
+    }
+    if (!nr_prot) {
+        const mProt = retorno.match(/nProt="([^"]+)"/i) || retorno.match(/<nProt>([^<]+)<\/nProt>/i);
+        if (mProt) nr_prot = mProt[1];
+    }
+    if (!c_stat) {
+        const mStat = retorno.match(/cStat="([^"]+)"/i) || retorno.match(/<cStat>([^<]+)<\/cStat>/i);
+        if (mStat) c_stat = mStat[1];
+    }
+    if (!x_motivo) {
+        const mMot = retorno.match(/xMotivo="([^"]+)"/i) || retorno.match(/<xMotivo>([^<]+)<\/xMotivo>/i);
+        if (mMot) x_motivo = mMot[1];
+    }
+
+    return { chave_mdfe, nr_protocolo: nr_prot, c_stat, x_motivo };
 };
 
 const waitSync = (ms) => {
@@ -348,6 +408,95 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave, confi
     }
 };
 
+/**
+ * Tenta imprimir DAMDFE baseado em print_config { tp_imp, nm_impressora }.
+ * Retorna um objeto de resultado e nunca propaga erro para o fluxo fiscal.
+ */
+const tentarImprimirDAMDFE = (lib, handle, printConfig, modeloLabel, chave, configPayload) => {
+    if (!printConfig) return { sucesso: true, ignorado: true, pdf_path: null };
+    const tp = (printConfig.tp_imp || 'PDF').toUpperCase();
+    if (tp === 'NAO_IMPRIME' || tp === 'NAO IMPRIME' || tp === 'NONE') return { sucesso: true, ignorado: true, pdf_path: null };
+
+    try {
+        if (tp === 'IMPRESSORA' && printConfig.nm_impressora) {
+            lib.ConfigGravarValor(handle, "DAMDFe", "Impressora", printConfig.nm_impressora);
+        }
+        const pdfDir = path.join(resolverBaseArquivos(configPayload), "PDF");
+        if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
+
+        // Limpa arquivos antigos da mesma chave para evitar pegar o arquivo errado
+        if (chave) {
+            try {
+                const files = fs.readdirSync(pdfDir);
+                for (const f of files) {
+                    if (f.includes(chave) && f.toLowerCase().endsWith('.pdf')) {
+                        fs.unlinkSync(path.join(pdfDir, f));
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        lib.ConfigGravarValor(handle, "DAMDFe", "PathPDF", pdfDir);
+        lib.ConfigGravarValor(handle, "DAMDFe", "MostraPreview", "0");
+        lib.ConfigGravarValor(handle, "DAMDFe", "MostraStatus", "0");
+
+        if (tp === 'PDF' && lib.ImprimirDANFEPDF) {
+            const ret = lib.ImprimirDANFEPDF(handle);
+            console.log(`[FiscalLib] ImprimirPDF (MDFE) ret=${ret}`);
+            if (ret !== 0) {
+                const errDll = lerRetornoACBr(lib, handle);
+                console.error(`[FiscalLib] Erro na DLL ao gerar PDF MDF-e: ${errDll}`);
+                return { sucesso: false, erro: errDll || `MDFE_ImprimirPDF retornou ${ret}`, pdf_path: null };
+            }
+
+            // Aguarda um curto tempo para o SO liberar o arquivo
+            waitSync(500);
+
+            // Busca pelo arquivo exato informado pelo usuário: {chave}-mdfe.pdf ou {chave}.pdf
+            let finalPdf = null;
+            if (chave) {
+                const p = path.join(pdfDir, `${chave}-mdfe.pdf`);
+                if (fs.existsSync(p)) {
+                    finalPdf = p;
+                } else {
+                    const pAlt = path.join(pdfDir, `${chave}.pdf`);
+                    if (fs.existsSync(pAlt)) finalPdf = pAlt;
+                }
+            }
+
+            if (!finalPdf) {
+                const files = fs.readdirSync(pdfDir);
+                console.warn(`[FiscalLib] PDF MDF-e não localizado em ${pdfDir}. Esperado: ${chave}-mdfe.pdf. Arquivos presentes:`, files);
+                return { sucesso: false, erro: `Arquivo PDF (${chave}-mdfe.pdf) não foi localizado no diretório de saída.`, pdf_path: pdfDir };
+            }
+
+            let pdf_base64 = null;
+            try {
+                pdf_base64 = fs.readFileSync(finalPdf).toString('base64');
+                console.log(`[FiscalLib] PDF MDF-e carregado com sucesso: ${finalPdf}`);
+            } catch (e) {
+                console.error(`[FiscalLib] Falha ao ler PDF MDF-e: ${e.message}`);
+                return { sucesso: false, erro: `Falha ao ler arquivo gerado: ${e.message}`, pdf_path: finalPdf };
+            }
+
+            return {
+                sucesso: true,
+                pdf_path: finalPdf,
+                pdf_base64
+            };
+        } else if (tp === 'IMPRESSORA' && lib.ImprimirDANFE) {
+            let ret = lib.ImprimirDANFE(handle, printConfig.nm_impressora || "", 1, "", false, "");
+            console.log(`[FiscalLib] Imprimir (MDFE) ret=${ret}`);
+            if (ret !== 0) return { sucesso: false, erro: lerRetornoACBr(lib, handle) || `MDFE_Imprimir retornou ${ret}`, pdf_path: null };
+            return { sucesso: true, pdf_path: null };
+        }
+        return { sucesso: false, erro: `Tipo de impressão ${tp} sem função disponível na ACBrLib MDF-e.`, pdf_path: null };
+    } catch (e) {
+        console.warn(`[FiscalLib] Falha ao imprimir DAMDFE: ${e.message}`);
+        return { sucesso: false, erro: e.message, pdf_path: null };
+    }
+};
+
 const resolverBaseArquivos = (configPayload) => {
     let resolvedPath = '';
     const custom = configPayload && configPayload.pasta_arquivos
@@ -411,7 +560,7 @@ const configurarHandle = (lib, handle, configPayload, prefix = 'NFE') => {
 
     // Determina bibliotecas SSL com fallback para os padrões estáveis do Windows
     let sslLib = "4"; // 4=libWinCrypt (nativo)
-    let sslCryptLib = "3"; // 3=cryWinCrypt (nativo)
+    let sslCryptLib = "1"; // 1=cryOpenSSL (recomendado/estável para hashes)
     let sslHttpLib = "1"; // 1=httpWinINet (nativo, melhor compatibilidade com SEFAZ)
     let sslXmlSignLib = "4"; // 4=xsLibXml2 (nativo)
 
@@ -428,6 +577,15 @@ const configurarHandle = (lib, handle, configPayload, prefix = 'NFE') => {
         sslXmlSignLib = String(configPayload.ssl_xml_sign_lib);
     }
 
+    // Se o tipo de certificado for REPOSITORIO (repositório de certificados do Windows),
+    // é obrigatório o uso de libWinCrypt (4) e cryWinCrypt (3).
+    if (tipoCertificado === 'REPOSITORIO') {
+        console.warn(`[FiscalLib] ⚠️ tipoCertificado é REPOSITORIO. Forçando SSLLib=4 (libWinCrypt), SSLCryptLib=3 (cryWinCrypt) e SSLXmlSignLib=4 (xsLibXml2).`);
+        sslLib = "4";
+        sslCryptLib = "3";
+        sslXmlSignLib = "4";
+    }
+
     // Validação de compatibilidade: detecta combinações conhecidamente quebradas e auto-corrige
     // Capicom (SSLLib=2 ou SSLLib=3) é legado 32-bit e não funciona em ambientes 64-bit modernos
     const capicomLibs = ["2", "3"]; // libCapicom, libCapicomDelphiSoap
@@ -435,15 +593,17 @@ const configurarHandle = (lib, handle, configPayload, prefix = 'NFE') => {
         console.warn(`[FiscalLib] ⚠️ SSLLib=${sslLib} (Capicom) detectada — incompatível com 64-bit. Auto-corrigindo para libWinCrypt (4).`);
         sslLib = "4";
     }
-    // xsMsXmlCapicom (XmlSignLib=3) não implementa assinatura em ACBrLib 64-bit
-    if (sslXmlSignLib === "3") {
-        console.warn(`[FiscalLib] ⚠️ SSLXmlSignLib=3 (xsMsXmlCapicom) detectada — "Assinar não implementado". Auto-corrigindo para xsLibXml2 (4).`);
+    // Apenas xsXmlSec (1) e xsLibXml2 (4) implementam assinatura XML. 
+    // Qualquer outro valor (incluindo xsNone=0, xsMsXml=2, xsMsXmlCapicom=3) causará erro "não implementado".
+    if (!["1", "4"].includes(sslXmlSignLib)) {
+        console.warn(`[FiscalLib] ⚠️ SSLXmlSignLib=${sslXmlSignLib} não implementa assinatura. Auto-corrigindo para xsLibXml2 (4).`);
         sslXmlSignLib = "4";
     }
-    // Se SSLLib é WinCrypt (4), garante que CryptLib seja compatível (cryWinCrypt=3)
-    if (sslLib === "4" && !["3"].includes(sslCryptLib)) {
-        console.warn(`[FiscalLib] ⚠️ SSLCryptLib=${sslCryptLib} incompatível com libWinCrypt. Auto-corrigindo para cryWinCrypt (3).`);
-        sslCryptLib = "3";
+    
+    // Se não for repositório, CryptLib recomendada é cryOpenSSL (1).
+    if (tipoCertificado !== 'REPOSITORIO' && sslCryptLib !== "1") {
+        console.warn(`[FiscalLib] ⚠️ SSLCryptLib=${sslCryptLib} corrigindo para cryOpenSSL (1) em certificados de arquivo.`);
+        sslCryptLib = "1";
     }
 
     // Grava as bibliotecas SSL configuradas no ACBrLib
@@ -549,56 +709,199 @@ const configurarHandle = (lib, handle, configPayload, prefix = 'NFE') => {
     lib.ConfigGravarValor(handle, "NFe", "SalvarArq", "1");
 };
 
+const updateIniString = (iniText, section, key, value) => {
+    const lines = iniText.split(/\r?\n/);
+    let currentSection = "";
+    let keyUpdated = false;
+    const newLines = [];
+
+    for (let line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            currentSection = trimmed.slice(1, -1).trim();
+        }
+
+        if (currentSection === section && trimmed.split('=')[0].trim() === key) {
+            newLines.push(`${key}=${value}`);
+            keyUpdated = true;
+        } else {
+            newLines.push(line);
+        }
+    }
+
+    if (!keyUpdated) {
+        let sectionIndex = newLines.findIndex(line => line.trim() === `[${section}]`);
+        if (sectionIndex !== -1) {
+            newLines.splice(sectionIndex + 1, 0, `${key}=${value}`);
+        } else {
+            newLines.push(`\n[${section}]`);
+            newLines.push(`${key}=${value}`);
+        }
+    }
+
+    return newLines.join("\r\n");
+};
+
+const patchIniForThread = (iniContent, configPayload) => {
+    if (!configPayload) return iniContent;
+
+    const tipoCertificado = configPayload.tipo_certificado || 'ARQUIVO';
+    let sslLib = "4"; // Default libWinCrypt
+    let sslCryptLib = "1"; // Default cryOpenSSL
+    let sslHttpLib = "1"; // Default httpWinINet
+    let sslXmlSignLib = "4"; // Default xsLibXml2
+
+    if (configPayload.ssl_lib !== undefined && configPayload.ssl_lib !== null && configPayload.ssl_lib !== "") {
+        sslLib = String(configPayload.ssl_lib);
+    }
+    if (configPayload.ssl_crypt_lib !== undefined && configPayload.ssl_crypt_lib !== null && configPayload.ssl_crypt_lib !== "") {
+        sslCryptLib = String(configPayload.ssl_crypt_lib);
+    }
+    if (configPayload.ssl_http_lib !== undefined && configPayload.ssl_http_lib !== null && configPayload.ssl_http_lib !== "") {
+        sslHttpLib = String(configPayload.ssl_http_lib);
+    }
+    if (configPayload.ssl_xml_sign_lib !== undefined && configPayload.ssl_xml_sign_lib !== null && configPayload.ssl_xml_sign_lib !== "") {
+        sslXmlSignLib = String(configPayload.ssl_xml_sign_lib);
+    }
+
+    // Se SSLLib=2 ou 3 (Capicom), corrige para 4
+    if (["2", "3"].includes(sslLib)) sslLib = "4";
+    // Apenas xsXmlSec (1) e xsLibXml2 (4) implementam assinatura XML.
+    if (!["1", "4"].includes(sslXmlSignLib)) sslXmlSignLib = "4";
+    // A CryptLib recomendada e compatível para hashing é cryOpenSSL (1).
+    if (tipoCertificado !== 'REPOSITORIO' && sslCryptLib !== "1") sslCryptLib = "1";
+
+    // Se REPOSITORIO, força WinCrypt, WinCrypt (para hashing/cert) e LibXml2 (para assinatura)
+    if (tipoCertificado === 'REPOSITORIO') {
+        sslLib = "4";
+        sslCryptLib = "3";
+        sslXmlSignLib = "4";
+    }
+
+    let updated = iniContent;
+    updated = updateIniString(updated, "DFe", "SSLLib", sslLib);
+    updated = updateIniString(updated, "DFe", "SSLCryptLib", sslCryptLib);
+    updated = updateIniString(updated, "DFe", "SSLHttpLib", sslHttpLib);
+    updated = updateIniString(updated, "DFe", "SSLXmlSignLib", sslXmlSignLib);
+
+    // Certificado
+    if (tipoCertificado === 'REPOSITORIO') {
+        if (configPayload.certificadoPath) {
+            updated = updateIniString(updated, "DFe", "NumeroSerie", configPayload.certificadoPath);
+            updated = updateIniString(updated, "DFe", "ArquivoPFX", "");
+            updated = updateIniString(updated, "DFe", "Senha", "");
+        }
+    } else {
+        if (configPayload.certificadoPath) {
+            let pfxPath = configPayload.certificadoPath;
+            if (!fs.existsSync(pfxPath) && !path.isAbsolute(pfxPath)) {
+                const baseArquivos = resolverBaseArquivos(configPayload);
+                const certFolder = path.join(baseArquivos, 'certificado');
+                const certFolderStyle = path.join(certFolder, pfxPath);
+                const directBasePath = path.join(baseArquivos, pfxPath);
+                
+                if (fs.existsSync(certFolderStyle)) {
+                    pfxPath = certFolderStyle;
+                } else if (fs.existsSync(directBasePath)) {
+                    pfxPath = directBasePath;
+                } else {
+                    pfxPath = certFolderStyle;
+                }
+            }
+            updated = updateIniString(updated, "DFe", "ArquivoPFX", pfxPath);
+            updated = updateIniString(updated, "DFe", "Senha", decodeSenhaCertificado(configPayload.certificadoSenha));
+            updated = updateIniString(updated, "DFe", "NumeroSerie", "");
+        }
+    }
+
+    return updated;
+};
+
 /**
  * Função utilitária para chamar a DLL isolada por requisição (Multi-Thread)
  */
 const executarNaDLL = async (lib, configPayload, callbackExecucao, prefix = 'NFE') => {
-    if (!lib) throw new Error("A DLL nativa não está carregada no ambiente.");
+    let attempts = 0;
+    const maxAttempts = 2;
 
-    // 1. Instanciar o Handle isolado com um INI único por thread para evitar corrupção de concorrência
-    const handlePtr = [null];
-    const baseIni = path.resolve(process.cwd(), "ACBrNFe.ini");
-    const uniqueId = crypto.randomUUID();
-    const threadIni = path.resolve(process.cwd(), `ACBrNFe_Thread_${uniqueId}.ini`);
+    while (attempts < maxAttempts) {
+        attempts++;
+        if (!lib) throw new Error("A DLL nativa não está carregada no ambiente.");
 
-    try {
-        if (fs.existsSync(baseIni)) {
-            fs.copyFileSync(baseIni, threadIni);
-        } else {
-            fs.writeFileSync(threadIni, "");
-        }
-    } catch (e) {
-        console.warn(`[FiscalLib Worker] Aviso: Não foi possível preparar o INI temporário: ${e.message}`);
-    }
+        // 1. Instanciar o Handle isolado com um INI único por thread para evitar corrupção de concorrência
+        const handlePtr = [null];
+        const baseIni = path.resolve(process.cwd(), "ACBrNFe.ini");
+        const uniqueId = crypto.randomUUID();
+        const threadIni = path.resolve(process.cwd(), `ACBrNFe_Thread_${uniqueId}.ini`);
 
-    const retInit = lib.Inicializar(handlePtr, threadIni, "");
-    if (retInit !== 0) {
-        let erroDetalhado = "Erro desconhecido";
-        if (handlePtr[0]) {
-            try { erroDetalhado = lerRetornoACBr(lib, handlePtr[0]); } catch (e) { }
-        }
-        try { if (fs.existsSync(threadIni)) fs.unlinkSync(threadIni); } catch (e) { }
-        throw new Error("Falha ao inicializar a ACBrLib (Handle MT). Retorno: " + retInit + " | Detalhe: " + erroDetalhado);
-    }
-
-    const handle = handlePtr[0];
-
-    try {
-        // 2. Configurar o Emitente dinamicamente
-        configurarHandle(lib, handle, configPayload, prefix);
-
-        // 3. Executar o fluxo da nota solicitado
-        return await callbackExecucao(handle);
-
-    } finally {
-        // 4. Sempre finalizar e destruir o Handle na memória e apagar o INI temporário
-        if (handle) lib.Finalizar(handle);
         try {
-            if (fs.existsSync(threadIni)) {
-                fs.unlinkSync(threadIni);
+            let iniContent = "";
+            if (fs.existsSync(baseIni)) {
+                iniContent = fs.readFileSync(baseIni, "utf8");
             }
+            const patchedIni = patchIniForThread(iniContent, configPayload);
+            
+            // Diagnóstico: Imprime o payload de configuração e a seção [DFe] resultante do INI
+            const dfeMatch = patchedIni.match(/\[DFe\][\s\S]*?(?=\r?\n\r?\n|\[|$)/i);
+            const dfeSection = dfeMatch ? dfeMatch[0] : "Seção [DFe] não encontrada no INI";
+            console.log(`[FiscalLib Worker] Inicializando DLL ${prefix} (Tentativa ${attempts}) com configPayload:`, JSON.stringify(configPayload));
+            console.log(`[FiscalLib Worker] Seção [DFe] gerada no INI temporário:\n${dfeSection}\n---`);
+            
+            fs.writeFileSync(threadIni, patchedIni, "utf8");
         } catch (e) {
-            console.error(`[FiscalLib Worker] Falha ao excluir INI temporário ${threadIni}: ${e.message}`);
+            console.warn(`[FiscalLib Worker] Aviso: Não foi possível preparar o INI temporário: ${e.message}`);
+        }
+
+        const retInit = lib.Inicializar(handlePtr, threadIni, "");
+        if (retInit !== 0) {
+            let erroDetalhado = "Erro desconhecido";
+            if (handlePtr[0]) {
+                try { erroDetalhado = lerRetornoACBr(lib, handlePtr[0]); } catch (e) { }
+            }
+            try { if (fs.existsSync(threadIni)) fs.unlinkSync(threadIni); } catch (e) { }
+            
+            if (attempts < maxAttempts) {
+                console.warn(`[FiscalLib Worker] Falha ao inicializar na tentativa ${attempts}. Tentando novamente...`);
+                continue;
+            }
+            throw new Error("Falha ao inicializar a ACBrLib (Handle MT). Retorno: " + retInit + " | Detalhe: " + erroDetalhado);
+        }
+
+        const handle = handlePtr[0];
+
+        try {
+            // 2. Configurar o Emitente dinamicamente
+            configurarHandle(lib, handle, configPayload, prefix);
+
+            // 3. Executar o fluxo da nota solicitado
+            const result = await callbackExecucao(handle);
+
+            // Se falhou com erro 10091 de rede, força o retry
+            if (result && result.sucesso === false && typeof result.erro === 'string' && result.erro.includes('10091')) {
+                if (attempts < maxAttempts) {
+                    console.warn(`[FiscalLib Worker] ⚠️ Detectado erro de rede 10091 na tentativa ${attempts}. Reiniciando handle para tentar novamente...`);
+                    throw new Error(`[RETRY_TRIGGER] 10091 Network subsystem is unusable: ${result.erro}`);
+                }
+            }
+
+            return result;
+
+        } catch (err) {
+            if (attempts < maxAttempts && err.message && (err.message.startsWith('[RETRY_TRIGGER]') || err.message.includes('10091'))) {
+                console.warn(`[FiscalLib Worker] ⚠️ Detectado erro 10091 na tentativa ${attempts}. Tentando novamente...`);
+                continue;
+            }
+            throw err;
+        } finally {
+            // 4. Sempre finalizar e destruir o Handle na memória e apagar o INI temporário
+            if (handle) lib.Finalizar(handle);
+            try {
+                if (fs.existsSync(threadIni)) {
+                    fs.unlinkSync(threadIni);
+                }
+            } catch (e) {
+                console.error(`[FiscalLib Worker] Falha ao excluir INI temporário ${threadIni}: ${e.message}`);
+            }
         }
     }
 };
@@ -889,15 +1192,55 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 let ret = libMDFe.CarregarINI(handle, dados);
                 if (ret !== 0) throw new Error(lerRetornoACBr(libMDFe, handle));
 
-                const bufferResposta = Buffer.alloc(9999);
+                const bufferResposta = Buffer.alloc(TAMANHO_BUFFER);
                 const bufferTamanho = Buffer.alloc(4);
-                bufferTamanho.writeInt32LE(9999, 0);
+                bufferTamanho.writeInt32LE(TAMANHO_BUFFER, 0);
 
                 ret = libMDFe.Enviar(handle, 1, false, true, false, bufferResposta, bufferTamanho);
-                if (ret !== 0) throw new Error(lerRetornoACBr(libMDFe, handle));
+                const ultimoRetorno = lerRetornoACBr(libMDFe, handle);
+                const tamanho = bufferTamanho.readInt32LE(0);
+                const xmlRetorno = tamanho > 0 && tamanho !== TAMANHO_BUFFER
+                    ? bufferResposta.toString('utf8', 0, tamanho)
+                    : '';
 
-                return { sucesso: true, result: bufferResposta.toString('utf8', 0, bufferTamanho.readInt32LE(0)) };
-            }, 'MDFE');
+                console.log(`[FiscalLib] Enviar MDFe ret=${ret} | UltimoRetorno: ${ultimoRetorno.substring(0, 200)}`);
+
+                const parsed = parsearRetornoMdfe(ultimoRetorno || xmlRetorno);
+                const sucesso = parsed.c_stat === '100';
+
+                // Se sucesso, obter o XML assinado completo do MDF-e (procMDFe)
+                let xml_mdfe = '';
+                if (sucesso) {
+                    try {
+                        const bufXml = Buffer.alloc(TAMANHO_BUFFER);
+                        const bufXmlTam = Buffer.alloc(4);
+                        bufXmlTam.writeInt32LE(TAMANHO_BUFFER, 0);
+                        const retXml = libMDFe.ObterXml(handle, 0, bufXml, bufXmlTam);
+                        if (retXml === 0) {
+                            const tamXml = bufXmlTam.readInt32LE(0);
+                            if (tamXml > 0 && tamXml <= TAMANHO_BUFFER) {
+                                xml_mdfe = bufXml.toString('utf8', 0, tamXml).replace(/\0/g, '');
+                            }
+                        } else {
+                            console.warn(`[FiscalLib] ObterXml MDFe ret=${retXml} | ${lerRetornoACBr(libMDFe, handle)}`);
+                        }
+                    } catch (e) {
+                        console.warn('[FiscalLib] Falha ObterXml MDFe:', e.message);
+                    }
+                }
+
+                return {
+                    sucesso,
+                    chave_mdfe: parsed.chave_mdfe,
+                    nr_protocolo: parsed.nr_protocolo,
+                    c_stat: parsed.c_stat,
+                    x_motivo: parsed.x_motivo,
+                    xml_mdfe,
+                    xml_retorno: xmlRetorno,
+                    retorno_completo: ultimoRetorno || xmlRetorno,
+                    erro: sucesso ? null : (parsed.x_motivo || ultimoRetorno)
+                };
+            }, 'MDFe');
 
         case 'ENCERRAR_MDFE':
             return executarNaDLL(libMDFe, config, async (handle) => {
@@ -905,15 +1248,38 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 let ret = libMDFe.CarregarEventoINI(handle, dados);
                 if (ret !== 0) throw new Error(lerRetornoACBr(libMDFe, handle));
 
-                const bufferResposta = Buffer.alloc(9999);
+                const bufferResposta = Buffer.alloc(TAMANHO_BUFFER);
                 const bufferTamanho = Buffer.alloc(4);
-                bufferTamanho.writeInt32LE(9999, 0);
+                bufferTamanho.writeInt32LE(TAMANHO_BUFFER, 0);
 
                 ret = libMDFe.EnviarEvento(handle, 1, bufferResposta, bufferTamanho);
-                if (ret !== 0) throw new Error(lerRetornoACBr(libMDFe, handle));
+                const ultimoRetorno = lerRetornoACBr(libMDFe, handle);
+                const tamanho = bufferTamanho.readInt32LE(0);
+                const xmlRetorno = tamanho > 0 && tamanho !== TAMANHO_BUFFER ? bufferResposta.toString('utf8', 0, tamanho) : '';
 
-                return { sucesso: true, result: bufferResposta.toString('utf8', 0, bufferTamanho.readInt32LE(0)) };
-            }, 'MDFE');
+                console.log(`[FiscalLib] EnviarEvento MDFe ret=${ret} | UltimoRetorno: ${ultimoRetorno.substring(0, 200)}`);
+
+                const parsed = parsearRetornoMdfe(ultimoRetorno || xmlRetorno);
+                const sucesso = ['135', '100', '631'].includes(String(parsed.c_stat)) || String(ultimoRetorno).includes('135') || String(ultimoRetorno).includes('631');
+
+                return {
+                    sucesso,
+                    c_stat: parsed.c_stat,
+                    x_motivo: parsed.x_motivo,
+                    protocol: parsed.nr_protocolo,
+                    xml_retorno: xmlRetorno,
+                    retorno_completo: ultimoRetorno || xmlRetorno,
+                    erro: sucesso ? null : (parsed.x_motivo || ultimoRetorno)
+                };
+            }, 'MDFe');
+
+        case 'IMPRIMIR_MDFE':
+            return executarNaDLL(libMDFe, config, async (handle) => {
+                libMDFe.LimparLista(handle);
+                const ret = libMDFe.CarregarXML(handle, dados);
+                if (ret !== 0) return { sucesso: false, erro: '[IMPRIMIR_MDFE] CarregarXML: ' + lerRetornoACBr(libMDFe, handle), pdf_path: null };
+                return tentarImprimirDAMDFE(libMDFe, handle, jsonPayload.print_config, 'MDFe', jsonPayload.chave, config);
+            }, 'MDFe');
 
         case 'IMPRIMIR_NFE':
         case 'IMPRIMIR_NFCE':
