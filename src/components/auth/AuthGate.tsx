@@ -28,7 +28,9 @@ interface AuthGateProps {
 
 const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
   const [session, setSession] = useState<Session | null>(null);
+  const [rawSession, setRawSession] = useState<Session | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
+  const [XIsSuperuser, setXIsSuperuser] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [mode, setMode] = useState<AuthMode>("signin");
   const [email, setEmail] = useState("");
@@ -96,12 +98,17 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
     return true;
   };
 
-  const checkUserAuthorized = async (userId: string): Promise<boolean> => {
+  interface AuthResult {
+    isAuthorized: boolean;
+    isSuperuser: boolean;
+  }
+
+  const checkUserAuthorized = async (userId: string): Promise<AuthResult> => {
     // Timeout de segurança de 6 segundos para a consulta do banco (aumentado para comportar retentativa)
-    const timeoutPromise = new Promise<boolean>((resolve) =>
+    const timeoutPromise = new Promise<AuthResult>((resolve) =>
       setTimeout(() => {
         console.warn("[AuthGate] A consulta de autorização excedeu o limite de 6s. Fallback para não autorizado.");
-        resolve(false);
+        resolve({ isAuthorized: false, isSuperuser: false });
       }, 6000)
     );
 
@@ -109,7 +116,7 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
       try {
         let { data, error } = await supabase
           .from("profiles")
-          .select("fl_autorizado")
+          .select("fl_autorizado, fl_superuser")
           .eq("id", userId)
           .single();
         
@@ -119,7 +126,7 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
           await new Promise((resolve) => setTimeout(resolve, 500));
           const retry = await supabase
             .from("profiles")
-            .select("fl_autorizado")
+            .select("fl_autorizado, fl_superuser")
             .eq("id", userId)
             .single();
           data = retry.data;
@@ -128,42 +135,66 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
 
         if (error) {
           console.error("Erro ao verificar autorização:", error);
-          return false;
+          return { isAuthorized: false, isSuperuser: false };
         }
-        return data?.fl_autorizado ?? false;
+        return {
+          isAuthorized: (data as any)?.fl_autorizado ?? false,
+          isSuperuser: (data as any)?.fl_superuser ?? false
+        };
       } catch (err) {
         console.error("Exceção na consulta de autorização:", err);
-        return false;
+        return { isAuthorized: false, isSuperuser: false };
       }
     })();
 
     return Promise.race([queryPromise, timeoutPromise]);
   };
 
-  const handleSessionChange = async (s: Session | null) => {
-    try {
-      if (s) {
-        const isAuthorized = await checkUserAuthorized(s.user.id);
+  // Verify authorization whenever rawSession changes
+  useEffect(() => {
+    let active = true;
+
+    const verify = async () => {
+      if (!rawSession) {
+        setSession(null);
+        setLoadingSession(false);
+        return;
+      }
+
+      setLoadingSession(true);
+      try {
+        const { isAuthorized, isSuperuser } = await checkUserAuthorized(rawSession.user.id);
+        if (!active) return;
+
         if (!isAuthorized) {
           toast.error("Acesso pendente de liberação pelo administrador.");
           setAuthError("Seu acesso foi criado com sucesso, mas está aguardando a liberação de um administrador da sua empresa para entrar.");
-          // Executa signOut em background para não bloquear o fluxo da UI
+          // Executa signOut em background
           supabase.auth.signOut().catch((err) => {
             console.error("Erro ao desconectar usuário não autorizado:", err);
           });
           setSession(null);
-          return;
+        } else {
+          setAuthError(null);
+          setXIsSuperuser(isSuperuser);
+          setSession(rawSession);
         }
-        setAuthError(null);
-        setSession(s);
-      } else {
+      } catch (err) {
+        console.error("Erro ao verificar autorização no useEffect:", err);
         setSession(null);
+      } finally {
+        if (active) {
+          setLoadingSession(false);
+        }
       }
-    } catch (err) {
-      console.error("Erro ao processar alteração de sessão:", err);
-      setSession(null);
-    }
-  };
+    };
+
+    verify();
+
+    return () => {
+      active = false;
+    };
+  }, [rawSession]);
 
   useEffect(() => {
     let active = true;
@@ -176,17 +207,19 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
       }
     }, 3000);
 
-    supabase.auth.getSession().then(async ({ data }) => {
+    supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
       try {
         if (data.session) {
-          await handleSessionChange(data.session);
+          setRawSession(data.session);
+        } else {
+          setLoadingSession(false);
         }
       } catch (err) {
         console.error("Erro no getSession inicial:", err);
+        setLoadingSession(false);
       } finally {
         clearTimeout(fallbackTimer);
-        setLoadingSession(false);
       }
     }).catch((err) => {
       console.error("Erro catastrófico ao obter sessão inicial:", err);
@@ -196,24 +229,20 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       try {
-        if (nextSession) {
-          await handleSessionChange(nextSession);
-        } else {
-          setSession(null);
-        }
+        setRawSession(nextSession);
       } catch (err) {
         console.error("Erro no onAuthStateChange:", err);
       } finally {
         if (active) {
           clearTimeout(fallbackTimer);
-          setLoadingSession(false);
           // Reset empresa selection on logout
           if (!nextSession) {
             setXEmpresasVinculadas([]);
             setXEmpresaSelecionada(null);
             setXEmpresaConfirmada(false);
+            setLoadingSession(false);
           }
         }
       }
@@ -235,40 +264,58 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
       try {
         console.log("[AuthGate] Iniciando carregamento de empresas para o usuário:", session.user.id);
         
-        // Get empresa_usuario links for this user
-        const { data: XLinks, error: XLinkError } = await (supabase as any)
-          .from("empresa_usuario")
-          .select("empresa_id")
-          .eq("user_id", session.user.id)
-          .eq("fl_excluido", false);
+        let XList: IEmpresaVinculada[] = [];
 
-        if (XLinkError) {
-          console.error("[AuthGate] Erro ao buscar vínculos:", XLinkError);
-          throw XLinkError;
+        if (XIsSuperuser) {
+          console.log("[AuthGate] Usuário é superusuário. Carregando todas as empresas.");
+          const { data: XEmpresas, error: XEmpError } = await (supabase as any)
+            .from("empresa")
+            .select("empresa_id, razao_social, nome_fantasia, empresa_matriz_id, identificacao")
+            .eq("excluido", false)
+            .order("razao_social");
+
+          if (XEmpError) {
+            console.error("[AuthGate] Erro ao buscar todas as empresas:", XEmpError);
+            throw XEmpError;
+          }
+          XList = (XEmpresas || []) as IEmpresaVinculada[];
+        } else {
+          // Get empresa_usuario links for this user
+          const { data: XLinks, error: XLinkError } = await (supabase as any)
+            .from("empresa_usuario")
+            .select("empresa_id")
+            .eq("user_id", session.user.id)
+            .eq("fl_excluido", false);
+
+          if (XLinkError) {
+            console.error("[AuthGate] Erro ao buscar vínculos:", XLinkError);
+            throw XLinkError;
+          }
+
+          console.log("[AuthGate] Vínculos encontrados:", XLinks?.length || 0);
+
+          if (!XLinks || XLinks.length === 0) {
+            setXEmpresasVinculadas([]);
+            return;
+          }
+
+          const XEmpresaIds = XLinks.map((l: any) => l.empresa_id);
+
+          const { data: XEmpresas, error: XEmpError } = await (supabase as any)
+            .from("empresa")
+            .select("empresa_id, razao_social, nome_fantasia, empresa_matriz_id, identificacao")
+            .in("empresa_id", XEmpresaIds)
+            .eq("excluido", false)
+            .order("razao_social");
+
+          if (XEmpError) {
+            console.error("[AuthGate] Erro ao buscar detalhes das empresas:", XEmpError);
+            throw XEmpError;
+          }
+
+          XList = (XEmpresas || []) as IEmpresaVinculada[];
         }
 
-        console.log("[AuthGate] Vínculos encontrados:", XLinks?.length || 0);
-
-        if (!XLinks || XLinks.length === 0) {
-          setXEmpresasVinculadas([]);
-          return;
-        }
-
-        const XEmpresaIds = XLinks.map((l: any) => l.empresa_id);
-
-        const { data: XEmpresas, error: XEmpError } = await (supabase as any)
-          .from("empresa")
-          .select("empresa_id, razao_social, nome_fantasia, empresa_matriz_id, identificacao")
-          .in("empresa_id", XEmpresaIds)
-          .eq("excluido", false)
-          .order("razao_social");
-
-        if (XEmpError) {
-          console.error("[AuthGate] Erro ao buscar detalhes das empresas:", XEmpError);
-          throw XEmpError;
-        }
-
-        const XList = (XEmpresas || []) as IEmpresaVinculada[];
         console.log("[AuthGate] Empresas carregadas com sucesso:", XList.length);
         setXEmpresasVinculadas(XList);
 
@@ -288,7 +335,7 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
     };
 
     loadEmpresas();
-  }, [session, XEmpresaConfirmada]);
+  }, [session, XEmpresaConfirmada, XIsSuperuser]);
 
   const title = useMemo(
     () => (mode === "signin" ? "Entrar no sistema" : "Criar acesso"),
