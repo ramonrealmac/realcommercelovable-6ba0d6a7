@@ -170,6 +170,17 @@ export const mdfeEmissaoService = {
         }
       }
 
+      // Validar presença de veículo de tração e condutores para o modal rodoviário
+      const temTracao = (veiculos || []).some((v: any) => v.tp_veiculo === "TRACAO" && !v.excluido);
+      if (!temTracao) {
+        throw new Error("É obrigatório adicionar um Veículo do tipo TRAÇÃO no manifesto antes de transmitir.");
+      }
+
+      const activeCondutores = (condutoresRaw || []).filter((c: any) => !c.excluido);
+      if (activeCondutores.length === 0) {
+        throw new Error("É obrigatório cadastrar pelo menos um Motorista (Condutor) na aba Veículos / Motoristas.");
+      }
+
       // Coletar IDs de Cidades e Motoristas para buscas em lote na memória
       const cidadeIds = new Set<number>();
       (carregaRaw || []).forEach((c: any) => { if (c.cidade_id) cidadeIds.add(Number(c.cidade_id)); });

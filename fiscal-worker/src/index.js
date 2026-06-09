@@ -241,6 +241,11 @@ const processarEvento = async (evento) => {
                 logger.warn(`Falha ao buscar config de impressão: ${e.message}`);
             }
         } else if (isEmissaoMdfe && evento.mdf_manifesto_id && !payload.print_config) {
+            // Default printing fallback to PDF
+            payload.print_config = {
+                tp_imp: 'PDF',
+                nm_impressora: ''
+            };
             try {
                 const { data: mdf } = await supabase
                     .from('fiscal_mdf_manifesto')
@@ -347,6 +352,55 @@ const processarEvento = async (evento) => {
         // 3. Chama a biblioteca nativa passando o JSON payload atualizado
         const resultado = await executarComandoFiscal(evento.comando, payload);
 
+        // Intercepta e auto-cura rejeição por duplicidade (204) para MDF-e se o documento não estiver autorizado no banco
+        if (evento.comando === 'EMITIR_MDFE') {
+            let manifestoAtual = null;
+            try {
+                const { data } = await supabase
+                    .from('fiscal_mdf_manifesto')
+                    .select('status, chave_acesso, numero_protocolo')
+                    .eq('mdf_manifesto_id', evento.mdf_manifesto_id)
+                    .maybeSingle();
+                manifestoAtual = data;
+            } catch (err) {
+                logger.warn(`[MDF-e] Erro ao consultar status atual do MDF-e #${evento.mdf_manifesto_id}: ${err.message}`);
+            }
+
+            const jaAutorizadoOuEncerrado = manifestoAtual && (manifestoAtual.status === 'A' || manifestoAtual.status === 'E');
+            const isDuplicidade = String(resultado.c_stat) === '204' || String(resultado.erro || '').includes('204') || String(resultado.retorno_completo || '').includes('204');
+
+            if (isDuplicidade) {
+                if (jaAutorizadoOuEncerrado) {
+                    logger.info(`[MDF-e #${evento.mdf_manifesto_id}] Já autorizado ou encerrado no banco (${manifestoAtual.status}). Mantendo os dados intactos.`);
+                } else {
+                    logger.info(`[MDF-e #${evento.mdf_manifesto_id}] Duplicidade (204) detectada em documento pendente. Aplicando autocura.`);
+                    
+                    let chave = resultado.chave_mdfe;
+                    if (!chave || chave.length !== 44) {
+                        const mCh = String(resultado.retorno_completo || '').match(/MDFe(\d{44})/i) || String(resultado.erro || '').match(/MDFe(\d{44})/i);
+                        if (mCh) chave = mCh[1];
+                    }
+                    if (chave && chave.includes('&')) {
+                        const mCh44 = chave.match(/\d{44}/);
+                        if (mCh44) chave = mCh44[0];
+                    }
+                    
+                    let prot = resultado.nr_protocolo;
+                    if (!prot) {
+                        const mPr = String(resultado.retorno_completo || '').match(/nProt:(\d+)/i) || String(resultado.erro || '').match(/nProt:(\d+)/i);
+                        if (mPr) prot = mPr[1];
+                    }
+
+                    resultado.sucesso = true;
+                    resultado.c_stat = '100';
+                    resultado.x_motivo = 'Autorizado o uso do MDF-e (Recuperado por Duplicidade)';
+                    if (chave) resultado.chave_mdfe = chave;
+                    if (prot) resultado.nr_protocolo = prot;
+                    resultado.erro = null;
+                }
+            }
+        }
+
         const isCancelamento = ['CANCELAR_NFE', 'CANCELAR_NFCE'].includes(evento.comando);
         const isInutilizacao = ['INUTILIZAR_NFE', 'INUTILIZAR_NFCE'].includes(evento.comando);
 
@@ -398,14 +452,33 @@ const processarEvento = async (evento) => {
         // 4c. Atualizar fiscal_mdf_manifesto se for emissão ou encerramento de MDF-e
         if (evento.mdf_manifesto_id) {
             if (isEmissaoMdfe) {
-                const updateMdfe = {
-                    status: resultado.sucesso ? 'A' : 'R', // A=Autorizado, R=Rejeitado
-                    chave_acesso: resultado.chave_mdfe || null,
-                    numero_protocolo: resultado.nr_protocolo || null,
-                    dt_alteracao: new Date().toISOString()
-                };
-                await supabase.from('fiscal_mdf_manifesto').update(updateMdfe).eq('mdf_manifesto_id', evento.mdf_manifesto_id);
-                logger.info(`MDF-e #${evento.mdf_manifesto_id} atualizado (Emissão) - Status: ${updateMdfe.status}`);
+                // Verificar status atual no banco de dados para evitar rebaixamento
+                let manifestoAtual = null;
+                try {
+                    const { data } = await supabase
+                        .from('fiscal_mdf_manifesto')
+                        .select('status')
+                        .eq('mdf_manifesto_id', evento.mdf_manifesto_id)
+                        .maybeSingle();
+                    manifestoAtual = data;
+                } catch (err) {
+                    logger.warn(`Erro ao consultar manifesto atual no update: ${err.message}`);
+                }
+
+                const jaAutorizadoOuEncerrado = manifestoAtual && (manifestoAtual.status === 'A' || manifestoAtual.status === 'E');
+
+                if (jaAutorizadoOuEncerrado) {
+                    logger.info(`[MDF-e #${evento.mdf_manifesto_id}] MDF-e já se encontra como ${manifestoAtual.status}. Não atualizando para evitar rebaixamento ou perda de chave.`);
+                } else {
+                    const updateMdfe = {
+                        status: resultado.sucesso ? 'A' : 'R', // A=Autorizado, R=Rejeitado
+                        chave_acesso: resultado.chave_mdfe || null,
+                        numero_protocolo: resultado.nr_protocolo || null,
+                        dt_alteracao: new Date().toISOString()
+                    };
+                    await supabase.from('fiscal_mdf_manifesto').update(updateMdfe).eq('mdf_manifesto_id', evento.mdf_manifesto_id);
+                    logger.info(`MDF-e #${evento.mdf_manifesto_id} atualizado (Emissão) - Status: ${updateMdfe.status}`);
+                }
             } else if (isEncerramentoMdfe && resultado.sucesso) {
                 const updateMdfe = {
                     status: 'E', // E=Encerrado

@@ -180,15 +180,84 @@ const lerRetornoACBr = (lib, handle) => {
 const parsearRetornoNfe = (retorno) => {
     if (!retorno) return { chave_nfe: null, nr_protocolo: null, c_stat: null, x_motivo: null, recibo_sefaz: null };
 
+    // Se for JSON, trata como JSON
+    if (typeof retorno === 'string' && (retorno.trim().startsWith('{') || retorno.trim().startsWith('['))) {
+        try {
+            const obj = JSON.parse(retorno);
+            
+            const acharNoObjeto = (targetObj, chaveDesejada) => {
+                if (!targetObj || typeof targetObj !== 'object') return null;
+                const chaves = Object.keys(targetObj);
+                for (const k of chaves) {
+                    if (k.toLowerCase() === chaveDesejada.toLowerCase()) return targetObj[k];
+                }
+                for (const k of chaves) {
+                    const res = acharNoObjeto(targetObj[k], chaveDesejada);
+                    if (res !== null) return res;
+                }
+                return null;
+            };
+
+            let c_stat = acharNoObjeto(obj, 'cStat') || acharNoObjeto(obj, 'CStat');
+            let x_motivo = acharNoObjeto(obj, 'xMotivo') || acharNoObjeto(obj, 'XMotivo');
+            let chave_nfe = acharNoObjeto(obj, 'chNFe') || acharNoObjeto(obj, 'ChaveNFe') || acharNoObjeto(obj, 'chDFe') || acharNoObjeto(obj, 'Chave');
+            let nr_prot = acharNoObjeto(obj, 'nProt') || acharNoObjeto(obj, 'NProt') || acharNoObjeto(obj, 'Protocolo');
+            let recibo = acharNoObjeto(obj, 'nRec') || acharNoObjeto(obj, 'NRec') || acharNoObjeto(obj, 'Recibo');
+
+            if (x_motivo) {
+                if (!nr_prot) {
+                    const mProt = String(x_motivo).match(/nProt:(\d+)/i) || String(x_motivo).match(/Protocolo:(\d+)/i);
+                    if (mProt) nr_prot = mProt[1];
+                }
+                if (!chave_nfe) {
+                    const mChave = String(x_motivo).match(/chNFe:(\d{44})/i) || String(x_motivo).match(/(\d{44})/);
+                    if (mChave) chave_nfe = mChave[1];
+                }
+            }
+
+            if (!chave_nfe) {
+                const procurarChaveNasPropriedades = (o) => {
+                    if (!o || typeof o !== 'object') return null;
+                    for (const k of Object.keys(o)) {
+                        const m = k.match(/NFe(\d{44})/i) || k.match(/(\d{44})/);
+                        if (m) return m[1];
+                        const res = procurarChaveNasPropriedades(o[k]);
+                        if (res) return res;
+                    }
+                    return null;
+                };
+                chave_nfe = procurarChaveNasPropriedades(obj);
+            }
+
+            if (chave_nfe) {
+                const mChave44 = String(chave_nfe).match(/\d{44}/);
+                if (mChave44) chave_nfe = mChave44[0];
+            }
+            if (nr_prot) {
+                nr_prot = String(nr_prot).replace(/[\]"']/g, '').trim();
+            }
+
+            return {
+                chave_nfe: chave_nfe ? String(chave_nfe) : null,
+                nr_protocolo: nr_prot ? String(nr_prot) : null,
+                c_stat: c_stat ? String(c_stat) : null,
+                x_motivo: x_motivo ? String(x_motivo) : null,
+                recibo_sefaz: recibo ? String(recibo) : null
+            };
+        } catch (e) {
+            console.error("[Parser NFe] Erro ao tratar como JSON:", e.message);
+        }
+    }
+
     const extrair = (chave) => {
-        const regex = new RegExp(`${chave}[=:]\\s*"?([^\\r\\n",}]+)"?`, 'i');
+        const regex = new RegExp(`${chave}[=:]\\s*"?([^\\r\\n",}\\]]+)"?`, 'i');
         const m = retorno.match(regex);
         return m ? m[1].trim() : null;
     };
 
     let c_stat = extrair('cStat') || extrair('CStat');
     let x_motivo = extrair('xMotivo') || extrair('XMotivo');
-    let chave_nfe = extrair('chNFe') || extrair('ChNFe') || extrair('ChaveNFe');
+    let chave_nfe = extrair('chNFe') || extrair('ChFe') || extrair('ChaveNFe');
     let nr_prot = extrair('nProt') || extrair('NProt') || extrair('Protocolo');
     let recibo = extrair('nRec') || extrair('NRec') || extrair('Recibo');
 
@@ -223,10 +292,96 @@ const parsearRetornoNfe = (retorno) => {
 const parsearRetornoMdfe = (retorno) => {
     if (!retorno) return { chave_mdfe: null, nr_protocolo: null, c_stat: null, x_motivo: null };
 
+    // Se for JSON, trata como JSON
+    if (typeof retorno === 'string' && (retorno.trim().startsWith('{') || retorno.trim().startsWith('['))) {
+        try {
+            const obj = JSON.parse(retorno);
+            
+            const acharNoObjeto = (targetObj, chaveDesejada) => {
+                if (!targetObj || typeof targetObj !== 'object') return null;
+                const chaves = Object.keys(targetObj);
+                for (const k of chaves) {
+                    if (k.toLowerCase() === chaveDesejada.toLowerCase()) return targetObj[k];
+                }
+                for (const k of chaves) {
+                    const res = acharNoObjeto(targetObj[k], chaveDesejada);
+                    if (res !== null) return res;
+                }
+                return null;
+            };
+
+            let c_stat = acharNoObjeto(obj, 'cStat') || acharNoObjeto(obj, 'CStat');
+            let x_motivo = acharNoObjeto(obj, 'xMotivo') || acharNoObjeto(obj, 'XMotivo');
+            let chave_mdfe = acharNoObjeto(obj, 'chMDFe') || acharNoObjeto(obj, 'ChaveMDFe') || acharNoObjeto(obj, 'chDFe') || acharNoObjeto(obj, 'Chave');
+            let nr_prot = acharNoObjeto(obj, 'nProt') || acharNoObjeto(obj, 'NProt') || acharNoObjeto(obj, 'Protocolo');
+
+            if (x_motivo) {
+                if (!nr_prot) {
+                    const mProt = String(x_motivo).match(/nProt:(\d+)/i) || String(x_motivo).match(/Protocolo:(\d+)/i);
+                    if (mProt) nr_prot = mProt[1];
+                }
+                if (!chave_mdfe) {
+                    const mChave = String(x_motivo).match(/chMDFe:(\d{44})/i) || String(x_motivo).match(/(\d{44})/);
+                    if (mChave) chave_mdfe = mChave[1];
+                }
+            }
+
+            if (!chave_mdfe) {
+                const procurarChaveNasPropriedades = (o) => {
+                    if (!o || typeof o !== 'object') return null;
+                    for (const k of Object.keys(o)) {
+                        const m = k.match(/MDFe(\d{44})/i) || k.match(/(\d{44})/);
+                        if (m) return m[1];
+                        const res = procurarChaveNasPropriedades(o[k]);
+                        if (res) return res;
+                    }
+                    return null;
+                };
+                chave_mdfe = procurarChaveNasPropriedades(obj);
+            }
+
+            if (chave_mdfe) {
+                const mChave44 = String(chave_mdfe).match(/\d{44}/);
+                if (mChave44) chave_mdfe = mChave44[0];
+            }
+            if (nr_prot) {
+                nr_prot = String(nr_prot).replace(/[\]"']/g, '').trim();
+            }
+
+            return {
+                chave_mdfe: chave_mdfe ? String(chave_mdfe) : null,
+                nr_protocolo: nr_prot ? String(nr_prot) : null,
+                c_stat: c_stat ? String(c_stat) : null,
+                x_motivo: x_motivo ? String(x_motivo) : null
+            };
+        } catch (e) {
+            console.error("[Parser MDFe] Erro ao tratar como JSON:", e.message);
+        }
+    }
+
+    const extrairDeSecao = (secao, chave) => {
+        const regexSecao = new RegExp(`\\[${secao}\\]([\\s\\S]*?)(?=\\r?\\n\\[|$)`, 'i');
+        const mSecao = retorno.match(regexSecao);
+        if (mSecao) {
+            const conteudoSecao = mSecao[1];
+            const regexChave = new RegExp(`${chave}[=:]\\s*"?([^\\r\\n",}\\]]+)"?`, 'i');
+            const mChave = conteudoSecao.match(regexChave);
+            return mChave ? mChave[1].trim() : null;
+        }
+        return null;
+    };
+
     const extrair = (chave) => {
-        const regex = new RegExp(`${chave}[=:]\\s*"?([^\\r\\n",}]+)"?`, 'i');
-        const m = retorno.match(regex);
-        return m ? m[1].trim() : null;
+        let valor = extrairDeSecao('Retorno', chave) 
+            || extrairDeSecao('MDFe\\d+', chave) 
+            || extrairDeSecao('Envio', chave);
+        
+        if (!valor) {
+            const regex = new RegExp(`${chave}[=:]\\s*"?([^\\r\\n",}\\]]+)"?`, 'i');
+            const m = retorno.match(regex);
+            valor = m ? m[1].trim() : null;
+        }
+        return valor;
     };
 
     let c_stat = extrair('cStat') || extrair('CStat');
@@ -234,13 +389,25 @@ const parsearRetornoMdfe = (retorno) => {
     let chave_mdfe = extrair('chMDFe') || extrair('ChaveMDFe') || extrair('chDFe') || extrair('Chave');
     let nr_prot = extrair('nProt') || extrair('NProt') || extrair('Protocolo');
 
-    if (!chave_mdfe) {
-        const mChave = retorno.match(/chMDFe="([^"]{44})"/i) || retorno.match(/<chMDFe>([^<]{44})<\/chMDFe>/i);
+    if (chave_mdfe) {
+        const mChave44 = chave_mdfe.match(/\d{44}/);
+        if (mChave44) {
+            chave_mdfe = mChave44[0];
+        }
+    }
+
+    if (!chave_mdfe || chave_mdfe.length !== 44) {
+        const mChave = retorno.match(/MDFe(\d{44})/i) || retorno.match(/chMDFe[=:]\s*"?(\d{44})"?/i) || retorno.match(/<chMDFe>(\d{44})<\/chMDFe>/i);
         if (mChave) chave_mdfe = mChave[1];
     }
+
+    if (nr_prot) {
+        nr_prot = nr_prot.replace(/[\]"']/g, '').trim();
+    }
+
     if (!nr_prot) {
         const mProt = retorno.match(/nProt="([^"]+)"/i) || retorno.match(/<nProt>([^<]+)<\/nProt>/i);
-        if (mProt) nr_prot = mProt[1];
+        if (mProt) nr_prot = mProt[1] ? mProt[1].replace(/[\]"']/g, '').trim() : null;
     }
     if (!c_stat) {
         const mStat = retorno.match(/cStat="([^"]+)"/i) || retorno.match(/<cStat>([^<]+)<\/cStat>/i);

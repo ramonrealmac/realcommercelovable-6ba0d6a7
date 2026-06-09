@@ -337,20 +337,31 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
         }
       }
 
+      // Verificar se há veículo TRAÇÃO cadastrado (Sempre obrigatório no modal rodoviário)
+      const { data: veiculoTracao } = await supabase
+        .from("fiscal_mdf_veiculo")
+        .select("veiculo_id")
+        .eq("mdf_manifesto_id", manifestoId)
+        .eq("tp_veiculo", "TRACAO")
+        .eq("excluido", false)
+        .maybeSingle();
+
+      if (!veiculoTracao) {
+        throw new Error("É obrigatório adicionar um Veículo do tipo TRAÇÃO no manifesto antes de transmitir.");
+      }
+
+      // Verificar se há motorista (condutor) cadastrado (Sempre obrigatório no modal rodoviário)
+      const { data: condutores } = await supabase
+        .from("fiscal_mdf_condutor")
+        .select("mdf_condutor_id")
+        .eq("mdf_manifesto_id", manifestoId)
+        .eq("excluido", false);
+
+      if (!condutores || condutores.length === 0) {
+        throw new Error("É obrigatório adicionar pelo menos um Motorista (Condutor) no manifesto antes de transmitir.");
+      }
+
       if (manifesto.tp_transportador) {
-        // Verificar se há veículo TRACAO cadastrado
-        const { data: veiculoTracao } = await supabase
-          .from("fiscal_mdf_veiculo")
-          .select("veiculo_id")
-          .eq("mdf_manifesto_id", manifestoId)
-          .eq("tp_veiculo", "TRACAO")
-          .eq("excluido", false)
-          .maybeSingle();
-
-        if (!veiculoTracao) {
-          throw new Error("É obrigatório adicionar um Veículo do tipo TRAÇÃO no manifesto antes de transmitir.");
-        }
-
         if (!manifesto.transp_cnpj_cpf || !manifesto.transp_cnpj_cpf.trim()) {
           throw new Error("O CNPJ/CPF do Transportador é obrigatório. Certifique-se de que o Proprietário do Veículo de Tração possui um documento (CNPJ/CPF) cadastrado.");
         }
