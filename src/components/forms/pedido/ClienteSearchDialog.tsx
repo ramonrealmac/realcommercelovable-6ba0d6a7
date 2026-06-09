@@ -8,6 +8,7 @@ const db = supabase as any;
 
 export interface IClienteRow {
   cadastro_id: number;
+  cd_cadastro?: number | null;
   cnpj: string | null;
   razao_social: string | null;
   nome_fantasia: string | null;
@@ -86,7 +87,7 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
   const buscar = useCallback(async (termo: string) => {
     setXLoading(true);
     let q = db.from("cadastro")
-      .select("cadastro_id, cnpj, razao_social, nome_fantasia, fone_geral, email, endereco_cidade_id, endereco_bairro, endereco_logradouro")
+      .select("cadastro_id, cd_cadastro, cnpj, razao_social, nome_fantasia, fone_geral, email, endereco_cidade_id, endereco_bairro, endereco_logradouro")
       .eq("excluido", false)
       .eq("st_cliente", "S")
       .eq("empresa_id", empresaId)
@@ -95,7 +96,7 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
     const t = termo.trim();
     if (t) {
       if (/^\d+$/.test(t)) {
-        q = q.or(`cadastro_id.eq.${t},cnpj.ilike.%${t}%`);
+        q = q.or(`cd_cadastro.eq.${t},cnpj.ilike.%${t}%`);
       } else {
         q = q.or(`razao_social.ilike.%${t}%,nome_fantasia.ilike.%${t}%,cnpj.ilike.%${t}%`);
       }
@@ -160,7 +161,7 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
       chips.push(<span key={key}>{node}</span>);
     };
 
-    push("codigo", <span className="font-mono text-blue-600 dark:text-blue-400">#{r.cadastro_id}</span>);
+    push("codigo", <span className="font-mono text-blue-600 dark:text-blue-400">#{r.cd_cadastro ?? r.cadastro_id}</span>);
     push("cnpj", r.cnpj ? <span className="font-mono text-muted-foreground">{r.cnpj}</span> : null);
     push("razao_social", <span className="text-blue-800 dark:text-blue-300 font-medium break-words">{r.razao_social || ""}</span>);
     push("fantasia", r.nome_fantasia ? <span className="text-foreground">{r.nome_fantasia}</span> : null);

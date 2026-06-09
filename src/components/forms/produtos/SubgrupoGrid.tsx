@@ -12,7 +12,7 @@ interface SubgrupoGridProps {
 }
 
 const XSubgrupoColumns: IGridColumn[] = [
-  { key: "produto_subgrupo_id", label: "Código", width: "100px", align: "right" },
+  { key: "cd_produto_subgrupo", label: "Código", width: "100px", align: "right" },
   { key: "nome", label: "Nome", width: "1fr" },
 ];
 
@@ -26,11 +26,11 @@ const SubgrupoGrid: React.FC<SubgrupoGridProps> = ({ XEmpresaId, XGrupoId }) => 
 
   const loadData = useCallback(async () => {
     const { data } = await db.from("produto_subgrupo")
-      .select("produto_subgrupo_id,nome,produto_grupo_id,empresa_id,excluido")
+      .select("produto_subgrupo_id,cd_produto_subgrupo,nome,produto_grupo_id,empresa_id,excluido")
       .eq("empresa_id", XEmpresaId)
       .eq("produto_grupo_id", XGrupoId)
       .eq("excluido", false)
-      .order("produto_subgrupo_id");
+      .order("cd_produto_subgrupo");
     setXSubgrupos(data || []);
   }, [XEmpresaId, XGrupoId]);
 
@@ -41,9 +41,9 @@ const SubgrupoGrid: React.FC<SubgrupoGridProps> = ({ XEmpresaId, XGrupoId }) => 
   }, [XEmpresaId, XGrupoId, loadData]);
 
   const XFiltered = XSubgrupos.filter(s => {
-    const fc = XFilterValues["produto_subgrupo_id"] || "";
+    const fc = XFilterValues["cd_produto_subgrupo"] || "";
     const fn = XFilterValues["nome"] || "";
-    if (fc && !String(s.produto_subgrupo_id).includes(fc)) return false;
+    if (fc && !String(s.cd_produto_subgrupo ?? s.produto_subgrupo_id ?? "").includes(fc)) return false;
     if (fn && !s.nome.toLowerCase().includes(fn.toLowerCase())) return false;
     return true;
   });

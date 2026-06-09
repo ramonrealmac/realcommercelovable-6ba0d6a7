@@ -2,6 +2,7 @@ import React from "react";
 import { useAppContext } from "@/contexts/AppContext";
 import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import type { IGridColumn } from "@/components/grid/DataGrid";
+import { supabase } from "@/integrations/supabase/client";
 
 interface IUnidade {
   unidade_id: string;
@@ -31,6 +32,43 @@ const UnidadeForm: React.FC = () => {
           if (!rec.unidade_id?.toString().trim()) throw new Error("A sigla da unidade é obrigatória.");
           if (!rec.descricao?.trim()) throw new Error("A descrição é obrigatória.");
           return { ...rec, unidade_id: rec.unidade_id.toString().trim().toUpperCase(), descricao: rec.descricao.trim() };
+        },
+        XOnSave: async (rec, mode) => {
+          if (mode === "insert") {
+            const { data, error } = await supabase
+              .from("unidade")
+              .insert({
+                unidade_id: rec.unidade_id,
+                descricao: rec.descricao,
+                empresa_id: XEmpresaMatrizId,
+                excluido: false
+              })
+              .select()
+              .single();
+            if (error) throw new Error(error.message);
+            return data;
+          } else {
+            const { data, error } = await supabase
+              .from("unidade")
+              .update({
+                descricao: rec.descricao,
+                excluido: rec.excluido ?? false
+              })
+              .eq("unidade_id", rec.unidade_id)
+              .eq("empresa_id", XEmpresaMatrizId)
+              .select()
+              .single();
+            if (error) throw new Error(error.message);
+            return data;
+          }
+        },
+        XOnDelete: async (rec) => {
+          const { error } = await supabase
+            .from("unidade")
+            .update({ excluido: true })
+            .eq("unidade_id", rec.unidade_id)
+            .eq("empresa_id", XEmpresaMatrizId);
+          if (error) throw new Error(error.message);
         },
       }}
       XGridCols={XGridCols}

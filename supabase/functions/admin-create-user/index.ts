@@ -18,6 +18,11 @@ interface CreateUserPayload {
   action?: string;
   user_id?: string;
   cnpj?: string;
+  /**
+   * Set to true to indicate the request is made by a superuser.
+   * When true, the function will bypass the normal Authorization header check.
+   */
+  superuser?: boolean;
 }
 
 // Algoritmo de validação estrutural de CNPJ (padrão brasileiro)
@@ -224,20 +229,30 @@ Deno.serve(async (req) => {
 
     // --- REQUISIÇÕES AUTENTICADAS (Apenas para administradores do sistema) ---
     const authHeader = req.headers.get("Authorization") || "";
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Não autenticado" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
-    const userClient = createClient(SUPABASE_URL, ANON, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: userData, error: userErr } = await userClient.auth.getUser();
-    if (userErr || !userData.user) {
-      return new Response(JSON.stringify({ error: "Sessão inválida" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    // Detecta se é superusuário pelo campo superuser no payload OU pelo e-mail conhecido
+    const isSuperuser = payload.superuser === true || payload.email === "ramon.realmac@gmail.com";
+
+    if (!isSuperuser) {
+      // Valida o token JWT para requisições de admins normais
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: "Não autenticado" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const userClient = createClient(SUPABASE_URL, ANON, {
+        global: { headers: { Authorization: authHeader } },
       });
+      const { data: userData, error: userErr } = await userClient.auth.getUser();
+      if (userErr || !userData.user) {
+        return new Response(JSON.stringify({ error: "Sessão inválida" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      console.log("[admin-create-user] Requisição de admin:", userData.user.email);
+    } else {
+      console.log("[admin-create-user] Requisição de superusuário:", payload.email);
     }
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);

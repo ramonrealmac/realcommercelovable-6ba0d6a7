@@ -6532,10 +6532,10 @@ export type Database = {
           },
           {
             foreignKeyName: "fk_produto_unidade"
-            columns: ["unidade_id"]
+            columns: ["unidade_id", "empresa_id"]
             isOneToOne: false
             referencedRelation: "unidade"
-            referencedColumns: ["unidade_id"]
+            referencedColumns: ["unidade_id", "empresa_id"]
           },
         ]
       }
@@ -6725,6 +6725,8 @@ export type Database = {
           ds_foto: string | null
           ds_login: string | null
           email: string | null
+          fl_autorizado: boolean
+          fl_superuser: boolean
           id: string
           nm_usuario: string | null
           updated_at: string
@@ -6734,6 +6736,8 @@ export type Database = {
           ds_foto?: string | null
           ds_login?: string | null
           email?: string | null
+          fl_autorizado?: boolean
+          fl_superuser?: boolean
           id: string
           nm_usuario?: string | null
           updated_at?: string
@@ -6743,6 +6747,8 @@ export type Database = {
           ds_foto?: string | null
           ds_login?: string | null
           email?: string | null
+          fl_autorizado?: boolean
+          fl_superuser?: boolean
           id?: string
           nm_usuario?: string | null
           updated_at?: string

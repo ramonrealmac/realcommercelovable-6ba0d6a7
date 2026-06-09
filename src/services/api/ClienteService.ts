@@ -27,13 +27,19 @@ export class ClienteService extends BaseService<ClienteRow, ClienteInsert, Clien
   async buscar(termo: string, empresaId: number, limite: number = 20): Promise<ClienteRow[]> {
     if (!termo || termo.length < 2) return [];
 
-    const { data, error } = await this.client
+    let query = this.client
       .from(this.tableName)
       .select("*")
       .eq("empresa_id", empresaId)
-      .eq("excluido", false)
-      .or(`razao_social.ilike.%${termo}%,nome_fantasia.ilike.%${termo}%,cnpj_cpf.ilike.%${termo}%`)
-      .limit(limite);
+      .eq("excluido", false);
+
+    if (/^\d+$/.test(termo)) {
+      query = query.or(`cd_cadastro.eq.${termo},cnpj.ilike.%${termo}%`);
+    } else {
+      query = query.or(`razao_social.ilike.%${termo}%,nome_fantasia.ilike.%${termo}%,cnpj.ilike.%${termo}%`);
+    }
+
+    const { data, error } = await query.limit(limite);
 
     if (error) throw new Error("Erro na busca de clientes: " + error.message);
     return data as ClienteRow[];

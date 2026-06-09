@@ -9,6 +9,7 @@ const db = supabase as any;
 
 export interface IProdutoRow {
   produto_id: number;
+  cd_produto?: number | null;
   nome: string;
   unidade_id: string | null;
   preco_venda: number;
@@ -86,13 +87,13 @@ export async function buscarProdutoPorCodigo(
     .maybeSingle();
 
   let q = db.from("produto")
-    .select("produto_id, nome, unidade_id, preco_venda, preco_promocional, st_promo, referencia, gtin")
+    .select("produto_id, cd_produto, nome, unidade_id, preco_venda, preco_promocional, st_promo, referencia, gtin")
     .in("empresa_id", ids).eq("excluido", false).limit(5);
     
   if (codBarraData?.produto_id) {
     q = q.eq("produto_id", codBarraData.produto_id);
   } else if (/^\d+$/.test(t)) {
-    q = q.or(`produto_id.eq.${t},referencia.eq.${t},gtin.eq.${t}`);
+    q = q.or(`cd_produto.eq.${t},referencia.eq.${t},gtin.eq.${t}`);
   } else {
     q = q.or(`referencia.eq.${t},gtin.eq.${t}`);
   }
@@ -126,6 +127,7 @@ export async function buscarProdutoPorCodigo(
   const isPromo = String(p.st_promo || "").toUpperCase() === "S";
   return {
     produto_id: p.produto_id,
+    cd_produto: p.cd_produto,
     nome: p.nome,
     unidade_id: p.unidade_id,
     preco_venda: Number(p.preco_venda || 0),
@@ -198,7 +200,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
     const ids = XGroupEmpresaIds.length > 0 ? XGroupEmpresaIds : [XEmpresaId];
 
     let q = db.from("produto")
-      .select("produto_id, nome, unidade_id, preco_venda, preco_promocional, st_promo, referencia, gtin")
+      .select("produto_id, cd_produto, nome, unidade_id, preco_venda, preco_promocional, st_promo, referencia, gtin")
       .in("empresa_id", ids).eq("excluido", false).order("nome").limit(100);
 
     const t = termo.trim();
@@ -216,7 +218,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
       
       const cbFilter = codBarraProdIds.length > 0 ? `,produto_id.in.(${codBarraProdIds.join(",")})` : "";
       if (/^\d+$/.test(t)) {
-        q = q.or(`produto_id.eq.${t},referencia.ilike.%${t}%,gtin.ilike.%${t}%,nome.ilike.%${t}%${cbFilter}`);
+        q = q.or(`cd_produto.eq.${t},referencia.ilike.%${t}%,gtin.ilike.%${t}%,nome.ilike.%${t}%${cbFilter}`);
       } else {
         q = q.or(`nome.ilike.%${t}%,referencia.ilike.%${t}%,gtin.ilike.%${t}%${cbFilter}`);
       }
@@ -255,6 +257,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
 
     let rows: IProdutoRow[] = (prods as any[]).map(p => ({
       produto_id: p.produto_id,
+      cd_produto: p.cd_produto,
       nome: p.nome,
       unidade_id: p.unidade_id,
       preco_venda: Number(p.preco_venda || 0),
@@ -392,7 +395,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
       chips.push(<span key={key}>{node}</span>);
     };
 
-    push("codigo", <span className="font-mono text-blue-600 dark:text-blue-400">#{r.produto_id}</span>);
+    push("codigo", <span className="font-mono text-blue-600 dark:text-blue-400">#{r.cd_produto ?? r.produto_id}</span>);
     push("referencia", r.referencia ? <span className="font-mono text-muted-foreground">Ref: {r.referencia}</span> : null);
     push("gtin", r.gtin ? <span className="font-mono text-muted-foreground">GTIN: {r.gtin}</span> : null);
     push("nome", <span className="text-blue-800 dark:text-blue-300 font-medium break-words">{r.nome}</span>);

@@ -6,12 +6,13 @@ import SubgrupoGrid from "./SubgrupoGrid";
 
 interface IGrupo {
   produto_grupo_id: number;
+  cd_produto_grupo?: number | null;
   nome: string;
   empresa_id: number;
 }
 
 const XGridCols: IGridColumn[] = [
-  { key: "produto_grupo_id", label: "Código", width: "80px", align: "right" },
+  { key: "cd_produto_grupo", label: "Código", width: "80px", align: "right" },
   { key: "nome", label: "Nome", width: "1fr" },
 ];
 
@@ -40,7 +41,7 @@ const GrupoProdutosForm: React.FC = () => {
           <div className="grid grid-cols-1 md:flex md:gap-4 gap-3">
             <div className="w-full md:w-32">
               <label className="block text-xs font-medium text-muted-foreground mb-1">Código</label>
-              <input type="text" value={mode === "insert" ? "(Novo)" : record.produto_grupo_id ?? ""} readOnly className="w-full border border-border rounded px-3 py-1.5 text-sm bg-secondary text-right" />
+              <input type="text" value={mode === "insert" ? "(Novo)" : record.cd_produto_grupo ?? ""} readOnly className="w-full border border-border rounded px-3 py-1.5 text-sm bg-secondary text-right" />
             </div>
             <div className="w-full md:w-[13.5rem]">
               <label className="block text-xs font-medium text-muted-foreground mb-1">Emp. Matriz</label>

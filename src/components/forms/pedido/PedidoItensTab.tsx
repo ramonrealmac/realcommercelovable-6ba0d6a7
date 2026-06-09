@@ -181,14 +181,14 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
     setXEdit(prev => recalc({
       ...(prev || {}),
       produto_id: p.produto_id,
-      cd_produto: String(p.produto_id),
+      cd_produto: String(p.cd_produto ?? p.produto_id),
       nm_produto: p.nome,
       unidade_id: p.unidade_id,
       vl_und_produto: Number(p.st_promo && p.preco_promocional > 0 ? p.preco_promocional : p.preco_venda) || 0,
       ...(deposito_id ? { deposito_id } : {}),
     }));
     setXEditEstoque({ disp: p.estoque_disponivel, res: p.estoque_reservado });
-    setXCodigo(String(p.produto_id));
+    setXCodigo(String(p.cd_produto ?? p.produto_id));
     carregarEstoquePorDeposito(p.produto_id);
     // foco no preço unitário
     setTimeout(() => { precoUnitRef.current?.focus(); precoUnitRef.current?.select(); }, 80);

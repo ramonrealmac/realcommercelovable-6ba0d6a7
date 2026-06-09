@@ -367,7 +367,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       const preco = p.st_promo && p.preco_promocional > 0 ? p.preco_promocional : p.preco_venda;
       return [...prev, {
         produto_id: p.produto_id,
-        cd_produto: String(p.produto_id),
+        cd_produto: String(p.cd_produto ?? p.produto_id),
         nm_produto: p.nome,
         unidade_id: p.unidade_id,
         vl_unitario: preco,
@@ -475,6 +475,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       empresa_id: XEmpresaId,
       movimento_id: movId,
       produto_id: c.produto_id,
+      cd_produto: c.cd_produto,
       nm_produto: c.nm_produto,
       unidade_id: c.unidade_id,
       tp_movimento: "S",

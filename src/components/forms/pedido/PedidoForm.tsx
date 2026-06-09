@@ -18,7 +18,7 @@ import { ToolbarBtn, ToolbarSeparator } from "@/components/shared/FormToolbar";
 const db = supabase as any;
 
 interface ILookup { id: number; label: string; }
-interface IClienteInfo { id: number; cnpj: string; razao: string; fantasia: string; }
+interface IClienteInfo { id: number; cnpj: string; razao: string; fantasia: string; cd_cadastro?: number | null; }
 
 const buildGridCols = (
   vendedores: ILookup[],
@@ -29,7 +29,7 @@ const buildGridCols = (
     {
       key: "_cliente", label: "Cliente", width: "2fr",
       getValue: r => clientesCache[r.cadastro_id]?.razao || "",
-      render: r => clientesCache[r.cadastro_id]?.razao || (r.cadastro_id ? `#${r.cadastro_id}` : ""),
+      render: r => clientesCache[r.cadastro_id]?.razao || (r.cadastro_id ? `#${clientesCache[r.cadastro_id]?.cd_cadastro ?? r.cadastro_id}` : ""),
     },
     { key: "_vendedor", label: "Vendedor", width: "1fr", render: r => vendedores.find(v => v.id === r.funcionario_id)?.label || "" },
 
@@ -137,6 +137,7 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
         ...prev,
         [c.cadastro_id]: {
           id: c.cadastro_id,
+          cd_cadastro: c.cd_cadastro,
           cnpj: c.cnpj || "",
           razao: c.razao_social || "",
           fantasia: c.nome_fantasia || ""
@@ -206,7 +207,7 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
             <input
               ref={clientInputRef}
               readOnly
-              value={record.cadastro_id ? (clientesCache[record.cadastro_id]?.razao || `#${record.cadastro_id}`) : ""}
+              value={record.cadastro_id ? (clientesCache[record.cadastro_id]?.razao || `#${clientesCache[record.cadastro_id]?.cd_cadastro ?? record.cadastro_id}`) : ""}
               placeholder="F2 = Padrão, Enter = Pesquisar..."
               className="flex-1 border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
               data-lookup="true"
@@ -384,8 +385,8 @@ const PedidoForm: React.FC = () => {
     };
 
     load(
-      db.from("funcionario").select("funcionario_id, nome").order("nome").limit(500),
-      (d) => setXVendedores(d.map((c: any) => ({ id: c.funcionario_id, label: c.nome }))),
+      db.from("funcionario").select("funcionario_id, cd_funcionario, nome").order("nome").limit(500),
+      (d) => setXVendedores(d.map((c: any) => ({ id: c.funcionario_id, label: `${c.cd_funcionario ?? c.funcionario_id} - ${c.nome}` }))),
       "funcionario",
     );
     load(
@@ -412,14 +413,14 @@ const PedidoForm: React.FC = () => {
     const faltando = ids.filter(id => id && !XClientesCacheRef.current[id]);
     if (!faltando.length) return;
     const { data, error } = await db.from("cadastro")
-      .select("cadastro_id, cnpj, razao_social, nome_fantasia")
+      .select("cadastro_id, cd_cadastro, cnpj, razao_social, nome_fantasia")
       .in("cadastro_id", faltando);
     if (error) { toast.error("Erro ao carregar clientes: " + error.message); return; }
     if (data) {
       setXClientesCache(prev => {
         const next = { ...prev };
         for (const c of data as any[]) {
-          next[c.cadastro_id] = { id: c.cadastro_id, cnpj: c.cnpj || "", razao: c.razao_social || "", fantasia: c.nome_fantasia || "" };
+          next[c.cadastro_id] = { id: c.cadastro_id, cd_cadastro: c.cd_cadastro, cnpj: c.cnpj || "", razao: c.razao_social || "", fantasia: c.nome_fantasia || "" };
         }
         return next;
       });

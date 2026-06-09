@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 interface ISubgrupo {
   produto_subgrupo_id: number;
+  cd_produto_subgrupo?: number | null;
   produto_grupo_id: number | null;
   nome: string;
   empresa_id: number;
@@ -23,7 +24,7 @@ interface IGrupoOption {
 }
 
 const XGridCols: IGridColumn[] = [
-  { key: "produto_subgrupo_id", label: "Código", width: "100px", align: "right" },
+  { key: "cd_produto_subgrupo", label: "Código", width: "100px", align: "right" },
   { key: "nome", label: "Nome", width: "1fr" },
   { key: "grupo_nome", label: "Grupo de Produtos", width: "1fr" },
 ];
@@ -65,7 +66,7 @@ const SubgrupoProdutosForm: React.FC = () => {
     XTitle: "Subgrupos de Produtos",
     XEmpresaId: XEmpresaMatrizId,
     XDefaultRecord: { nome: "", produto_grupo_id: null },
-    XSelectCols: "produto_subgrupo_id,nome,produto_grupo_id,empresa_id,excluido",
+    XSelectCols: "produto_subgrupo_id,cd_produto_subgrupo,nome,produto_grupo_id,empresa_id,excluido",
     XOnBeforeSave: (rec: Partial<ISubgrupo>) => {
       if (!rec.nome?.trim()) throw new Error("O nome do subgrupo é obrigatório.");
       if (!rec.produto_grupo_id) throw new Error("O grupo de produtos é obrigatório.");
@@ -95,7 +96,7 @@ const SubgrupoProdutosForm: React.FC = () => {
               <label className="block text-xs font-medium text-muted-foreground mb-1">Código</label>
               <input 
                 type="text" 
-                value={mode === "insert" ? "(Novo)" : record.produto_subgrupo_id ?? ""} 
+                value={mode === "insert" ? "(Novo)" : record.cd_produto_subgrupo ?? ""} 
                 readOnly 
                 className="w-full border border-border rounded px-3 py-1.5 text-sm bg-secondary text-right" 
               />
