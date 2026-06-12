@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import { useAppContext } from "@/contexts/AppContext";
 import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import type { IGridColumn } from "@/components/grid/DataGrid";
+import { InicializarDepositoDialog } from "./InicializarDepositoDialog";
 interface IDeposito {
   deposito_id: number;
   nome: string;
@@ -18,6 +19,7 @@ const XGridCols: IGridColumn[] = [
 
 const DepositoForm: React.FC = () => {
   const { XEmpresaId, XEmpresaMatrizId, XEmpresas } = useAppContext();
+  const [isInitOpen, setIsInitOpen] = useState(false);
 
   // IDs de empresas "irmãs" (mesma matriz, exceto a atual)
   const XSisterIds = XEmpresas
@@ -52,6 +54,9 @@ const DepositoForm: React.FC = () => {
       renderCadastro={({ record, setField, mode, isEditing }) => {
         const XReadOnlyForeign = !isEditing && !!record.empresa_id && record.empresa_id !== XEmpresaId;
         const XEmpName = XEmpresas.find(e => e.empresa_id === record.empresa_id);
+        const depositCompany = XEmpresas.find(e => e.empresa_id === record.empresa_id);
+        const targetMatrixId = depositCompany?.empresa_matriz_id || record.empresa_id || XEmpresaMatrizId;
+
         return (
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:flex md:gap-4 gap-3">
@@ -85,7 +90,7 @@ const DepositoForm: React.FC = () => {
                 className={`w-full border border-border rounded px-3 py-1.5 text-sm ${isEditing && !XReadOnlyForeign ? "bg-card focus:ring-2 focus:ring-ring outline-none" : "bg-secondary"}`}
               />
             </div>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mt-2">
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input
                   type="checkbox"
@@ -96,12 +101,31 @@ const DepositoForm: React.FC = () => {
                 />
                 Depósito privado (visível apenas para esta empresa)
               </label>
+
+              {mode === "view" && record.deposito_id && (
+                <button
+                  type="button"
+                  onClick={() => setIsInitOpen(true)}
+                  className="px-4 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-primary/90 rounded shadow transition duration-150 active:scale-95"
+                >
+                  Inicializar Depósito
+                </button>
+              )}
             </div>
             {XReadOnlyForeign && (
               <div className="text-xs text-muted-foreground italic">
                 Depósito de empresa irmã (somente leitura).
               </div>
             )}
+
+            <InicializarDepositoDialog
+              open={isInitOpen}
+              onClose={() => setIsInitOpen(false)}
+              depositoId={record.deposito_id}
+              depositoNome={record.nome}
+              empresaId={record.empresa_id}
+              empresaMatrizId={targetMatrixId}
+            />
           </div>
         );
       }}
