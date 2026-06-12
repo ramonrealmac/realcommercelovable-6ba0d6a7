@@ -262,6 +262,21 @@ const MdfPercursoTab: React.FC<IProps> = ({
     loadPercursos();
   };
 
+  const clearPercursoRows = useCallback(async () => {
+    setPercursoRows([]);
+    if (mdfManifestoId) {
+      const { error } = await supabase
+        .from("fiscal_mdf_percurso")
+        .update({ excluido: true, dt_alteracao: new Date().toISOString() })
+        .eq("mdf_manifesto_id", mdfManifestoId);
+      if (error) {
+        console.error("Erro ao limpar percurso:", error.message);
+      } else {
+        toast.info("Percurso intermediário removido pois as UFs inicial e final não exigem percurso.");
+      }
+    }
+  }, [mdfManifestoId]);
+
   const ro = !isEditing;
   const naoExigePercurso = !!(record.ufini && record.uffim && areUFsNeighbors(record.ufini, record.uffim));
 
@@ -281,7 +296,13 @@ const MdfPercursoTab: React.FC<IProps> = ({
             <select
               disabled={ro}
               value={record.ufini ?? ""}
-              onChange={e => setField("ufini", e.target.value)}
+              onChange={e => {
+                const val = e.target.value;
+                setField("ufini", val);
+                if (val && record.uffim && areUFsNeighbors(val, record.uffim)) {
+                  clearPercursoRows();
+                }
+              }}
               className="w-full border border-border rounded px-2 py-1.5 text-sm bg-card font-medium focus:ring-1 focus:ring-primary focus:border-primary"
             >
               <option value="">— UF —</option>
@@ -357,7 +378,13 @@ const MdfPercursoTab: React.FC<IProps> = ({
             <select
               disabled={ro}
               value={record.uffim ?? ""}
-              onChange={e => setField("uffim", e.target.value)}
+              onChange={e => {
+                const val = e.target.value;
+                setField("uffim", val);
+                if (record.ufini && val && areUFsNeighbors(record.ufini, val)) {
+                  clearPercursoRows();
+                }
+              }}
               className="w-full border border-border rounded px-2 py-1.5 text-sm bg-card font-medium focus:ring-1 focus:ring-primary focus:border-primary"
             >
               <option value="">— UF —</option>

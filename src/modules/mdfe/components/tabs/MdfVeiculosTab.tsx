@@ -6,12 +6,13 @@ import { Trash2, Plus } from "lucide-react";
 interface IProps {
   mdfManifestoId: number | null;
   empresaId: number;
+  transportadorId: number | null;
   podeEditar: boolean;
   onTracaoCadastroIdChange?: (cadastroId: number | null) => void;
   onMotoristasChanged?: () => void;
 }
 
-const MdfVeiculosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEditar, onTracaoCadastroIdChange, onMotoristasChanged }) => {
+const MdfVeiculosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, transportadorId, podeEditar, onTracaoCadastroIdChange, onMotoristasChanged }) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [rows, setRows] = useState<any[]>([]);
   const [veiculoId, setVeiculoId] = useState("");
@@ -44,13 +45,18 @@ const MdfVeiculosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
 
   const loadVeiculos = useCallback(async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("cadastro_veiculo")
         .select("veiculo_id, placa, descricao, renavam, tara, capacidade_kg, tp_rodado, tp_carroceria, uf, tp_veiculo, cadastro_id")
         .eq("empresa_id", empresaId)
         .eq("excluido", false)
-        .eq("ativo", true)
-        .order("placa");
+        .eq("ativo", true);
+
+      if (transportadorId) {
+        query = query.eq("cadastro_id", transportadorId);
+      }
+
+      const { data, error } = await query.order("placa");
       if (error) {
         console.error("Erro ao carregar lista de veículos:", error);
         toast.error("Erro ao carregar lista de veículos: " + error.message);
@@ -62,7 +68,7 @@ const MdfVeiculosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdita
       console.error("Exceção ao carregar lista de veículos:", errorObj);
       toast.error("Erro ao carregar lista de veículos: " + errorObj.message);
     }
-  }, [empresaId]);
+  }, [empresaId, transportadorId]);
 
   useEffect(() => {
     setRows([]);

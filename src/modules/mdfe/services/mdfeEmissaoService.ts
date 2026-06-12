@@ -113,59 +113,65 @@ export const mdfeEmissaoService = {
           }
         }
 
-        // Validar componentes de pagamento
-        const activeComponents = (componentes || []).filter((c: any) => !c.excluido);
-        if (activeComponents.length === 0) {
-          throw new Error("É obrigatório informar ao menos um componente de pagamento (aba Componentes) para TAC.");
-        }
+        // Validar se há múltiplos documentos cadastrados
+        const activeDocs = (documentosRaw || []).filter((d: any) => !d.excluido);
+        const hasMultipleDocs = activeDocs.length > 1;
 
-        // Validar Vale-Pedágio se houver pedágio
-        if (manifesto.possui_pedagio) {
-          const temPedagio = activeComponents.some((c: any) => c.tp_componente === "01");
-          if (!temPedagio) {
-            throw new Error("A rota/manifesto possui pedágio. É obrigatório adicionar ao menos um componente do tipo '01 - Vale Pedágio' na aba Componentes.");
+        if (!hasMultipleDocs) {
+          // Validar componentes de pagamento
+          const activeComponents = (componentes || []).filter((c: any) => !c.excluido);
+          if (activeComponents.length === 0) {
+            throw new Error("É obrigatório informar ao menos um componente de pagamento (aba Componentes) para TAC.");
           }
-        }
 
-        // Validar que cada componente 01 possua fornecedor e comprovante preenchidos
-        activeComponents.forEach((c: any) => {
-          if (c.tp_componente === "01") {
-            const cleanForn = String(c.cnpj_fornecedor || "").replace(/\D/g, "");
-            if (cleanForn.length !== 14) {
-              throw new Error("Para componentes do tipo '01 - Vale Pedágio', é obrigatório informar um CNPJ de Fornecedor válido (14 dígitos).");
-            }
-            if (!String(c.comprovante || "").trim()) {
-              throw new Error("Para componentes do tipo '01 - Vale Pedágio', é obrigatório informar o número do comprovante.");
+          // Validar Vale-Pedágio se houver pedágio
+          if (manifesto.possui_pedagio) {
+            const temPedagio = activeComponents.some((c: any) => c.tp_componente === "01");
+            if (!temPedagio) {
+              throw new Error("A rota/manifesto possui pedágio. É obrigatório adicionar ao menos um componente do tipo '01 - Vale Pedágio' na aba Componentes.");
             }
           }
-        });
 
-        // Validar se há informações de pagamento salvas e corretas
-        const pag = (pagamentos || []).find((p: any) => !p.excluido);
-        if (!pag) {
-          throw new Error("As informações de pagamento não foram cadastradas na aba Pagamento.");
-        }
+          // Validar que cada componente 01 possua fornecedor e comprovante preenchidos
+          activeComponents.forEach((c: any) => {
+            if (c.tp_componente === "01") {
+              const cleanForn = String(c.cnpj_fornecedor || "").replace(/\D/g, "");
+              if (cleanForn.length !== 14) {
+                throw new Error("Para componentes do tipo '01 - Vale Pedágio', é obrigatório informar um CNPJ de Fornecedor válido (14 dígitos).");
+              }
+              if (!String(c.comprovante || "").trim()) {
+                throw new Error("Para componentes do tipo '01 - Vale Pedágio', é obrigatório informar o número do comprovante.");
+              }
+            }
+          });
 
-        const temBanco = pag.banco && String(pag.banco).trim() !== "";
-        const temAgencia = pag.agencia && String(pag.agencia).trim() !== "";
-        const temPix = pag.chave_pix && String(pag.chave_pix).trim() !== "";
-        const temIpef = pag.cnpjipef && String(pag.cnpjipef).trim() !== "";
-
-        if (temBanco && !temAgencia) {
-          throw new Error("Como o Banco foi informado, a Agência também deve ser preenchida na aba Pagamento.");
-        }
-
-        if (!temBanco) {
-          if (!temPix && !temIpef) {
-            throw new Error("Informe os dados do Banco/Agência, a Chave PIX ou o CNPJ da IPEF na aba Pagamento.");
+          // Validar se há informações de pagamento salvas e corretas
+          const pag = (pagamentos || []).find((p: any) => !p.excluido);
+          if (!pag) {
+            throw new Error("As informações de pagamento não foram cadastradas na aba Pagamento.");
           }
-        }
 
-        // Validar parcelas se forma de pagamento for a prazo (1)
-        if (pag.forma_pagto === "1") {
-          const activeParcelas = (parcelas || []).filter((p: any) => !p.excluido);
-          if (activeParcelas.length === 0) {
-            throw new Error("Para Pagamento à Prazo, é obrigatório lançar pelo menos 1 parcela na aba Parcelas.");
+          const temBanco = pag.banco && String(pag.banco).trim() !== "";
+          const temAgencia = pag.agencia && String(pag.agencia).trim() !== "";
+          const temPix = pag.chave_pix && String(pag.chave_pix).trim() !== "";
+          const temIpef = pag.cnpjipef && String(pag.cnpjipef).trim() !== "";
+
+          if (temBanco && !temAgencia) {
+            throw new Error("Como o Banco foi informado, a Agência também deve ser preenchida na aba Pagamento.");
+          }
+
+          if (!temBanco) {
+            if (!temPix && !temIpef) {
+              throw new Error("Informe os dados do Banco/Agência, a Chave PIX ou o CNPJ da IPEF na aba Pagamento.");
+            }
+          }
+
+          // Validar parcelas se forma de pagamento for a prazo (1)
+          if (pag.forma_pagto === "1") {
+            const activeParcelas = (parcelas || []).filter((p: any) => !p.excluido);
+            if (activeParcelas.length === 0) {
+              throw new Error("Para Pagamento à Prazo, é obrigatório lançar pelo menos 1 parcela na aba Parcelas.");
+            }
           }
         }
       }
