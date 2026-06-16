@@ -78,6 +78,10 @@ interface ICadastro {
   tp_proprietario: string | null;
   rntrc: string | null;
   uf_proprietario: string | null;
+  bloqueia_cliente: number;
+  vl_lim_credito: number;
+  qt_tit_aberto: number;
+  qt_tit_vencido: number;
 }
 
 
@@ -119,6 +123,7 @@ const emptyForm = (): Record<string, string> => ({
   condicao_id: "", funcionario_id: "", portador_id: "", rota_id: "", tabela_preco_id: "",
   latitude: "", longitude: "",
   tp_proprietario: "", rntrc: "", uf_proprietario: "",
+  bloqueia_cliente: "3", vl_lim_credito: "0.00", qt_tit_aberto: "0", qt_tit_vencido: "0",
 });
 
 const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
@@ -694,6 +699,10 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
       tp_proprietario: toNull(XF.tp_proprietario) || null,
       rntrc: toNull(XF.rntrc) || null,
       uf_proprietario: toNull(XF.uf_proprietario) || null,
+      bloqueia_cliente: toInt(XF.bloqueia_cliente) || 3,
+      vl_lim_credito: toFloat(XF.vl_lim_credito) || 0.00,
+      qt_tit_aberto: toInt(XF.qt_tit_aberto) || 0,
+      qt_tit_vencido: toInt(XF.qt_tit_vencido) || 0,
     };
 
     let XSavedCadastroId: number | null = null;
@@ -894,7 +903,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
   };
 
   const XCadTabs = useMemo(() => {
-    const XBase = ["geral", "endereco", "complemento", "geo"];
+    const XBase = ["geral", "endereco", "complemento", "geo", "credito"];
     const isTransportador = XIsEditing
       ? XF.st_transportador === "S"
       : XCurrentRecord?.st_transportador === "S";
@@ -922,6 +931,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
     endereco: "Endereço / Contato",
     complemento: "Complemento",
     geo: "Geolocalização",
+    credito: "Análise de Crédito",
     veiculos: "Veículos",
     motoristas: "Motoristas",
   };
@@ -1295,6 +1305,25 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
                     {XIsEditing && <p className="text-xs mt-1">Clique em "Obter Coordenadas GPS" para capturar a localização.</p>}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* === ABA ANÁLISE DE CRÉDITO === */}
+            {XCadastroInnerTab === "credito" && (
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold text-muted-foreground border-b border-border pb-1">Parâmetros de Análise de Crédito</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {renderSelect("Bloqueio de Cliente", "bloqueia_cliente", [
+                    { v: "1", l: "1 - Sempre Bloquear" },
+                    { v: "2", l: "2 - Bloquear por Regra Financeira" },
+                    { v: "3", l: "3 - Nunca Bloquear" },
+                  ])}
+                  {renderField("Limite de Crédito (R$)", "vl_lim_credito")}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {renderField("Qtde. Máx. Títulos em Aberto", "qt_tit_aberto")}
+                  {renderField("Qtde. Máx. Títulos Vencidos", "qt_tit_vencido")}
+                </div>
               </div>
             )}
 

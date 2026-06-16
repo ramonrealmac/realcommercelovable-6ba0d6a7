@@ -144,6 +144,7 @@ const emptyEmpresa = () => ({
   ia_modelo: "gpt-4o",
   pesquisa_prod_min_letras: 3,
   pesquisa_prod_limite: 200,
+  bloquear_pedido: "N",
 });
 
 type TEmpresa = ReturnType<typeof emptyEmpresa>;
@@ -766,7 +767,7 @@ const EmpresaForm: React.FC = () => {
             </div>
 
             <div>
-              <h3 className="text-sm font-semibold text-foreground mb-4 border-b pb-2">Validação de Estoque</h3>
+              <h3 className="text-sm font-semibold text-foreground mb-4 border-b pb-2">Validações e Parâmetros de Venda</h3>
               <div className="flex flex-wrap gap-6">
                 <div className="flex items-center gap-2">
                   <Switch
@@ -783,9 +784,17 @@ const EmpresaForm: React.FC = () => {
                     disabled={!XIsEditing}
                   />
                   <Label className="text-xs">Validar Estoque no PDV</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={XDisplayVal("bloquear_pedido") === "S"}
+                    onCheckedChange={v => updateEdit("bloquear_pedido", v ? "S" : "N")}
+                    disabled={!XIsEditing}
+                  />
+                  <Label className="text-xs">Bloquear Pedidos por Análise de Crédito</Label>
+                </div>
               </div>
             </div>
-          </div>
 
           <div>
             <h3 className="text-sm font-semibold text-foreground mb-4 border-b pb-2">Parâmetros de Busca de Produtos</h3>

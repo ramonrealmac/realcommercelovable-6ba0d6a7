@@ -43,6 +43,8 @@ const XDefaultRecord: Partial<IMovimento> = {
   tp_origem: "PDV",
   st_pedido: "O",
   faturado: "N",
+  st_bloqueado: "N",
+  st_entrega: "N",
   tp_desconto: "N",
   pc_desconto: 0,
   vl_produto: 0,
@@ -81,6 +83,7 @@ interface PedidoCadastroFormContentProps {
   setXModoInsertSemId: (val: boolean) => void;
   handleKeyDown: (e: React.KeyboardEvent<HTMLElement>) => void;
   onSalvar?: () => Promise<void>;
+  fetchItensCadastro?: (id: number) => Promise<void>;
 }
 
 const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
@@ -88,7 +91,7 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
   vendedores, tpOperacoes, rotas, cidades, clientesCache, setXClientesCache,
   abrirPesquisaCliente, clientePadraoId, ensureClienteInfo,
   pedidoTotalCtx, setXMovimentoParaBuscar, setXModoInsertSemId, handleKeyDown,
-  onSalvar
+  onSalvar, fetchItensCadastro
 }) => {
   const clientInputRef = useRef<HTMLInputElement>(null);
   const vendedorSelectRef = useRef<HTMLSelectElement>(null);
@@ -201,7 +204,7 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
           <label className="text-xs text-muted-foreground">Pedido</label>
           <input readOnly tabIndex={-1} value={record.nr_movimento ?? (mode === "insert" ? "(Novo)" : "")} className="w-full border border-border rounded px-2 py-1 text-sm text-right bg-secondary/50 focus:outline-none" />
         </div>
-        <div className="col-span-5">
+        <div className="col-span-4">
           <label className="text-xs text-muted-foreground">Cliente <span className="text-destructive">*</span></label>
           <div className="flex gap-1">
             <input
@@ -253,12 +256,55 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
           <label className="text-xs text-muted-foreground">Faturado</label>
           <input readOnly tabIndex={-1} value={record.faturado ?? "N"} className="w-full border border-border rounded px-2 py-1 text-sm text-center bg-secondary/50 focus:outline-none" />
         </div>
+        <div className="col-span-1">
+          <label className="text-xs text-muted-foreground">Bloqueado</label>
+          <input 
+            readOnly 
+            tabIndex={-1} 
+            value={record.st_bloqueado ?? "N"} 
+            className={`w-full border rounded px-2 py-1 text-sm text-center focus:outline-none ${
+              record.st_bloqueado === "S" 
+                ? "border-destructive bg-destructive/10 text-destructive font-bold" 
+                : "border-border bg-secondary/50"
+            }`} 
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-12 gap-3">
         <div className="col-span-2">
           <label className="text-xs text-muted-foreground">Dt. Emissão <span className="text-destructive">*</span></label>
           <input type="date" tabIndex={-1} disabled={ro} value={(record.dt_emissao || "").toString().substring(0, 10)} onChange={e => setField("dt_emissao", e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary/20 focus:outline-none" />
+        </div>
+        <div className="col-span-2">
+          <label className="text-xs text-muted-foreground">Entrega <span className="text-destructive">*</span></label>
+          <select
+            disabled={ro}
+            value={record.st_entrega || "N"}
+            onChange={async (e) => {
+              const val = e.target.value;
+              setField("st_entrega", val);
+              if (record.movimento_id && (val === "S" || val === "N")) {
+                const { error } = await db.from("movimento_item")
+                  .update({ entrega: val })
+                  .eq("movimento_id", record.movimento_id)
+                  .eq("excluido", false);
+                if (error) {
+                  toast.error("Erro ao atualizar itens: " + error.message);
+                } else {
+                  toast.success(`Itens do pedido atualizados para entrega: ${val === "S" ? "Sim" : "Não"}`);
+                  if (fetchItensCadastro) {
+                    await fetchItensCadastro(record.movimento_id);
+                  }
+                }
+              }
+            }}
+            className="w-full border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
+          >
+            <option value="S">Sim</option>
+            <option value="N">Não</option>
+            <option value="P">Parcial</option>
+          </select>
         </div>
         <div className="col-span-2">
           <label className="text-xs text-muted-foreground">Dt. Entrega <span className="text-destructive">*</span></label>
@@ -278,10 +324,6 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
             <option value="SV">Saída por Venda</option>
             <option value="OR">Orçamento</option>
           </select>
-        </div>
-        <div className="col-span-2">
-          <label className="text-xs text-muted-foreground">NF</label>
-          <input readOnly tabIndex={-1} value={record.numero_nfe ?? ""} className="w-full border border-border rounded px-2 py-1 text-sm text-right bg-secondary/50 focus:outline-none" />
         </div>
       </div>
 
@@ -686,6 +728,12 @@ const PedidoForm: React.FC = () => {
           XOnAfterSave: async (rec, mode) => {
             if (mode === "insert") setXAutoNovoItem(n => n + 1);
             if (rec.movimento_id) {
+              if (rec.st_entrega === "S" || rec.st_entrega === "N") {
+                await db.from("movimento_item")
+                  .update({ entrega: rec.st_entrega })
+                  .eq("movimento_id", rec.movimento_id)
+                  .eq("excluido", false);
+              }
               await fetchItensCadastro(rec.movimento_id);
             }
           },
@@ -828,6 +876,7 @@ const PedidoForm: React.FC = () => {
               setXMovimentoParaBuscar={setXMovimentoParaBuscar}
               setXModoInsertSemId={setXModoInsertSemId}
               handleKeyDown={handleKeyDown}
+              fetchItensCadastro={fetchItensCadastro}
             />
           );
         }}

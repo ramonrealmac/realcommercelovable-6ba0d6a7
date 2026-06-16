@@ -86,16 +86,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const openTab = useCallback((tab: Omit<AppTab, "id">) => {
-    const XExisting = XTabs.find(t => t.component === tab.component);
-    if (XExisting) {
-      setXActiveTabId(XExisting.id);
-      return;
-    }
-    const XNewId = `tab-${Date.now()}`;
-    const XNewTab: AppTab = { ...tab, id: XNewId };
-    setXTabs(prev => [...prev, XNewTab]);
-    setXActiveTabId(XNewId);
-  }, [XTabs]);
+    setXTabs(prev => {
+      const XExisting = prev.find(t => t.component === tab.component);
+      if (XExisting) {
+        setXActiveTabId(XExisting.id);
+        return prev; // sem mudança
+      }
+      const XNewId = `tab-${Date.now()}`;
+      const XNewTab: AppTab = { ...tab, id: XNewId };
+      setXActiveTabId(XNewId);
+      return [...prev, XNewTab];
+    });
+  }, []);
 
   const closeTab = useCallback((id: string) => {
     setXTabs(prev => {

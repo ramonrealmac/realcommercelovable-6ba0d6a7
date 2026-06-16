@@ -1,5 +1,6 @@
 export interface IMovimento {
   movimento_id: number;
+  st_entrega: string | null;
   empresa_id: number;
   cadastro_id: number | null;
   funcionario_id: number | null;
