@@ -214,6 +214,7 @@ export const MENU_CONFIG: MenuItem[] = [
       },
       { id: "contas-pagar", title: "Contas a Pagar", icon: FileDown },
       { id: "emissao-boletos", title: "Emissão de Boletos", icon: FileText },
+      { id: "liberacao-pedidos", title: "Liberação de Pedidos", icon: ClipboardCheck },
     ],
   },
   {

@@ -95,7 +95,7 @@ const DepositoForm: React.FC = () => {
                 <input
                   type="checkbox"
                   checked={record.st_privado ?? true}
-                  onChange={e => setField("st_privado", e.target.checked as any)}
+                  onChange={e => setField("st_privado", e.target.checked)}
                   disabled={!isEditing || XReadOnlyForeign}
                   className="rounded border-border"
                 />

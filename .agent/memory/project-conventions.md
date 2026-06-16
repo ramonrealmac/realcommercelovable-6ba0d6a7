@@ -17,3 +17,6 @@ The `sys_config` table must store the following properties:
 - **Database Connection**: Database name (`db_name`) and port used (`db_port`).
 - **Backup Path**: The location of the backup folder (`backup_folder_path`). In the UI, this should offer a way to pick/select folders.
 - **Backup Automation**: Periodicity setting (`backup_periodicity`) to configure the schedule (e.g., Daily, Weekly, Monthly, Disabled).
+
+## Versionamento do Sistema (Tabela `sistema_versoes`)
+- Sempre registrar as novas implementações, melhorias e novos recursos na tabela `sistema_versoes` do banco de dados ao final de cada tarefa relevante, caso aprovado pelo usuário.

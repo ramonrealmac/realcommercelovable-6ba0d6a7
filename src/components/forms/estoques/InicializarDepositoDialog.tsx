@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
-const db = supabase as any;
+const db = supabase;
 
 interface IProps {
   open: boolean;
@@ -110,8 +110,11 @@ export const InicializarDepositoDialog: React.FC<IProps> = ({
         .eq("excluido", false);
       if (stockErr) throw new Error(stockErr.message);
 
-      const existingProductIds = new Set((existingStocks || []).map((s: any) => s.produto_id));
-      const productsToInsert = products.filter((p: any) => !existingProductIds.has(p.produto_id));
+      const existingProductIds = new Set(
+        ((existingStocks || []) as { produto_id: number }[]).map(s => s.produto_id)
+      );
+      const productsList = (products || []) as { produto_id: number; empresa_id: number }[];
+      const productsToInsert = productsList.filter(p => !existingProductIds.has(p.produto_id));
 
       if (productsToInsert.length === 0) {
         toast.info("Todos os produtos filtrados já possuem estoque cadastrado neste depósito.");
@@ -127,14 +130,13 @@ export const InicializarDepositoDialog: React.FC<IProps> = ({
         return;
       }
 
-      const insertPayload = productsToInsert.map((p: any) => ({
+      const insertPayload = productsToInsert.map(p => ({
         produto_id: p.produto_id,
         deposito_id: depositoId,
         empresa_id: empresaId,
         endereco: "",
         estoque_fisico: 0,
         estoque_reservado: 0,
-        estoque_disponivel: 0,
         estoque_minimo: 0,
         estoque_padrao: 0,
         excluido: false,
@@ -152,9 +154,10 @@ export const InicializarDepositoDialog: React.FC<IProps> = ({
 
       toast.success(`Estoque inicializado com sucesso para ${insertedCount} produto(s)!`);
       onClose();
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      toast.error("Erro na inicialização: " + (e.message || e));
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      toast.error("Erro na inicialização: " + errorMessage);
     } finally {
       setLoading(false);
     }

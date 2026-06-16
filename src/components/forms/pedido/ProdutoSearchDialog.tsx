@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Search, X, Settings2 } from "lucide-react";
+import { Search, X, Settings2, ArrowDown, ArrowUp } from "lucide-react";
 import { useAppContext } from "@/contexts/AppContext";
 
 const db = supabase as any;
@@ -58,6 +58,19 @@ const CAMPOS_DISPONIVEIS: { key: CampoKey; label: string; obrigatorio?: boolean 
   { key: "reservado", label: "Reservado" },
 ];
 
+const COLUMNS_CONFIG: Record<CampoKey, { label: string; width: string; align?: "left" | "right" | "center" }> = {
+  codigo: { label: "Código", width: "70px", align: "right" },
+  referencia: { label: "Referência", width: "100px" },
+  gtin: { label: "GTIN", width: "115px" },
+  nome: { label: "Nome", width: "1fr" },
+  unidade: { label: "Unid.", width: "55px", align: "center" },
+  preco: { label: "Preço", width: "90px", align: "right" },
+  preco_promo: { label: "Promoção", width: "95px", align: "right" },
+  estoque_disp: { label: "Est. Disp.", width: "95px", align: "right" },
+  estoque_emp: { label: "Est. Emp.", width: "95px", align: "right" },
+  reservado: { label: "Reserv.", width: "90px", align: "right" },
+};
+
 const CAMPOS_DEFAULT: CampoKey[] = ["codigo", "nome", "unidade", "preco", "estoque_disp", "reservado"];
 
 const parseCampos = (raw: any): CampoKey[] => {
@@ -105,24 +118,26 @@ export async function buscarProdutoPorCodigo(
   const { data: deps } = await db.from("deposito")
     .select("deposito_id, empresa_id, st_privado")
     .in("empresa_id", ids).eq("excluido", false);
-  const visibleDepIds = new Set(
+  // Normaliza IDs para number (Supabase bigint pode chegar como string no JS)
+  const visibleDepIds = new Set<number>(
     (deps || [])
-      .filter((d: any) => d.empresa_id === XEmpresaId || d.st_privado === false)
-      .map((d: any) => d.deposito_id)
+      .filter((d: any) => Number(d.empresa_id) === XEmpresaId || d.st_privado === false)
+      .map((d: any) => Number(d.deposito_id))
   );
   const empresaDoDep: Record<number, number> = {};
-  for (const d of (deps || []) as any[]) empresaDoDep[d.deposito_id] = d.empresa_id;
+  for (const d of (deps || []) as any[]) empresaDoDep[Number(d.deposito_id)] = Number(d.empresa_id);
 
   const { data: ests } = await db.from("estoque")
     .select("produto_id, deposito_id, estoque_disponivel, estoque_reservado")
     .eq("produto_id", p.produto_id).in("empresa_id", ids).eq("excluido", false);
   let disp = 0, res = 0, naEmpresa = 0;
   for (const e of (ests || []) as any[]) {
-    if (!visibleDepIds.has(e.deposito_id)) continue;
+    const depId = Number(e.deposito_id);
+    if (!visibleDepIds.has(depId)) continue;
     const v = Number(e.estoque_disponivel || 0);
     disp += v;
     res += Number(e.estoque_reservado || 0);
-    if (empresaDoDep[e.deposito_id] === XEmpresaId) naEmpresa += v;
+    if (empresaDoDep[depId] === XEmpresaId) naEmpresa += v;
   }
   const isPromo = String(p.st_promo || "").toUpperCase() === "S";
   return {
@@ -153,14 +168,146 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
   const [XLoadingEst, setXLoadingEst] = useState(false);
   const [XCampos, setXCampos] = useState<CampoKey[]>(CAMPOS_DEFAULT);
   const [XCfgOpen, setXCfgOpen] = useState(false);
+  const [XSortBy, setXSortBy] = useState<{ key: CampoKey; asc: boolean } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  const sortedRows = useMemo(() => {
+    if (!XSortBy) return XRows;
+    return [...XRows].sort((a, b) => {
+      let valA: any = a[XSortBy.key as keyof IProdutoRow];
+      let valB: any = b[XSortBy.key as keyof IProdutoRow];
+      
+      if (XSortBy.key === "codigo") { valA = a.cd_produto ?? a.produto_id; valB = b.cd_produto ?? b.produto_id; }
+      else if (XSortBy.key === "preco") { valA = a.preco_venda; valB = b.preco_venda; }
+      else if (XSortBy.key === "preco_promo") { valA = a.preco_promocional; valB = b.preco_promocional; }
+      else if (XSortBy.key === "estoque_disp") { valA = a.estoque_disponivel; valB = b.estoque_disponivel; }
+      else if (XSortBy.key === "estoque_emp") { valA = a.estoque_na_empresa; valB = b.estoque_na_empresa; }
+      else if (XSortBy.key === "reservado") { valA = a.estoque_reservado; valB = b.estoque_reservado; }
+      else if (XSortBy.key === "unidade") { valA = a.unidade_id; valB = b.unidade_id; }
+
+      if (valA === valB) return 0;
+      if (valA === null || valA === undefined) return 1;
+      if (valB === null || valB === undefined) return -1;
+      
+      if (typeof valA === "string" && typeof valB === "string") {
+        return XSortBy.asc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      }
+      return XSortBy.asc ? (valA < valB ? -1 : 1) : (valA > valB ? -1 : 1);
+    });
+  }, [XRows, XSortBy]);
+
+  const handleSort = (k: CampoKey) => {
+    setXSortBy(prev => {
+      if (prev?.key === k) return { key: k, asc: !prev.asc };
+      return { key: k, asc: true };
+    });
+    setXSelectedIdx(null);
+  };
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const DEFAULT_WIDTHS: Record<CampoKey, number> = {
+    codigo: 70,
+    referencia: 100,
+    gtin: 115,
+    nome: 300,
+    unidade: 55,
+    preco: 90,
+    preco_promo: 95,
+    estoque_disp: 95,
+    estoque_emp: 95,
+    reservado: 90,
+  };
+
+  const getStorageKey = useCallback(() => {
+    if (typeof window === "undefined") return "pdv_search_col_widths_default";
+    const w = window.innerWidth;
+    let category = "sm";
+    if (w >= 1536) category = "2xl";
+    else if (w >= 1280) category = "xl";
+    else if (w >= 1024) category = "lg";
+    else if (w >= 768) category = "md";
+    return `pdv_search_col_widths_${category}`;
+  }, []);
+
+  const [currentKey, setCurrentKey] = useState<string>("");
+  const [XColWidths, setXColWidths] = useState<Record<CampoKey, number>>(DEFAULT_WIDTHS);
+
+  useEffect(() => {
+    const handleResize = () => setCurrentKey(getStorageKey());
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [getStorageKey]);
+
+  useEffect(() => {
+    if (!currentKey) return;
+    try {
+      const saved = localStorage.getItem(currentKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setXColWidths({
+          codigo: parsed.codigo ?? DEFAULT_WIDTHS.codigo,
+          referencia: parsed.referencia ?? DEFAULT_WIDTHS.referencia,
+          gtin: parsed.gtin ?? DEFAULT_WIDTHS.gtin,
+          nome: parsed.nome ?? DEFAULT_WIDTHS.nome,
+          unidade: parsed.unidade ?? DEFAULT_WIDTHS.unidade,
+          preco: parsed.preco ?? DEFAULT_WIDTHS.preco,
+          preco_promo: parsed.preco_promo ?? DEFAULT_WIDTHS.preco_promo,
+          estoque_disp: parsed.estoque_disp ?? DEFAULT_WIDTHS.estoque_disp,
+          estoque_emp: parsed.estoque_emp ?? DEFAULT_WIDTHS.estoque_emp,
+          reservado: parsed.reservado ?? DEFAULT_WIDTHS.reservado,
+        });
+      } else {
+        setXColWidths(DEFAULT_WIDTHS);
+      }
+    } catch (e) {
+      console.warn("Falha ao ler larguras de coluna no localStorage", e);
+    }
+  }, [currentKey]);
+
+  useEffect(() => {
+    if (!currentKey) return;
+    try {
+      localStorage.setItem(currentKey, JSON.stringify(XColWidths));
+    } catch (e) {
+      console.warn("Falha ao salvar larguras de coluna no localStorage", e);
+    }
+  }, [XColWidths, currentKey]);
+
+  const startResize = useCallback((key: CampoKey, startWidth: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      setXColWidths(prev => ({
+        ...prev,
+        [key]: Math.max(40, startWidth + deltaX),
+      }));
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  }, []);
 
   const XGroupEmpresaIds = useMemo(() => {
     return XEmpresas
       .filter(e => e.empresa_matriz_id === XEmpresaMatrizId || e.empresa_id === XEmpresaMatrizId)
       .map(e => e.empresa_id);
   }, [XEmpresas, XEmpresaMatrizId]);
+
+  const gridTemplateColumns = useMemo(() => {
+    return CAMPOS_DISPONIVEIS
+      .filter(c => XCampos.includes(c.key))
+      .map(c => `${XColWidths[c.key]}px`)
+      .join(" ");
+  }, [XCampos, XColWidths]);
 
   const empresaNome = useCallback((id: number) => {
     return XEmpresas.find(e => e.empresa_id === id)?.nome_fantasia
@@ -199,11 +346,54 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
     setXLoading(true);
     const ids = XGroupEmpresaIds.length > 0 ? XGroupEmpresaIds : [XEmpresaId];
 
-    let q = db.from("produto")
-      .select("produto_id, cd_produto, nome, unidade_id, preco_venda, preco_promocional, st_promo, referencia, gtin")
-      .in("empresa_id", ids).eq("excluido", false).order("nome").limit(100);
+    // 1. Buscar depósitos primeiro para obter os visibleDepIds
+    const { data: deps } = await db.from("deposito")
+      .select("deposito_id, empresa_id, st_privado")
+      .in("empresa_id", ids).eq("excluido", false);
+
+    // Normaliza IDs para number (Supabase bigint pode chegar como string no JS)
+    const visibleDepIds = new Set<number>(
+      (deps || []).filter((d: any) => Number(d.empresa_id) === XEmpresaId || d.st_privado === false)
+        .map((d: any) => Number(d.deposito_id))
+    );
+    const empresaDoDep: Record<number, number> = {};
+    for (const d of (deps || []) as any[]) empresaDoDep[Number(d.deposito_id)] = Number(d.empresa_id);
 
     const t = termo.trim();
+
+    // 2. Se o filtro "com estoque" estiver ativo e a pesquisa estiver vazia,
+    // buscamos primeiro os IDs dos produtos que têm estoque para limitar a busca de produtos.
+    let prodIdsWithStock: number[] | null = null;
+    if (XSoEstoque && !t && visibleDepIds.size > 0) {
+      const { data: stockData } = await db.from("estoque")
+        .select("produto_id")
+        .in("empresa_id", ids)
+        .in("deposito_id", Array.from(visibleDepIds))
+        .gt("estoque_disponivel", 0)
+        .eq("excluido", false)
+        .limit(100);
+
+      if (stockData && stockData.length > 0) {
+        prodIdsWithStock = Array.from(new Set(stockData.map((x: any) => Number(x.produto_id))));
+      } else {
+        prodIdsWithStock = [];
+      }
+    }
+
+    // 3. Monta query de produtos
+    let q = db.from("produto")
+      .select("produto_id, cd_produto, nome, unidade_id, preco_venda, preco_promocional, st_promo, referencia, gtin")
+      .in("empresa_id", ids).eq("excluido", false);
+
+    // Se temos filtro de IDs por estoque na busca vazia
+    if (XSoEstoque && !t) {
+      if (prodIdsWithStock && prodIdsWithStock.length > 0) {
+        q = q.in("produto_id", prodIdsWithStock);
+      } else {
+        q = q.in("produto_id", [-1]); // Força lista vazia
+      }
+    }
+
     if (t) {
       let codBarraProdIds: number[] = [];
       const { data: cbData } = await db.from("produto_codbarra")
@@ -225,35 +415,56 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
     }
     if (XSoPromo) q = q.eq("st_promo", "S");
 
+    // Limite de busca: se estiver buscando com filtro de estoque por termo,
+    // aumentamos o limite para achar produtos correspondentes.
+    const limitVal = (XSoEstoque && t) ? 250 : 100;
+    q = q.order("nome").limit(limitVal);
+
     const { data: prods, error } = await q;
     if (error || !prods) { setXLoading(false); setXRows([]); return; }
 
-    const { data: deps } = await db.from("deposito")
-      .select("deposito_id, empresa_id, st_privado")
-      .in("empresa_id", ids).eq("excluido", false);
-    const visibleDepIds = new Set(
-      (deps || []).filter((d: any) => d.empresa_id === XEmpresaId || d.st_privado === false)
-        .map((d: any) => d.deposito_id)
-    );
-    const empresaDoDep: Record<number, number> = {};
-    for (const d of (deps || []) as any[]) empresaDoDep[d.deposito_id] = d.empresa_id;
-
     const prodIds = prods.map((p: any) => p.produto_id);
     let estMap: Record<number, { disp: number; res: number; naEmp: number }> = {};
+
+    // 🔍 DEBUG — remover após diagnóstico
+    console.group("[ProdutoSearch] DEBUG buscar — empresa=" + XEmpresaId + " ids=" + JSON.stringify(ids));
+    console.log("Depósitos buscados:", (deps || []).map((d:any) => ({ dep: Number(d.deposito_id), emp: Number(d.empresa_id), priv: d.st_privado })));
+    console.log("visibleDepIds:", [...visibleDepIds]);
+    console.log("prodIds.length:", prodIds.length, "| visibleDepIds.size:", visibleDepIds.size);
+
     if (prodIds.length > 0 && visibleDepIds.size > 0) {
       const { data: ests } = await db.from("estoque")
         .select("produto_id, deposito_id, estoque_disponivel, estoque_reservado")
         .in("produto_id", prodIds).in("empresa_id", ids).eq("excluido", false);
+
+      console.log("Total estoque records retornados:", (ests || []).length);
+      const raw998 = (ests || []).filter((e:any) => Number(e.produto_id) === 998);
+      if (raw998.length > 0)
+        console.log("Estoque bruto produto 998:", raw998.map((e:any) => ({ dep: Number(e.deposito_id), disp: e.estoque_disponivel, res: e.estoque_reservado })));
+      else
+        console.warn("Produto 998 NÃO encontrado no retorno do estoque");
+
       for (const e of (ests || []) as any[]) {
-        if (!visibleDepIds.has(e.deposito_id)) continue;
-        const cur = estMap[e.produto_id] || { disp: 0, res: 0, naEmp: 0 };
+        const depId = Number(e.deposito_id);
+        const prodId = Number(e.produto_id);
+        if (!visibleDepIds.has(depId)) {
+          if (prodId === 998) console.warn("Produto 998: depósito", depId, "IGNORADO (não está em visibleDepIds). empresaDoDep[depId]=", empresaDoDep[depId]);
+          continue;
+        }
+        const cur = estMap[prodId] || { disp: 0, res: 0, naEmp: 0 };
         const v = Number(e.estoque_disponivel || 0);
         cur.disp += v;
         cur.res += Number(e.estoque_reservado || 0);
-        if (empresaDoDep[e.deposito_id] === XEmpresaId) cur.naEmp += v;
-        estMap[e.produto_id] = cur;
+        if (empresaDoDep[depId] === XEmpresaId) cur.naEmp += v;
+        estMap[prodId] = cur;
       }
+    } else {
+      console.warn("ESTOQUE NÃO BUSCADO: prodIds.length=", prodIds.length, "| visibleDepIds.size=", visibleDepIds.size);
     }
+
+    console.log("estMap[998]:", estMap[998] ?? "NÃO ENCONTRADO");
+    console.groupEnd();
+    // 🔍 fim DEBUG
 
     let rows: IProdutoRow[] = (prods as any[]).map(p => ({
       produto_id: p.produto_id,
@@ -269,7 +480,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
       referencia: p.referencia,
       gtin: p.gtin,
     }));
-    if (XSoEstoque) rows = rows.filter(r => r.estoque_na_empresa > 0);
+    if (XSoEstoque) rows = rows.filter(r => r.estoque_disponivel > 0);
     setXRows(rows);
     setXSelectedIdx(null);
     setXEstDeps([]);
@@ -283,25 +494,26 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
       .select("deposito_id, empresa_id, estoque_fisico, estoque_reservado, estoque_disponivel")
       .eq("produto_id", produto_id).in("empresa_id", ids).eq("excluido", false);
 
-    const depIds = Array.from(new Set((ests || []).map((e: any) => e.deposito_id)));
+    const depIds = Array.from(new Set((ests || []).map((e: any) => Number(e.deposito_id))));
     let depMap: Record<number, { nome: string; empresa_id: number; st_privado: boolean }> = {};
     if (depIds.length > 0) {
       const { data: deps } = await db.from("deposito")
         .select("deposito_id, nome, empresa_id, st_privado")
         .in("deposito_id", depIds).eq("excluido", false);
       for (const d of (deps || []) as any[]) {
-        depMap[d.deposito_id] = { nome: d.nome, empresa_id: d.empresa_id, st_privado: d.st_privado };
+        depMap[Number(d.deposito_id)] = { nome: d.nome, empresa_id: Number(d.empresa_id), st_privado: d.st_privado };
       }
     }
 
     const rows: IEstoqueDepositoRow[] = [];
     for (const e of (ests || []) as any[]) {
-      const d = depMap[e.deposito_id];
+      const depId = Number(e.deposito_id);
+      const d = depMap[depId];
       if (!d) continue;
       const visivel = d.empresa_id === XEmpresaId || d.st_privado === false;
       if (!visivel) continue;
       rows.push({
-        deposito_id: e.deposito_id,
+        deposito_id: depId,
         deposito_nome: d.nome,
         empresa_id: d.empresa_id,
         empresa_nome: empresaNome(d.empresa_id),
@@ -335,24 +547,24 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
   }, [XTermo, open, buscar]);
 
   useEffect(() => {
-    if (XSelectedIdx !== null && XRows[XSelectedIdx]) {
-      carregarEstoqueDoProduto(XRows[XSelectedIdx].produto_id);
+    if (XSelectedIdx !== null && sortedRows[XSelectedIdx]) {
+      carregarEstoqueDoProduto(sortedRows[XSelectedIdx].produto_id);
     } else {
       setXEstDeps([]);
     }
-  }, [XSelectedIdx, XRows, carregarEstoqueDoProduto]);
+  }, [XSelectedIdx, sortedRows, carregarEstoqueDoProduto]);
 
   const selecionarLinha = (idx: number, r: IProdutoRow) => {
     setXSelectedIdx(idx);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (XRows.length === 0 || XLoading) return;
+    if (sortedRows.length === 0 || XLoading) return;
 
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setXSelectedIdx(prev => {
-        const next = prev === null ? 0 : Math.min(prev + 1, XRows.length - 1);
+        const next = prev === null ? 0 : Math.min(prev + 1, sortedRows.length - 1);
         setTimeout(() => {
           const el = listRef.current?.querySelector(`[data-index="${next}"]`) as HTMLElement;
           el?.scrollIntoView({ block: "nearest" });
@@ -371,9 +583,9 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
       });
     } else if (e.key === "Enter") {
       const selected = XSelectedIdx !== null ? XSelectedIdx : 0;
-      if (XRows[selected]) {
+      if (sortedRows[selected]) {
         e.preventDefault();
-        onSelect(XRows[selected]);
+        onSelect(sortedRows[selected]);
         onClose();
       }
     }
@@ -414,9 +626,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
     );
 
     const corEst = (v: number) =>
-      v > 0 ? "text-blue-600 dark:text-blue-400"
-        : v < 0 ? "text-red-600 dark:text-red-400 font-semibold"
-        : "text-muted-foreground";
+      v > 0 ? "text-black dark:text-white" : "text-red-600 dark:text-red-400 font-semibold";
 
     push("estoque_disp",
       <span className={`font-mono ${corEst(r.estoque_disponivel)}`}>Estq: {fmtNum(r.estoque_disponivel, 3)}</span>
@@ -431,68 +641,118 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
     return chips;
   };
 
+  // ── Renderiza uma célula na tabela (desktop/convencionais) ──
+  const renderCell = (r: IProdutoRow, key: CampoKey) => {
+    const showPromo = r.st_promo && r.preco_promocional > 0;
+    const corEst = (v: number) =>
+      v > 0 ? "text-black dark:text-white font-mono" : "text-red-600 dark:text-red-400 font-semibold font-mono";
+
+    switch (key) {
+      case "codigo":
+        return <span className="font-mono text-blue-600 dark:text-blue-400">#{r.cd_produto ?? r.produto_id}</span>;
+      case "referencia":
+        return r.referencia ? <span className="font-mono text-muted-foreground">{r.referencia}</span> : <span className="text-muted-foreground/30">-</span>;
+      case "gtin":
+        return r.gtin ? <span className="font-mono text-muted-foreground">{r.gtin}</span> : <span className="text-muted-foreground/30">-</span>;
+      case "nome":
+        return <span className="text-blue-800 dark:text-blue-300 font-medium break-all">{r.nome}</span>;
+      case "unidade":
+        return r.unidade_id ? <span className="text-muted-foreground">{r.unidade_id}</span> : <span className="text-muted-foreground/30">-</span>;
+      case "preco":
+        return showPromo
+          ? <span className="line-through text-muted-foreground font-mono">R$ {fmtNum(r.preco_venda)}</span>
+          : <span className="text-black dark:text-white font-mono font-medium">R$ {fmtNum(r.preco_venda)}</span>;
+      case "preco_promo":
+        return showPromo
+          ? <span className="text-green-600 dark:text-green-400 font-semibold font-mono">R$ {fmtNum(r.preco_promocional)}</span>
+          : <span className="text-muted-foreground/30">-</span>;
+      case "estoque_disp":
+        return <span className={corEst(r.estoque_disponivel)}>{fmtNum(r.estoque_disponivel, 3)}</span>;
+      case "estoque_emp":
+        return <span className={corEst(r.estoque_na_empresa)}>{fmtNum(r.estoque_na_empresa, 3)}</span>;
+      case "reservado":
+        return <span className="font-mono text-amber-600 dark:text-amber-400">{fmtNum(r.estoque_reservado, 3)}</span>;
+      default:
+        return null;
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent 
-        className="max-w-3xl"
+        className="max-w-[95vw] lg:max-w-[90vw] xl:max-w-[85vw] h-[90vh] flex flex-col p-0 overflow-hidden [&>button[class*='absolute']]:text-white/80 [&>button[class*='absolute']]:hover:text-white [&>button[class*='absolute']]:top-4 [&>button[class*='absolute']]:right-4 border border-border"
         onOpenAutoFocus={(e) => {
           e.preventDefault();
           inputRef.current?.focus();
         }}
       >
-        <DialogHeader>
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <DialogTitle>Pesquisar Produto</DialogTitle>
-            <div className="flex items-center gap-4 text-xs">
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input type="checkbox" checked={XSoEstoque} onChange={e => setXSoEstoque(e.target.checked)} />
-                Com estoque
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input type="checkbox" checked={XSoPromo} onChange={e => setXSoPromo(e.target.checked)} />
-                Em promoção
-              </label>
-              <Popover open={XCfgOpen} onOpenChange={setXCfgOpen}>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    title="Configurar campos exibidos"
-                    className="flex items-center gap-1 px-2 py-1 rounded border border-border hover:bg-accent"
-                  >
-                    <Settings2 className="w-3.5 h-3.5" /> Campos
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-60 p-2" align="end">
-                  <div className="text-xs font-semibold text-muted-foreground mb-2 px-1">
-                    Campos exibidos
-                  </div>
-                  <div className="space-y-1">
-                    {CAMPOS_DISPONIVEIS.map(c => (
-                      <label
-                        key={c.key}
-                        className={`flex items-center gap-2 px-2 py-1 rounded text-sm cursor-pointer hover:bg-accent ${c.obrigatorio ? "opacity-60 cursor-not-allowed" : ""}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={XCampos.includes(c.key)}
-                          disabled={c.obrigatorio}
-                          onChange={() => toggleCampo(c.key)}
-                        />
-                        {c.label}
-                        {c.obrigatorio && <span className="text-[10px] text-muted-foreground ml-auto">obrig.</span>}
-                      </label>
-                    ))}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground mt-2 px-1">
-                    Salvo automaticamente na empresa.
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
+        <DialogHeader className="shrink-0 bg-primary text-primary-foreground px-6 py-1.5 flex flex-row items-center justify-between">
+          <DialogTitle className="text-base font-semibold text-primary-foreground">Pesquisar Produto</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
-          <div className="relative">
+
+        {/* Toolbar de Filtros (evita sobreposição com botão Fechar) */}
+        <div className="flex items-center justify-between gap-4 px-6 h-[25px] bg-muted/40 border-b border-border text-xs shrink-0 select-none">
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-1.5 cursor-pointer font-medium text-muted-foreground hover:text-foreground">
+              <input 
+                type="checkbox" 
+                checked={XSoEstoque} 
+                onChange={e => setXSoEstoque(e.target.checked)} 
+                className="rounded border-muted-foreground/30 text-primary focus:ring-primary w-3.5 h-3.5 m-0" 
+              />
+              <span className="leading-none mt-[1px]">Com estoque</span>
+            </label>
+            <label className="flex items-center gap-1.5 cursor-pointer font-medium text-muted-foreground hover:text-foreground">
+              <input 
+                type="checkbox" 
+                checked={XSoPromo} 
+                onChange={e => setXSoPromo(e.target.checked)} 
+                className="rounded border-muted-foreground/30 text-primary focus:ring-primary w-3.5 h-3.5 m-0" 
+              />
+              <span className="leading-none mt-[1px]">Em promoção</span>
+            </label>
+          </div>
+
+          <Popover open={XCfgOpen} onOpenChange={setXCfgOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                title="Configurar campos exibidos"
+                className="flex items-center justify-center gap-1 px-2.5 py-0 h-[20px] rounded border border-border bg-card hover:bg-accent text-[11px] font-medium"
+              >
+                <Settings2 className="w-3.5 h-3.5" /> <span className="leading-none">Campos</span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-60 p-2" align="end">
+              <div className="text-xs font-semibold text-muted-foreground mb-2 px-1">
+                Campos exibidos
+              </div>
+              <div className="space-y-1">
+                {CAMPOS_DISPONIVEIS.map(c => (
+                  <label
+                    key={c.key}
+                    className={`flex items-center gap-2 px-2 py-1 rounded text-sm cursor-pointer hover:bg-accent ${c.obrigatorio ? "opacity-60 cursor-not-allowed" : ""}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={XCampos.includes(c.key)}
+                      disabled={c.obrigatorio}
+                      onChange={() => toggleCampo(c.key)}
+                    />
+                    {c.label}
+                    {c.obrigatorio && <span className="text-[10px] text-muted-foreground ml-auto">obrig.</span>}
+                  </label>
+                ))}
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-2 px-1">
+                Salvo automaticamente na empresa.
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        <div className="px-6 pt-1.5 pb-6 flex-1 flex flex-col min-h-0 space-y-4">
+          <div className="relative shrink-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               ref={inputRef}
@@ -510,43 +770,104 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
             )}
           </div>
 
-          {/* Lista em coluna única com chips coloridos */}
-          <div className="border border-border rounded overflow-hidden">
-            <div ref={listRef} className="h-[320px] overflow-y-auto flex flex-col">
-              {XLoading && (
-                <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-6">
-                  Carregando...
-                </div>
-              )}
-              {!XLoading && XRows.length === 0 && (
-                <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-6">
-                  Nenhum produto encontrado.
-                </div>
-              )}
-              {!XLoading && XRows.map((r, idx) => {
-                const sel = XSelectedIdx === idx;
-                const zebra = idx % 2 === 1 ? "bg-muted/30" : "";
-                return (
-                  <div
-                    key={r.produto_id}
-                    data-index={idx}
-                    onClick={() => selecionarLinha(idx, r)}
-                    onDoubleClick={() => { onSelect(r); onClose(); }}
-                    className={`flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-sm border-t border-border cursor-pointer shrink-0 break-words ${
-                      sel ? "bg-primary/15" : `${zebra} hover:bg-accent/50`
-                    }`}
-                  >
-                    {renderChips(r)}
+          {/* Lista em coluna única com chips coloridos ou tabela desktop */}
+          <div className="border border-border rounded overflow-hidden overflow-x-auto flex-1 min-h-0 flex flex-col bg-card">
+            <div className="w-max min-w-full flex-1 flex flex-col min-h-0">
+              {/* Header (desktop apenas) */}
+              <div 
+                className="hidden md:grid bg-muted/50 text-xs font-semibold text-muted-foreground border-b border-border select-none shrink-0"
+                style={{ gridTemplateColumns }}
+              >
+                {CAMPOS_DISPONIVEIS
+                  .filter(c => XCampos.includes(c.key))
+                  .map(c => (
+                    <div 
+                      key={c.key} 
+                      className={`relative py-1.5 px-3 select-none flex items-center h-full group border-r border-border/40 last:border-r-0 cursor-pointer hover:bg-muted/80 ${
+                        COLUMNS_CONFIG[c.key].align === "right" ? "justify-end text-right" :
+                        COLUMNS_CONFIG[c.key].align === "center" ? "justify-center text-center" : "justify-start text-left"
+                      }`}
+                      onClick={() => handleSort(c.key)}
+                    >
+                      <span className="truncate pr-2 flex items-center gap-1">
+                        {COLUMNS_CONFIG[c.key].label}
+                        {XSortBy?.key === c.key && (
+                          XSortBy.asc ? <ArrowUp className="w-3 h-3 inline" /> : <ArrowDown className="w-3 h-3 inline" />
+                        )}
+                      </span>
+                      
+                      {/* Drag Handle */}
+                      <div
+                        onMouseDown={(e) => startResize(c.key, XColWidths[c.key], e)}
+                        className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary/45 active:bg-primary z-10 border-r border-border/60 group-hover:border-primary/40 transition-colors"
+                        title="Arraste para redimensionar"
+                      />
+                    </div>
+                  ))}
+              </div>
+
+              <div ref={listRef} className="flex-1 overflow-y-auto flex flex-col min-h-0">
+                {XLoading && (
+                  <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-6">
+                    Carregando...
                   </div>
-                );
-              })}
+                )}
+                {!XLoading && sortedRows.length === 0 && (
+                  <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-6">
+                    Nenhum produto encontrado.
+                  </div>
+                )}
+                {!XLoading && sortedRows.map((r, idx) => {
+                  const sel = XSelectedIdx === idx;
+                  const zebra = idx % 2 === 1 ? "bg-gray-100 dark:bg-zinc-800/50" : "bg-white dark:bg-zinc-950";
+                  return (
+                    <div
+                      key={r.produto_id}
+                      data-index={idx}
+                      onClick={() => selecionarLinha(idx, r)}
+                      onDoubleClick={() => { onSelect(r); onClose(); }}
+                      className={`text-sm border-t border-border cursor-pointer shrink-0 break-words ${
+                        sel ? "bg-primary/15" : `${zebra} hover:bg-accent/50`
+                      }`}
+                    >
+                      {/* Padrão Mobile: chips em flex wrap */}
+                      <div className="flex md:hidden flex-wrap items-center gap-x-2 gap-y-1 w-full px-3 py-2">
+                        {renderChips(r)}
+                      </div>
+
+                      {/* Padrão Desktop: campos separados em colunas */}
+                      <div 
+                        className="hidden md:grid items-center w-full"
+                        style={{ gridTemplateColumns }}
+                      >
+                        {CAMPOS_DISPONIVEIS
+                          .filter(c => XCampos.includes(c.key))
+                          .map(c => {
+                            const cellContent = renderCell(r, c.key);
+                            return (
+                              <div 
+                                key={c.key} 
+                                className={`truncate px-3 py-1 border-r border-border/20 last:border-r-0 h-full flex items-center ${
+                                  COLUMNS_CONFIG[c.key].align === "right" ? "justify-end text-right" :
+                                  COLUMNS_CONFIG[c.key].align === "center" ? "justify-center text-center" : "justify-start text-left"
+                                }`}
+                              >
+                                <span className="truncate w-full">{cellContent}</span>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
           {/* 2ª Grade — estoque por depósito do produto selecionado */}
-          <div className="border border-border rounded overflow-hidden">
+          <div className="border border-border rounded overflow-hidden shrink-0 bg-card">
             <div className="px-3 py-1.5 bg-muted/50 text-[11px] font-semibold text-muted-foreground border-b border-border">
-              Estoque por depósito {XSelectedIdx != null ? `— ${XRows[XSelectedIdx]?.nome}` : ""}
+              Estoque por depósito {XSelectedIdx != null ? `— ${sortedRows[XSelectedIdx]?.nome}` : ""}
             </div>
             <div className="grid grid-cols-12 gap-2 px-3 py-1.5 bg-muted text-[11px] font-semibold text-muted-foreground">
               <div className="col-span-6">Depósito</div>
@@ -576,7 +897,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
                   <div
                     key={d.deposito_id}
                     onDoubleClick={() => {
-                      const p = XRows[XSelectedIdx!];
+                      const p = sortedRows[XSelectedIdx!];
                       onSelect(p, d.deposito_id);
                       onClose();
                     }}
@@ -595,7 +916,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
             </div>
           </div>
 
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground shrink-0">
             Clique para selecionar e ver estoque por depósito. <strong>Duplo clique</strong> seleciona o produto;
             duplo clique na grade de estoque seleciona produto + depósito.
           </p>

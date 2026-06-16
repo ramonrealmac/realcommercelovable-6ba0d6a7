@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { Loader2, LockKeyhole } from "lucide-react";
 import { toast } from "sonner";
@@ -28,6 +28,8 @@ interface AuthGateProps {
 
 const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
   const [session, setSession] = useState<Session | null>(null);
+  const sessionRef = useRef<Session | null>(null);
+  sessionRef.current = session;
   const [rawSession, setRawSession] = useState<Session | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
   const [XIsSuperuser, setXIsSuperuser] = useState(false);
@@ -161,7 +163,9 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
         return;
       }
 
-      setLoadingSession(true);
+      if (!sessionRef.current) {
+        setLoadingSession(true);
+      }
       try {
         const { isAuthorized, isSuperuser } = await checkUserAuthorized(rawSession.user.id);
         if (!active) return;

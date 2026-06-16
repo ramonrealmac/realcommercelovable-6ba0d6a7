@@ -1,4 +1,4 @@
-import { useEffect, useRef, lazy, Suspense } from "react";
+import { useEffect, useRef, lazy, Suspense, memo } from "react";
 import { useAppContext, AppProvider } from "@/contexts/AppContext";
 import TopBar from "@/components/layout/TopBar";
 import TabBar from "@/components/layout/TabBar";
@@ -36,6 +36,9 @@ const ListaNfeEmitidaForm = lazy(() => import("@/components/forms/nfe/ListaNfeEm
 const NfeEmitidaForm = lazy(() => import("@/components/forms/nfe/NfeEmitidaForm"));
 const ConsultaTitulosReceberForm = lazy(() => import("@/components/forms/financeiro/ConsultaTitulosReceberForm"));
 const BaixaPorClienteForm = lazy(() => import("@/components/forms/financeiro/BaixaPorClienteForm"));
+const LiberacaoPedidosForm = lazy(() => import("@/components/forms/financeiro/LiberacaoPedidosForm"));
+const MontagemRotaForm = lazy(() => import("@/components/forms/entrega/MontagemRotaForm"));
+const RotasMontadasForm = lazy(() => import("@/components/forms/entrega/RotasMontadasForm"));
 const FiscalConfigForm = lazy(() => import("@/components/forms/fiscal/FiscalConfigForm"));
 const MdfeForm = lazy(() => import("@/modules/mdfe/components/MdfeForm"));
 const ListaMdfeForm = lazy(() => import("@/modules/mdfe/components/ListaMdfeForm"));
@@ -74,129 +77,68 @@ const TabLoadingFallback = () => (
   </div>
 );
 
-const AppContent = () => {
-  const { XTabs, XActiveTabId, openTab, XEmpresaId, setXLogomarca, XLogomarca } = useAppContext();
-  const XInitRef = useRef(false);
-
-  // Load theme colors based on selected empresa
-  const { XLogomarca: XThemeLogomarca } = useThemeColors(XEmpresaId);
-
-  useEffect(() => {
-    if (XThemeLogomarca !== undefined) {
-      setXLogomarca(XThemeLogomarca);
-    }
-  }, [XThemeLogomarca, setXLogomarca]);
-
-  const renderTabContent = (component: string, params?: any) => {
+// Componente estável: evita desmontagem ao re-renderizar AppContent
+const TabContent = memo(({ component, params }: { component: string; params?: any }) => {
+  const renderContent = () => {
     switch (component) {
-      case "cadastro-completo":
-        return <CadastroCompletoForm formTitle="Cadastros" />;
-      case "fornecedores-transportadores":
-        return <FornecedorTransportadorForm />;
-      case "funcionarios":
-        return <FuncionarioForm />;
-      case "grupo-cadastros":
-        return <CadastroGrupoForm />;
-      case "produtos":
-        return <ProdutoForm />;
-      case "linhas-produtos":
-        return <LinhaProdutoForm />;
-      case "grupo-produtos":
-        return <GrupoProdutosForm />;
-      case "subgrupo-produtos":
-        return <SubgrupoProdutosForm />;
-      case "unidades":
-        return <UnidadeForm />;
-      case "estoque":
-        return <EstoqueForm />;
-      case "depositos":
-        return <DepositoForm />;
-      case "estados":
-        return <EstadoForm />;
-      case "cidades":
-        return <CidadeForm />;
-      case "rotas":
-        return <RotaForm />;
-      case "bancos":
-        return <BancoForm />;
-      case "cond-pagamento":
-        return <CondicaoPagamentoForm />;
-      case "plano-contas":
-        return <PlanoContaForm />;
-      case "cfop":
-        return <CfopForm />;
-      case "fiscal-grupo-produtos":
-        return <FiscalGrupoProdutoForm />;
-      case "fiscal-regras":
-        return <FiscalRegraForm />;
-      case "pedidos":
-        return <PedidoForm />;
+      case "cadastro-completo": return <CadastroCompletoForm formTitle="Cadastros" />;
+      case "fornecedores-transportadores": return <FornecedorTransportadorForm />;
+      case "funcionarios": return <FuncionarioForm />;
+      case "grupo-cadastros": return <CadastroGrupoForm />;
+      case "produtos": return <ProdutoForm />;
+      case "linhas-produtos": return <LinhaProdutoForm />;
+      case "grupo-produtos": return <GrupoProdutosForm />;
+      case "subgrupo-produtos": return <SubgrupoProdutosForm />;
+      case "unidades": return <UnidadeForm />;
+      case "estoque": return <EstoqueForm />;
+      case "depositos": return <DepositoForm />;
+      case "estados": return <EstadoForm />;
+      case "cidades": return <CidadeForm />;
+      case "rotas": return <RotaForm />;
+      case "bancos": return <BancoForm />;
+      case "cond-pagamento": return <CondicaoPagamentoForm />;
+      case "plano-contas": return <PlanoContaForm />;
+      case "cfop": return <CfopForm />;
+      case "fiscal-grupo-produtos": return <FiscalGrupoProdutoForm />;
+      case "fiscal-regras": return <FiscalRegraForm />;
+      case "pedidos": return <PedidoForm />;
       case "nova-entrada":
-      case "minhas-entradas":
-        return <NotaFiscalEntradaForm />;
-      case "nfe-recebidas":
-        return <NfeRecebidasForm />;
-      case "devolucao-nfe-entrada":
-        return <DevolucaoNfeEntradaForm initialNfeId={params?.nfe_cabecalho_id} />;
+      case "minhas-entradas": return <NotaFiscalEntradaForm />;
+      case "nfe-recebidas": return <NfeRecebidasForm />;
+      case "devolucao-nfe-entrada": return <DevolucaoNfeEntradaForm initialNfeId={params?.nfe_cabecalho_id} />;
       case "devolucao-nfe-saida":
-      case "devolucao-nfe-saida-fiscal":
-        return <DevolucaoNfeSaidaForm initialNfeId={params?.nfe_cabecalho_id} />;
-      case "nfe-emitidas":
-        return <ListaNfeEmitidaForm initialFilterId={params?.nfe_cabecalho_id} />;
-      case "nfe-form":
-        return <NfeEmitidaForm initialId={params?.nfe_cabecalho_id} />;
-      case "consulta-titulos-receber":
-        return <ConsultaTitulosReceberForm />;
-      case "baixa-por-cliente":
-        return <BaixaPorClienteForm />;
-      case "fiscal-config":
-        return <FiscalConfigForm />;
-      case "mdfe-lista":
-        return <ListaMdfeForm />;
-      case "mdfe-form":
-        return <MdfeForm initialId={params?.mdf_manifesto_id} />;
-      case "empresas":
-        return <EmpresaForm />;
-      case "PerfilForm":
-        return <PerfilForm />;
-      case "ControleAcessoForm":
-        return <ControleAcessoForm />;
-      case "UsuarioForm":
-        return <UsuarioForm />;
-      case "cce":
-        return <CartaCorrecaoForm initialNfeId={params?.nfe_cabecalho_id} />;
-      case "nfe-inutilizacao":
-        return <NfeInutilizacaoForm initialData={params} />;
-      case "TrocaSenhaForm":
-        return <TrocaSenhaForm />;
-      case "importacao":
-        return <ImportacaoForm />;
-      case "sistema-versoes":
-        return <SistemaVersoesForm />;
-      case "backup-config":
-        return <BackupForm />;
-      case "rpb-relatorios":
-        return <RpbManager />;
-      case "consulta-estoque":
-        return <ConsultaEstoqueForm />;
-      case "ajuste-estoque":
-        return <AjusteEstoqueForm />;
-      case "inventario":
-        return <InventarioEmBreve />;
-
-      // PDV cases
-      case "abertura-caixa":
-        return <AberturaCaixaForm />;
-      case "pdv-caixa":
-        return <PdvCaixaForm />;
-      case "fechamento-caixa":
-        return <FechamentoCaixaForm />;
-      case "suprimento-caixa":
-        return <SuprimentoSangriaForm tipo="SUP" />;
-      case "sangria-caixa":
-        return <SuprimentoSangriaForm tipo="SAN" />;
-
-      default:
+      case "devolucao-nfe-saida-fiscal": return <DevolucaoNfeSaidaForm initialNfeId={params?.nfe_cabecalho_id} />;
+      case "nfe-emitidas": return <ListaNfeEmitidaForm initialFilterId={params?.nfe_cabecalho_id} />;
+      case "nfe-form": return <NfeEmitidaForm initialId={params?.nfe_cabecalho_id} />;
+      case "consulta-titulos-receber": return <ConsultaTitulosReceberForm />;
+      case "baixa-por-cliente": return <BaixaPorClienteForm />;
+      case "liberacao-pedidos": return <LiberacaoPedidosForm />;
+      case "montagem-rota": return <MontagemRotaForm />;
+      case "rotas-montadas": return <RotasMontadasForm />;
+      case "fiscal-config": return <FiscalConfigForm />;
+      case "mdfe-lista": return <ListaMdfeForm />;
+      case "mdfe-form": return <MdfeForm initialId={params?.mdf_manifesto_id} />;
+      case "empresas": return <EmpresaForm />;
+      case "PerfilForm": return <PerfilForm />;
+      case "ControleAcessoForm": return <ControleAcessoForm />;
+      case "UsuarioForm": return <UsuarioForm />;
+      case "cce": return <CartaCorrecaoForm initialNfeId={params?.nfe_cabecalho_id} />;
+      case "nfe-inutilizacao": return <NfeInutilizacaoForm initialData={params} />;
+      case "TrocaSenhaForm": return <TrocaSenhaForm />;
+      case "importacao": return <ImportacaoForm />;
+      case "sistema-versoes": return <SistemaVersoesForm />;
+      case "backup-config": return <BackupForm />;
+      case "rpb-relatorios": return <RpbManager />;
+      case "consulta-estoque": return <ConsultaEstoqueForm />;
+      case "ajuste-estoque": return <AjusteEstoqueForm />;
+      case "inventario": return <InventarioEmBreve />;
+      // PDV
+      case "abertura-caixa": return <AberturaCaixaForm />;
+      case "pdv-caixa": return <PdvCaixaForm />;
+      case "fechamento-caixa": return <FechamentoCaixaForm />;
+      case "suprimento-caixa": return <SuprimentoSangriaForm tipo="SUP" />;
+      case "sangria-caixa": return <SuprimentoSangriaForm tipo="SAN" />;
+      default: {
         if (component.startsWith("rpb-exec-")) {
           const XRelId = parseInt(component.replace("rpb-exec-", ""));
           if (!isNaN(XRelId)) return <RpbStandaloneExecutor rpbRelatorioId={XRelId} initialParams={params} />;
@@ -216,8 +158,31 @@ const AppContent = () => {
             </div>
           </div>
         );
+      }
     }
   };
+
+  return (
+    <Suspense fallback={<TabLoadingFallback />}>
+      {renderContent()}
+    </Suspense>
+  );
+});
+TabContent.displayName = "TabContent";
+
+const AppContent = () => {
+  const { XTabs, XActiveTabId, openTab, XEmpresaId, setXLogomarca, XLogomarca } = useAppContext();
+  const XInitRef = useRef(false);
+
+  // Load theme colors based on selected empresa
+  const { XLogomarca: XThemeLogomarca } = useThemeColors(XEmpresaId);
+
+  useEffect(() => {
+    if (XThemeLogomarca !== undefined) {
+      setXLogomarca(XThemeLogomarca);
+    }
+  }, [XThemeLogomarca, setXLogomarca]);
+
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -228,12 +193,10 @@ const AppContent = () => {
         <div className="relative z-10 h-full">
           {XTabs.map(tab => (
             <div
-              key={tab.id}
+              key={`${tab.id}-${XEmpresaId}`}
               className={`h-full ${tab.id === XActiveTabId ? "block" : "hidden"}`}
             >
-              <Suspense fallback={<TabLoadingFallback />}>
-                {renderTabContent(tab.component, tab.params)}
-              </Suspense>
+              <TabContent key={`${tab.component}-${XEmpresaId}`} component={tab.component} params={tab.params} />
             </div>
           ))}
           {XTabs.length === 0 && (

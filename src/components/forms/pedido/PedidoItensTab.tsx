@@ -123,10 +123,11 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
       qt_movimento: 1, vl_und_produto: 0, vl_produto: 0,
       pc_desconto: 0, vl_desconto: 0, vl_movimento: 0,
       vl_despesa: 0, vl_frete: 0, vl_seguro: 0, vl_outro: 0,
-      entrega: "N", deposito_id: XDepositos[0]?.deposito_id ?? 1,
+      entrega: pedido?.st_entrega === "S" ? "S" : "N",
+      deposito_id: XDepositos[0]?.deposito_id ?? 1,
     });
     setTimeout(() => codigoRef.current?.focus(), 50);
-  }, [XDepositos]);
+  }, [XDepositos, pedido?.st_entrega]);
 
   // Auto disparar "novo" após inserção do cabeçalho
   useEffect(() => {
@@ -151,7 +152,11 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
   }, [XEmpresaId, XGroupEmpresaIds]);
 
   const editar = (it: IMovimentoItem) => {
-    setXEdit({ ...it });
+    let itemEntrega = it.entrega;
+    if (pedido?.st_entrega === "S" || pedido?.st_entrega === "N") {
+      itemEntrega = pedido.st_entrega;
+    }
+    setXEdit({ ...it, entrega: itemEntrega });
     setXEditingId(it.movimento_item_id);
     setXEditEstoque(null);
     setXCodigo(it.cd_produto || String(it.produto_id || ""));
@@ -459,7 +464,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
             </div>
             <div className="col-span-2 flex items-end">
               <label className="flex items-center gap-1 text-xs">
-                <input type="checkbox" disabled={ro}
+                <input type="checkbox" disabled={ro || pedido?.st_entrega === "S" || pedido?.st_entrega === "N"}
                   checked={XEdit.entrega === "S"}
                   onChange={e => setF("entrega", e.target.checked ? "S" : "N")} />
                 P/Entrega?
