@@ -85,6 +85,14 @@ export const gerarIniMdfe = (params: any): string => {
     return `${dateStr} ${timeStr}`;
   };
 
+  const formatDataBR = (dateStr: string) => {
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateStr;
+  };
+
   let ini = "[infMDFe]\n";
   ini += "versao=3.00\n\n";
 
@@ -211,9 +219,28 @@ export const gerarIniMdfe = (params: any): string => {
         ini += `IE=ISENTO\n`;
         ini += `UFProp=${transportador.uf_proprietario || vTracao.uf || manifesto.ufini}\n`;
 
+        // Determine tpProp from transportador.tp_proprietario or fallback to tpTransp
         let tpProp = "0";
-        if (tpTransp === "2") tpProp = "1";
-        else if (tpTransp === "3") tpProp = "2";
+        if (transportador.tp_proprietario === "0") tpProp = "0";
+        else if (transportador.tp_proprietario === "1") tpProp = "1";
+        else if (transportador.tp_proprietario === "2") tpProp = "2";
+        else {
+          // Fallback to mapping based on tpTransp
+          if (tpTransp === "2") tpProp = "1";
+          else if (tpTransp === "3") tpProp = "2";
+        }
+
+        // SEFAZ Validation Safeguard rules:
+        if (docClean.length === 11) {
+          // CPF can only be 0 (TAC Agregado) or 1 (TAC Independente). Never allow 2 (Outros).
+          if (tpProp === "2") {
+            tpProp = "0"; // Safe default fallback
+          }
+        } else if (docClean.length === 14) {
+          // CNPJ can only be 2 (Outros)
+          tpProp = "2";
+        }
+
         ini += `tpProp=${tpProp}\n`;
       }
       ini += "\n";
@@ -297,8 +324,25 @@ export const gerarIniMdfe = (params: any): string => {
     return ["1", "2", "3"].includes(tpTranspStr);
   };
 
-  if (isInfPagMandatoryVal()) {
-    const pag = (pagamentos && pagamentos.length > 0) ? pagamentos[0] : null;
+  const activeDocs = (documentos || []).filter((d: any) => !d.excluido);
+  const hasMultipleDocs = activeDocs.length > 1;
+
+  const pag = (pagamentos && pagamentos.length > 0) ? pagamentos[0] : null;
+  const hasRealPayment = !!(
+    (pag && (
+      Number(pag.vl_contrato || 0) > 0 ||
+      (pag.banco && String(pag.banco).trim() !== "") ||
+      (pag.chave_pix && String(pag.chave_pix).trim() !== "") ||
+      (pag.cnpjipef && String(pag.cnpjipef).trim() !== "")
+    )) ||
+    (componentes && componentes.length > 0)
+  );
+
+  // infPag só é obrigatório se for TAC E tiver apenas 1 documento fiscal.
+  // Se tiver múltiplos documentos, só geramos se houver um pagamento real cadastrado.
+  const shouldGenerateInfPag = isInfPagMandatoryVal() && (!hasMultipleDocs || hasRealPayment);
+
+  if (shouldGenerateInfPag) {
     const temParcelas = parcelas && parcelas.length > 0;
     const indPag = temParcelas ? "1" : "0";
     const cnpjipefClean = pag?.cnpjipef 
@@ -315,19 +359,18 @@ export const gerarIniMdfe = (params: any): string => {
     ini += "\n";
 
     // Informações bancárias (infBanc)
-    const hasBanco = pag?.banco && String(pag.banco).trim() !== "";
-    const hasAgencia = pag?.agencia && String(pag.agencia).trim() !== "";
-    const hasPix = pag?.chave_pix && String(pag.chave_pix).trim() !== "";
-    const hasIpef = pag?.cnpjipef && String(pag.cnpjipef).trim() !== "";
+    const hasBancoValido = pag?.banco && String(pag.banco).trim() !== "" && pag?.agencia && String(pag.agencia).trim() !== "";
+    const hasPixValido = pag?.chave_pix && String(pag.chave_pix).trim() !== "";
+    const hasIpefValido = pag?.cnpjipef && String(pag.cnpjipef).trim() !== "";
 
-    if (hasBanco || hasPix || hasIpef) {
+    if (hasBancoValido || hasPixValido || hasIpefValido) {
       ini += "[infBanc001]\n";
-      if (hasBanco && hasAgencia) {
+      if (hasBancoValido) {
         ini += `codBanco=${String(pag.banco).trim().substring(0, 4)}\n`;
         ini += `codAgencia=${String(pag.agencia).trim().substring(0, 10)}\n`;
-      } else if (hasPix) {
+      } else if (hasPixValido) {
         ini += `PIX=${String(pag.chave_pix).trim().substring(0, 60)}\n`;
-      } else if (hasIpef) {
+      } else if (hasIpefValido) {
         ini += `CNPJIPEF=${String(pag.cnpjipef).replace(/\D/g, "").substring(0, 14)}\n`;
       }
       ini += "\n";
@@ -375,7 +418,7 @@ export const gerarIniMdfe = (params: any): string => {
         const prazoIdx = String(idx + 1).padStart(3, '0');
         ini += `[infPrazo001${prazoIdx}]\n`;
         ini += `nParcela=${p.nr_parcela}\n`;
-        ini += `dVenc=${formatData(p.dt_vencimento)}\n`;
+        ini += `dVenc=${formatDataBR(formatData(p.dt_vencimento))}\n`;
         ini += `vParcela=${p.vl_parcela || 0}\n\n`;
       });
     }

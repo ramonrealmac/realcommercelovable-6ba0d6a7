@@ -56,13 +56,37 @@ const XGridCols: IGridColumn[] = [
     render: r => <span className={ST_COLORS[r.status as TMdfSt] || ""}>{ST_LABELS[r.status as TMdfSt] || r.status}</span> },
 ];
 
-const validarObrigatoriedadesTransporte = async (rec: any) => {
+const validarObrigatoriedadesTransporte = async (rec: any, empresaId: number) => {
   const tpTransp = rec.tp_transportador;
   const tpEmit = rec.tp_emitente ?? "1";
 
-  // Se tpTransp não for informado, mas tpEmit for 1 ou 3, tpTransp é obrigatório.
-  if (!tpTransp && tpEmit !== "2") {
-    throw new Error("Tipo de Transportador é obrigatório para Prestadores de Serviço de Transporte (tpEmit 1 ou 3).");
+  // Buscar CNPJ da empresa logada
+  const { data: empData } = await supabase
+    .from("empresa")
+    .select("cnpj")
+    .eq("empresa_id", empresaId)
+    .single();
+
+  const cleanEmpCnpj = empData?.cnpj ? empData.cnpj.replace(/\D/g, "") : "";
+
+  // Buscar CNPJ do transportador
+  let cleanTranspCnpj = "";
+  if (rec.transportador_id) {
+    const { data: transpData } = await supabase
+      .from("cadastro")
+      .select("cnpj")
+      .eq("cadastro_id", rec.transportador_id)
+      .maybeSingle();
+    if (transpData?.cnpj) {
+      cleanTranspCnpj = transpData.cnpj.replace(/\D/g, "");
+    }
+  }
+
+  // O campo Tipo de Transportador é obrigatório apenas quando o CNPJ do Transportador for diferente do CNPJ da empresa logada
+  const isDifferentCnpj = cleanTranspCnpj && cleanTranspCnpj !== cleanEmpCnpj;
+
+  if (isDifferentCnpj && !tpTransp) {
+    throw new Error("Tipo de Transportador é obrigatório para transportador diferente da empresa emitente.");
   }
 
   if (!tpTransp) {
@@ -86,16 +110,18 @@ const validarObrigatoriedadesTransporte = async (rec: any) => {
       }
       const cleanTransp = rec.transp_cnpj_cpf.replace(/\D/g, "");
 
-      // TAC (2) exige CPF do transportador
-      if (tpTransp === "2") {
-        if (cleanTransp.length !== 11) {
-          throw new Error("Para TAC, o documento do transportador deve ser um CPF (11 dígitos).");
+      if (cleanTransp.length === 11) {
+        // CPF: tp_transportador deve ser TAC Agregado (1) ou TAC Independente (2)
+        if (!["1", "2"].includes(String(tpTransp))) {
+          throw new Error("Para proprietário com CPF, o Tipo de Transportador deve ser TAC Agregado ou TAC Independente.");
+        }
+      } else if (cleanTransp.length === 14) {
+        // CNPJ: tp_transportador deve ser TAC Equiparado / Outros (3)
+        if (String(tpTransp) !== "3") {
+          throw new Error("Para proprietário com CNPJ, o Tipo de Proprietário deve ser Outros.");
         }
       } else {
-        // ETC (1) e CTC (3) exigem CNPJ do transportador
-        if (cleanTransp.length !== 14) {
-          throw new Error("Para ETC/CTC, o documento do transportador deve ser um CNPJ (14 dígitos).");
-        }
+        throw new Error("Documento do transportador inválido (deve ser CPF de 11 dígitos ou CNPJ de 14 dígitos).");
       }
     }
   }
@@ -139,56 +165,67 @@ const validarObrigatoriedadesTransporte = async (rec: any) => {
 
     // Se já salvo, validar componentes de pagamento, vale-pedágio e parcelas no banco
     if (rec.mdf_manifesto_id) {
-      const { data: componentes } = await supabase
-        .from("fiscal_mdf_componente")
-        .select("tp_componente")
+      // Obter quantidade de documentos cadastrados
+      const { data: docs } = await supabase
+        .from("fiscal_mdf_documento")
+        .select("mdf_documento_id")
         .eq("mdf_manifesto_id", rec.mdf_manifesto_id)
         .eq("excluido", false);
 
-      if (!componentes || componentes.length === 0) {
-        throw new Error("É obrigatório informar ao menos um componente de pagamento (aba Componentes) para TAC.");
-      }
+      const hasMultipleDocs = docs && docs.length > 1;
 
-      if (rec.possui_pedagio) {
-        const temPedagioComp = componentes.some((c: any) => c.tp_componente === "01");
-        if (!temPedagioComp) {
-          throw new Error("A rota/manifesto possui pedágio. É obrigatório adicionar ao menos um componente do tipo '01 - Vale Pedágio' na aba Componentes.");
-        }
-      }
-
-      // Validar se há informações de pagamento salvas e corretas
-      const { data: pag } = await supabase
-        .from("fiscal_mdf_pagamento")
-        .select("forma_pagto, banco, agencia, cnpjipef")
-        .eq("mdf_manifesto_id", rec.mdf_manifesto_id)
-        .eq("excluido", false)
-        .maybeSingle();
-
-      if (!pag) {
-        throw new Error("As informações de pagamento não foram cadastradas na aba Pagamento.");
-      }
-
-      const temBanco = pag.banco && String(pag.banco).trim() !== "";
-      const temIpef = pag.cnpjipef && String(pag.cnpjipef).trim() !== "";
-
-      if (!temBanco && !temIpef) {
-        throw new Error("Informe os dados do Banco/Agência ou o CNPJ da IPEF na aba Pagamento.");
-      }
-
-      if (temBanco && (!pag.agencia || String(pag.agencia).trim() === "")) {
-        throw new Error("Como o Banco foi informado, a Agência também deve ser preenchida na aba Pagamento.");
-      }
-
-      // Validar parcelas se forma de pagamento for a prazo (1)
-      if (pag.forma_pagto === "1") {
-        const { data: parcelas } = await supabase
-          .from("fiscal_mdf_pagtos")
-          .select("mdf_pagtos_id")
+      if (!hasMultipleDocs) {
+        const { data: componentes } = await supabase
+          .from("fiscal_mdf_componente")
+          .select("tp_componente")
           .eq("mdf_manifesto_id", rec.mdf_manifesto_id)
           .eq("excluido", false);
 
-        if (!parcelas || parcelas.length === 0) {
-          throw new Error("Para Pagamento à Prazo, é obrigatório lançar pelo menos 1 parcela na aba Parcelas.");
+        if (!componentes || componentes.length === 0) {
+          throw new Error("É obrigatório informar ao menos um componente de pagamento (aba Componentes) para TAC.");
+        }
+
+        if (rec.possui_pedagio) {
+          const temPedagioComp = componentes.some((c: any) => c.tp_componente === "01");
+          if (!temPedagioComp) {
+            throw new Error("A rota/manifesto possui pedágio. É obrigatório adicionar ao menos um componente do tipo '01 - Vale Pedágio' na aba Componentes.");
+          }
+        }
+
+        // Validar se há informações de pagamento salvas e corretas
+        const { data: pag } = await supabase
+          .from("fiscal_mdf_pagamento")
+          .select("forma_pagto, banco, agencia, cnpjipef")
+          .eq("mdf_manifesto_id", rec.mdf_manifesto_id)
+          .eq("excluido", false)
+          .maybeSingle();
+
+        if (!pag) {
+          throw new Error("As informações de pagamento não foram cadastradas na aba Pagamento.");
+        }
+
+        const temBanco = pag.banco && String(pag.banco).trim() !== "";
+        const temIpef = pag.cnpjipef && String(pag.cnpjipef).trim() !== "";
+
+        if (!temBanco && !temIpef) {
+          throw new Error("Informe os dados do Banco/Agência ou o CNPJ da IPEF na aba Pagamento.");
+        }
+
+        if (temBanco && (!pag.agencia || String(pag.agencia).trim() === "")) {
+          throw new Error("Como o Banco foi informado, a Agência também deve ser preenchida na aba Pagamento.");
+        }
+
+        // Validar parcelas se forma de pagamento for a prazo (1)
+        if (pag.forma_pagto === "1") {
+          const { data: parcelas } = await supabase
+            .from("fiscal_mdf_pagtos")
+            .select("mdf_pagtos_id")
+            .eq("mdf_manifesto_id", rec.mdf_manifesto_id)
+            .eq("excluido", false);
+
+          if (!parcelas || parcelas.length === 0) {
+            throw new Error("Para Pagamento à Prazo, é obrigatório lançar pelo menos 1 parcela na aba Parcelas.");
+          }
         }
       }
     }
@@ -226,10 +263,26 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
   const XRefreshRef = useRef<any>(null);
   const [selectedCadastroId, setSelectedCadastroId] = useState<number | null>(null);
   const [refreshMotoristasTrigger, setRefreshMotoristasTrigger] = useState(0);
-  const [transportadores, setTransportadores] = useState<{ cadastro_id: number; razao_social: string }[]>([]);
+  const [transportadores, setTransportadores] = useState<{ cadastro_id: number; razao_social: string; cnpj: string | null; rntrc: string | null; tp_proprietario: string | null }[]>([]);
+  const [empresaCnpj, setEmpresaCnpj] = useState<string>("");
   const [selectedManifestoId, setSelectedManifestoId] = useState<number | null>(null);
   const [formaPagto, setFormaPagto] = useState<string>("0");
   const [rotas, setRotas] = useState<{ rota_id: number; descricao: string; possui_pedagio: boolean }[]>([]);
+
+  useEffect(() => {
+    if (!XEmpresaId) return;
+    const loadEmpresa = async () => {
+      const { data } = await supabase
+        .from("empresa")
+        .select("cnpj")
+        .eq("empresa_id", XEmpresaId)
+        .maybeSingle();
+      if (data?.cnpj) {
+        setEmpresaCnpj(data.cnpj.replace(/\D/g, ""));
+      }
+    };
+    loadEmpresa();
+  }, [XEmpresaId]);
 
   useEffect(() => {
     const loadFormaPagto = async () => {
@@ -258,7 +311,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
     const loadTransportadores = async () => {
       const { data, error } = await supabase
         .from("cadastro")
-        .select("cadastro_id, razao_social")
+        .select("cadastro_id, razao_social, cnpj, rntrc, tp_proprietario")
         .eq("empresa_id", XEmpresaId)
         .eq("st_transportador", "S")
         .eq("excluido", false)
@@ -366,7 +419,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
           throw new Error("O CNPJ/CPF do Transportador é obrigatório. Certifique-se de que o Proprietário do Veículo de Tração possui um documento (CNPJ/CPF) cadastrado.");
         }
 
-        if (manifesto.tp_transportador === "2") { // TAC
+        if (["1", "2", "3"].includes(String(manifesto.tp_transportador))) { // TAC
           if (!manifesto.contratante_cnpj_cpf || !manifesto.contratante_nome) {
             throw new Error("CNPJ/CPF e Nome do Contratante são obrigatórios para TAC.");
           }
@@ -441,6 +494,31 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
           if (!rec.dt_viagem)    throw new Error("Data da Viagem é obrigatória.");
           if (!rec.hr_viagem)    throw new Error("Hora da Viagem é obrigatória.");
           
+          // Transportador: Buscar a partir do cadastro do transportador selecionado
+          if (rec.transportador_id) {
+            const { data: cadastro } = await supabase
+              .from("cadastro")
+              .select("cnpj, rntrc, tp_proprietario")
+              .eq("cadastro_id", rec.transportador_id)
+              .maybeSingle();
+
+            if (cadastro) {
+              if (cadastro.cnpj) rec.transp_cnpj_cpf = cadastro.cnpj;
+              if (cadastro.rntrc) rec.rntrc = cadastro.rntrc.replace(/\D/g, "").substring(0, 8);
+              
+              // Map tp_proprietario to tp_transportador
+              let tpTranspVal = "";
+              if (cadastro.tp_proprietario === "0") tpTranspVal = "1";
+              else if (cadastro.tp_proprietario === "1") tpTranspVal = "2";
+              else if (cadastro.tp_proprietario === "2") tpTranspVal = "3";
+              rec.tp_transportador = tpTranspVal || null;
+            }
+          } else {
+            rec.transp_cnpj_cpf = null;
+            rec.rntrc = null;
+            rec.tp_transportador = null;
+          }
+
           const isTac = ["1", "2", "3"].includes(String(rec.tp_transportador || ""));
           if (isTac) {
             // Contratante: Buscar da tabela 'empresa'
@@ -454,33 +532,26 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
               rec.contratante_cnpj_cpf = empData.cnpj;
               rec.contratante_nome = empData.razao_social;
             }
-
-            // Transportador: Buscar a partir do cadastro do transportador selecionado
-            if (rec.transportador_id) {
-              const { data: cadastro } = await supabase
-                .from("cadastro")
-                .select("cnpj, rntrc")
-                .eq("cadastro_id", rec.transportador_id)
-                .maybeSingle();
-
-              if (cadastro) {
-                if (cadastro.cnpj) rec.transp_cnpj_cpf = cadastro.cnpj;
-                if (cadastro.rntrc) rec.rntrc = cadastro.rntrc.replace(/\D/g, "").substring(0, 8);
-              }
-            }
           } else {
-            rec.transportador_id = null;
-            rec.transp_cnpj_cpf = null;
             rec.contratante_cnpj_cpf = null;
             rec.contratante_nome = null;
-            rec.rntrc = null;
             rec.ciot = null;
             rec.ciot_cnpj_cpf = null;
             rec.rota_id = null;
             rec.possui_pedagio = false;
           }
 
-          await validarObrigatoriedadesTransporte(rec);
+          await validarObrigatoriedadesTransporte(rec, XEmpresaId);
+          
+          // Se as UFs forem iguais ou vizinhas, não deve haver UFs de percurso intermediárias no banco.
+          if (rec.ufini && rec.uffim && areUFsNeighbors(rec.ufini, rec.uffim)) {
+            if (rec.mdf_manifesto_id) {
+              await supabase
+                .from("fiscal_mdf_percurso")
+                .update({ excluido: true, dt_alteracao: new Date().toISOString() })
+                .eq("mdf_manifesto_id", rec.mdf_manifesto_id);
+            }
+          }
           
           // Lógica de Sequencial Automático (apenas na inclusão)
           if (!rec.mdf_manifesto_id) {
@@ -567,13 +638,14 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
         },
         {
           key: "veiculos", label: "Veículos / Motoristas",
-          render: ({ currentRecord }) => (
+          render: ({ currentRecord, record }) => (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
               <div className="border border-border rounded p-4 bg-card/20 shadow-sm">
                 <h3 className="text-sm font-semibold text-foreground border-b border-border pb-1 mb-3">Veículos</h3>
                 <MdfVeiculosTab
                   mdfManifestoId={currentRecord?.mdf_manifesto_id ?? null}
                   empresaId={XEmpresaId}
+                  transportadorId={record?.transportador_id ?? currentRecord?.transportador_id ?? null}
                   podeEditar={!currentRecord?.status || ["D", "R"].includes(String(currentRecord?.status))}
                   onTracaoCadastroIdChange={setSelectedCadastroId}
                   onMotoristasChanged={() => setRefreshMotoristasTrigger(p => p + 1)}
@@ -740,9 +812,9 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
               </div>
             </div>
 
-            {/* ── Linha 3: Tipo Emitente / Transportador ── */}
+            {/* ── Linha 3: Tipo Emitente / Transportador / Tipo Transportador ── */}
             <div className="grid grid-cols-12 gap-3 items-end">
-              <div className="col-span-6">
+              <div className="col-span-4">
                 <label className="text-xs text-muted-foreground">Tipo Emitente <span className="text-destructive">*</span></label>
                 <select disabled={ro} value={record.tp_emitente ?? "1"}
                   onChange={e => setField("tp_emitente", e.target.value)}
@@ -752,26 +824,77 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
                   <option value="3">3 - Prestador de serviço de transporte (Carga própria)</option>
                 </select>
               </div>
-              <div className="col-span-6">
+              <div className="col-span-4">
                 <label className="text-xs text-muted-foreground">
-                  Tipo Transportador {record.tp_emitente !== "2" && <span className="text-destructive">*</span>}
+                  Transportador {(record.tp_emitente !== "2" || (record.transportador_id && record.transp_cnpj_cpf?.replace(/\D/g, "") !== empresaCnpj)) && <span className="text-destructive">*</span>}
                 </label>
-                <select disabled={ro} value={record.tp_transportador ?? ""}
+                <select disabled={ro} value={record.transportador_id ?? ""}
                   onChange={e => {
-                    const val = e.target.value || null;
-                    setField("tp_transportador", val);
-                    if (!["1", "2", "3"].includes(String(val))) {
-                      setField("transportador_id", null);
-                      setField("transp_cnpj_cpf", null);
-                      setField("rntrc", null);
+                    const oldTranspId = record.transportador_id;
+                    const val = e.target.value ? Number(e.target.value) : null;
+                    if (val !== oldTranspId) {
+                      setField("transportador_id", val);
+                      if (val) {
+                        const t = transportadores.find(x => x.cadastro_id === val);
+                        if (t) {
+                          setField("transp_cnpj_cpf", t.cnpj || null);
+                          const cleanRntrc = t.rntrc ? String(t.rntrc).replace(/\D/g, "").substring(0, 8) : null;
+                          setField("rntrc", cleanRntrc);
+                          
+                          // Map tp_proprietario to tp_transportador
+                          // tp_proprietario: 0 -> 1 (TAC Agregado), 1 -> 2 (TAC Independente), 2 -> 3 (TAC Equiparado/Outros)
+                          let tpTranspVal = "";
+                          if (t.tp_proprietario === "0") tpTranspVal = "1";
+                          else if (t.tp_proprietario === "1") tpTranspVal = "2";
+                          else if (t.tp_proprietario === "2") tpTranspVal = "3";
+                          setField("tp_transportador", tpTranspVal || null);
+                        }
+                      } else {
+                        setField("transp_cnpj_cpf", null);
+                        setField("rntrc", null);
+                        setField("tp_transportador", null);
+                      }
+
+                      // Limpar as grids de veículos e motoristas se o manifesto já estiver salvo
+                      if (record.mdf_manifesto_id) {
+                        Promise.all([
+                          supabase
+                            .from("fiscal_mdf_veiculo")
+                            .update({ excluido: true, dt_alteracao: new Date().toISOString() })
+                            .eq("mdf_manifesto_id", record.mdf_manifesto_id),
+                          supabase
+                            .from("fiscal_mdf_condutor")
+                            .update({ excluido: true, dt_alteracao: new Date().toISOString() })
+                            .eq("mdf_manifesto_id", record.mdf_manifesto_id)
+                        ]).then(() => {
+                          setRefreshMotoristasTrigger(p => p + 1);
+                          toast.info("Veículos e motoristas desvinculados devido à mudança de Transportador.");
+                        }).catch(err => {
+                          console.error("Erro ao limpar veículos e motoristas:", err);
+                        });
+                      }
                     }
                   }}
                   className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
-                  <option value="">(Não Informado / Carga Própria)</option>
-                  <option value="1">1 - TAC Agregado</option>
-                  <option value="2">2 - TAC Independente</option>
-                  <option value="3">3 - TAC Equiparado</option>
+                  <option value="">— Selecione o Transportador —</option>
+                  {transportadores.map(t => (
+                    <option key={t.cadastro_id} value={t.cadastro_id}>{t.razao_social}</option>
+                  ))}
                 </select>
+              </div>
+              <div className="col-span-4">
+                <label className="text-xs text-muted-foreground">Tipo de Transportador (TAC)</label>
+                <input 
+                  type="text" 
+                  disabled 
+                  value={
+                    record.tp_transportador === "1" ? "0 - TAC Agregado" :
+                    record.tp_transportador === "2" ? "1 - TAC Independente" :
+                    record.tp_transportador === "3" ? "2 - Outros" :
+                    "(Não Informado / Carga Própria)"
+                  }
+                  className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary"
+                />
               </div>
             </div>
 
@@ -779,37 +902,6 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
             {["1", "2", "3"].includes(String(record.tp_transportador || "")) && (
               <div className="border border-border rounded p-3 bg-accent/10 space-y-3">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Dados de TAC (Transportador Autônomo)</p>
-                
-                <div className="grid grid-cols-12 gap-3 items-end">
-                  <div className="col-span-12">
-                    <label className="text-xs text-muted-foreground">Transportador <span className="text-destructive">*</span></label>
-                    <select disabled={ro} value={record.transportador_id ?? ""}
-                      onChange={async (e) => {
-                        const val = e.target.value ? Number(e.target.value) : null;
-                        setField("transportador_id", val);
-                        if (val) {
-                          const { data: cad } = await supabase
-                            .from("cadastro")
-                            .select("cnpj, rntrc")
-                            .eq("cadastro_id", val)
-                            .maybeSingle();
-                          if (cad) {
-                            if (cad.cnpj) setField("transp_cnpj_cpf", cad.cnpj);
-                            if (cad.rntrc) setField("rntrc", cad.rntrc.replace(/\D/g, "").substring(0, 8));
-                          }
-                        } else {
-                          setField("transp_cnpj_cpf", null);
-                          setField("rntrc", null);
-                        }
-                      }}
-                      className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
-                      <option value="">— Selecione o Transportador —</option>
-                      {transportadores.map(t => (
-                        <option key={t.cadastro_id} value={t.cadastro_id}>{t.razao_social}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
 
                 <div className="grid grid-cols-12 gap-3 items-center">
                   <div className="col-span-8">

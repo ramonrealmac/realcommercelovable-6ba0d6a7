@@ -626,6 +626,41 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
       }
     }
 
+    // Validações obrigatórias para Transportador (MDF-e/tpProp)
+    if (XF.st_transportador === "S") {
+      const cleanDoc = XF.cnpj ? XF.cnpj.replace(/\D/g, "") : "";
+      
+      // Obter CNPJ da empresa logada para verificar a obrigatoriedade
+      const { data: empData } = await db
+        .from("empresa")
+        .select("cnpj")
+        .eq("empresa_id", XEmpresaMatrizId)
+        .single();
+      
+      const cleanEmpCnpj = empData?.cnpj ? empData.cnpj.replace(/\D/g, "") : "";
+      const isDifferentCnpj = cleanDoc && cleanDoc !== cleanEmpCnpj;
+
+      // Se o transportador for de terceiros (CNPJ/CPF diferente da empresa), o tipo de proprietário (TAC) é obrigatório
+      if (isDifferentCnpj && (!XF.tp_proprietario || XF.tp_proprietario.trim() === "")) {
+        toast.error("O Tipo de Proprietário é obrigatório para transportador diferente da empresa emitente.");
+        return;
+      }
+
+      if (cleanDoc.length === 11) {
+        // CPF: tp_proprietario deve ser 0 (TAC Agregado) ou 1 (TAC Independente). Nunca 2 (Outros).
+        if (XF.tp_proprietario === "2") {
+          toast.error("Para proprietário com CPF, o Tipo de Proprietário deve ser TAC Agregado ou TAC Independente (não pode ser Outros).");
+          return;
+        }
+      } else if (cleanDoc.length === 14) {
+        // CNPJ: tp_proprietario deve ser 2 (Outros) se preenchido.
+        if (XF.tp_proprietario && XF.tp_proprietario !== "2") {
+          toast.error("Para proprietário com CNPJ, o Tipo de Proprietário deve ser Outros.");
+          return;
+        }
+      }
+    }
+
     // Extra validation from config
     if (extraValidation) {
       const XMsg = extraValidation(XF);

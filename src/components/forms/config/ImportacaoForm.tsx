@@ -176,15 +176,24 @@ const TABLE_DEFINITIONS: TableDefinition[] = [
       { name: "produto_grupo_id", label: "ID do Grupo de Produtos", type: "number", required: false, description: "Vínculo numérico com o grupo." },
       { name: "produto_subgrupo_id", label: "ID do Subgrupo", type: "number", required: false, description: "Vínculo numérico com o subgrupo." },
       { name: "linha_id", label: "ID da Linha de Produtos", type: "number", required: false, description: "Vínculo numérico com a linha." },
-      { name: "cd_produto_grupo", label: "Código do Grupo de Produtos (cd_produto_grupo)", type: "string", required: false, description: "Código do grupo para buscar o ID correspondente." },
-      { name: "cd_produto_subgrupo", label: "Código do Subgrupo (cd_produto_subgrupo)", type: "string", required: false, description: "Código do subgrupo para buscar o ID correspondente." },
-      { name: "cd_linha", label: "Código da Linha (cd_linha)", type: "string", required: false, description: "Código da linha de produtos para buscar o ID correspondente." },
       { name: "peso_liquido", label: "Peso Líquido", type: "number", required: false, description: "Peso em KG." },
       { name: "peso_bruto", label: "Peso Bruto", type: "number", required: false, description: "Peso com embalagem." },
       { name: "grupo_icms_id", label: "ID do Grupo de ICMS", type: "number", required: false, description: "Vínculo numérico com o grupo tributário de ICMS." },
       { name: "grupo_ipi_id", label: "ID do Grupo de IPI", type: "number", required: false, description: "Vínculo numérico com o grupo tributário de IPI." },
       { name: "grupo_ibscbs_id", label: "ID do Grupo de IBS/CBS", type: "number", required: false, description: "Vínculo numérico com o grupo tributário de IBS/CBS (Reforma Tributária)." },
       { name: "grupo_pis_cofins_id", label: "ID do Grupo de PIS/COFINS", type: "number", required: false, description: "Vínculo numérico com o grupo tributário de PIS/COFINS." }
+    ]
+  },
+  {
+    id: "produto_codbarra",
+    name: "produto_codbarra",
+    label: "Código de Barras (produto_codbarra)",
+    primaryKey: "produto_codbarra_id",
+    description: "Vínculo de códigos de barras (EAN/GTIN) adicionais com produtos.",
+    columns: [
+      { name: "produto_id", label: "ID do Produto", type: "number", required: false, description: "Vínculo numérico com o produto." },
+      { name: "cd_produto", label: "Código do Produto (cd_produto)", type: "string", required: false, description: "Código do produto para buscar o ID correspondente." },
+      { name: "cod_barra", label: "Código de Barras", type: "string", required: true, description: "Código de barras EAN/GTIN." }
     ]
   },
   {
@@ -341,7 +350,8 @@ const TABLE_DEFINITIONS: TableDefinition[] = [
     description: "Itens que compõem cada movimento de estoque/vendas.",
     columns: [
       { name: "movimento_id", label: "ID do Movimento", type: "number", required: true, description: "ID do cabeçalho de movimento associado." },
-      { name: "produto_id", label: "ID do Produto", type: "number", required: true, description: "ID do produto associado." },
+      { name: "produto_id", label: "ID do Produto", type: "number", required: false, description: "ID do produto associado." },
+      { name: "cd_produto", label: "Código do Produto (cd_produto)", type: "string", required: false, description: "Código do produto para buscar o ID correspondente." },
       { name: "qt_movimento", label: "Quantidade", type: "number", required: false, description: "Quantidade movimentada." },
       { name: "vl_und_produto", label: "Valor Unitário", type: "number", required: false, description: "Preço unitário do item." },
       { name: "vl_movimento", label: "Valor Total do Item", type: "number", required: false, description: "Valor final calculado do item." }
@@ -385,7 +395,8 @@ const TABLE_DEFINITIONS: TableDefinition[] = [
     description: "Saldo de estoque por depósito e endereçamento físico.",
     columns: [
       { name: "cd_estoque", label: "Código do Estoque (cd_estoque)", type: "string", required: true, description: "Código de identificação único do registro de estoque por empresa." },
-      { name: "produto_id", label: "ID do Produto", type: "number", required: true, description: "ID numérico do produto associado." },
+      { name: "produto_id", label: "ID do Produto", type: "number", required: false, description: "ID numérico do produto associado." },
+      { name: "cd_produto", label: "Código do Produto (cd_produto)", type: "string", required: false, description: "Código do produto para buscar o ID correspondente." },
       { name: "deposito_id", label: "ID do Depósito", type: "number", required: false, description: "ID numérico do depósito de estoque." },
       { name: "estoque_fisico", label: "Estoque Físico", type: "number", required: false, description: "Saldo físico atual." },
       { name: "estoque_reservado", label: "Estoque Reservado", type: "number", required: false, description: "Saldo reservado por pedidos de venda." },
@@ -484,15 +495,24 @@ function normalizeDate(val: string): string {
 }
 
 // Helper function to apply translation rules for a specific column
-function applyColumnFormula(value: string, formulaStr: string): string {
-  if (!formulaStr || !formulaStr.trim()) return value;
+function applyColumnFormula(value: string | null | undefined, formulaStr: string): string {
+  const normValue = value === null || value === undefined ? "" : String(value);
+  if (!formulaStr || !formulaStr.trim()) return normValue;
   
   let formula = formulaStr.trim();
   if (formula.toLowerCase().startsWith("cond:")) {
     formula = formula.substring(5);
   } else {
-    return value;
+    return normValue;
   }
+  
+  const cleanQuotes = (str: string) => {
+    let s = str.trim();
+    if ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith('"') && s.endsWith('"'))) {
+      return s.substring(1, s.length - 1);
+    }
+    return s;
+  };
   
   const rules = formula.split(",");
   for (const rule of rules) {
@@ -500,22 +520,28 @@ function applyColumnFormula(value: string, formulaStr: string): string {
     if (!trimmedRule) continue;
     
     const parts = trimmedRule.split("=");
-    if (parts.length === 2) {
+    if (parts.length >= 2) {
       const sourceVal = parts[0].trim();
-      const targetVal = parts[1].trim();
-      if (value.trim().toLowerCase() === sourceVal.toLowerCase()) {
-        return targetVal;
+      const targetVal = parts.slice(1).join("=").trim();
+      
+      const isSourceEmptyTarget = sourceVal === "" || 
+                                  sourceVal.toLowerCase() === "null" || 
+                                  sourceVal.toLowerCase() === "empty" || 
+                                  sourceVal === "''" || 
+                                  sourceVal === '""';
+      const isValueEmpty = normValue.trim() === "";
+      
+      if (isValueEmpty && isSourceEmptyTarget) {
+        return cleanQuotes(targetVal);
       }
-    } else if (parts.length >= 3) {
-      const sourceVal = parts[1].trim();
-      const targetVal = parts.slice(2).join("=").trim();
-      if (value.trim().toLowerCase() === sourceVal.toLowerCase()) {
-        return targetVal;
+      
+      if (!isValueEmpty && normValue.trim().toLowerCase() === sourceVal.toLowerCase()) {
+        return cleanQuotes(targetVal);
       }
     }
   }
   
-  return value;
+  return normValue;
 }
 
 const ImportacaoForm: React.FC = () => {
@@ -794,10 +820,23 @@ const ImportacaoForm: React.FC = () => {
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
-      setCsvContent(text);
-      setFileName(file.name);
-      toast.success(`Arquivo carregado com sucesso!`);
-      setCurrentStep(2);
+      // Auto-detect ANSI vs UTF-8 by checking for replacement character
+      if (text.includes("\uFFFD")) {
+        const retryReader = new FileReader();
+        retryReader.onload = (retryEvent) => {
+          const retryText = retryEvent.target?.result as string;
+          setCsvContent(retryText);
+          setFileName(file.name);
+          toast.success(`Arquivo carregado em ISO-8859-1 (ANSI) com sucesso!`);
+          setCurrentStep(2);
+        };
+        retryReader.readAsText(file, "ISO-8859-1");
+      } else {
+        setCsvContent(text);
+        setFileName(file.name);
+        toast.success(`Arquivo carregado em UTF-8 com sucesso!`);
+        setCurrentStep(2);
+      }
     };
     reader.readAsText(file, "UTF-8");
   };
@@ -869,7 +908,7 @@ const ImportacaoForm: React.FC = () => {
     const matrizCompanyId = XEmpresaMatrizId || companyId;
     
     // Distinguish matrix-level (shared catalog) vs branch-level (operational/transaction) tables
-    const matrixTables = ["cadastro", "cadastro_grupo", "produto", "produto_grupo", "produto_subgrupo", "linha_produto", "unidade"];
+    const matrixTables = ["cadastro", "cadastro_grupo", "produto", "produto_grupo", "produto_subgrupo", "linha_produto", "unidade", "produto_codbarra"];
     const isMatrixTable = matrixTables.includes(activeTable.name);
     const targetCompanyId = isMatrixTable ? matrizCompanyId : companyId;
 
@@ -878,6 +917,84 @@ const ImportacaoForm: React.FC = () => {
     const subgrupoMap: Record<string, number> = {};
     const linhaMap: Record<string, number> = {};
     const cadastroMap: Record<string, number> = {};
+    const produtoMap: Record<string, number> = {};
+
+    // For validation: sets of valid database primary key IDs/keys for the current company/matriz
+    const validGroupIds = new Set<number>();
+    const validSubgroupIds = new Set<number>();
+    const validLinhaIds = new Set<number>();
+    const validUnidadeIds = new Set<string>();
+
+    // For translation: maps from code to database ID
+    const groupCodeToId = new Map<string, number>();
+    const subgrupoCodeToId = new Map<string, number>();
+    const linhaCodeToId = new Map<string, number>();
+
+    if (selectedTableId === "produto") {
+      try {
+        const { data: groups } = await supabase
+          .from("produto_grupo")
+          .select("produto_grupo_id, cd_produto_grupo")
+          .eq("empresa_id", targetCompanyId);
+        if (groups) {
+          groups.forEach(g => {
+            if (g.produto_grupo_id !== null && g.produto_grupo_id !== undefined) {
+              const id = Number(g.produto_grupo_id);
+              validGroupIds.add(id);
+              if (g.cd_produto_grupo !== null && g.cd_produto_grupo !== undefined && g.cd_produto_grupo !== "") {
+                groupCodeToId.set(String(g.cd_produto_grupo).trim(), id);
+              }
+            }
+          });
+        }
+
+        const { data: subgrupos } = await supabase
+          .from("produto_subgrupo")
+          .select("produto_subgrupo_id, cd_produto_subgrupo")
+          .eq("empresa_id", targetCompanyId);
+        if (subgrupos) {
+          subgrupos.forEach(s => {
+            if (s.produto_subgrupo_id !== null && s.produto_subgrupo_id !== undefined) {
+              const id = Number(s.produto_subgrupo_id);
+              validSubgroupIds.add(id);
+              if (s.cd_produto_subgrupo !== null && s.cd_produto_subgrupo !== undefined && s.cd_produto_subgrupo !== "") {
+                subgrupoCodeToId.set(String(s.cd_produto_subgrupo).trim(), id);
+              }
+            }
+          });
+        }
+
+        const { data: linhas } = await supabase
+          .from("linha_produto")
+          .select("linha_id, cd_linha")
+          .eq("empresa_id", targetCompanyId);
+        if (linhas) {
+          linhas.forEach(l => {
+            if (l.linha_id !== null && l.linha_id !== undefined) {
+              const id = Number(l.linha_id);
+              validLinhaIds.add(id);
+              if (l.cd_linha !== null && l.cd_linha !== undefined && l.cd_linha !== "") {
+                linhaCodeToId.set(String(l.cd_linha).trim(), id);
+              }
+            }
+          });
+        }
+
+        const { data: units } = await supabase
+          .from("unidade")
+          .select("unidade_id")
+          .eq("empresa_id", targetCompanyId);
+        if (units) {
+          units.forEach(u => {
+            if (u.unidade_id) {
+              validUnidadeIds.add(u.unidade_id.trim().toUpperCase());
+            }
+          });
+        }
+      } catch (e) {
+        console.error("Erro ao pré-carregar IDs e códigos para validação:", e);
+      }
+    }
 
     if (["movimento", "financeiro", "cadastro_veiculo"].includes(selectedTableId)) {
       const lookupCompanyId = matrizCompanyId;
@@ -923,7 +1040,7 @@ const ImportacaoForm: React.FC = () => {
       }
     }
 
-    if (selectedTableId === "produto") {
+    if (["produto_codbarra", "estoque", "movimento_item"].includes(selectedTableId)) {
       const lookupCompanyId = matrizCompanyId;
 
       const extractCodes = (colName: string): string[] => {
@@ -943,279 +1060,31 @@ const ImportacaoForm: React.FC = () => {
         return Array.from(codesSet);
       };
 
-      const groupCodes = extractCodes("cd_produto_grupo");
-      const subgrupoCodes = extractCodes("cd_produto_subgrupo");
-      const linhaCodes = extractCodes("cd_linha");
+      const produtoCodes = extractCodes("cd_produto");
 
-      const queries = [];
-
-      if (groupCodes.length > 0) {
-        queries.push(
-          (async () => {
-            const { data, error } = await supabase
-              .from("produto_grupo")
-              .select("produto_grupo_id, cd_produto_grupo")
-              .eq("empresa_id", lookupCompanyId)
-              .in("cd_produto_grupo", groupCodes);
-            if (error) {
-              console.error("Erro ao buscar produto_grupo:", error);
-            } else if (data) {
-              (data as Array<{ cd_produto_grupo: string | number | null; produto_grupo_id: number }>).forEach((row) => {
-                if (row.cd_produto_grupo) {
-                  groupMap[String(row.cd_produto_grupo).trim()] = row.produto_grupo_id;
-                }
-              });
-            }
-          })()
-        );
-      }
-
-      if (subgrupoCodes.length > 0) {
-        queries.push(
-          (async () => {
-            const { data, error } = await supabase
-              .from("produto_subgrupo")
-              .select("produto_subgrupo_id, cd_produto_subgrupo")
-              .eq("empresa_id", lookupCompanyId)
-              .in("cd_produto_subgrupo", subgrupoCodes);
-            if (error) {
-              console.error("Erro ao buscar produto_subgrupo:", error);
-            } else if (data) {
-              (data as Array<{ cd_produto_subgrupo: string | number | null; produto_subgrupo_id: number }>).forEach((row) => {
-                if (row.cd_produto_subgrupo) {
-                  subgrupoMap[String(row.cd_produto_subgrupo).trim()] = row.produto_subgrupo_id;
-                }
-              });
-            }
-          })()
-        );
-      }
-
-      if (linhaCodes.length > 0) {
-        queries.push(
-          (async () => {
-            const { data, error } = await supabase
-              .from("linha_produto")
-              .select("linha_id, cd_linha")
-              .eq("empresa_id", lookupCompanyId)
-              .in("cd_linha", linhaCodes);
-            if (error) {
-              console.error("Erro ao buscar linha_produto:", error);
-            } else if (data) {
-              (data as Array<{ cd_linha: string | number | null; linha_id: number }>).forEach((row) => {
-                if (row.cd_linha) {
-                  linhaMap[String(row.cd_linha).trim()] = row.linha_id;
-                }
-              });
-            }
-          })()
-        );
-      }
-
-      if (queries.length > 0) {
+      if (produtoCodes.length > 0) {
         try {
-          await Promise.all(queries);
+          const { data, error } = await supabase
+            .from("produto")
+            .select("produto_id, cd_produto")
+            .eq("empresa_id", lookupCompanyId)
+            .in("cd_produto", produtoCodes.map(Number).filter(n => !isNaN(n)));
+          if (error) {
+            console.error("Erro ao buscar produto:", error);
+          } else if (data) {
+            (data as Array<{ cd_produto: number | null; produto_id: number }>).forEach((row) => {
+              if (row.cd_produto !== null && row.cd_produto !== undefined) {
+                produtoMap[String(row.cd_produto).trim()] = row.produto_id;
+              }
+            });
+          }
         } catch (e) {
-          console.error("Erro ao pré-carregar mapeamento de chaves estrangeiras:", e);
-        }
-      }
-
-      // Check for missing codes and offer the user options (abort / null / insert)
-      const cdGroupMapping = mappings["cd_produto_grupo"];
-      const cdSubgrupoMapping = mappings["cd_produto_subgrupo"];
-      const cdLinhaMapping = mappings["cd_linha"];
-
-      const missingGroups = new Set<string>();
-      const missingSubgrupos = new Set<string>();
-      const missingLinhas = new Set<string>();
-
-      parsedRows.forEach(row => {
-        if (cdGroupMapping) {
-          let val = cdGroupMapping.type === "static" ? cdGroupMapping.staticValue : row[cdGroupMapping.fileIndex!];
-          if (val) {
-            val = val.trim();
-            if (val && groupMap[val] === undefined) {
-              missingGroups.add(val);
-            }
-          }
-        }
-        if (cdSubgrupoMapping) {
-          let val = cdSubgrupoMapping.type === "static" ? cdSubgrupoMapping.staticValue : row[cdSubgrupoMapping.fileIndex!];
-          if (val) {
-            val = val.trim();
-            if (val && subgrupoMap[val] === undefined) {
-              missingSubgrupos.add(val);
-            }
-          }
-        }
-        if (cdLinhaMapping) {
-          let val = cdLinhaMapping.type === "static" ? cdLinhaMapping.staticValue : row[cdLinhaMapping.fileIndex!];
-          if (val) {
-            val = val.trim();
-            if (val && linhaMap[val] === undefined) {
-              missingLinhas.add(val);
-            }
-          }
-        }
-      });
-
-      if (missingGroups.size > 0 || missingSubgrupos.size > 0 || missingLinhas.size > 0) {
-        const action = await new Promise<"abort" | "null" | "insert">((resolve) => {
-          setMissingData({
-            groups: Array.from(missingGroups),
-            subgrupos: Array.from(missingSubgrupos),
-            linhas: Array.from(missingLinhas),
-            onResolve: (res) => {
-              setMissingModalOpen(false);
-              resolve(res);
-            }
-          });
-          setMissingModalOpen(true);
-        });
-
-        if (action === "abort") {
-          setIsImporting(false);
-          return;
-        }
-
-        if (action === "insert") {
-          // 1. Insert missing groups
-          if (missingGroups.size > 0) {
-            const insertGroups = Array.from(missingGroups).map(code => ({
-              empresa_id: lookupCompanyId,
-              cd_produto_grupo: code,
-              nome: code
-            }));
-            const { data, error } = await supabase
-              .from("produto_grupo")
-              .insert(insertGroups)
-              .select("produto_grupo_id, cd_produto_grupo");
-            
-            if (error) {
-              console.error("Erro ao cadastrar grupos em lote:", error);
-              toast.error(`Erro ao cadastrar grupos: ${error.message}`);
-            } else if (data) {
-              (data as Array<{ cd_produto_grupo: string | number | null; produto_grupo_id: number }>).forEach((row) => {
-                if (row.cd_produto_grupo) {
-                  groupMap[String(row.cd_produto_grupo).trim()] = row.produto_grupo_id;
-                }
-              });
-            }
-          }
-
-          // 2. Resolve subgrupo parent group ID before inserting subgrupos
-          if (missingSubgrupos.size > 0) {
-            const subgrupoToGroupId: Record<string, number> = {};
-            parsedRows.forEach(row => {
-              let subgrupoVal = cdSubgrupoMapping
-                ? (cdSubgrupoMapping.type === "static" ? cdSubgrupoMapping.staticValue : (cdSubgrupoMapping.fileIndex !== undefined ? row[cdSubgrupoMapping.fileIndex] : undefined))
-                : undefined;
-              let groupVal = cdGroupMapping
-                ? (cdGroupMapping.type === "static" ? cdGroupMapping.staticValue : (cdGroupMapping.fileIndex !== undefined ? row[cdGroupMapping.fileIndex] : undefined))
-                : undefined;
-              
-              if (subgrupoVal) {
-                subgrupoVal = subgrupoVal.trim();
-                if (groupVal) {
-                  groupVal = groupVal.trim();
-                  const resolvedGroupId = groupMap[groupVal];
-                  if (resolvedGroupId !== undefined) {
-                    subgrupoToGroupId[subgrupoVal] = resolvedGroupId;
-                  }
-                }
-              }
-            });
-
-            let fallbackGroupId: number | undefined;
-            const groupKeys = Object.keys(groupMap);
-            if (groupKeys.length > 0) {
-              fallbackGroupId = groupMap[groupKeys[0]];
-            } else {
-              const { data: firstGroup } = await supabase
-                .from("produto_grupo")
-                .select("produto_grupo_id")
-                .eq("empresa_id", lookupCompanyId)
-                .limit(1)
-                .maybeSingle();
-              if (firstGroup) {
-                fallbackGroupId = firstGroup.produto_grupo_id;
-              }
-            }
-
-            const insertSubgrupos = Array.from(missingSubgrupos).map(code => {
-              const gid = subgrupoToGroupId[code] || fallbackGroupId;
-              return {
-                empresa_id: lookupCompanyId,
-                cd_produto_subgrupo: code,
-                nome: code,
-                produto_grupo_id: gid
-              };
-            });
-
-            if (insertSubgrupos.some(s => s.produto_grupo_id === undefined || s.produto_grupo_id === null)) {
-              const { data: newDefGroup } = await supabase
-                .from("produto_grupo")
-                .insert({
-                  empresa_id: lookupCompanyId,
-                  cd_produto_grupo: "GERAL",
-                  nome: "Grupo Geral"
-                })
-                .select("produto_grupo_id")
-                .single();
-              if (newDefGroup) {
-                const defGroupId = newDefGroup.produto_grupo_id;
-                groupMap["GERAL"] = defGroupId;
-                insertSubgrupos.forEach(s => {
-                  if (s.produto_grupo_id === undefined || s.produto_grupo_id === null) {
-                    s.produto_grupo_id = defGroupId;
-                  }
-                });
-              }
-            }
-
-            const { data: subData, error: subErr } = await supabase
-              .from("produto_subgrupo")
-              .insert(insertSubgrupos)
-              .select("produto_subgrupo_id, cd_produto_subgrupo");
-            
-            if (subErr) {
-              console.error("Erro ao cadastrar subgrupos em lote:", subErr);
-              toast.error(`Erro ao cadastrar subgrupos: ${subErr.message}`);
-            } else if (subData) {
-              (subData as Array<{ cd_produto_subgrupo: string | number | null; produto_subgrupo_id: number }>).forEach((row) => {
-                if (row.cd_produto_subgrupo) {
-                  subgrupoMap[String(row.cd_produto_subgrupo).trim()] = row.produto_subgrupo_id;
-                }
-              });
-            }
-          }
-
-          // 3. Insert missing lines
-          if (missingLinhas.size > 0) {
-            const insertLinhas = Array.from(missingLinhas).map(code => ({
-              empresa_id: lookupCompanyId,
-              cd_linha: code,
-              nome: code
-            }));
-            const { data: linData, error: linErr } = await supabase
-              .from("linha_produto")
-              .insert(insertLinhas)
-              .select("linha_id, cd_linha");
-            
-            if (linErr) {
-              console.error("Erro ao cadastrar linhas em lote:", linErr);
-              toast.error(`Erro ao cadastrar linhas: ${linErr.message}`);
-            } else if (linData) {
-              (linData as Array<{ cd_linha: string | number | null; linha_id: number }>).forEach((row) => {
-                if (row.cd_linha) {
-                  linhaMap[String(row.cd_linha).trim()] = row.linha_id;
-                }
-              });
-            }
-          }
+          console.error("Erro ao pré-carregar mapeamento de produto_id:", e);
         }
       }
     }
+
+
 
     // Parse and prepare data rows
     const payloadRows = parsedRows.map((row, rowIndex) => {
@@ -1240,9 +1109,7 @@ const ImportacaoForm: React.FC = () => {
             
             // Apply translation formula if configured!
             if (mapping.useFallback && mapping.fallbackValue && mapping.fallbackValue.trim().toLowerCase().startsWith("cond:")) {
-              if (rawValue !== undefined && rawValue !== null) {
-                rawValue = applyColumnFormula(rawValue, mapping.fallbackValue);
-              }
+              rawValue = applyColumnFormula(rawValue, mapping.fallbackValue);
             }
           }
         }
@@ -1311,26 +1178,7 @@ const ImportacaoForm: React.FC = () => {
         }
       });
 
-      if (selectedTableId === "produto") {
-        const cdGroup = record.cd_produto_grupo ? String(record.cd_produto_grupo).trim() : "";
-        const cdSubgrupo = record.cd_produto_subgrupo ? String(record.cd_produto_subgrupo).trim() : "";
-        const cdLinha = record.cd_linha ? String(record.cd_linha).trim() : "";
 
-        if (cdGroup) {
-          record.produto_grupo_id = groupMap[cdGroup] !== undefined ? groupMap[cdGroup] : null;
-        }
-        if (cdSubgrupo) {
-          record.produto_subgrupo_id = subgrupoMap[cdSubgrupo] !== undefined ? subgrupoMap[cdSubgrupo] : null;
-        }
-        if (cdLinha) {
-          record.linha_id = linhaMap[cdLinha] !== undefined ? linhaMap[cdLinha] : null;
-        }
-
-        // Exclude temporary code columns from insert payload
-        delete record.cd_produto_grupo;
-        delete record.cd_produto_subgrupo;
-        delete record.cd_linha;
-      }
 
       if (["movimento", "financeiro", "cadastro_veiculo"].includes(selectedTableId)) {
         const cdCadastro = record.cd_cadastro ? String(record.cd_cadastro).trim() : "";
@@ -1341,13 +1189,135 @@ const ImportacaoForm: React.FC = () => {
         delete record.cd_cadastro;
       }
 
+      if (["produto_codbarra", "estoque", "movimento_item"].includes(selectedTableId)) {
+        const cdProd = record.cd_produto ? String(record.cd_produto).trim() : "";
+        if (cdProd) {
+          record.produto_id = produtoMap[cdProd] !== undefined ? produtoMap[cdProd] : null;
+        }
+        // Exclude temporary code column from insert payload
+        delete record.cd_produto;
+      }
+
       return { record, rowIndex: rowIndex + 2 };
     });
 
-    // Split payloadRows into chunks of batchSize
+    // Validate rows before chunking
+    const validPayloadRows: typeof payloadRows = [];
+
+    for (const item of payloadRows) {
+      let hasValidationError = false;
+      let validationErrorMessage = "";
+
+      // 1. Check required fields
+      for (const col of activeColumns) {
+        if (col.required) {
+          const val = item.record[col.name];
+          if (val === null || val === undefined || (typeof val === "string" && val.trim() === "")) {
+            hasValidationError = true;
+            validationErrorMessage = `Campo obrigatório "${col.label}" está vazio ou nulo. Linha: ${item.rowIndex}, Código: ${item.record.cd_produto || "N/D"}.`;
+            break;
+          }
+        }
+      }
+
+      // 2. Perform table-specific validations (like FK checks for "produto")
+      if (!hasValidationError && selectedTableId === "produto") {
+        let pgId = item.record.produto_grupo_id;
+        let psgId = item.record.produto_subgrupo_id;
+        let lId = item.record.linha_id;
+
+        // Group code translation & validation
+        if (pgId !== null && pgId !== undefined && pgId !== "") {
+          const strPgId = String(pgId).trim();
+          if (groupCodeToId.has(strPgId)) {
+            const resolvedId = groupCodeToId.get(strPgId)!;
+            item.record.produto_grupo_id = resolvedId;
+            pgId = resolvedId;
+          } else {
+            const numPgId = Number(pgId);
+            if (isNaN(numPgId) || !validGroupIds.has(numPgId)) {
+              hasValidationError = true;
+              validationErrorMessage = `Grupo de produtos Código/ID ${pgId} não encontrado no banco de dados. Linha: ${item.rowIndex}, Código: ${item.record.cd_produto || "N/D"}, Nome: ${item.record.nome || "N/D"}.`;
+            }
+          }
+        }
+
+        // Subgroup code translation & validation
+        if (!hasValidationError && psgId !== null && psgId !== undefined && psgId !== "") {
+          const strPsgId = String(psgId).trim();
+          if (subgrupoCodeToId.has(strPsgId)) {
+            const resolvedId = subgrupoCodeToId.get(strPsgId)!;
+            item.record.produto_subgrupo_id = resolvedId;
+            psgId = resolvedId;
+          } else {
+            const numPsgId = Number(psgId);
+            if (isNaN(numPsgId) || !validSubgroupIds.has(numPsgId)) {
+              hasValidationError = true;
+              validationErrorMessage = `Subgrupo de produtos Código/ID ${psgId} não encontrado no banco de dados. Linha: ${item.rowIndex}, Código: ${item.record.cd_produto || "N/D"}, Nome: ${item.record.nome || "N/D"}.`;
+            }
+          }
+        }
+
+        // Line code translation & validation
+        if (!hasValidationError && lId !== null && lId !== undefined && lId !== "") {
+          const strLId = String(lId).trim();
+          if (linhaCodeToId.has(strLId)) {
+            const resolvedId = linhaCodeToId.get(strLId)!;
+            item.record.linha_id = resolvedId;
+            lId = resolvedId;
+          } else {
+            const numLId = Number(lId);
+            if (isNaN(numLId) || !validLinhaIds.has(numLId)) {
+              hasValidationError = true;
+              validationErrorMessage = `Linha de produtos Código/ID ${lId} não encontrado no banco de dados. Linha: ${item.rowIndex}, Código: ${item.record.cd_produto || "N/D"}, Nome: ${item.record.nome || "N/D"}.`;
+            }
+          }
+        }
+
+        // Unit ID validation
+        const undId = item.record.unidade_id;
+        if (!hasValidationError && undId !== null && undId !== undefined && undId !== "") {
+          const strUndId = String(undId).trim().toUpperCase();
+          if (!validUnidadeIds.has(strUndId)) {
+            hasValidationError = true;
+            validationErrorMessage = `Unidade de medida "${undId}" não encontrada no banco de dados para a empresa ativa. Linha: ${item.rowIndex}, Código: ${item.record.cd_produto || "N/D"}, Nome: ${item.record.nome || "N/D"}.`;
+          }
+        }
+      }
+
+      if (hasValidationError) {
+        failedCount++;
+        localFailedList.push({
+          row: item.rowIndex,
+          data: item.record,
+          error: validationErrorMessage
+        });
+
+        if (abortOnError) {
+          isAborted = true;
+          // Mark all subsequent rows as aborted/failed
+          const remainingCount = payloadRows.length - localFailedList.length;
+          failedCount += remainingCount;
+          for (let r = payloadRows.indexOf(item) + 1; r < payloadRows.length; r++) {
+            localFailedList.push({
+              row: payloadRows[r].rowIndex,
+              data: payloadRows[r].record,
+              error: `Importação abortada devido a erro de validação na linha ${item.rowIndex}`
+            });
+          }
+          break;
+        }
+      } else {
+        validPayloadRows.push(item);
+      }
+    }
+
+    // Split validPayloadRows into chunks of batchSize
     const chunks: typeof payloadRows[] = [];
-    for (let i = 0; i < payloadRows.length; i += batchSize) {
-      chunks.push(payloadRows.slice(i, i + batchSize));
+    if (!isAborted) {
+      for (let i = 0; i < validPayloadRows.length; i += batchSize) {
+        chunks.push(validPayloadRows.slice(i, i + batchSize));
+      }
     }
 
     let rowsProcessed = 0;
@@ -1497,9 +1467,7 @@ const ImportacaoForm: React.FC = () => {
     
     // Apply translation formula if configured!
     if (mapping.useFallback && mapping.fallbackValue && mapping.fallbackValue.trim().toLowerCase().startsWith("cond:")) {
-      if (rawVal !== undefined && rawVal !== null) {
-        rawVal = applyColumnFormula(rawVal, mapping.fallbackValue);
-      }
+      rawVal = applyColumnFormula(rawVal, mapping.fallbackValue);
       if (rawVal === undefined || rawVal.trim() === "") {
         rawVal = " ";
       }
