@@ -513,6 +513,44 @@ function applyColumnFormula(value: string | null | undefined, formulaStr: string
     }
     return s;
   };
+
+  const parseAsNum = (s: string) => {
+    const trimmed = s.trim();
+    if (!trimmed) return null;
+    
+    // If it has a comma and a dot, e.g. "1.234,56"
+    if (trimmed.includes(",") && trimmed.includes(".")) {
+      const commaIndex = trimmed.indexOf(",");
+      const dotIndex = trimmed.indexOf(".");
+      if (commaIndex > dotIndex) {
+        // Brazilian format: "1.234,56"
+        const cleaned = trimmed.replace(/\./g, "").replace(/,/g, ".");
+        const val = parseFloat(cleaned);
+        return isNaN(val) ? null : val;
+      } else {
+        // Standard format: "1,234.56"
+        const cleaned = trimmed.replace(/,/g, "");
+        const val = parseFloat(cleaned);
+        return isNaN(val) ? null : val;
+      }
+    }
+    
+    // If it has only comma: "108,0"
+    if (trimmed.includes(",")) {
+      const cleaned = trimmed.replace(/,/g, ".");
+      const val = parseFloat(cleaned);
+      return isNaN(val) ? null : val;
+    }
+    
+    // If it has only dot: "108.0"
+    if (trimmed.includes(".")) {
+      const val = parseFloat(trimmed);
+      return isNaN(val) ? null : val;
+    }
+    
+    const val = parseFloat(trimmed);
+    return isNaN(val) ? null : val;
+  };
   
   const rules = formula.split(",");
   for (const rule of rules) {
@@ -535,7 +573,19 @@ function applyColumnFormula(value: string | null | undefined, formulaStr: string
         return cleanQuotes(targetVal);
       }
       
-      if (!isValueEmpty && normValue.trim().toLowerCase() === sourceVal.toLowerCase()) {
+      // Try string comparison (case-insensitive, trimmed)
+      const cleanNorm = normValue.trim().toLowerCase();
+      const cleanSource = sourceVal.toLowerCase();
+      
+      if (!isValueEmpty && cleanNorm === cleanSource) {
+        return cleanQuotes(targetVal);
+      }
+
+      // Also try numeric comparison in case one is formatted differently (e.g. 108.0 vs 108)
+      const numNorm = parseAsNum(cleanNorm);
+      const numSource = parseAsNum(cleanSource);
+      
+      if (!isValueEmpty && numNorm !== null && numSource !== null && numNorm === numSource) {
         return cleanQuotes(targetVal);
       }
     }
