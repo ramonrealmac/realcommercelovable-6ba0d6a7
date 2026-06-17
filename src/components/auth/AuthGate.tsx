@@ -376,8 +376,21 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
 
     try {
       if (mode === "signin") {
+        let actualEmail = email.trim();
+
+        // Se não for um email (não contiver @), tenta buscar o email pelo login ou nome
+        if (!actualEmail.includes("@")) {
+          const { data: resolvedEmail, error: rpcErr } = await supabase.rpc("get_email_by_login", { p_login: actualEmail });
+          if (rpcErr || !resolvedEmail) {
+            toast.error("Usuário não encontrado.");
+            setSubmitting(false);
+            return;
+          }
+          actualEmail = resolvedEmail;
+        }
+
         const { error } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
+          email: actualEmail,
           password,
         });
 
@@ -518,14 +531,14 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="auth-email">E-mail</Label>
+              <Label htmlFor="auth-email">E-mail ou Usuário</Label>
               <Input
                 id="auth-email"
-                type="email"
-                autoComplete="email"
+                type="text"
+                autoComplete="username"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                placeholder="voce@empresa.com"
+                placeholder="voce@empresa.com ou nome do usuário"
                 onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
               />
             </div>

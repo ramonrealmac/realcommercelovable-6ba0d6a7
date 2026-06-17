@@ -150,7 +150,7 @@ const emptyEmpresa = () => ({
 type TEmpresa = ReturnType<typeof emptyEmpresa>;
 
 const EmpresaForm: React.FC = () => {
-  const { XEmpresaId, XTabs, XActiveTabId, closeTab } = useAppContext();
+  const { XEmpresaId, XTabs, XActiveTabId, closeTab, setXLogomarca } = useAppContext();
 
   const [XFormMode, setXFormMode] = useState<TFormMode>("view");
   const [XInnerTab, setXInnerTab] = useState<string>("cadastro");
@@ -355,6 +355,10 @@ const EmpresaForm: React.FC = () => {
           root.style.setProperty("--grid-header", hsl); 
           root.style.setProperty("--grid-selected", hsl); 
         } 
+      }
+
+      if (empresaIdToSave === XEmpresaId && XEdit.logomarca !== undefined) {
+        setXLogomarca(XEdit.logomarca);
       }
 
       setXFormMode("view");

@@ -3,7 +3,7 @@ import { KeyRound, Upload } from "lucide-react";
 import { useAppContext } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import { usePerfis } from "@/hooks/useAccessControl";
-import { dataStore } from "@/data/store";
+
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import GridActionToolbar, { gridActions } from "@/components/grid/GridActionToolbar";
 import StandardCrudForm from "@/components/shared/StandardCrudForm";
@@ -51,8 +51,9 @@ const XVinculoColumns: IGridColumn[] = [
 ];
 
 const UsuarioForm: React.FC = () => {
-  const { XEmpresaId } = useAppContext();
-  const XEmpresas = dataStore.getEmpresas();
+  const { XEmpresaId, XEmpresaMatrizId, XEmpresas: contextEmpresas } = useAppContext();
+  // Filtra para mostrar apenas empresas da mesma matriz
+  const XEmpresas = contextEmpresas.filter(e => e.empresa_matriz_id === XEmpresaMatrizId || e.empresa_id === XEmpresaId);
 
   /* ── State ── */
   const [XSenha, setXSenha] = useState("");
@@ -169,18 +170,18 @@ const UsuarioForm: React.FC = () => {
   const loadVinculos = useCallback(async (XUserId: string) => {
     const { data } = await supabase.from("perfil_usuario").select("perfil_usuario_id, empresa_id, perfil_id, perfil(nm_perfil)").eq("user_id", XUserId).eq("fl_excluido", false).order("empresa_id");
     if (!data) { setXVinculos([]); return; }
-    const XEmpList = dataStore.getEmpresas();
+    
     setXVinculos(data.map((pu: any) => {
-      const XEmp = XEmpList.find(e => e.EMPRESA_ID === pu.empresa_id);
+      const XEmp = contextEmpresas.find(e => e.empresa_id === pu.empresa_id);
       return {
         perfil_usuario_id: pu.perfil_usuario_id,
         empresa_id: pu.empresa_id,
         perfil_id: pu.perfil_id,
         nm_perfil: pu.perfil?.nm_perfil || "",
-        nm_empresa: XEmp?.NM_RAZAO_SOCIAL || `Empresa ${pu.empresa_id}`,
+        nm_empresa: XEmp?.razao_social || `Empresa ${pu.empresa_id}`,
       };
     }));
-  }, []);
+  }, [contextEmpresas]);
 
   useEffect(() => { loadAllPerfis(); }, [XEmpresaId, loadAllPerfis]);
 
@@ -358,7 +359,7 @@ const UsuarioForm: React.FC = () => {
               <div className="flex-1 space-y-1">
                 <label className="text-[10px] font-bold text-slate-500 uppercase">Empresa</label>
                 <select value={XEditEmpresaId} onChange={e => setXEditEmpresaId(Number(e.target.value))} className="w-full border border-border rounded-md px-2 py-1.5 text-xs bg-card outline-none focus:ring-2 focus:ring-ring">
-                  {XEmpresas.map(e => <option key={e.EMPRESA_ID} value={e.EMPRESA_ID}>{e.NM_RAZAO_SOCIAL}</option>)}
+                  {XEmpresas.map(e => <option key={e.empresa_id} value={e.empresa_id}>{e.razao_social}</option>)}
                 </select>
               </div>
               <div className="flex-1 space-y-1">
