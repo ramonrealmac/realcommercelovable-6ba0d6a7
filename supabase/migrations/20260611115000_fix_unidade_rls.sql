@@ -4,6 +4,7 @@ DROP POLICY IF EXISTS unidade_delete_authenticated ON public.unidade;
 DROP POLICY IF EXISTS unidade_insert_authenticated ON public.unidade;
 DROP POLICY IF EXISTS unidade_select_authenticated ON public.unidade;
 DROP POLICY IF EXISTS unidade_update_authenticated ON public.unidade;
+DROP POLICY IF EXISTS unidade_all_authenticated ON public.unidade;
 
 -- Create a single open policy for authenticated users on public.unidade
 CREATE POLICY unidade_all_authenticated ON public.unidade
