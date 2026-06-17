@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { ArrowUp, ArrowDown, Download, FileText, FileSpreadsheet, File } from "lucide-react";
+import { ArrowUp, ArrowDown, ArrowUpDown, Download, FileText, FileSpreadsheet, File } from "lucide-react";
 
 export interface IGridColumn {
   key: string;
@@ -37,19 +37,116 @@ interface DataGridProps {
 }
 
 // --- Sorting logic ---
+const parseDateString = (v: unknown): number => {
+  if (v instanceof Date) return v.getTime();
+  if (typeof v !== "string") return NaN;
+  const str = v.trim();
+  
+  // Match dd/mm/yyyy hh:mm:ss or dd/mm/yyyy
+  const dmyRegex = /^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/;
+  const match = str.match(dmyRegex);
+  if (match) {
+    const [, day, month, year, hour = "00", minute = "00", second = "00"] = match;
+    return new Date(
+      parseInt(year),
+      parseInt(month) - 1,
+      parseInt(day),
+      parseInt(hour),
+      parseInt(minute),
+      parseInt(second)
+    ).getTime();
+  }
+  
+  return Date.parse(str);
+};
+
+const isDateString = (v: unknown): boolean => {
+  if (v instanceof Date) return true;
+  if (typeof v !== "string" || v.trim().length < 10) return false;
+  const str = v.trim();
+  
+  // Formato: dd/mm/yyyy hh:mm:ss ou dd/mm/yyyy
+  const dmyRegex = /^\d{2}\/\d{2}\/\d{4}(\s+\d{2}:\d{2}(:\d{2})?)?$/;
+  // Formato: yyyy-mm-dd ou ISO date (ex.: 2026-06-17T11:23:02.000Z ou 2026-06-17T11:23:02-03:00)
+  const ymdRegex = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{3})?(Z|[+-]\d{2}:?\d{2})?)?$/;
+  
+  return dmyRegex.test(str) || ymdRegex.test(str);
+};
+
+const getColumnType = (data: any[], key: string, col?: IGridColumn): "date" | "number" | "string" => {
+  let hasDate = false;
+  let hasNumber = false;
+  let hasString = false;
+  let count = 0;
+
+  for (const row of data) {
+    const val = col?.getValue ? col.getValue(row) : (row as any)[key];
+    if (val === null || val === undefined || val === "") continue;
+
+    count++;
+    if (isDateString(val)) {
+      hasDate = true;
+    } else {
+      const num = Number(String(val).replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
+      if (!isNaN(num)) {
+        hasNumber = true;
+      } else {
+        hasString = true;
+      }
+    }
+    if (count >= 100) break;
+  }
+
+  if (count === 0) return "string";
+  if (hasString) return "string";
+  if (hasDate && !hasNumber) return "date";
+  if (hasNumber && !hasDate) return "number";
+  return "string";
+};
+
+// --- Sorting logic ---
 function applySorting<T>(data: T[], sorts: ISortItem[], columns: IGridColumn[]): T[] {
   if (sorts.length === 0) return data;
+  
+  // Precompute column types for sorting keys to avoid O(N log N) detection runs
+  const sortTypes = sorts.map(s => {
+    const col = columns.find(c => c.key === s.key);
+    return {
+      key: s.key,
+      dir: s.dir,
+      col,
+      type: getColumnType(data, s.key, col)
+    };
+  });
+
   return [...data].sort((a, b) => {
-    for (const s of sorts) {
-      const col = columns.find(c => c.key === s.key);
-      const va = col?.getValue ? col.getValue(a) : (a as any)[s.key];
-      const vb = col?.getValue ? col.getValue(b) : (b as any)[s.key];
+    for (const s of sortTypes) {
+      const va = s.col?.getValue ? s.col.getValue(a) : (a as any)[s.key];
+      const vb = s.col?.getValue ? s.col.getValue(b) : (b as any)[s.key];
       let cmp = 0;
-      if (typeof va === "number" && typeof vb === "number") {
-        cmp = va - vb;
+
+      if (s.type === "date") {
+        const timeA = parseDateString(va);
+        const timeB = parseDateString(vb);
+        const nanA = isNaN(timeA);
+        const nanB = isNaN(timeB);
+        if (nanA && nanB) cmp = 0;
+        else if (nanA) cmp = 1;
+        else if (nanB) cmp = -1;
+        else cmp = timeA - timeB;
+      } else if (s.type === "number") {
+        const numA = va !== null && va !== undefined && va !== "" ? Number(String(va).replace(/\s/g, "").replace(/\./g, "").replace(",", ".")) : NaN;
+        const numB = vb !== null && vb !== undefined && vb !== "" ? Number(String(vb).replace(/\s/g, "").replace(/\./g, "").replace(",", ".")) : NaN;
+        const nanA = isNaN(numA);
+        const nanB = isNaN(numB);
+        if (nanA && nanB) cmp = 0;
+        else if (nanA) cmp = 1;
+        else if (nanB) cmp = -1;
+        else cmp = numA - numB;
       } else {
         cmp = String(va ?? "").localeCompare(String(vb ?? ""), "pt-BR", { sensitivity: "base" });
       }
+
       if (cmp !== 0) return s.dir === "asc" ? cmp : -cmp;
     }
     return 0;
@@ -156,10 +253,10 @@ const DataGrid: React.FC<DataGridProps> = ({
 
   const handleSort = (key: string) => {
     setXSorts(prev => {
-      const idx = prev.findIndex(s => s.key === key);
-      if (idx === -1) return [...prev, { key, dir: "asc" }];
-      if (prev[idx].dir === "asc") return prev.map((s, i) => i === idx ? { ...s, dir: "desc" as const } : s);
-      return prev.filter((_, i) => i !== idx);
+      const current = prev.find(s => s.key === key);
+      if (!current) return [{ key, dir: "asc" }];
+      if (current.dir === "asc") return [{ key, dir: "desc" }];
+      return [{ key, dir: "asc" }];
     });
   };
 
@@ -250,12 +347,16 @@ const DataGrid: React.FC<DataGridProps> = ({
 
   const getSortIcon = (key: string) => {
     const s = XSorts.find(s => s.key === key);
-    if (!s) return null;
-    const idx = XSorts.indexOf(s);
+    if (!s) {
+      return (
+        <span className="inline-flex items-center ml-1 text-white opacity-40 hover:opacity-100 transition-opacity">
+          <ArrowUpDown size={10} />
+        </span>
+      );
+    }
     return (
-      <span className="inline-flex items-center ml-1">
+      <span className="inline-flex items-center ml-1 text-white opacity-100">
         {s.dir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />}
-        {XSorts.length > 1 && <span className="text-[9px] ml-0.5">{idx + 1}</span>}
       </span>
     );
   };
@@ -328,6 +429,15 @@ const DataGrid: React.FC<DataGridProps> = ({
                 placeholder={typeof c.label === "string" ? c.label : ""}
                 value={filterValues[c.key] || ""}
                 onChange={e => onFilterChange(c.key, e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (XSortedData.length > 0) {
+                      if (onRowClick) onRowClick(XSortedData[0], 0);
+                      if (onRowDoubleClick) onRowDoubleClick(XSortedData[0], 0);
+                    }
+                  }
+                }}
                 className="px-2 py-1 text-xs border-r border-border outline-none last:border-r-0 bg-card min-w-0"
               />
             ))}
@@ -345,10 +455,10 @@ const DataGrid: React.FC<DataGridProps> = ({
               ref={(el) => { headerRefs.current[c.key] = el; }}
               className={`relative px-2 py-1.5 border-r last:border-r-0 cursor-pointer select-none flex items-center min-w-0 truncate ${headerClassName ? 'border-current/10' : 'border-primary-foreground/20'}`}
               style={{ justifyContent: c.align === "right" ? "flex-end" : c.align === "center" ? "center" : "flex-start" }}
-              onClick={() => typeof c.label === "string" ? handleSort(c.key) : null}
+              onClick={() => handleSort(c.key)}
             >
               <div className="truncate">{c.label}</div>
-              {typeof c.label === "string" && getSortIcon(c.key)}
+              {c.label !== null && c.label !== undefined && getSortIcon(c.key)}
               <div
                 className="absolute right-0 top-0 h-full w-2 cursor-col-resize hover:bg-primary/50 opacity-0 hover:opacity-100 z-20"
                 onMouseDown={(e) => handleResizeStart(e, c.key)}

@@ -610,7 +610,7 @@ const ProdutoForm: React.FC = () => {
   };
 
   /* ─── Search filter ─── */
-  const XFilteredData = useGridFilter(XEnrichedData, XSearchFilters);
+  const XFilteredData = useGridFilter(XEnrichedData, XSearchFilters, XLocalizarColumns);
 
   const handleSelectFromSearch = (row: any) => {
     const idx = XData.findIndex(r => r.produto_id === row.produto_id);

@@ -28,6 +28,8 @@ interface IEstoque {
 interface IProduto {
   produto_id: number;
   nome: string;
+  cd_produto?: number | null;
+  descricao?: string;
 }
 
 interface IDeposito {
@@ -44,6 +46,8 @@ const EstoqueForm: React.FC = () => {
   const [XProdutos, setXProdutos] = useState<IProduto[]>([]);
   const [XDepositos, setXDepositos] = useState<IDeposito[]>([]);
   const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
+  const [XSelectedEstoque, setXSelectedEstoque] = useState<IEstoque | null>(null);
+  const [XEditingEstoque, setXEditingEstoque] = useState<IEstoque | null>(null);
   const [XFilterValues, setXFilterValues] = useState<Record<string, string>>({});
   const [XShowFilters, setXShowFilters] = useState(true);
   const [XEditMode, setXEditMode] = useState<"none" | "insert" | "edit">("none");
@@ -70,11 +74,13 @@ const EstoqueForm: React.FC = () => {
 
   const loadData = useCallback(async () => {
     const XIds = XGroupEmpresaIds.length > 0 ? XGroupEmpresaIds : [XEmpresaId];
-    const [{ data: XEstData }, { data: XProdData }, { data: XDepData }] = await Promise.all([
+    
+    // 1. Fetch stock and deposit records first
+    const [{ data: XEstData }, { data: XDepData }] = await Promise.all([
       db.from("estoque").select("*").in("empresa_id", XIds).eq("excluido", false).order("estoque_id"),
-      db.from("produto").select("produto_id, nome").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("nome"),
       db.from("deposito").select("deposito_id, nome, empresa_id, st_privado").in("empresa_id", XIds).eq("excluido", false).order("nome"),
     ]);
+
     // Filter deposits: own company = all, sister companies = only public (st_privado=false)
     const XFilteredDeps = (XDepData || []).filter((d: IDeposito) =>
       d.empresa_id === XEmpresaId || d.st_privado === false
@@ -82,20 +88,46 @@ const EstoqueForm: React.FC = () => {
     // Filter estoques to only show those in visible deposits
     const XVisibleDepIds = new Set(XFilteredDeps.map((d: IDeposito) => d.deposito_id));
     const XFilteredEst = (XEstData || []).filter((e: IEstoque) => XVisibleDepIds.has(e.deposito_id));
+
+    // 2. Extract unique product IDs from stock records to ensure they are loaded regardless of query limits
+    const XEstProdIds = [...new Set(XFilteredEst.map((e: IEstoque) => e.produto_id).filter(Boolean))];
+
+    // 3. Fetch referenced products AND the first 1000 products by name in parallel
+    const [{ data: XProdEstData }, { data: XProdRecentData }] = await Promise.all([
+      XEstProdIds.length > 0
+        ? db.from("produto").select("produto_id, nome, cd_produto, descricao").in("produto_id", XEstProdIds)
+        : Promise.resolve({ data: [] }),
+      db.from("produto").select("produto_id, nome, cd_produto, descricao").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("nome").limit(1000)
+    ]);
+
+    // 4. Merge products to remove duplicates
+    const XMergedProdsMap = new Map<number, IProduto>();
+    (XProdRecentData || []).forEach((p: IProduto) => XMergedProdsMap.set(p.produto_id, p));
+    (XProdEstData || []).forEach((p: IProduto) => XMergedProdsMap.set(p.produto_id, p));
+    const XMergedProds = Array.from(XMergedProdsMap.values());
+
     setXEstoques(XFilteredEst);
-    setXProdutos(XProdData || []);
+    setXProdutos(XMergedProds);
     setXDepositos(XFilteredDeps);
   }, [XEmpresaId, XEmpresaMatrizId, XGroupEmpresaIds]);
 
   useEffect(() => {
     loadData();
     setXSelectedIdx(null);
+    setXSelectedEstoque(null);
+    setXEditingEstoque(null);
     setXEditMode("none");
   }, [XEmpresaId, loadData]);
 
-  const XProdutoMap = useMemo(() => {
+  const XProdutoCdMap = useMemo(() => {
+    const m: Record<number, string | number> = {};
+    XProdutos.forEach(p => { m[p.produto_id] = p.cd_produto ?? p.produto_id; });
+    return m;
+  }, [XProdutos]);
+
+  const XProdutoDescMap = useMemo(() => {
     const m: Record<number, string> = {};
-    XProdutos.forEach(p => { m[p.produto_id] = p.nome; });
+    XProdutos.forEach(p => { m[p.produto_id] = p.descricao || p.nome || ""; });
     return m;
   }, [XProdutos]);
 
@@ -113,9 +145,14 @@ const EstoqueForm: React.FC = () => {
 
   const XColumns: IGridColumn[] = useMemo(() => [
     {
-      key: "produto_id", label: "Produto", width: "1fr",
-      render: (r: IEstoque) => `${r.produto_id} - ${XProdutoMap[r.produto_id] || ""}`,
-      getValue: (r: IEstoque) => `${r.produto_id} - ${XProdutoMap[r.produto_id] || ""}`,
+      key: "cd_codigo", label: "Código", width: "120px",
+      render: (r: IEstoque) => XProdutoCdMap[r.produto_id] ?? "",
+      getValue: (r: IEstoque) => XProdutoCdMap[r.produto_id] ?? "",
+    },
+    {
+      key: "descricao", label: "Descrição", width: "1.5fr",
+      render: (r: IEstoque) => XProdutoDescMap[r.produto_id] ?? "",
+      getValue: (r: IEstoque) => XProdutoDescMap[r.produto_id] ?? "",
     },
     {
       key: "empresa_nome", label: "Empresa", width: "160px",
@@ -134,7 +171,7 @@ const EstoqueForm: React.FC = () => {
     { key: "estoque_minimo", label: "Mínimo", width: "90px", align: "right" as const },
     { key: "estoque_padrao", label: "Padrão", width: "90px", align: "right" as const },
     { key: "estoque_inventario", label: "Inventário", width: "90px", align: "right" as const },
-  ], [XProdutoMap, XDepositoMap, XEmpresaMap]);
+  ], [XProdutoCdMap, XProdutoDescMap, XDepositoMap, XEmpresaMap]);
 
   // Keep custom filter for estoque since it uses getValue/render
   const XFiltered = XEstoques.filter(e => {
@@ -150,8 +187,6 @@ const EstoqueForm: React.FC = () => {
     return true;
   });
 
-  const XSelectedEstoque = XSelectedIdx !== null ? XFiltered[XSelectedIdx] : null;
-
   const handleIncluir = () => {
     setXEditMode("insert");
     setXEditProdutoId("");
@@ -162,15 +197,83 @@ const EstoqueForm: React.FC = () => {
     setXEditEstoqueInventario(0);
   };
 
+  const startEditing = useCallback(async (row: IEstoque) => {
+    if (!row) return;
+
+    // Try to get cd_produto from XProdutos first
+    const product = XProdutos.find(p => p.produto_id === row.produto_id);
+    let cd_produto = product?.cd_produto;
+
+    // Fallback: fetch product details from database if not cached
+    if (cd_produto === undefined || cd_produto === null) {
+      try {
+        const { data: fallbackProd } = await db
+          .from("produto")
+          .select("cd_produto")
+          .eq("produto_id", row.produto_id)
+          .maybeSingle();
+        cd_produto = fallbackProd?.cd_produto;
+      } catch (e) {
+        console.error("Error fetching fallback product:", e);
+      }
+    }
+
+    if (cd_produto === undefined || cd_produto === null) {
+      toast.error("Produto nao cadastrado no estoque!");
+      return;
+    }
+
+    try {
+      // 1. Fetch the product ID for the active company and product code
+      const { data: prodData, error: prodError } = await db
+        .from("produto")
+        .select("produto_id")
+        .eq("empresa_id", XEmpresaId)
+        .eq("cd_produto", cd_produto)
+        .eq("excluido", false)
+        .maybeSingle();
+
+      if (prodError) throw prodError;
+      if (!prodData) {
+        toast.error("Produto nao cadastrado no estoque!");
+        return;
+      }
+
+      // 2. Fetch the estoque record for that product_id, selected deposit, and active company
+      const { data: estData, error: estError } = await db
+        .from("estoque")
+        .select("*")
+        .eq("produto_id", prodData.produto_id)
+        .eq("deposito_id", row.deposito_id)
+        .eq("empresa_id", XEmpresaId)
+        .eq("excluido", false)
+        .maybeSingle();
+
+      if (estError) throw estError;
+      if (!estData) {
+        toast.error("Produto nao cadastrado no estoque!");
+        return;
+      }
+
+      // 3. Set state to enter edit mode with the retrieved record
+      setXEditMode("edit");
+      setXEditingEstoque(estData);
+      setXEditProdutoId(estData.produto_id);
+      setXEditDepositoId(estData.deposito_id);
+      setXEditEndereco(estData.endereco || "");
+      setXEditEstoqueMinimo(estData.estoque_minimo ?? 0);
+      setXEditEstoquePadrao(estData.estoque_padrao ?? 0);
+      setXEditEstoqueInventario(estData.estoque_inventario ?? 0);
+
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      toast.error("Erro ao carregar dados para edição: " + errMsg);
+    }
+  }, [XEmpresaId, XProdutos]);
+
   const handleEditar = () => {
     if (!XSelectedEstoque) return;
-    setXEditMode("edit");
-    setXEditProdutoId(XSelectedEstoque.produto_id);
-    setXEditDepositoId(XSelectedEstoque.deposito_id);
-    setXEditEndereco(XSelectedEstoque.endereco || "");
-    setXEditEstoqueMinimo(XSelectedEstoque.estoque_minimo ?? 0);
-    setXEditEstoquePadrao(XSelectedEstoque.estoque_padrao ?? 0);
-    setXEditEstoqueInventario(XSelectedEstoque.estoque_inventario ?? 0);
+    startEditing(XSelectedEstoque);
   };
 
   const handleSalvar = async () => {
@@ -192,8 +295,8 @@ const EstoqueForm: React.FC = () => {
       });
       if (error) { toast.error("Erro ao incluir estoque: " + error.message); return; }
       toast.success("Estoque incluído com sucesso.");
-    } else if (XEditMode === "edit" && XSelectedEstoque) {
-      const { error } = await baseService.atualizar("estoque", "estoque_id", XSelectedEstoque.estoque_id, {
+    } else if (XEditMode === "edit" && XEditingEstoque) {
+      const { error } = await baseService.atualizar("estoque", "estoque_id", XEditingEstoque.estoque_id, {
         endereco: XEditEndereco.trim(),
         estoque_minimo: XEditEstoqueMinimo,
         estoque_padrao: XEditEstoquePadrao,
@@ -203,6 +306,9 @@ const EstoqueForm: React.FC = () => {
       toast.success("Estoque alterado com sucesso.");
     }
     setXEditMode("none");
+    setXSelectedIdx(null);
+    setXSelectedEstoque(null);
+    setXEditingEstoque(null);
     loadData();
   };
 
@@ -212,6 +318,7 @@ const EstoqueForm: React.FC = () => {
       await baseService.excluirLogico("estoque", "estoque_id", XSelectedEstoque.estoque_id);
       toast.success("Estoque excluído.");
       setXSelectedIdx(null);
+      setXSelectedEstoque(null);
       loadData();
     }
   };
@@ -257,7 +364,7 @@ const EstoqueForm: React.FC = () => {
             <label className="text-[10px] text-muted-foreground">Produto *</label>
             <select value={XEditProdutoId} onChange={(e) => setXEditProdutoId(e.target.value ? Number(e.target.value) : "")} disabled={XEditMode === "edit"} className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-56 disabled:opacity-50 disabled:bg-secondary">
               <option value="">Selecione...</option>
-              {XProdutos.map(p => (<option key={p.produto_id} value={p.produto_id}>{p.produto_id} - {p.nome}</option>))}
+              {XProdutos.map(p => (<option key={p.produto_id} value={p.produto_id}>{p.cd_produto ?? p.produto_id} - {p.descricao || p.nome}</option>))}
             </select>
           </div>
           <div className="flex flex-col gap-0.5">
@@ -304,19 +411,15 @@ const EstoqueForm: React.FC = () => {
           columns={XColumns}
           data={XFiltered}
           selectedIdx={XSelectedIdx}
-          onRowClick={(_row, idx) => setXSelectedIdx(idx)}
-          onRowDoubleClick={(_row, idx) => {
+          onRowClick={(_row, idx) => {
             setXSelectedIdx(idx);
-            const e = XFiltered[idx];
-            if (e) {
-              setXEditMode("edit");
-              setXEditProdutoId(e.produto_id);
-              setXEditDepositoId(e.deposito_id);
-              setXEditEndereco(e.endereco || "");
-              setXEditEstoqueMinimo(e.estoque_minimo ?? 0);
-              setXEditEstoquePadrao(e.estoque_padrao ?? 0);
-              setXEditEstoqueInventario(e.estoque_inventario ?? 0);
-            }
+            setXSelectedEstoque(_row);
+          }}
+          onRowDoubleClick={(_row, idx) => {
+            if (XIsEditing) return;
+            setXSelectedIdx(idx);
+            setXSelectedEstoque(_row);
+            startEditing(_row);
           }}
           showFilters={XShowFilters}
           filterValues={XFilterValues}

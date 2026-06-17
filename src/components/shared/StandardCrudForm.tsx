@@ -154,7 +154,7 @@ function StandardCrudForm<T extends Record<string, any>>({
     if (XRefreshRef) XRefreshRef.current = ctrl.loadData;
   }, [XRefreshRef, ctrl.loadData]);
 
-  const XFilteredData = useGridFilter(ctrl.XData, XSearchFilters);
+  const XFilteredData = useGridFilter(ctrl.XData, XSearchFilters, XGridCols);
 
   useEffect(() => {
     if (XInitialId && ctrl.XData.length > 0) {

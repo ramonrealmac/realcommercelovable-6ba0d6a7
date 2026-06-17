@@ -336,7 +336,8 @@ const ProdutoForm: React.FC = () => {
 
     const hasSearch = Object.entries(XSearchFilters).some(([key, val]) => {
       if (!val || !val.trim()) return false;
-      if (["cd_produto", "nome", "nome_reduzido", "gtin"].includes(key)) {
+      if (key === "cd_produto") return true;
+      if (["nome", "nome_reduzido", "gtin"].includes(key)) {
         return val.trim().length >= pesquisaProdMinLetras;
       }
       return false;
@@ -739,7 +740,7 @@ const ProdutoForm: React.FC = () => {
   };
 
   /* ─── Search filter ─── */
-  const XFilteredData = useGridFilter(XEnrichedData, XSearchFilters);
+  const XFilteredData = useGridFilter(XEnrichedData, XSearchFilters, XLocalizarColumns);
 
   const handleSelectFromSearch = (row: any) => {
     const idx = XData.findIndex(r => r.produto_id === row.produto_id);
