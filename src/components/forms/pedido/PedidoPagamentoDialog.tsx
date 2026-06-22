@@ -60,6 +60,8 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
   const [XCalcReset, setXCalcReset] = useState(false);
 
   const condicaoRef = useRef<HTMLSelectElement>(null);
+  const vlPagarRef = useRef<HTMLInputElement>(null);
+  const adicionarBtnRef = useRef<HTMLButtonElement>(null);
   const finalizarRef = useRef<HTMLButtonElement>(null);
 
   const vlDescNum = useMemo(() => parseNum(XVlDesconto), [XVlDesconto]);
@@ -115,6 +117,29 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
     }
   }, [totalPedido, open, XLinhas.length]);
 
+  // Abre a combobox de Condição de Pagamento ao pressionar Alt + Seta para Baixo
+  useEffect(() => {
+    if (!open) return;
+    const handleDialogKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && e.key === "ArrowDown") {
+        e.preventDefault();
+        e.stopPropagation();
+        if (condicaoRef.current) {
+          condicaoRef.current.focus();
+          if (typeof condicaoRef.current.showPicker === 'function') {
+            try {
+              condicaoRef.current.showPicker();
+            } catch (err) {
+              console.warn("showPicker error:", err);
+            }
+          }
+        }
+      }
+    };
+    window.addEventListener("keydown", handleDialogKeyDown);
+    return () => window.removeEventListener("keydown", handleDialogKeyDown);
+  }, [open]);
+
   const resetForm = (vl: number) => {
     setXCondicaoId(0); setXVlPagar(fmtInput(vl)); setXQtParcela(1); setXEditUid(null);
   };
@@ -167,6 +192,9 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
     setXSelectedIdx(null);
     const restante = Math.max(0, totalPedido - (totalPago + vPagar));
     resetForm(restante);
+    setTimeout(() => {
+      condicaoRef.current?.focus();
+    }, 50);
   };
 
   const finalizar = async (enviarAoCaixa: boolean = false) => {
@@ -278,22 +306,58 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
               <div className="grid grid-cols-12 gap-3">
                 <div className="col-span-6">
                   <label className="text-[10px] font-bold uppercase">Condição de Pagamento</label>
-                  <select ref={condicaoRef} value={XCondicaoId} onChange={e => {
-                    const cid = Number(e.target.value);
-                    setXCondicaoId(cid);
-                    const c = XCondicoes.find(x => x.condicao_id === cid);
-                    if (c?.qtd_parcelas) setXQtParcela(c.qtd_parcelas);
-                  }} className="w-full border border-border rounded px-2 py-1 text-sm h-9 bg-white">
+                  <select 
+                    ref={condicaoRef} 
+                    value={XCondicaoId} 
+                    disabled={valorRestante <= 0 || XSalvando}
+                    onChange={e => {
+                      const cid = Number(e.target.value);
+                      setXCondicaoId(cid);
+                      const c = XCondicoes.find(x => x.condicao_id === cid);
+                      if (c?.qtd_parcelas) setXQtParcela(c.qtd_parcelas);
+                    }} 
+                    onKeyDown={e => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        vlPagarRef.current?.focus();
+                        vlPagarRef.current?.select();
+                      }
+                    }}
+                    className="w-full border border-border rounded px-2 py-1 text-sm h-9 bg-white disabled:opacity-50 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                  >
                     <option value={0}>-- Selecione --</option>
                     {XCondicoes.map(c => <option key={c.condicao_id} value={c.condicao_id}>{c.descricao}</option>)}
                   </select>
                 </div>
                 <div className="col-span-3">
                   <label className="text-[10px] font-bold uppercase">Valor</label>
-                  <input type="text" value={XVlPagar} onChange={e => setXVlPagar(e.target.value)} onBlur={() => setXVlPagar(fmtInput(XVlPagar))} className="w-full border border-border rounded px-2 py-1 text-sm text-right h-9 font-bold bg-white" />
+                  <input 
+                    ref={vlPagarRef}
+                    type="text" 
+                    value={XVlPagar} 
+                    disabled={valorRestante <= 0 || XSalvando}
+                    onChange={e => setXVlPagar(e.target.value)} 
+                    onBlur={() => setXVlPagar(fmtInput(XVlPagar))} 
+                    onKeyDown={e => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        adicionarBtnRef.current?.focus();
+                      }
+                    }}
+                    className="w-full border border-border rounded px-2 py-1 text-sm text-right h-9 font-bold bg-white disabled:opacity-50 disabled:bg-slate-100 disabled:cursor-not-allowed" 
+                  />
                 </div>
                 <div className="col-span-3 flex items-end">
-                  <button onClick={confirmarLinha} className="w-full h-9 rounded bg-emerald-500 text-white font-bold text-xs hover:bg-emerald-600">✓ Adicionar</button>
+                  <button 
+                    ref={adicionarBtnRef}
+                    onClick={confirmarLinha} 
+                    disabled={valorRestante <= 0 || XSalvando}
+                    className="w-full h-9 rounded bg-emerald-500 text-white font-bold text-xs hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    ✓ Adicionar
+                  </button>
                 </div>
               </div>
             </div>
