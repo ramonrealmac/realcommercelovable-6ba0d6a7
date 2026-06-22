@@ -80,41 +80,84 @@ export const InicializarDepositoDialog: React.FC<IProps> = ({
   const handleInicializar = async () => {
     setLoading(true);
     try {
-      let qProd = db.from("produto")
-        .select("produto_id, empresa_id")
-        .eq("empresa_id", empresaMatrizId)
-        .eq("excluido", false);
+      let allProducts: { produto_id: number; empresa_id: number }[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-      if (filterAtivo !== "TODOS") {
-        qProd = qProd.eq("ativo", filterAtivo);
-      }
-      if (selectedGrupo) {
-        qProd = qProd.eq("produto_grupo_id", parseInt(selectedGrupo));
-      }
-      if (selectedLinha) {
-        qProd = qProd.eq("linha_id", parseInt(selectedLinha));
+      while (hasMore) {
+        const from = page * pageSize;
+        const to = from + pageSize - 1;
+
+        let q = db.from("produto")
+          .select("produto_id, empresa_id")
+          .eq("empresa_id", empresaMatrizId)
+          .eq("excluido", false)
+          .range(from, to);
+
+        if (filterAtivo !== "TODOS") {
+          q = q.eq("ativo", filterAtivo);
+        }
+        if (selectedGrupo) {
+          q = q.eq("produto_grupo_id", parseInt(selectedGrupo));
+        }
+        if (selectedLinha) {
+          q = q.eq("linha_id", parseInt(selectedLinha));
+        }
+
+        const { data, error } = await q;
+        if (error) throw new Error(error.message);
+
+        if (data && data.length > 0) {
+          allProducts = allProducts.concat(data as any);
+          if (data.length < pageSize) {
+            hasMore = false;
+          } else {
+            page++;
+          }
+        } else {
+          hasMore = false;
+        }
       }
 
-      const { data: products, error: prodErr } = await qProd;
-      if (prodErr) throw new Error(prodErr.message);
-
-      if (!products || products.length === 0) {
+      if (allProducts.length === 0) {
         toast.info("Nenhum produto correspondente aos filtros encontrado na empresa matriz.");
         setLoading(false);
         return;
       }
 
-      const { data: existingStocks, error: stockErr } = await db.from("estoque")
-        .select("produto_id")
-        .eq("deposito_id", depositoId)
-        .eq("excluido", false);
-      if (stockErr) throw new Error(stockErr.message);
+      let allExistingStocks: { produto_id: number }[] = [];
+      let stockPage = 0;
+      let stockHasMore = true;
+
+      while (stockHasMore) {
+        const from = stockPage * pageSize;
+        const to = from + pageSize - 1;
+
+        const { data, error } = await db.from("estoque")
+          .select("produto_id")
+          .eq("deposito_id", depositoId)
+          .eq("excluido", false)
+          .range(from, to);
+
+        if (error) throw new Error(error.message);
+
+        if (data && data.length > 0) {
+          allExistingStocks = allExistingStocks.concat(data as any);
+          if (data.length < pageSize) {
+            stockHasMore = false;
+          } else {
+            stockPage++;
+          }
+        } else {
+          stockHasMore = false;
+        }
+      }
 
       const existingProductIds = new Set(
-        ((existingStocks || []) as { produto_id: number }[]).map(s => s.produto_id)
+        allExistingStocks.map(s => s.produto_id)
       );
-      const productsList = (products || []) as { produto_id: number; empresa_id: number }[];
-      const productsToInsert = productsList.filter(p => !existingProductIds.has(p.produto_id));
+      const productsToInsert = allProducts.filter(p => !existingProductIds.has(p.produto_id));
 
       if (productsToInsert.length === 0) {
         toast.info("Todos os produtos filtrados já possuem estoque cadastrado neste depósito.");

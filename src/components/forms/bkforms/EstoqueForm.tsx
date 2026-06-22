@@ -35,6 +35,7 @@ interface IDeposito {
   nome: string;
   empresa_id: number;
   st_privado: boolean;
+  endereco: string;
 }
 
 const EstoqueForm: React.FC = () => {
@@ -73,7 +74,7 @@ const EstoqueForm: React.FC = () => {
     const [{ data: XEstData }, { data: XProdData }, { data: XDepData }] = await Promise.all([
       db.from("estoque").select("*").in("empresa_id", XIds).eq("excluido", false).order("estoque_id"),
       db.from("produto").select("produto_id, nome").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("nome"),
-      db.from("deposito").select("deposito_id, nome, empresa_id, st_privado").in("empresa_id", XIds).eq("excluido", false).order("nome"),
+      db.from("deposito").select("deposito_id, nome, empresa_id, st_privado, endereco").in("empresa_id", XIds).eq("excluido", false).order("nome"),
     ]);
     // Filter deposits: own company = all, sister companies = only public (st_privado=false)
     const XFilteredDeps = (XDepData || []).filter((d: IDeposito) =>
@@ -105,9 +106,9 @@ const EstoqueForm: React.FC = () => {
     return m;
   }, [XDepositos]);
 
-  const XDepositoEmpresaMap = useMemo(() => {
-    const m: Record<number, number> = {};
-    XDepositos.forEach(d => { m[d.deposito_id] = d.empresa_id; });
+  const XDepositoEnderecoMap = useMemo(() => {
+    const m: Record<number, string> = {};
+    XDepositos.forEach(d => { m[d.deposito_id] = d.endereco || ""; });
     return m;
   }, [XDepositos]);
 
@@ -127,14 +128,18 @@ const EstoqueForm: React.FC = () => {
       render: (r: IEstoque) => `${r.deposito_id} - ${XDepositoMap[r.deposito_id] || ""}`,
       getValue: (r: IEstoque) => XDepositoMap[r.deposito_id] || "",
     },
-    { key: "endereco", label: "Endereço", width: "120px" },
+    {
+      key: "endereco", label: "Endereço", width: "120px",
+      render: (r: IEstoque) => XDepositoEnderecoMap[r.deposito_id] || r.endereco || "",
+      getValue: (r: IEstoque) => XDepositoEnderecoMap[r.deposito_id] || r.endereco || "",
+    },
     { key: "estoque_fisico", label: "Físico", width: "90px", align: "right" as const },
     { key: "estoque_reservado", label: "Reservado", width: "90px", align: "right" as const },
     { key: "estoque_disponivel", label: "Disponível", width: "90px", align: "right" as const },
     { key: "estoque_minimo", label: "Mínimo", width: "90px", align: "right" as const },
     { key: "estoque_padrao", label: "Padrão", width: "90px", align: "right" as const },
     { key: "estoque_inventario", label: "Inventário", width: "90px", align: "right" as const },
-  ], [XProdutoMap, XDepositoMap, XEmpresaMap]);
+  ], [XProdutoMap, XDepositoMap, XEmpresaMap, XDepositoEnderecoMap]);
 
   // Keep custom filter for estoque since it uses getValue/render
   const XFiltered = XEstoques.filter(e => {
@@ -145,7 +150,30 @@ const EstoqueForm: React.FC = () => {
       if (col.getValue) val = String(col.getValue(e));
       else if (col.render) val = String(col.render(e));
       else val = String((e as any)[col.key] ?? "");
-      if (!val.toLowerCase().includes(fv.toLowerCase())) return false;
+
+      const normalizedVal = val.toLowerCase().trim();
+      const normalizedFv = fv.toLowerCase().trim();
+
+      const k = col.key.toLowerCase();
+      const l = typeof col.label === "string" ? col.label.toLowerCase() : "";
+      const isNumericCode =
+        k === "codigo" ||
+        k === "cd_codigo" ||
+        k === "cd_produto" ||
+        k === "cd_cadastro" ||
+        k === "produto_id" ||
+        k === "cadastro_id" ||
+        k === "deposito_id" ||
+        k.startsWith("cd_") ||
+        (k.endsWith("_id") && k !== "unidade_id") ||
+        l.includes("código") ||
+        l.includes("cód.");
+
+      if (isNumericCode) {
+        if (normalizedVal !== normalizedFv) return false;
+      } else {
+        if (!normalizedVal.includes(normalizedFv)) return false;
+      }
     }
     return true;
   });

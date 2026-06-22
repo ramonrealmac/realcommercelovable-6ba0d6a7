@@ -24,6 +24,7 @@ const RotaForm = lazy(() => import("@/components/forms/enderecos/RotaForm"));
 const BancoForm = lazy(() => import("@/components/forms/financeiro/BancoForm"));
 const CondicaoPagamentoForm = lazy(() => import("@/components/forms/financeiro/CondicaoPagamentoForm"));
 const PlanoContaForm = lazy(() => import("@/components/forms/financeiro/PlanoContaForm"));
+const TpOperacaoForm = lazy(() => import("@/components/forms/fiscal/TpOperacaoForm"));
 const CfopForm = lazy(() => import("@/components/forms/fiscal/CfopForm"));
 const FiscalGrupoProdutoForm = lazy(() => import("@/components/forms/fiscal/FiscalGrupoProdutoForm"));
 const FiscalRegraForm = lazy(() => import("@/components/forms/fiscal/FiscalRegraForm"));
@@ -98,6 +99,7 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "bancos": return <BancoForm />;
       case "cond-pagamento": return <CondicaoPagamentoForm />;
       case "plano-contas": return <PlanoContaForm />;
+      case "tipo-operacoes": return <TpOperacaoForm />;
       case "cfop": return <CfopForm />;
       case "fiscal-grupo-produtos": return <FiscalGrupoProdutoForm />;
       case "fiscal-regras": return <FiscalRegraForm />;

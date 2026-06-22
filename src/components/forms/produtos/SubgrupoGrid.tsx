@@ -43,7 +43,7 @@ const SubgrupoGrid: React.FC<SubgrupoGridProps> = ({ XEmpresaId, XGrupoId }) => 
   const XFiltered = XSubgrupos.filter(s => {
     const fc = XFilterValues["cd_produto_subgrupo"] || "";
     const fn = XFilterValues["nome"] || "";
-    if (fc && !String(s.cd_produto_subgrupo ?? s.produto_subgrupo_id ?? "").includes(fc)) return false;
+    if (fc && String(s.cd_produto_subgrupo ?? s.produto_subgrupo_id ?? "").trim() !== fc.trim()) return false;
     if (fn && !s.nome.toLowerCase().includes(fn.toLowerCase())) return false;
     return true;
   });

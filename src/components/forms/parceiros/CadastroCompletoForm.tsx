@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useAppContext } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -138,6 +138,13 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
   skipInitialLoad = false,
 }) => {
   const { XEmpresaId, XEmpresaMatrizId, XEmpresas, closeTab, XTabs, XActiveTabId } = useAppContext();
+
+  const XCurrentEmpresa = useMemo(() => {
+    return (XEmpresas || []).find((e: any) => e.empresa_id === XEmpresaId) || null;
+  }, [XEmpresas, XEmpresaId]);
+
+  const pesquisaMinLetras = XCurrentEmpresa?.pesquisa_prod_min_letras ?? 3;
+  const isFirstRender = useRef(true);
 
   const [XFormMode, setXFormMode] = useState<TFormMode>("view");
   const [XInnerTab, setXInnerTab] = useState<"cadastro" | "localizar">("cadastro");
@@ -470,7 +477,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
     setXVendedores(r8.data || []);
   }, []);
 
-  const loadData = useCallback(async (savedId?: number) => {
+  const loadData = useCallback(async (savedId?: number, filters?: Record<string, string>) => {
     setXLoading(true);
     let XQuery = db
       .from("cadastro")
@@ -486,21 +493,60 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
 
     if (skipInitialLoad && savedId) {
       XQuery = XQuery.eq("cadastro_id", savedId);
-    } else if (dataFilter) {
-      if (filterMode === "or") {
-        const XParts: string[] = [];
-        if (dataFilter.st_cliente) XParts.push(`st_cliente.eq.${dataFilter.st_cliente}`);
-        if (dataFilter.st_fornecedor) XParts.push(`st_fornecedor.eq.${dataFilter.st_fornecedor}`);
-        if (dataFilter.st_transportador) XParts.push(`st_transportador.eq.${dataFilter.st_transportador}`);
-        if (XParts.length > 0) XQuery = XQuery.or(XParts.join(","));
+    } else {
+      if (dataFilter) {
+        if (filterMode === "or") {
+          const XParts: string[] = [];
+          if (dataFilter.st_cliente) XParts.push(`st_cliente.eq.${dataFilter.st_cliente}`);
+          if (dataFilter.st_fornecedor) XParts.push(`st_fornecedor.eq.${dataFilter.st_fornecedor}`);
+          if (dataFilter.st_transportador) XParts.push(`st_transportador.eq.${dataFilter.st_transportador}`);
+          if (XParts.length > 0) XQuery = XQuery.or(XParts.join(","));
+        } else {
+          if (dataFilter.st_cliente) XQuery = XQuery.eq("st_cliente", dataFilter.st_cliente);
+          if (dataFilter.st_fornecedor) XQuery = XQuery.eq("st_fornecedor", dataFilter.st_fornecedor);
+          if (dataFilter.st_transportador) XQuery = XQuery.eq("st_transportador", dataFilter.st_transportador);
+        }
+      }
+
+      if (filters && Object.keys(filters).length > 0) {
+        const filterCdCadastro = filters["cd_cadastro"];
+        const filterRazao = filters["razao_social"];
+        const filterFantasia = filters["nome_fantasia"];
+        const filterCnpj = filters["cnpj"];
+        const filterFone = filters["fone_geral"];
+
+        if (filterCdCadastro && filterCdCadastro.trim()) {
+          const num = Number(filterCdCadastro.trim());
+          if (!isNaN(num)) {
+            XQuery = XQuery.eq("cd_cadastro", num);
+          }
+        }
+        if (filterRazao && filterRazao.trim()) {
+          XQuery = XQuery.ilike("razao_social", `%${filterRazao.trim()}%`);
+        }
+        if (filterFantasia && filterFantasia.trim()) {
+          XQuery = XQuery.ilike("nome_fantasia", `%${filterFantasia.trim()}%`);
+        }
+        if (filterCnpj && filterCnpj.trim()) {
+          const cleanDoc = filterCnpj.replace(/\D/g, "");
+          if (cleanDoc) {
+            XQuery = XQuery.ilike("cnpj", `%${cleanDoc}%`);
+          }
+        }
+        if (filterFone && filterFone.trim()) {
+          const cleanFone = filterFone.replace(/\D/g, "");
+          if (cleanFone) {
+            XQuery = XQuery.ilike("fone_geral", `%${cleanFone}%`);
+          }
+        }
+        
+        XQuery = XQuery.order("razao_social").limit(500);
       } else {
-        if (dataFilter.st_cliente) XQuery = XQuery.eq("st_cliente", dataFilter.st_cliente);
-        if (dataFilter.st_fornecedor) XQuery = XQuery.eq("st_fornecedor", dataFilter.st_fornecedor);
-        if (dataFilter.st_transportador) XQuery = XQuery.eq("st_transportador", dataFilter.st_transportador);
+        XQuery = XQuery.order("cadastro_id", { ascending: false }).limit(1000);
       }
     }
 
-    const { data: XRows } = await XQuery.order("cadastro_id");
+    const { data: XRows } = await XQuery;
     const rows = XRows || [];
     setXData(rows);
 
@@ -513,7 +559,41 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
     setXLoading(false);
   }, [XEmpresaMatrizId, dataFilter, filterMode, skipInitialLoad]);
 
+  // Trigger server-side dynamic search with debounce when filters change
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    const hasSearch = Object.entries(XSearchFilters).some(([key, val]) => {
+      if (!val || !val.trim()) return false;
+      if (key === "cd_cadastro") return true;
+      if (["razao_social", "nome_fantasia", "cnpj", "fone_geral"].includes(key)) {
+        return val.trim().length >= pesquisaMinLetras;
+      }
+      return false;
+    });
+
+    const handler = setTimeout(() => {
+      if (hasSearch) {
+        console.log("[CadastroCompletoForm] Executando busca dinâmica no servidor...", XSearchFilters);
+        loadData(undefined, XSearchFilters);
+      } else {
+        const hasActiveFiltersInState = Object.values(XSearchFilters).some(val => val && val.trim());
+        if (!hasActiveFiltersInState) {
+          console.log("[CadastroCompletoForm] Filtros limpos. Recarregando lista padrão...");
+          loadData();
+        }
+      }
+    }, 400);
+
+    return () => clearTimeout(handler);
+  }, [XSearchFilters, loadData, pesquisaMinLetras]);
+
+  useEffect(() => {
+    setXSearchFilters({});
+    isFirstRender.current = true;
     if (!skipInitialLoad) loadData();
     loadLookups();
     setXCurrentIdx(0);

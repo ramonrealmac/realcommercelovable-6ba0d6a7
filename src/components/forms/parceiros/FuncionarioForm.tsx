@@ -10,6 +10,33 @@ import { useGridFilter } from "@/hooks/useGridFilter";
 
 const db = supabase as any;
 
+const parseNum = (v: any) => {
+  if (v === undefined || v === null || v === "") return 0;
+  if (typeof v === "number") return v;
+  const s = String(v).replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+};
+
+const fmt2 = (v: number) => Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const fmtInput = (v: any) => {
+  if (v === 0 || v === "0") return "0,00";
+  const n = typeof v === "number" ? v : parseNum(v);
+  return n.toFixed(2).replace(".", ",");
+};
+
+const formatNumericInput = (rawString: string, decimals = 2): string => {
+  const clean = String(rawString || "").replace(/\D/g, "");
+  if (!clean) return "";
+  const num = parseInt(clean, 10);
+  const floatVal = num / Math.pow(10, decimals);
+  return floatVal.toLocaleString("pt-BR", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+};
+
 type TFormMode = "view" | "edit" | "insert";
 
 interface IFuncionario {
@@ -55,8 +82,8 @@ const emptyForm = (): Record<string, string> => ({
   caixa_cnc_venda: "N",
   caixa_edit_venda: "N",
   caixa_inf_vend: "N",
-  pc_comissao_av: "0",
-  pc_comissao_prz: "0",
+  pc_comissao_av: "0,00",
+  pc_comissao_prz: "0,00",
   tp_comissao: "1",
   corretora_id: "",
   tamanho_fonte_pedidos: "12",
@@ -169,7 +196,11 @@ const FuncionarioForm: React.FC = () => {
       const XNf: Record<string, string> = {};
       for (const key of Object.keys(emptyForm())) {
         const XVal = (XCurrentRecord as any)[key];
-        XNf[key] = XVal != null ? String(XVal) : "";
+        if ((key === "pc_comissao_av" || key === "pc_comissao_prz") && XVal != null) {
+          XNf[key] = fmtInput(XVal);
+        } else {
+          XNf[key] = XVal != null ? String(XVal) : "";
+        }
       }
       setXF(XNf);
     }
@@ -196,7 +227,7 @@ const FuncionarioForm: React.FC = () => {
 
     const toNull = (v: string) => v.trim() || null;
     const toInt = (v: string) => { const n = parseInt(v); return isNaN(n) ? null : n; };
-    const toFloat = (v: string) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+    const toFloat = (v: string) => { const n = parseNum(v); return isNaN(n) ? null : n; };
 
     const XPayload: any = {
       empresa_id: XEmpresaId,
@@ -290,6 +321,45 @@ const FuncionarioForm: React.FC = () => {
           onChange={(e) => set(key, e.target.value.toUpperCase())}
           readOnly={!XIsEditing}
           className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XIsEditing ? XFieldBgEdit : XFieldBgRead} focus:ring-2 focus:ring-ring outline-none`}
+        />
+      </div>
+    );
+  };
+
+  const handleNumBlur = useCallback((key: string, decimals: number = 2) => {
+    const current = XF[key];
+    if (current === undefined || current === null || current === "") return;
+    const val = parseNum(current);
+    set(key, val.toFixed(decimals).replace(".", ","));
+  }, [XF, set]);
+
+  const renderNumField = (label: string, key: string, options?: { required?: boolean; className?: string }) => {
+    if (XIsEditing) {
+      return (
+        <div className={options?.className}>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">
+            {label} {options?.required && <span className="text-destructive">*</span>}
+          </label>
+          <input
+            type="text"
+            value={XF[key] || "0,00"}
+            onChange={(e) => set(key, formatNumericInput(e.target.value, 2))}
+            onBlur={() => handleNumBlur(key, 2)}
+            onFocus={(e) => e.target.select()}
+            className={`w-full border border-border rounded px-3 py-1.5 text-sm text-right ${XFieldBgEdit} focus:ring-2 focus:ring-ring outline-none`}
+          />
+        </div>
+      );
+    }
+    const val = XCurrentRecord ? Number((XCurrentRecord as any)[key] || 0) : 0;
+    return (
+      <div className={options?.className}>
+        <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
+        <input
+          type="text"
+          value={fmt2(val)}
+          readOnly
+          className={`w-full border border-border rounded px-3 py-1.5 text-sm text-right ${XFieldBgRead}`}
         />
       </div>
     );
@@ -426,8 +496,8 @@ const FuncionarioForm: React.FC = () => {
             {XCadastroInnerTab === "comissoes" && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-left-1 duration-200">
                 {renderSelect("Tipo de Comissão", "tp_comissao", [{ v: "1", l: "Percentual sobre Venda" }, { v: "2", l: "Valor Fixo por Item" }])}
-                {renderField("% Comissão À Vista", "pc_comissao_av")}
-                {renderField("% Comissão À Prazo", "pc_comissao_prz")}
+                {renderNumField("% Comissão À Vista", "pc_comissao_av")}
+                {renderNumField("% Comissão À Prazo", "pc_comissao_prz")}
               </div>
             )}
 

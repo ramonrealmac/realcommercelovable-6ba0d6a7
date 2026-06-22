@@ -21,6 +21,8 @@ const isNumericCodeColumn = (key: string, col?: IFilterColumn) => {
     k === "produto_id" ||
     k === "cadastro_id" ||
     k === "deposito_id" ||
+    k.startsWith("cd_") ||
+    (k.endsWith("_id") && k !== "unidade_id") ||
     labelStr.includes("código") ||
     labelStr.includes("cód.")
   );

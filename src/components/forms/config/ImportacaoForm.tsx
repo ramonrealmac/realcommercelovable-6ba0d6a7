@@ -495,7 +495,13 @@ function normalizeDate(val: string): string {
 }
 
 // Helper function to apply translation rules for a specific column
-function applyColumnFormula(value: string | null | undefined, formulaStr: string): string {
+function applyColumnFormula(
+  value: string | null | undefined,
+  formulaStr: string,
+  row?: string[],
+  mappings?: Record<string, MappingItem>,
+  colName?: string
+): string {
   const normValue = value === null || value === undefined ? "" : String(value);
   if (!formulaStr || !formulaStr.trim()) return normValue;
   
@@ -551,6 +557,19 @@ function applyColumnFormula(value: string | null | undefined, formulaStr: string
     const val = parseFloat(trimmed);
     return isNaN(val) ? null : val;
   };
+
+  let groupCsvValue = "";
+  let subgroupCsvValue = "";
+  if (row && mappings) {
+    const grpMapping = mappings["produto_grupo_id"];
+    if (grpMapping && grpMapping.fileIndex !== undefined) {
+      groupCsvValue = String(row[grpMapping.fileIndex] || "").trim();
+    }
+    const subgrpMapping = mappings["produto_subgrupo_id"];
+    if (subgrpMapping && subgrpMapping.fileIndex !== undefined) {
+      subgroupCsvValue = String(row[subgrpMapping.fileIndex] || "").trim();
+    }
+  }
   
   const rules = formula.split(",");
   for (const rule of rules) {
@@ -561,6 +580,32 @@ function applyColumnFormula(value: string | null | undefined, formulaStr: string
     if (parts.length >= 2) {
       const sourceVal = parts[0].trim();
       const targetVal = parts.slice(1).join("=").trim();
+      
+      // Composite match logic (e.g. "12+7")
+      if (sourceVal.includes("+")) {
+        const sourceParts = sourceVal.split("+").map(s => s.trim());
+        const sourceGrp = sourceParts[0];
+        const sourceSubgrp = sourceParts[1];
+
+        const matchGrp = (groupCsvValue.toLowerCase() === sourceGrp.toLowerCase()) ||
+                         (parseAsNum(groupCsvValue) !== null && parseAsNum(sourceGrp) !== null && parseAsNum(groupCsvValue) === parseAsNum(sourceGrp));
+        
+        const matchSubgrp = (subgroupCsvValue.toLowerCase() === sourceSubgrp.toLowerCase()) ||
+                            (parseAsNum(subgroupCsvValue) !== null && parseAsNum(sourceSubgrp) !== null && parseAsNum(subgroupCsvValue) === parseAsNum(sourceSubgrp));
+
+        if (matchGrp && matchSubgrp) {
+          if (targetVal.includes("+")) {
+            const targetParts = targetVal.split("+").map(s => s.trim());
+            if (colName === "produto_grupo_id") {
+              return cleanQuotes(targetParts[0]);
+            } else if (colName === "produto_subgrupo_id") {
+              return cleanQuotes(targetParts[1]);
+            }
+          }
+          return cleanQuotes(targetVal);
+        }
+        continue;
+      }
       
       const isSourceEmptyTarget = sourceVal === "" || 
                                   sourceVal.toLowerCase() === "null" || 
@@ -1159,7 +1204,7 @@ const ImportacaoForm: React.FC = () => {
             
             // Apply translation formula if configured!
             if (mapping.useFallback && mapping.fallbackValue && mapping.fallbackValue.trim().toLowerCase().startsWith("cond:")) {
-              rawValue = applyColumnFormula(rawValue, mapping.fallbackValue);
+              rawValue = applyColumnFormula(rawValue, mapping.fallbackValue, row, mappings, colName);
             }
           }
         }
@@ -1185,7 +1230,7 @@ const ImportacaoForm: React.FC = () => {
           if (mapping.useFallback) {
             rawValue = " ";
           } else {
-            record[colName] = null;
+            record[colName] = colDef.type === "string" && colName !== "unidade_id" ? "" : null;
             return;
           }
         }
@@ -1517,7 +1562,7 @@ const ImportacaoForm: React.FC = () => {
     
     // Apply translation formula if configured!
     if (mapping.useFallback && mapping.fallbackValue && mapping.fallbackValue.trim().toLowerCase().startsWith("cond:")) {
-      rawVal = applyColumnFormula(rawVal, mapping.fallbackValue);
+      rawVal = applyColumnFormula(rawVal, mapping.fallbackValue, csvRow, mappings, colName);
       if (rawVal === undefined || rawVal.trim() === "") {
         rawVal = " ";
       }

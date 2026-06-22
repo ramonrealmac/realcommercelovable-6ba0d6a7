@@ -42,6 +42,17 @@ const parseNum = (v: any) => {
   return isNaN(n) ? 0 : n;
 };
 
+const formatNumericInput = (rawString: string, decimals = 4): string => {
+  const clean = String(rawString || "").replace(/\D/g, "");
+  if (!clean) return "";
+  const num = parseInt(clean, 10);
+  const floatVal = num / Math.pow(10, decimals);
+  return floatVal.toLocaleString("pt-BR", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+};
+
 export default function AjusteEstoqueItensTab({ pedido, podeEditar, onItemsChanged, autoNovoTrigger }: IProps) {
   const { XEmpresaId, XEmpresaMatrizId, XEmpresas } = useAppContext();
   const [XItens, setXItens] = useState<IMovimentoItem[]>([]);
@@ -374,42 +385,45 @@ export default function AjusteEstoqueItensTab({ pedido, podeEditar, onItemsChang
                 className="w-full border border-border rounded-lg px-3 py-1.5 text-sm mt-1 bg-secondary/30 text-center text-muted-foreground outline-none" />
             </div>
 
-            {/* Tipo de Ajuste de Estoque */}
-            <div className="col-span-12 sm:col-span-2">
-              <label className="text-xs font-medium text-foreground/80 flex items-center gap-1">
-                Tipo de Ajuste
-                <HelpCircle className="w-3.5 h-3.5 text-muted-foreground" title="A = Adiciona ao físico, R = Retira do físico, M = Modifica/Força a quantidade atual no estoque" />
-              </label>
-              <select disabled={ro} value={XEdit.tp_ajs_estoque ?? ""}
-                onChange={e => setF("tp_ajs_estoque", e.target.value)}
-                className="w-full border border-border rounded-lg px-3 py-1.5 text-sm mt-1 bg-background/50 focus:bg-background outline-none font-medium">
-                <option value="A">➕ Adiciona</option>
-                <option value="R">➖ Retira</option>
-                <option value="M">✏️ Modifica</option>
-              </select>
-            </div>
+            {/* Tipo de Ajuste / Quantidade / Físico Atual */}
+            <div className="col-span-12 sm:col-span-5 grid grid-cols-12 gap-3">
+              {/* Tipo de Ajuste de Estoque */}
+              <div className="col-span-12 sm:col-span-6">
+                <label className="text-xs font-medium text-foreground/80 flex items-center gap-1">
+                  Tipo de Ajuste
+                  <HelpCircle className="w-3.5 h-3.5 text-muted-foreground" title="A = Adiciona ao físico, R = Retira do físico, M = Modifica/Força a quantidade atual no estoque" />
+                </label>
+                <select disabled={ro} value={XEdit.tp_ajs_estoque ?? ""}
+                  onChange={e => setF("tp_ajs_estoque", e.target.value)}
+                  className="w-full border border-border rounded-lg px-3 py-1.5 text-sm mt-1 bg-background/50 focus:bg-background outline-none font-medium">
+                  <option value="A">➕ Adiciona</option>
+                  <option value="R">➖ Retira</option>
+                  <option value="M">✏️ Modifica</option>
+                </select>
+              </div>
 
-            {/* Quantidade */}
-            <div className="col-span-12 sm:col-span-1.5">
-              <label className="text-xs font-medium text-foreground/80">Quantidade</label>
-              <input
-                ref={qtdRef}
-                type="text"
-                disabled={ro}
-                value={fmtInput(XEdit.qt_movimento, 4)}
-                onChange={e => setF("qt_movimento", e.target.value)}
-                onBlur={e => handleBlur("qt_movimento", e.target.value, 4)}
-                onFocus={e => e.target.select()}
-                className={`w-full border border-border rounded-lg px-3 py-1.5 text-sm text-right mt-1 bg-background/50 focus:bg-background outline-none font-semibold ${NO_SPIN}`}
-              />
-            </div>
+              {/* Quantidade */}
+              <div className="col-span-12 sm:col-span-3">
+                <label className="text-xs font-medium text-foreground/80">Quantidade</label>
+                <input
+                  ref={qtdRef}
+                  type="text"
+                  disabled={ro}
+                  value={fmtInput(XEdit.qt_movimento, 4)}
+                  onChange={e => setF("qt_movimento", formatNumericInput(e.target.value, 4))}
+                  onBlur={e => handleBlur("qt_movimento", e.target.value, 4)}
+                  onFocus={e => e.target.select()}
+                  className={`w-full border border-border rounded-lg px-3 py-1.5 text-sm text-right mt-1 bg-background/50 focus:bg-background outline-none font-semibold ${NO_SPIN}`}
+                />
+              </div>
 
-            {/* Estoque Físico Atual de Referência */}
-            <div className="col-span-12 sm:col-span-1.5">
-              <label className="text-xs font-medium text-foreground/80">Físico Atual</label>
-              <input readOnly tabIndex={-1} 
-                value={XEdit.produto_id && XEdit.deposito_id ? fmt(XDepEstoque[XEdit.deposito_id] || 0, 4) : "--"}
-                className="w-full border border-border rounded-lg px-3 py-1.5 text-sm text-right mt-1 bg-secondary/30 text-muted-foreground outline-none font-semibold" />
+              {/* Estoque Físico Atual de Referência */}
+              <div className="col-span-12 sm:col-span-3">
+                <label className="text-xs font-medium text-foreground/80">Físico Atual</label>
+                <input readOnly tabIndex={-1} 
+                  value={XEdit.produto_id && XEdit.deposito_id ? fmt(XDepEstoque[XEdit.deposito_id] || 0, 4) : "--"}
+                  className="w-full border border-border rounded-lg px-3 py-1.5 text-sm text-right mt-1 bg-secondary/30 text-muted-foreground outline-none font-semibold" />
+              </div>
             </div>
           </div>
 

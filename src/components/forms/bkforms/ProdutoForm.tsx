@@ -47,7 +47,7 @@ const XLocalizarColumns: IGridColumn[] = [
   { key: "subgrupo_nome", label: "Subgrupo", width: "1fr" },
   { key: "nome_reduzido", label: "Nome Reduzido", width: "1fr" },
   { key: "gtin", label: "GTIN", width: "140px" },
-  { key: "preco_venda", label: "Preço Venda", width: "110px", align: "right" },
+  { key: "preco_venda", label: "Preço Venda", width: "110px", align: "right", getValue: (r) => fmtBR(r.preco_venda, 2) },
 ];
 
 /* ─── Empty form ─── */
@@ -80,10 +80,10 @@ const XConvGridCols: IGridColumn[] = [
 const XEstoqueGridCols: IGridColumn[] = [
   { key: "empresa_nome", label: "Empresa", width: "160px" },
   { key: "deposito_nome", label: "Depósito", width: "1fr" },
-  { key: "endereco", label: "Endereço", width: "120px" },
-  { key: "estoque_fisico", label: "Qt. Física", width: "120px", align: "right" },
-  { key: "estoque_reservado", label: "Qt. Reservada", width: "120px", align: "right" },
-  { key: "estoque_disponivel", label: "Qt. Disponível", width: "120px", align: "right" },
+  { key: "endereco", label: "Endereço", width: "120px", getValue: (r) => r.deposito_endereco || r.endereco || "" },
+  { key: "estoque_fisico", label: "Qt. Física", width: "120px", align: "right", getValue: (r) => fmtBR(r.estoque_fisico, 2) },
+  { key: "estoque_reservado", label: "Qt. Reservada", width: "120px", align: "right", getValue: (r) => fmtBR(r.estoque_reservado, 2) },
+  { key: "estoque_disponivel", label: "Qt. Disponível", width: "120px", align: "right", getValue: (r) => fmtBR(r.estoque_disponivel, 2) },
 ];
 
 /* ─── Código de Barras grid columns ─── */
@@ -164,7 +164,7 @@ const ProdutoForm: React.FC = () => {
       db.from("grupo_ipi").select("grupo_ipi_id,descricao").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("descricao"),
       db.from("grupo_pis_cofins").select("grupo_pis_cofins_id,descricao").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("descricao"),
       XGroupEmpresaIds.length > 0
-        ? db.from("deposito").select("deposito_id,nome,empresa_id,st_privado").eq("excluido", false)
+        ? db.from("deposito").select("deposito_id,nome,empresa_id,st_privado,endereco").eq("excluido", false)
             .in("empresa_id", XGroupEmpresaIds).order("nome")
         : Promise.resolve({ data: [] }),
       db.from("grupo_ibscbs").select("grupo_ibscbs_id,descricao").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("descricao"),
@@ -214,7 +214,7 @@ const ProdutoForm: React.FC = () => {
   const loadSubData = useCallback(async (produtoId: number) => {
     // Filter deposits: own company = all, sister companies = only public (st_privado=false)
     const XVisibleDeps = XDepositos.filter((d: any) =>
-      d.empresa_id === XEmpresaId || d.st_privado === false
+      Number(d.empresa_id) === Number(XEmpresaId) || d.st_privado === false
     );
     const XVisibleDepIds = XVisibleDeps.map((d: any) => d.deposito_id);
     const [rEst, rConv, rBarra] = await Promise.all([
@@ -224,12 +224,13 @@ const ProdutoForm: React.FC = () => {
       db.from("produto_conversao").select("*").eq("empresa_id", XEmpresaMatrizId).eq("produto_id", produtoId).eq("excluido", false).order("conversao_id"),
       db.from("produto_codbarra").select("*").eq("empresa_id", XEmpresaMatrizId).eq("produto_id", produtoId).eq("excluido", false).order("produto_codbarra_id"),
     ]);
-    const XDepMap: Record<number, { nome: string; empresa_id: number }> = {};
-    XVisibleDeps.forEach((d: any) => { XDepMap[d.deposito_id] = { nome: d.nome, empresa_id: d.empresa_id }; });
+    const XDepMap: Record<number, { nome: string; empresa_id: number; endereco: string }> = {};
+    XVisibleDeps.forEach((d: any) => { XDepMap[d.deposito_id] = { nome: d.nome, empresa_id: d.empresa_id, endereco: d.endereco || "" }; });
     setXEstoques((rEst.data || []).map((e: any) => ({
       ...e,
       deposito_nome: XDepMap[e.deposito_id]?.nome || String(e.deposito_id),
       empresa_nome: XEmpresaMap[XDepMap[e.deposito_id]?.empresa_id ?? e.empresa_id] || String(e.empresa_id),
+      deposito_endereco: XDepMap[e.deposito_id]?.endereco || "",
     })));
     setXConversoes(rConv.data || []);
     setXBarras(rBarra.data || []);
@@ -263,7 +264,7 @@ const ProdutoForm: React.FC = () => {
       setXCurrentIdx(0);
       setXFormMode("view");
     }
-  }, [XEmpresaId]);
+  }, [XEmpresaId, loadLookups, loadData]);
 
   useEffect(() => {
     if (XCurrentRecord) loadSubData(XCurrentRecord.produto_id);
