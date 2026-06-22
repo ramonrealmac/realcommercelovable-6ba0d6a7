@@ -283,7 +283,22 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
             value={record.st_entrega || "N"}
             onChange={async (e) => {
               const val = e.target.value;
-              setField("st_entrega", val);
+              if (val === "N") {
+                setRecord((prev: any) => ({
+                  ...prev,
+                  st_entrega: "N",
+                  rota_id: null,
+                  cep_entrega: "",
+                  cidade_id: null,
+                  logradouro_entrega: "",
+                  bairro_entrega: "",
+                  numero_entrega: "",
+                  email_entrega: "",
+                }));
+              } else {
+                setField("st_entrega", val);
+              }
+
               if (record.movimento_id && (val === "S" || val === "N")) {
                 const { error } = await db.from("movimento_item")
                   .update({ entrega: val })
@@ -404,6 +419,7 @@ const PedidoForm: React.FC = () => {
   const [XPagamentoRefreshToken, setXPagamentoRefreshToken] = useState(0);
   const [XPedidoTotalCtx, setXPedidoTotalCtx] = useState<{ movimentoId: number | null; total: number; itens: IMovimentoItem[] }>({ movimentoId: null, total: 0, itens: [] });
   const [XOpenPagtoDialog, setXOpenPagtoDialog] = useState(false);
+  const [XBuscandoCep, setXBuscandoCep] = useState(false);
   const XFetchingItensRef = useRef<Set<number>>(new Set());
   // Ref para acionar refresh do CRUD sem window.location.reload()
   const XCrudRefreshRef = useRef<(() => Promise<void>) | null>(null);
@@ -437,15 +453,108 @@ const PedidoForm: React.FC = () => {
       "tp_operacao",
     );
     load(
-      db.from("rota").select("rota_id, descricao").eq("excluido", false).order("descricao"),
-      (d) => setXRotas(d.map((r: any) => ({ id: r.rota_id, label: r.descricao }))),
-      "rota",
-    );
-    load(
-      db.from("cidade").select("cidade_id, descricao, uf").eq("excluido", false).order("descricao").limit(1000),
-      (d) => setXCidades(d.map((c: any) => ({ id: c.cidade_id, label: `${c.descricao} - ${c.uf || ""}` }))),
+      db.from("cidade").select("cidade_id, descricao, estado_id").eq("excluido", false).order("descricao").limit(1000),
+      (d) => setXCidades(d.map((c: any) => ({ id: c.cidade_id, label: `${c.descricao} - ${c.estado_id || ""}` }))),
       "cidade",
     );
+  }, []);
+
+  // Carrega rotas filtradas pela empresa ativa
+  useEffect(() => {
+    if (!XEmpresaId) return;
+    const loadRotas = async () => {
+      const { data, error } = await db
+        .from("rota")
+        .select("rota_id, descricao")
+        .eq("empresa_id", XEmpresaId)
+        .eq("excluido", false)
+        .order("descricao");
+      if (error) {
+        console.warn("[PedidoForm] Rota lookup falhou:", error.message);
+        return;
+      }
+      setXRotas((data || []).map((r: any) => ({ id: r.rota_id, label: r.descricao })));
+    };
+    loadRotas();
+  }, [XEmpresaId]);
+
+  // Função para buscar e preencher dados do CEP automaticamente
+  const handleBuscarCep = useCallback(async (cep: string, setField: (k: string, v: any) => void) => {
+    const cleanCep = cep.replace(/\D/g, "");
+    if (cleanCep.length !== 8) return;
+
+    setXBuscandoCep(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("consulta-cep", {
+        body: { cep: cleanCep },
+      });
+
+      if (error) throw error;
+      if (data) {
+        if (data.logradouro) setField("logradouro_entrega", data.logradouro);
+        if (data.bairro) setField("bairro_entrega", data.bairro);
+
+        const ibge = data.ibge;
+        const localidade = data.localidade;
+        const uf = data.uf;
+
+        if (ibge || (localidade && uf)) {
+          let query = db.from("cidade").select("cidade_id, descricao, estado_id, cd_ibge").eq("excluido", false);
+          
+          if (ibge) {
+            query = query.eq("cd_ibge", ibge);
+          } else {
+            const cleanLocalidade = localidade
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .toUpperCase();
+            query = query.eq("descricao", cleanLocalidade).eq("estado_id", uf);
+          }
+
+          const { data: dbCidades } = await query;
+          let matchedCidade = dbCidades && dbCidades[0];
+
+          if (!matchedCidade && ibge && localidade && uf) {
+            const cleanLocalidade = localidade
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .toUpperCase();
+            const { data: fallbackCidades } = await db
+              .from("cidade")
+              .select("cidade_id, descricao, estado_id, cd_ibge")
+              .eq("excluido", false)
+              .eq("descricao", cleanLocalidade)
+              .eq("estado_id", uf);
+
+            if (fallbackCidades && fallbackCidades[0]) {
+              matchedCidade = fallbackCidades[0];
+            }
+          }
+
+          if (matchedCidade) {
+            const newCidadeItem = {
+              id: matchedCidade.cidade_id,
+              label: `${matchedCidade.descricao} - ${matchedCidade.estado_id || ""}`,
+            };
+            setXCidades(prev => {
+              if (!prev.some(c => c.id === matchedCidade.cidade_id)) {
+                return [...prev, newCidadeItem].sort((a, b) => a.label.localeCompare(b.label));
+              }
+              return prev;
+            });
+            setField("cidade_id", matchedCidade.cidade_id);
+          } else {
+            console.warn(`[PedidoForm] Cidade não encontrada no banco de dados para o CEP ${cep}: ${localidade} - ${uf}`);
+          }
+        }
+        toast.success("Endereço preenchido automaticamente.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Erro ao buscar CEP: " + (err.message || "CEP não encontrado."));
+    } finally {
+      setXBuscandoCep(false);
+    }
   }, []);
 
 
@@ -671,7 +780,10 @@ const PedidoForm: React.FC = () => {
           </>
         );
       }}
-      XHiddenTabs={[]}
+      XHiddenTabs={(record) => {
+        const st = record?.st_entrega;
+        return (st === "S" || st === "P") ? [] : ["entrega"];
+      }}
       config={{
           XTableName: "movimento",
           XPrimaryKey: "movimento_id",
@@ -690,6 +802,14 @@ const PedidoForm: React.FC = () => {
             if (!rec.funcionario_id) throw new Error("Selecione o Vendedor.");
             if (!rec.dt_emissao) throw new Error("Informe a Data de Emissão.");
             if (!rec.dt_entrega) throw new Error("Informe a Data de Entrega.");
+            if (rec.st_entrega === "S" || rec.st_entrega === "P") {
+              if (!rec.rota_id) throw new Error("Informe a Rota na aba Dados de Entrega.");
+              if (!rec.cep_entrega?.trim()) throw new Error("Informe o CEP na aba Dados de Entrega.");
+              if (!rec.cidade_id) throw new Error("Informe a Cidade na aba Dados de Entrega.");
+              if (!rec.logradouro_entrega?.trim()) throw new Error("Informe o Logradouro na aba Dados de Entrega.");
+              if (!rec.bairro_entrega?.trim()) throw new Error("Informe o Bairro na aba Dados de Entrega.");
+              if (!rec.numero_entrega?.trim()) throw new Error("Informe o Número na aba Dados de Entrega.");
+            }
             if (mode === "edit" && rec.st_pedido && rec.st_pedido !== "O") {
               throw new Error("Pedido não está em modo Orçamento; não pode ser alterado.");
             }
@@ -769,18 +889,42 @@ const PedidoForm: React.FC = () => {
                 <div className="space-y-3">
                   <div className="grid grid-cols-12 gap-3">
                     <div className="col-span-3">
-                      <label className="text-xs text-muted-foreground">Rota</label>
+                      <label className="text-xs text-muted-foreground">Rota <span className="text-destructive">*</span></label>
                       <select disabled={ro} value={record.rota_id ?? ""} onChange={e => setField("rota_id" as any, e.target.value ? Number(e.target.value) : null as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
                         <option value="">--</option>
                         {XRotas.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                       </select>
                     </div>
                     <div className="col-span-2">
-                      <label className="text-xs text-muted-foreground">CEP</label>
-                      <input disabled={ro} value={record.cep_entrega ?? ""} onChange={e => setField("cep_entrega" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
+                      <label className="text-xs text-muted-foreground flex items-center gap-1">
+                        CEP <span className="text-destructive">*</span>
+                        {XBuscandoCep && <span className="text-[10px] text-primary animate-pulse">...</span>}
+                      </label>
+                      <input
+                        disabled={ro || XBuscandoCep}
+                        maxLength={9}
+                        value={record.cep_entrega ?? ""}
+                        placeholder="00000-000"
+                        onChange={e => {
+                          const val = e.target.value;
+                          const digits = val.replace(/\D/g, "");
+                          let formatted = digits;
+                          if (digits.length > 5) {
+                            formatted = digits.substring(0, 5) + "-" + digits.substring(5, 8);
+                          }
+                          setField("cep_entrega" as any, formatted);
+                        }}
+                        onBlur={e => {
+                          const digits = e.target.value.replace(/\D/g, "");
+                          if (digits.length === 8) {
+                            handleBuscarCep(digits, setField);
+                          }
+                        }}
+                        className="w-full border border-border rounded px-2 py-1 text-sm disabled:opacity-50"
+                      />
                     </div>
                     <div className="col-span-7">
-                      <label className="text-xs text-muted-foreground">Cidade</label>
+                      <label className="text-xs text-muted-foreground">Cidade <span className="text-destructive">*</span></label>
                       <select disabled={ro} value={record.cidade_id ?? ""} onChange={e => setField("cidade_id" as any, e.target.value ? Number(e.target.value) : null as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
                         <option value="">--</option>
                         {XCidades.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
@@ -789,15 +933,15 @@ const PedidoForm: React.FC = () => {
                   </div>
                   <div className="grid grid-cols-12 gap-3">
                     <div className="col-span-7">
-                      <label className="text-xs text-muted-foreground">Logradouro</label>
+                      <label className="text-xs text-muted-foreground">Logradouro <span className="text-destructive">*</span></label>
                       <input disabled={ro} value={record.logradouro_entrega ?? ""} onChange={e => setField("logradouro_entrega" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
                     </div>
                     <div className="col-span-3">
-                      <label className="text-xs text-muted-foreground">Bairro</label>
+                      <label className="text-xs text-muted-foreground">Bairro <span className="text-destructive">*</span></label>
                       <input disabled={ro} value={record.bairro_entrega ?? ""} onChange={e => setField("bairro_entrega" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
                     </div>
                     <div className="col-span-2">
-                      <label className="text-xs text-muted-foreground">Nº</label>
+                      <label className="text-xs text-muted-foreground">Nº <span className="text-destructive">*</span></label>
                       <input disabled={ro} value={record.numero_entrega ?? ""} onChange={e => setField("numero_entrega" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
                     </div>
                   </div>
