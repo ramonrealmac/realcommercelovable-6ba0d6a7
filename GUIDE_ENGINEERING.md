@@ -1,4 +1,4 @@
-# Guia de Engenharia: ERP RealSys (v1.16.0)
+# Guia de Engenharia: ERP RealSys (v1.17.0)
 
 Este documento descreve como utilizar as novas ferramentas de arquitetura e qualidade implementadas durante a modernização do sistema.
 
@@ -61,6 +61,18 @@ SELECT * FROM sistema_versoes ORDER BY versao DESC;
 
 ---
 
-## 🛠️ 6. Outros Comandos Úteis
+## ⚡ 7. Servidor de Automação HTTP (API Externa)
+O sistema possui um microserviço de automação executado via Node.js/Bun para facilitar integrações e automações externas eficientes.
+
+*   **Localização**: `src/server/automationServer.ts`
+*   **Porta padrão**: `3436`
+*   **Endpoints de Integração**:
+    *   `POST /api/tools/clientes/cadastrar`: Cria cadastros sanitizando campos de CNPJ e telefones.
+    *   `POST /api/tools/pedidos/criar`: Cria pedidos de venda garantindo integridade transacional de cabeçalho e itens (com rollback automático).
+*   **Segurança**: Autenticação através do cabeçalho `x-agent-secret`.
+
+---
+
+## 🛠️ 8. Outros Comandos Úteis
 *   **Verificar Tipagem**: `npx tsc --noEmit` (Verifica se existem erros de TypeScript no projeto).
 *   **Linter (Limpeza)**: `npm run lint` (Identifica código mal formatado ou variáveis não utilizadas).

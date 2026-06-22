@@ -37,7 +37,7 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
       const n = name.trim().toLowerCase();
       return (n.includes('id') || n.includes('codigo') || n.includes('num')) ? '1' : 'NULL';
     });
-    const testSql = `SELECT * FROM (${safeSql}) __rpb_sub__ LIMIT 1`;
+    const testSql = `SELECT __rpb_sub__.* FROM (${safeSql}) __rpb_sub__ RIGHT JOIN (SELECT 1 AS __dummy) __d ON true LIMIT 1`;
     const { data, error } = await rpbExecuteQuery(testSql, {});
     setDetecting(false);
     if (error) { toast.error('Erro ao detectar colunas: ' + error); return; }

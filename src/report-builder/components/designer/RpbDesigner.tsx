@@ -85,20 +85,12 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
         if (n.includes('id') || n.includes('codigo') || n.includes('num')) return '1';
         return 'NULL';
       });
-      // Usamos WHERE 1=0 para obter apenas o esquema sem processar dados
-      const limitedSql = `SELECT * FROM (${safeSql}) __rpb_detect__ WHERE 1=0`;
+      // Força o retorno de pelo menos 1 linha (mesmo que com colunas nulas) usando RIGHT JOIN
+      const limitedSql = `SELECT __rpb_detect__.* FROM (${safeSql}) __rpb_detect__ RIGHT JOIN (SELECT 1 AS __dummy) __d ON true LIMIT 1`;
       const { data, error } = await rpbExecuteQuery(limitedSql, {});
       setDetecting(false);
-      if (!error) {
-        // Mesmo com WHERE 1=0, o RPC do Supabase deve retornar as chaves do objeto (esquema)
-        // Se não retornar nada (array vazio sem chaves), tentamos com LIMIT 1
-        if (data && data.length > 0) {
-          setQueryColumns(Object.keys(data[0]));
-        } else {
-          const fallbackSql = `SELECT * FROM (${safeSql}) __rpb_detect__ LIMIT 1`;
-          const { data: fData } = await rpbExecuteQuery(fallbackSql, {});
-          if (fData && fData.length > 0) setQueryColumns(Object.keys(fData[0]));
-        }
+      if (!error && data && data.length > 0) {
+        setQueryColumns(Object.keys(data[0]));
       }
     };
     detect();
@@ -113,7 +105,7 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
       if (n.includes('id') || n.includes('codigo') || n.includes('num')) return '1';
       return 'NULL';
     });
-    const limitedSql = `SELECT * FROM (${safeSql}) __rpb_detect__ LIMIT 1`;
+    const limitedSql = `SELECT __rpb_detect__.* FROM (${safeSql}) __rpb_detect__ RIGHT JOIN (SELECT 1 AS __dummy) __d ON true LIMIT 1`;
     const { data, error } = await rpbExecuteQuery(limitedSql, {});
     setDetecting(false);
     if (error) { toast.error('Erro ao detectar colunas: ' + error); return; }
