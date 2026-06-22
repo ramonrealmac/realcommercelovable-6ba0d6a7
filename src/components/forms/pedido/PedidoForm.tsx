@@ -893,7 +893,7 @@ const PedidoForm: React.FC = () => {
             render: ({ record, setField, isEditing }) => {
               const ro = !isEditing || record.st_pedido !== "O";
               return (
-                <div className="space-y-3">
+                <div className="space-y-3" onKeyDown={handleKeyDown}>
                   <div className="grid grid-cols-12 gap-3">
                     <div className="col-span-3">
                       <label className="text-xs text-muted-foreground">Rota</label>
