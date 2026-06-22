@@ -160,7 +160,10 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
       movimento_id: movimentoId
     };
 
-    setXLinhas([linha]); // Limpa anteriores e adiciona a nova conforme solicitado
+    setXLinhas(prev => {
+      if (XEditUid) return prev.map(l => l.uid === XEditUid ? linha : l);
+      return [...prev, linha];
+    });
     setXSelectedIdx(null);
     const restante = Math.max(0, totalPedido - (totalPago + vPagar));
     resetForm(restante);
