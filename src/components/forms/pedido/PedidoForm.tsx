@@ -890,7 +890,7 @@ const PedidoForm: React.FC = () => {
           },
           {
             key: "entrega", label: "Dados de Entrega",
-            render: ({ record, setField, isEditing }) => {
+            render: ({ record, setField, isEditing, setInnerTab }) => {
               const ro = !isEditing || record.st_pedido !== "O";
               return (
                 <div className="space-y-3" onKeyDown={handleKeyDown}>
@@ -954,7 +954,26 @@ const PedidoForm: React.FC = () => {
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">E-mail</label>
-                    <input disabled={ro} value={record.email_entrega ?? ""} onChange={e => setField("email_entrega" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
+                    <input 
+                      disabled={ro} 
+                      value={record.email_entrega ?? ""} 
+                      onChange={e => setField("email_entrega" as any, e.target.value as any)} 
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setInnerTab("adicionais");
+                          setTimeout(() => {
+                            const field = document.getElementById("obs_pedido_textarea");
+                            if (field) {
+                              field.focus();
+                              (field as HTMLTextAreaElement).select?.();
+                            }
+                          }, 150);
+                        }
+                      }}
+                      className="w-full border border-border rounded px-2 py-1 text-sm" 
+                    />
                   </div>
                 </div>
               );
@@ -968,7 +987,13 @@ const PedidoForm: React.FC = () => {
                 <div className="space-y-3">
                   <div>
                     <label className="text-xs text-muted-foreground">Observação do Pedido</label>
-                    <textarea disabled={ro} value={record.obs_pedido ?? ""} onChange={e => setField("obs_pedido" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-2 text-sm min-h-[100px]" />
+                    <textarea 
+                      id="obs_pedido_textarea"
+                      disabled={ro} 
+                      value={record.obs_pedido ?? ""} 
+                      onChange={e => setField("obs_pedido" as any, e.target.value as any)} 
+                      className="w-full border border-border rounded px-2 py-2 text-sm min-h-[100px]" 
+                    />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">Observação NF</label>
