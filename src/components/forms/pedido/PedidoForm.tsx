@@ -633,11 +633,19 @@ const PedidoForm: React.FC = () => {
     }
   }, []);
 
-  // Keyboard shortcuts F7 and F9
+  // Keyboard shortcuts F7 and F6
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       const rec = XCurrentRecordRef.current;
       if (!rec?.movimento_id) return;
+
+      const activeElement = document.activeElement;
+      const isTyping = activeElement && (
+        activeElement.tagName === "INPUT" ||
+        activeElement.tagName === "TEXTAREA" ||
+        activeElement.tagName === "SELECT" ||
+        activeElement.getAttribute("contenteditable") === "true"
+      );
 
       if (e.key === "F7") {
         const st = rec.st_pedido;
@@ -645,8 +653,8 @@ const PedidoForm: React.FC = () => {
           e.preventDefault();
           mudarStatus(rec.movimento_id, "F", "Confirma o envio deste pedido para o Caixa? O estoque será reservado.");
         }
-      } else if (e.key === "F9") {
-        // Atalho F9 para abrir Financeiro / Pagamento
+      } else if (e.key === "F6" || e.key === "F9" || ((e.key === "f" || e.key === "F") && !isTyping)) {
+        // Atalho F6 para abrir Financeiro / Pagamento
         // Regras: em navegação, valor > 0, não enviado para caixa, não cancelado, não faturado
         const valor = Number(rec.vl_movimento || 0);
         if (
@@ -772,7 +780,7 @@ const PedidoForm: React.FC = () => {
             {stAtual === "O" && (
               <ToolbarBtn 
                 icon={<CircleDollarSign size={18} />} 
-                label="Financeiro / Pagamento" 
+                label="F6 - Financeiro / Pagamento" 
                 onClick={() => { setInnerTab("pagamento"); setXOpenPagtoDialog(true); }} 
                 color="success" 
               />
