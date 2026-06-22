@@ -803,7 +803,6 @@ const PedidoForm: React.FC = () => {
             if (!rec.dt_emissao) throw new Error("Informe a Data de Emissão.");
             if (!rec.dt_entrega) throw new Error("Informe a Data de Entrega.");
             if (rec.st_entrega === "S" || rec.st_entrega === "P") {
-              if (!rec.rota_id) throw new Error("Informe a Rota na aba Dados de Entrega.");
               if (!rec.cep_entrega?.trim()) throw new Error("Informe o CEP na aba Dados de Entrega.");
               if (!rec.cidade_id) throw new Error("Informe a Cidade na aba Dados de Entrega.");
               if (!rec.logradouro_entrega?.trim()) throw new Error("Informe o Logradouro na aba Dados de Entrega.");
@@ -889,7 +888,7 @@ const PedidoForm: React.FC = () => {
                 <div className="space-y-3">
                   <div className="grid grid-cols-12 gap-3">
                     <div className="col-span-3">
-                      <label className="text-xs text-muted-foreground">Rota <span className="text-destructive">*</span></label>
+                      <label className="text-xs text-muted-foreground">Rota</label>
                       <select disabled={ro} value={record.rota_id ?? ""} onChange={e => setField("rota_id" as any, e.target.value ? Number(e.target.value) : null as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
                         <option value="">--</option>
                         {XRotas.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
