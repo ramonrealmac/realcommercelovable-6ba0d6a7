@@ -137,7 +137,7 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       // PDV
       case "abertura-caixa": return <AberturaCaixaForm />;
       case "pdv-caixa": return <PdvCaixaForm />;
-      case "fechamento-caixa": return <FechamentoCaixaForm />;
+      case "fechamento-caixa": return <FechamentoCaixaForm initialAberturaId={params?.caixa_abertura_id} initialDtAbertura={params?.dt_abertura} />;
       case "suprimento-caixa": return <SuprimentoSangriaForm tipo="SUP" />;
       case "sangria-caixa": return <SuprimentoSangriaForm tipo="SAN" />;
       default: {

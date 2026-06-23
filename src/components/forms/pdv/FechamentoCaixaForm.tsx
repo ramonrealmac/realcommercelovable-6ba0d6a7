@@ -28,13 +28,18 @@ interface IResumoMeio {
 
 const hoje = () => new Date().toISOString().slice(0, 10);
 
-const FechamentoCaixaForm: React.FC = () => {
+interface IFechamentoProps {
+  initialAberturaId?: number;
+  initialDtAbertura?: string;
+}
+
+const FechamentoCaixaForm: React.FC<IFechamentoProps> = ({ initialAberturaId, initialDtAbertura }) => {
   const { XEmpresaId } = useAppContext();
   const [XAberturas, setXAberturas] = useState<IAberturaRow[]>([]);
   const [XSel, setXSel] = useState<IAberturaRow | null>(null);
   const [XResumo, setXResumo] = useState<IResumoMeio[]>([]);
-  const [XDtIni, setXDtIni] = useState<string>(hoje());
-  const [XDtFim, setXDtFim] = useState<string>(hoje());
+  const [XDtIni, setXDtIni] = useState<string>(initialDtAbertura || hoje());
+  const [XDtFim, setXDtFim] = useState<string>(initialDtAbertura || hoje());
   const [XLoading, setXLoading] = useState(false);
   const [XSalvando, setXSalvando] = useState(false);
 
@@ -76,6 +81,16 @@ const FechamentoCaixaForm: React.FC = () => {
   useEffect(() => {
     carregar();
   }, [carregar]);
+
+  useEffect(() => {
+    if (initialAberturaId && XAberturas.length > 0 && !XSel) {
+      const found = XAberturas.find(r => r.caixa_abertura_id === initialAberturaId);
+      if (found) {
+        setXSel(found);
+        carregarResumo(found);
+      }
+    }
+  }, [initialAberturaId, XAberturas, XSel, carregarResumo]);
 
   // ===== Carrega resumo por meio de pagamento da abertura selecionada =====
   const carregarResumo = useCallback(async (ab: IAberturaRow) => {

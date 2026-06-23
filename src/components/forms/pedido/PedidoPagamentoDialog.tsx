@@ -6,6 +6,7 @@ import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import GridActionToolbar, { gridActions } from "@/components/grid/GridActionToolbar";
 import { useAppContext } from "@/contexts/AppContext";
 import { CreditCard, ShoppingCart, Wallet, ArrowRightLeft, Calculator, X, Delete, Trash2, Check, Percent, Send, Lock } from "lucide-react";
+import { CurrencyInput } from "@/components/shared/CurrencyInput";
 
 const db = supabase as any;
 
@@ -45,13 +46,14 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
 
   // Database totals
   const [XDbTotals, setXDbTotals] = useState({ subtotal: 0, desconto: 0, total: 0 });
-  // Discount states (input as strings)
-  const [XVlDesconto, setXVlDesconto] = useState<string>("0,00");
-  const [XPcDesconto, setXPcDesconto] = useState<string>("0,00");
+
+  // Discount states (input as numbers)
+  const [XVlDesconto, setXVlDesconto] = useState<number>(0);
+  const [XPcDesconto, setXPcDesconto] = useState<number>(0);
 
   // Form fields
   const [XCondicaoId, setXCondicaoId] = useState<number>(0);
-  const [XVlPagar, setXVlPagar] = useState<string>("0,00");
+  const [XVlPagar, setXVlPagar] = useState<number>(0);
   const [XQtParcela, setXQtParcela] = useState<number>(1);
   const [XEditUid, setXEditUid] = useState<string | null>(null);
 
@@ -64,19 +66,22 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
   const adicionarBtnRef = useRef<HTMLButtonElement>(null);
   const finalizarRef = useRef<HTMLButtonElement>(null);
 
-  const vlDescNum = useMemo(() => parseNum(XVlDesconto), [XVlDesconto]);
+  const vlDescNum = XVlDesconto;
   const subtotalEfetivo = XDbTotals.subtotal > 0 ? XDbTotals.subtotal : subtotalPedido;
   const totalPedido = useMemo(() => Number((subtotalEfetivo - vlDescNum).toFixed(2)), [subtotalEfetivo, vlDescNum]);
   const totalPago = useMemo(() => Number(XLinhas.reduce((a, l) => a + Number(l.vl_pagamento || 0), 0).toFixed(2)), [XLinhas]);
   const valorRestante = Number(Math.max(0, totalPedido - totalPago).toFixed(2));
   
-  const vlPagarNum = useMemo(() => parseNum(XVlPagar), [XVlPagar]);
+  const vlPagarNum = XVlPagar;
   const vlParcela = XQtParcela > 0 ? +(vlPagarNum / XQtParcela).toFixed(2) : vlPagarNum;
 
   useEffect(() => {
     if (!open) return;
+    setXLinhas([]);
+    setXSelectedIdx(null);
     (async () => {
       try {
+        let dbMov = subtotalPedido;
         // Fetch current movement for totals
         const { data: mov } = await db.from("movimento")
           .select("vl_desconto, pc_desconto, vl_movimento, vl_produto")
@@ -85,35 +90,61 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
         if (mov) {
           const dbVlDesc = Number(mov.vl_desconto || 0);
           const dbPcDesc = Number(mov.pc_desconto || 0);
-          const dbMov = Number(mov.vl_movimento || 0);
+          dbMov = Number(mov.vl_movimento || 0);
           const dbSub = dbMov + dbVlDesc;
           
           setXDbTotals({ subtotal: dbSub, desconto: dbVlDesc, total: dbMov });
-          setXVlDesconto(fmtInput(dbVlDesc));
-          setXPcDesconto(fmtInput(dbPcDesc));
-          resetForm(dbMov);
+          setXVlDesconto(dbVlDesc);
+          setXPcDesconto(dbPcDesc);
         }
-
-        // Delete existing payments
-        await db.from("movimento_pagamento").update({ excluido: true }).eq("movimento_id", movimentoId);
 
         // Fetch Conditions
         const { data: condData } = await db.from("condicao_pagamento").select("condicao_id, descricao, qtd_parcelas, plano_conta_id, meio_pagamento_id").eq("excluido", false).order("descricao");
-        setXCondicoes(condData || []);
+        const conds = condData || [];
+        setXCondicoes(conds);
+
+        // Fetch existing payments
+        const { data: pagtoData } = await db.from("movimento_pagamento")
+          .select("*")
+          .eq("movimento_id", movimentoId)
+          .eq("excluido", false)
+          .order("movimento_pagamento_id");
+
+        if (pagtoData && pagtoData.length > 0) {
+          const linhasMapeadas = pagtoData.map((p: any) => {
+            const cond = conds.find((c: any) => c.condicao_id === p.condicao_id);
+            return {
+              uid: String(p.movimento_pagamento_id || crypto.randomUUID()),
+              condicao_id: p.condicao_id,
+              condicao_descricao: cond?.descricao || `Condição ${p.condicao_id}`,
+              n_parcelas: p.n_parcelas || 1,
+              vl_parcelas: Number(p.vl_parcelas || 0),
+              vl_pagamento: Number(p.vl_pagamento || 0),
+              tp_pagamento: p.tp_pagamento || "DI",
+              empresa_id: p.empresa_id,
+              movimento_id: p.movimento_id
+            };
+          });
+          setXLinhas(linhasMapeadas);
+          
+          const totalPagoExistente = linhasMapeadas.reduce((a, l) => a + l.vl_pagamento, 0);
+          const restante = Math.max(0, dbMov - totalPagoExistente);
+          resetForm(restante);
+        } else {
+          resetForm(dbMov);
+        }
       } catch (err: any) {
         toast.error("Erro ao carregar dados: " + err.message);
       }
     })();
-    setXLinhas([]);
-    setXSelectedIdx(null);
     // Removemos totalPedido das dependências para evitar re-fetch infinito ao digitar desconto
-  }, [open, movimentoId]);
+  }, [open, movimentoId, subtotalPedido]);
 
   // Sincroniza o valor a pagar inicial apenas quando o totalPedido (calculado) mudar significativamente
   // ou quando o formulário for resetado
   useEffect(() => {
     if (open && XLinhas.length === 0) {
-      setXVlPagar(fmtInput(totalPedido));
+      setXVlPagar(totalPedido);
     }
   }, [totalPedido, open, XLinhas.length]);
 
@@ -141,28 +172,26 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
   }, [open]);
 
   const resetForm = (vl: number) => {
-    setXCondicaoId(0); setXVlPagar(fmtInput(vl)); setXQtParcela(1); setXEditUid(null);
+    setXCondicaoId(0); setXVlPagar(vl); setXQtParcela(1); setXEditUid(null);
   };
 
-  const handleVlDesconto = (val: string) => {
+  const handleVlDesconto = (val: number) => {
     setXVlDesconto(val);
-    const v = parseNum(val);
     const sub = XDbTotals.subtotal || subtotalPedido;
-    const pc = sub > 0 ? +(v / sub * 100).toFixed(2) : 0;
-    setXPcDesconto(fmtInput(pc));
+    const pc = sub > 0 ? +(val / sub * 100).toFixed(2) : 0;
+    setXPcDesconto(pc);
   };
 
-  const handlePcDesconto = (val: string) => {
+  const handlePcDesconto = (val: number) => {
     setXPcDesconto(val);
-    const p = parseNum(val);
     const sub = XDbTotals.subtotal || subtotalPedido;
-    const v = +(sub * p / 100).toFixed(2);
-    setXVlDesconto(fmtInput(v));
+    const v = +(sub * val / 100).toFixed(2);
+    setXVlDesconto(v);
   };
 
   const confirmarLinha = () => {
     if (!XCondicaoId) { toast.error("Selecione a condição."); return; }
-    let vPagar = parseNum(XVlPagar);
+    const vPagar = XVlPagar;
     if (vPagar <= 0) { toast.error("Informe um valor maior que zero."); return; }
     
     const cond = XCondicoes.find(c => c.condicao_id === XCondicaoId);
@@ -203,7 +232,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
     
     setXSalvando(true);
     try {
-      await onConfirmar(XLinhas, vlDescNum, parseNum(XPcDesconto), enviarAoCaixa);
+      await onConfirmar(XLinhas, vlDescNum, XPcDesconto, enviarAoCaixa);
       onClose();
     } catch (err: any) {
       toast.error("Erro: " + err.message);
@@ -260,11 +289,10 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
                   </div>
                   {editableDesc && (
                     <div className="flex gap-1">
-                      <input 
-                        type="text" 
+                      <CurrencyInput 
                         value={XPcDesconto} 
-                        onChange={e => handlePcDesconto(e.target.value)}
-                        onBlur={() => setXPcDesconto(fmtInput(XPcDesconto))}
+                        onChange={handlePcDesconto}
+                        decimals={2}
                         className="w-12 text-[10px] text-right border border-rose-300 rounded px-1 bg-white"
                         placeholder="%"
                       />
@@ -274,12 +302,11 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
                 </div>
                 <div className="flex items-center justify-between">
                   {editableDesc ? (
-                    <input 
-                      type="text" 
+                    <CurrencyInput 
                       value={XVlDesconto} 
-                      onChange={e => handleVlDesconto(e.target.value)}
-                      onBlur={() => setXVlDesconto(fmtInput(XVlDesconto))}
-                      className="w-full font-bold text-lg bg-transparent border-none focus:outline-none"
+                      onChange={handleVlDesconto}
+                      decimals={2}
+                      className="w-full font-bold text-lg bg-transparent border-none focus:outline-none text-right"
                     />
                   ) : (
                     <span className="font-bold text-lg">{fmt(vlDescNum)}</span>
@@ -332,13 +359,11 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
                 </div>
                 <div className="col-span-3">
                   <label className="text-[10px] font-bold uppercase">Valor</label>
-                  <input 
+                  <CurrencyInput 
                     ref={vlPagarRef}
-                    type="text" 
                     value={XVlPagar} 
                     disabled={valorRestante <= 0 || XSalvando}
-                    onChange={e => setXVlPagar(e.target.value)} 
-                    onBlur={() => setXVlPagar(fmtInput(XVlPagar))} 
+                    onChange={val => setXVlPagar(val)} 
                     onKeyDown={e => {
                       if (e.key === "Enter") {
                         e.preventDefault();
@@ -369,15 +394,6 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
               
               <div className="flex gap-2 w-full justify-end">
                 <button 
-                  onClick={() => finalizar(false)} 
-                  disabled={XSalvando || valorRestante > 0.01} 
-                  className="text-xs px-4 py-2 rounded bg-muted/50 border border-border text-blue-600 font-bold h-10 disabled:opacity-50 hover:bg-accent flex items-center gap-2 transition-colors"
-                >
-                  <Check size={16} />
-                  {XSalvando ? "Gravando..." : "Finalizar"}
-                </button>
-
-                <button 
                   ref={finalizarRef} 
                   onClick={() => finalizar(true)} 
                   disabled={XSalvando || valorRestante > 0.01} 
@@ -403,7 +419,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
                 <button key={b} onClick={() => handleCalcBtn(b)} className="h-12 rounded bg-card border border-border font-bold hover:bg-accent transition-colors">{b}</button>
               ))}
               <button onClick={() => handleCalcBtn("DEL")} className="h-12 rounded bg-card border border-border flex items-center justify-center hover:bg-accent text-rose-500"><Delete size={18} /></button>
-              <button onClick={() => setXVlPagar(fmtInput(XCalcDisplay))} className="col-span-3 h-12 rounded bg-emerald-500 text-white font-bold hover:bg-emerald-600 transition-colors">Usar Valor</button>
+              <button onClick={() => setXVlPagar(parseNum(XCalcDisplay))} className="col-span-3 h-12 rounded bg-emerald-500 text-white font-bold hover:bg-emerald-600 transition-colors">Usar Valor</button>
             </div>
           </div>
         </div>

@@ -91,6 +91,13 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
     
     if (errMov) { toast.error("Erro ao atualizar desconto: " + errMov.message); return; }
 
+    // Marca os pagamentos anteriores como excluídos
+    const { error: errDel } = await db.from("movimento_pagamento")
+      .update({ excluido: true })
+      .eq("movimento_id", pedido.movimento_id);
+    
+    if (errDel) { toast.error("Erro ao limpar pagamentos anteriores: " + errDel.message); return; }
+
     // Insere os novos pagamentos
     const payload = linhas.map(l => ({
       movimento_id: pedido.movimento_id,

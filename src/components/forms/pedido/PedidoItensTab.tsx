@@ -9,6 +9,8 @@ import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 import type { IMovimento, IMovimentoItem } from "./types";
 import ProdutoSearchDialog, { IProdutoRow, buscarProdutoPorCodigo } from "./ProdutoSearchDialog";
 
+import { CurrencyInput } from "@/components/shared/CurrencyInput";
+
 const db = supabase as any;
 
 interface IDepositoLookup { deposito_id: number; nome: string; }
@@ -26,10 +28,9 @@ const fmt = (v: number, dec = 2) =>
 const NO_SPIN = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
 const fmtInput = (v: any, dec = 2) => {
-  if (v === 0 || v === "0") return Number(0).toLocaleString("pt-BR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
   if (v === "" || v === undefined || v === null) return "";
-  if (typeof v === "number") return v.toLocaleString("pt-BR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
-  return String(v);
+  const num = parseNum(v);
+  return num.toLocaleString("pt-BR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
 };
 
 const parseNum = (v: any) => {
@@ -227,14 +228,15 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
   };
 
   const onPcDesc = (pc: number) => setXEdit(prev => recalc({ ...prev!, pc_desconto: pc }));
-  const onVlDesc = (vl: any) => {
+  const onVlDesc = (vNum: number) => {
     setXEdit(prev => {
-      const vNum = parseNum(vl);
       const sub = (parseNum(prev?.qt_movimento) || 0) * (parseNum(prev?.vl_und_produto) || 0);
       const pc = sub > 0 ? +(vNum / sub * 100).toFixed(2) : 0;
       return recalc({ ...prev!, pc_desconto: pc });
     });
   };
+
+  // Currency inputs handled by CurrencyInput component
 
   const salvarItem = async () => {
     if (!pedido?.movimento_id) { toast.error("Salve o pedido antes."); return; }
@@ -253,12 +255,15 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
     }
 
     const {
-      vl_produto, vl_movimento, vl_desconto, pc_desconto,
+      vl_produto, vl_movimento,
       ...basePayload
     } = XEdit;
     
     const payload = {
       ...basePayload,
+      vl_desconto: XEdit.vl_desconto || 0,
+      pc_desconto: XEdit.pc_desconto || 0,
+      vl_desc_rs: XEdit.vl_desconto || 0,
       empresa_id: XEmpresaId,
       movimento_id: pedido.movimento_id,
       tp_movimento: pedido.tp_movimento || "PD",
@@ -406,26 +411,23 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
             </div>
             <div className="col-span-1">
               <label className="text-xs text-muted-foreground">Preço Unit.</label>
-              <input
+              <CurrencyInput
                 ref={precoUnitRef}
-                type="text"
                 disabled={ro}
-                value={fmtInput(XEdit.vl_und_produto)}
-                onChange={e => setF("vl_und_produto", e.target.value)}
+                value={Number(XEdit.vl_und_produto || 0)}
+                onChange={val => setF("vl_und_produto", val)}
                 onBlur={e => handleBlur("vl_und_produto", e.target.value, 2)}
-                onFocus={e => e.target.select()}
                 className={`w-full border border-border rounded px-2 py-1 text-sm text-right ${NO_SPIN}`}
               />
             </div>
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Qtd.</label>
-              <input
-                type="text"
+              <CurrencyInput
                 disabled={ro}
-                value={fmtInput(XEdit.qt_movimento, 4)}
-                onChange={e => setF("qt_movimento", e.target.value)}
+                value={Number(XEdit.qt_movimento || 0)}
+                decimals={4}
+                onChange={val => setF("qt_movimento", val)}
                 onBlur={e => handleBlur("qt_movimento", e.target.value, 4)}
-                onFocus={e => e.target.select()}
                 className={`w-full border border-border rounded px-2 py-1 text-sm text-right ${NO_SPIN}`}
               />
             </div>
@@ -440,25 +442,22 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
           <div className="grid grid-cols-12 gap-2 items-end">
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Desc.(%)</label>
-              <input
-                type="text"
+              <CurrencyInput
                 disabled={ro || pedido?.tp_desconto !== "I"}
-                value={fmtInput(XEdit.pc_desconto)}
-                onChange={e => onPcDesc(e.target.value as any)}
+                value={Number(XEdit.pc_desconto || 0)}
+                decimals={2}
+                onChange={val => onPcDesc(val)}
                 onBlur={e => handleBlur("pc_desconto", e.target.value, 2)}
-                onFocus={e => e.target.select()}
                 className={`w-full border border-border rounded px-2 py-1 text-sm text-right ${NO_SPIN}`}
               />
             </div>
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Desc.(R$)</label>
-              <input
-                type="text"
+              <CurrencyInput
                 disabled={ro || pedido?.tp_desconto !== "I"}
-                value={fmtInput(XEdit.vl_desconto)}
-                onChange={e => onVlDesc(e.target.value as any)}
+                value={Number(XEdit.vl_desconto || 0)}
+                onChange={val => onVlDesc(val)}
                 onBlur={e => handleBlur("vl_desconto", e.target.value, 2)}
-                onFocus={e => e.target.select()}
                 className={`w-full border border-border rounded px-2 py-1 text-sm text-right ${NO_SPIN}`}
               />
             </div>
@@ -497,49 +496,41 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
           <div className="grid grid-cols-12 gap-2 items-end">
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Vlr. Desp.</label>
-              <input
-                type="text"
+              <CurrencyInput
                 disabled={ro}
-                value={fmtInput(XEdit.vl_despesa)}
-                onChange={e => setF("vl_despesa", e.target.value)}
+                value={Number(XEdit.vl_despesa || 0)}
+                onChange={val => setF("vl_despesa", val)}
                 onBlur={e => handleBlur("vl_despesa", e.target.value, 2)}
-                onFocus={e => e.target.select()}
                 className={`w-full border border-border rounded px-2 py-1 text-sm text-right ${NO_SPIN}`}
               />
             </div>
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Vlr. Frete</label>
-              <input
-                type="text"
+              <CurrencyInput
                 disabled={ro}
-                value={fmtInput(XEdit.vl_frete)}
-                onChange={e => setF("vl_frete", e.target.value)}
+                value={Number(XEdit.vl_frete || 0)}
+                onChange={val => setF("vl_frete", val)}
                 onBlur={e => handleBlur("vl_frete", e.target.value, 2)}
-                onFocus={e => e.target.select()}
                 className={`w-full border border-border rounded px-2 py-1 text-sm text-right ${NO_SPIN}`}
               />
             </div>
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Vlr. Seg.</label>
-              <input
-                type="text"
+              <CurrencyInput
                 disabled={ro}
-                value={fmtInput(XEdit.vl_seguro)}
-                onChange={e => setF("vl_seguro", e.target.value)}
+                value={Number(XEdit.vl_seguro || 0)}
+                onChange={val => setF("vl_seguro", val)}
                 onBlur={e => handleBlur("vl_seguro", e.target.value, 2)}
-                onFocus={e => e.target.select()}
                 className={`w-full border border-border rounded px-2 py-1 text-sm text-right ${NO_SPIN}`}
               />
             </div>
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Vlr. Outros</label>
-              <input
-                type="text"
+              <CurrencyInput
                 disabled={ro}
-                value={fmtInput(XEdit.vl_outro)}
-                onChange={e => setF("vl_outro", e.target.value)}
+                value={Number(XEdit.vl_outro || 0)}
+                onChange={val => setF("vl_outro", val)}
                 onBlur={e => handleBlur("vl_outro", e.target.value, 2)}
-                onFocus={e => e.target.select()}
                 className={`w-full border border-border rounded px-2 py-1 text-sm text-right ${NO_SPIN}`}
               />
             </div>

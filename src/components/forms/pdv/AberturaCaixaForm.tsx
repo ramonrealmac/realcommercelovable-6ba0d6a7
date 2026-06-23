@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAppContext } from "@/contexts/AppContext";
 import { toast } from "sonner";
 import { Unlock, X } from "lucide-react";
+import { CurrencyInput } from "@/components/shared/CurrencyInput";
 
 const db = supabase as any;
 
@@ -44,12 +45,12 @@ const AberturaCaixaForm: React.FC<IProps> = ({
   onCancelar,
   embutido = false,
 }) => {
-  const { XEmpresaId } = useAppContext();
+  const { XEmpresaId, openTab, closeTab, XActiveTabId } = useAppContext();
   const [XCaixas, setXCaixas] = useState<ICaixaFunc[]>([]);
   const [XCaixaSel, setXCaixaSel] = useState<number>(funcionarioId || 0);
   const [XDtAb, setXDtAb] = useState<string>(dtAbertura || hoje());
   const [XSaldoAnt, setXSaldoAnt] = useState<number>(0);
-  const [XVlAbertura, setXVlAbertura] = useState<string>("0,00");
+  const [XVlAbertura, setXVlAbertura] = useState<number>(0);
   const [XLoading, setXLoading] = useState(false);
   const [XSalvando, setXSalvando] = useState(false);
   const [XLoadingCaixas, setXLoadingCaixas] = useState(true);
@@ -82,7 +83,7 @@ const AberturaCaixaForm: React.FC<IProps> = ({
   const carregarSaldoAnterior = useCallback(async () => {
     if (!XCaixaSel) {
       setXSaldoAnt(0);
-      setXVlAbertura("0,00");
+      setXVlAbertura(0);
       setXAvisoAberto("");
       return;
     }
@@ -120,7 +121,7 @@ const AberturaCaixaForm: React.FC<IProps> = ({
         .limit(1);
       const saldo = Number((ant && ant[0]?.vl_fechamento) || 0);
       setXSaldoAnt(saldo);
-      setXVlAbertura(fmt(saldo));
+      setXVlAbertura(saldo);
     } catch (err: any) {
       toast.error(err.message || "Erro ao buscar saldo anterior.");
     } finally {
@@ -132,6 +133,14 @@ const AberturaCaixaForm: React.FC<IProps> = ({
     carregarSaldoAnterior();
   }, [carregarSaldoAnterior]);
 
+  const handleCancelar = () => {
+    if (onCancelar) {
+      onCancelar();
+    } else if (XActiveTabId) {
+      closeTab(XActiveTabId);
+    }
+  };
+
   const confirmar = async () => {
     if (!XCaixaSel) {
       toast.error("Selecione um caixa.");
@@ -141,12 +150,52 @@ const AberturaCaixaForm: React.FC<IProps> = ({
       toast.error("Informe a data de abertura.");
       return;
     }
-    if (XAvisoAberto) {
-      toast.error(XAvisoAberto);
-      return;
-    }
+    
     setXSalvando(true);
     try {
+      // 1. Verificar se já existe caixa aberto para o funcionário e empresa
+      const { data: caixasAbertos, error: errCheck } = await db
+        .from("caixa_abertura")
+        .select("caixa_abertura_id, dt_abertura")
+        .eq("empresa_id", XEmpresaId)
+        .eq("funcionario_id", XCaixaSel)
+        .eq("status", "A")
+        .order("dt_abertura", { ascending: false });
+
+      if (errCheck) throw new Error(errCheck.message);
+
+      if (caixasAbertos && caixasAbertos.length > 0) {
+        const caixaAberto = caixasAbertos[0];
+        const dtAbertoStr = caixaAberto.dt_abertura;
+
+        if (dtAbertoStr === XDtAb) {
+          toast.error(`O caixa já foi aberto para esta data (${new Date(dtAbertoStr + "T00:00:00").toLocaleDateString("pt-BR")})!`);
+          setXSalvando(false);
+          return;
+        } else if (dtAbertoStr < XDtAb) {
+          const conf = window.confirm(
+            `Existe um caixa aberto com data anterior (${new Date(dtAbertoStr + "T00:00:00").toLocaleDateString("pt-BR")}). Deseja fechar este caixa agora?`
+          );
+          if (conf) {
+            openTab({
+              title: "Fechamento de Caixa",
+              component: "fechamento-caixa",
+              params: {
+                caixa_abertura_id: caixaAberto.caixa_abertura_id,
+                dt_abertura: dtAbertoStr
+              }
+            });
+            handleCancelar();
+          }
+          setXSalvando(false);
+          return;
+        } else {
+          toast.error(`Existe um caixa aberto em data futura (${new Date(dtAbertoStr + "T00:00:00").toLocaleDateString("pt-BR")}).`);
+          setXSalvando(false);
+          return;
+        }
+      }
+
       const { data: maxRow } = await db
         .from("caixa_abertura")
         .select("caixa_abertura_id")
@@ -158,7 +207,7 @@ const AberturaCaixaForm: React.FC<IProps> = ({
         empresa_id: XEmpresaId,
         funcionario_id: XCaixaSel,
         dt_abertura: XDtAb,
-        vl_abertura: parseNum(XVlAbertura),
+        vl_abertura: XVlAbertura,
         vl_fechamento: null,
         status: "A",
       };
@@ -169,7 +218,7 @@ const AberturaCaixaForm: React.FC<IProps> = ({
         caixa_abertura_id: novoId,
         funcionario_id: XCaixaSel,
         dt_abertura: XDtAb,
-        vl_abertura: parseNum(XVlAbertura),
+        vl_abertura: XVlAbertura,
       });
     } catch (err: any) {
       toast.error(err.message || "Erro ao abrir caixa.");
@@ -229,12 +278,10 @@ const AberturaCaixaForm: React.FC<IProps> = ({
           </div>
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Valor de Abertura</label>
-            <input
-              type="text"
+            <CurrencyInput
               value={XVlAbertura}
-              onChange={(e) => setXVlAbertura(e.target.value)}
-              onBlur={() => setXVlAbertura(fmt(parseNum(XVlAbertura)))}
-              onFocus={(e) => e.target.select()}
+              onChange={setXVlAbertura}
+              decimals={2}
               className="w-full border border-border rounded px-2 py-2 text-sm bg-card text-right focus:ring-2 focus:ring-ring outline-none"
             />
           </div>
@@ -247,17 +294,15 @@ const AberturaCaixaForm: React.FC<IProps> = ({
         )}
 
         <div className="flex justify-end gap-2 pt-2 border-t border-border">
-          {onCancelar && (
-            <button
-              onClick={onCancelar}
-              className="text-sm px-4 py-1.5 rounded border border-border hover:bg-accent flex items-center gap-2 transition-colors"
-            >
-              <X size={14} className="text-rose-500" /> Cancelar
-            </button>
-          )}
+          <button
+            onClick={handleCancelar}
+            className="text-sm px-4 py-1.5 rounded border border-border hover:bg-accent flex items-center gap-2 transition-colors"
+          >
+            <X size={14} className="text-rose-500" /> Cancelar
+          </button>
           <button
             onClick={confirmar}
-            disabled={XSalvando || XLoading || !!XAvisoAberto}
+            disabled={XSalvando || XLoading}
             className="text-sm px-4 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2 transition-colors"
           >
             <Unlock size={14} />

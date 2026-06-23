@@ -67,7 +67,7 @@ interface PedidoCadastroFormContentProps {
   isEditing: boolean;
   currentRecord: any | null;
   setInnerTab: (tab: string) => void;
-  
+
   vendedores: ILookup[];
   tpOperacoes: ILookup[];
   rotas: ILookup[];
@@ -77,7 +77,7 @@ interface PedidoCadastroFormContentProps {
   abrirPesquisaCliente: (onPick: (c: IClienteRow) => void) => void;
   clientePadraoId: number | null;
   ensureClienteInfo: (ids: number[]) => Promise<void>;
-  
+
   pedidoTotalCtx: { movimentoId: number | null; total: number; itens: IMovimentoItem[] };
   setXMovimentoParaBuscar: (id: number | null) => void;
   setXModoInsertSemId: (val: boolean) => void;
@@ -258,15 +258,14 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
         </div>
         <div className="col-span-1">
           <label className="text-xs text-muted-foreground">Bloqueado</label>
-          <input 
-            readOnly 
-            tabIndex={-1} 
-            value={record.st_bloqueado ?? "N"} 
-            className={`w-full border rounded px-2 py-1 text-sm text-center focus:outline-none ${
-              record.st_bloqueado === "S" 
-                ? "border-destructive bg-destructive/10 text-destructive font-bold" 
+          <input
+            readOnly
+            tabIndex={-1}
+            value={record.st_bloqueado ?? "N"}
+            className={`w-full border rounded px-2 py-1 text-sm text-center focus:outline-none ${record.st_bloqueado === "S"
+                ? "border-destructive bg-destructive/10 text-destructive font-bold"
                 : "border-border bg-secondary/50"
-            }`} 
+              }`}
           />
         </div>
       </div>
@@ -500,7 +499,7 @@ const PedidoForm: React.FC = () => {
 
         if (ibge || (localidade && uf)) {
           let query = db.from("cidade").select("cidade_id, descricao, estado_id, cd_ibge").eq("excluido", false);
-          
+
           if (ibge) {
             query = query.eq("cd_ibge", ibge);
           } else {
@@ -721,78 +720,78 @@ const PedidoForm: React.FC = () => {
     <>
       <StandardCrudForm<IMovimento>
         XToolbarExtras={({ currentRecord, refresh, setInnerTab, isEditing }) => {
-        XCurrentRecordRef.current = currentRecord;
-        XSetInnerTabRef.current = setInnerTab;
-        XIsEditingRef.current = isEditing;
-        if (!currentRecord?.movimento_id || isEditing) return null;
-        const stAtual = currentRecord.st_pedido;
-        return (
-          <>
-            {/* 1. Cancelar - Agora logo após o imprimir para evitar clique acidental no final */}
-            {(stAtual === "O" || stAtual === "V" || stAtual === "F") && (
-              <ToolbarBtn 
-                icon={<Ban size={18} />} 
-                label="Cancelar Pedido" 
-                onClick={() => mudarStatus(currentRecord.movimento_id, "C", "Confirma o cancelamento deste pedido? Esta ação não pode ser desfeita.")} 
-                color="destructive" 
-              />
-            )}
+          XCurrentRecordRef.current = currentRecord;
+          XSetInnerTabRef.current = setInnerTab;
+          XIsEditingRef.current = isEditing;
+          if (!currentRecord?.movimento_id || isEditing) return null;
+          const stAtual = currentRecord.st_pedido;
+          return (
+            <>
+              {/* 1. Cancelar - Agora logo após o imprimir para evitar clique acidental no final */}
+              {(stAtual === "O" || stAtual === "V" || stAtual === "F") && (
+                <ToolbarBtn
+                  icon={<Ban size={18} />}
+                  label="Cancelar Pedido"
+                  onClick={() => mudarStatus(currentRecord.movimento_id, "C", "Confirma o cancelamento deste pedido? Esta ação não pode ser desfeita.")}
+                  color="destructive"
+                />
+              )}
 
-            <ToolbarSeparator />
-            
-            {/* 2. Enviar / Retirar do Caixa */}
-            {(stAtual === "O" || stAtual === "V") && (
-              <ToolbarBtn 
-                icon={<Lock size={18} />} 
-                label="Enviar p Caixa" 
-                onClick={() => mudarStatus(currentRecord.movimento_id, "F", "Confirma o envio deste pedido para o Caixa? O estoque será reservado.")} 
-                color="success" 
-              />
-            )}
-            {stAtual === "F" && (
-              <ToolbarBtn 
-                icon={<Unlock size={18} />} 
-                label="Retirar do Caixa" 
-                onClick={() => mudarStatus(currentRecord.movimento_id, "O", "Confirma a retirada do pedido do Caixa? O estoque reservado será liberado e descontos serão zerados.")} 
-                color="destructive" 
-              />
-            )}
+              <ToolbarSeparator />
 
-            {/* 3. Separar / Reserva */}
-            {stAtual === "O" && (
-              <ToolbarBtn 
-                icon={<Package size={18} />} 
-                label="Separar (Reserva)" 
-                onClick={() => mudarStatus(currentRecord.movimento_id, "V", "Confirma a reserva deste pedido? O estoque será reservado e o pedido não aparecerá no Caixa.")} 
-                color="info" 
-              />
-            )}
-            {stAtual === "V" && (
-              <ToolbarBtn 
-                icon={<Package size={18} />} 
-                label="Remover Reserva" 
-                onClick={() => mudarStatus(currentRecord.movimento_id, "O", "Confirma a retirada da reserva? O estoque reservado será liberado.")} 
-                color="warning" 
-              />
-            )}
+              {/* 2. Enviar / Retirar do Caixa */}
+              {(stAtual === "O" || stAtual === "V") && (
+                <ToolbarBtn
+                  icon={<Lock size={18} />}
+                  label="Enviar p Caixa"
+                  onClick={() => mudarStatus(currentRecord.movimento_id, "F", "Confirma o envio deste pedido para o Caixa? O estoque será reservado.")}
+                  color="success"
+                />
+              )}
+              {stAtual === "F" && (
+                <ToolbarBtn
+                  icon={<Unlock size={18} />}
+                  label="Retirar do Caixa"
+                  onClick={() => mudarStatus(currentRecord.movimento_id, "O", "Confirma a retirada do pedido do Caixa? O estoque reservado será liberado e descontos serão zerados.")}
+                  color="destructive"
+                />
+              )}
 
-            {/* 4. Pagamento */}
-            {stAtual === "O" && (
-              <ToolbarBtn 
-                icon={<CircleDollarSign size={18} />} 
-                label="F6 - Financeiro / Pagamento" 
-                onClick={() => { setInnerTab("pagamento"); setXOpenPagtoDialog(true); }} 
-                color="success" 
-              />
-            )}
-          </>
-        );
-      }}
-      XHiddenTabs={(record) => {
-        const st = record?.st_entrega;
-        return (st === "S" || st === "P") ? [] : ["entrega"];
-      }}
-      config={{
+              {/* 3. Separar / Reserva */}
+              {stAtual === "O" && (
+                <ToolbarBtn
+                  icon={<Package size={18} />}
+                  label="Separar (Reserva)"
+                  onClick={() => mudarStatus(currentRecord.movimento_id, "V", "Confirma a reserva deste pedido? O estoque será reservado e o pedido não aparecerá no Caixa.")}
+                  color="info"
+                />
+              )}
+              {stAtual === "V" && (
+                <ToolbarBtn
+                  icon={<Package size={18} />}
+                  label="Remover Reserva"
+                  onClick={() => mudarStatus(currentRecord.movimento_id, "O", "Confirma a retirada da reserva? O estoque reservado será liberado.")}
+                  color="warning"
+                />
+              )}
+
+              {/* 4. Pagamento */}
+              {stAtual === "O" && (
+                <ToolbarBtn
+                  icon={<CircleDollarSign size={18} />}
+                  label="F6 - Financeiro / Pagamento"
+                  onClick={() => { setInnerTab("pagamento"); setXOpenPagtoDialog(true); }}
+                  color="success"
+                />
+              )}
+            </>
+          );
+        }}
+        XHiddenTabs={(record) => {
+          const st = record?.st_entrega;
+          return (st === "S" || st === "P") ? [] : ["entrega"];
+        }}
+        config={{
           XTableName: "movimento",
           XPrimaryKey: "movimento_id",
           XTitle: "Pedidos",
@@ -800,6 +799,7 @@ const PedidoForm: React.FC = () => {
           XEmpresaId,
           XSelectCols: "*",
           XOrderBy: "movimento_id",
+          XKeepEditAfterInsert: true,
           XApplyFilter: (q) => q.in("tp_movimento", ["PD", "SV", "OR"]),
           XOnAfterLoad: (rows: any[]) => {
             const ids = Array.from(new Set(rows.map(r => r.cadastro_id).filter(Boolean))) as number[];
@@ -810,7 +810,7 @@ const PedidoForm: React.FC = () => {
             if (!rec.funcionario_id) throw new Error("Selecione o Vendedor.");
             if (!rec.dt_emissao) throw new Error("Informe a Data de Emissão.");
             if (!rec.dt_entrega) throw new Error("Informe a Data de Entrega.");
-            if (rec.st_entrega === "S" || rec.st_entrega === "P") {
+            if (mode === "edit" && (rec.st_entrega === "S" || rec.st_entrega === "P")) {
               if (!rec.cep_entrega?.trim()) throw new Error("Informe o CEP na aba Dados de Entrega.");
               if (!rec.cidade_id) throw new Error("Informe a Cidade na aba Dados de Entrega.");
               if (!rec.logradouro_entrega?.trim()) throw new Error("Informe o Logradouro na aba Dados de Entrega.");
@@ -892,6 +892,9 @@ const PedidoForm: React.FC = () => {
             key: "entrega", label: "Dados de Entrega",
             render: ({ record, setField, isEditing, setInnerTab }) => {
               const ro = !isEditing || record.st_pedido !== "O";
+              if (!record?.movimento_id) {
+                return <div className="text-sm text-muted-foreground p-4">Salve o pedido para inserir dados de entrega.</div>;
+              }
               return (
                 <div className="space-y-3" onKeyDown={handleKeyDown}>
                   <div className="grid grid-cols-12 gap-3">
@@ -954,10 +957,10 @@ const PedidoForm: React.FC = () => {
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">E-mail</label>
-                    <input 
-                      disabled={ro} 
-                      value={record.email_entrega ?? ""} 
-                      onChange={e => setField("email_entrega" as any, e.target.value as any)} 
+                    <input
+                      disabled={ro}
+                      value={record.email_entrega ?? ""}
+                      onChange={e => setField("email_entrega" as any, e.target.value as any)}
                       onKeyDown={e => {
                         if (e.key === "Enter") {
                           e.preventDefault();
@@ -972,7 +975,7 @@ const PedidoForm: React.FC = () => {
                           }, 150);
                         }
                       }}
-                      className="w-full border border-border rounded px-2 py-1 text-sm" 
+                      className="w-full border border-border rounded px-2 py-1 text-sm"
                     />
                   </div>
                 </div>
@@ -983,16 +986,19 @@ const PedidoForm: React.FC = () => {
             key: "adicionais", label: "Dados Adicionais",
             render: ({ record, setField, isEditing }) => {
               const ro = !isEditing || record.st_pedido !== "O";
+              if (!record?.movimento_id) {
+                return <div className="text-sm text-muted-foreground p-4">Salve o pedido para inserir dados adicionais.</div>;
+              }
               return (
                 <div className="space-y-3">
                   <div>
                     <label className="text-xs text-muted-foreground">Observação do Pedido</label>
-                    <textarea 
+                    <textarea
                       id="obs_pedido_textarea"
-                      disabled={ro} 
-                      value={record.obs_pedido ?? ""} 
-                      onChange={e => setField("obs_pedido" as any, e.target.value as any)} 
-                      className="w-full border border-border rounded px-2 py-2 text-sm min-h-[100px]" 
+                      disabled={ro}
+                      value={record.obs_pedido ?? ""}
+                      onChange={e => setField("obs_pedido" as any, e.target.value as any)}
+                      className="w-full border border-border rounded px-2 py-2 text-sm min-h-[100px]"
                     />
                   </div>
                   <div>

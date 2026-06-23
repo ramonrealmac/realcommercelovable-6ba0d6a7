@@ -29,6 +29,7 @@ export interface ICrudConfig<T extends Record<string, any>> {
   XCanEdit?: (rec: T) => boolean;     // Função para validar se o registro atual pode ser editado
   XUsePagination?: boolean;           // Ativa carregamento paginado via range
   XPageSize?: number;                 // Tamanho da página (default 50)
+  XKeepEditAfterInsert?: boolean;
 }
 
 export function useCrudController<T extends Record<string, any>>(config: ICrudConfig<T>) {
@@ -165,7 +166,12 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
         toast.error(e?.message || "Pós-processamento falhou.");
       }
     }
-    setXFormMode("view");
+    if (config.XKeepEditAfterInsert && XFormMode === "insert") {
+      setXEditRecord({ ...savedRec as T });
+      setXFormMode("edit");
+    } else {
+      setXFormMode("view");
+    }
     // Invalida o cache para que outras abas que usem a mesma tabela se atualizem sozinhas
     await queryClient.invalidateQueries({ queryKey: [config.XTableName] });
     await loadData();
