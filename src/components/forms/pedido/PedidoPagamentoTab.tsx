@@ -38,7 +38,7 @@ const parseNum = (v: any) => {
 };
 
 const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido: totalPedidoProp, refreshToken, onMudarStatus, onRetornar, openDialog, setOpenDialog }) => {
-  const { XEmpresaId } = useAppContext();
+  const { XEmpresaId, XEmpresaMatrizId } = useAppContext();
   const [XPagtos, setXPagtos] = useState<IMovimentoPagamento[]>([]);
   const [XCondicoes, setXCondicoes] = useState<ICondicao[]>([]);
   const [XEdit, setXEdit] = useState<Partial<IMovimentoPagamento> | null>(null);
@@ -57,7 +57,7 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
     setXPagtos(data || []);
   }, [pedido?.movimento_id]);
 
-  useEffect(() => { load(); }, [load, refreshToken]);
+  useEffect(() => { load(); }, [load, refreshToken, pedido?.st_pedido]);
 
   useEffect(() => {
     if (!pedido?.movimento_id) {
@@ -70,11 +70,40 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
 
   useEffect(() => {
     (async () => {
-      const { data } = await db.from("condicao_pagamento")
-        .select("condicao_id, descricao, qtd_parcelas").eq("excluido", false).order("descricao");
-      setXCondicoes(data || []);
+      let query = db.from("condicao_pagamento")
+        .select("condicao_id, descricao, qtd_parcelas, empresa_id")
+        .eq("excluido", false);
+
+      if (XEmpresaId === XEmpresaMatrizId) {
+        query = query.eq("empresa_id", XEmpresaId);
+      } else {
+        query = query.or(`empresa_id.eq.${XEmpresaId},empresa_id.eq.${XEmpresaMatrizId}`);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        toast.error("Erro ao carregar condições de pagamento: " + error.message);
+        return;
+      }
+
+      // Deduplica priorizando a empresa logada
+      const rawConds = data || [];
+      const condsMap = new Map<string, typeof rawConds[0]>();
+
+      rawConds.forEach(c => {
+        const key = c.descricao.trim().toLowerCase();
+        const existing = condsMap.get(key);
+        if (!existing || c.empresa_id === XEmpresaId) {
+          condsMap.set(key, c);
+        }
+      });
+
+      const finalConds = Array.from(condsMap.values());
+      finalConds.sort((a, b) => a.descricao.localeCompare(b.descricao));
+
+      setXCondicoes(finalConds);
     })();
-  }, []);
+  }, [XEmpresaId, XEmpresaMatrizId]);
 
   const vlDesconto = Number(pedido?.vl_desconto || 0);
   const totalPedido = Number(totalPedidoProp ?? pedido?.vl_movimento ?? 0);

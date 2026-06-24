@@ -64,8 +64,6 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
   const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
   const [XSalvando, setXSalvando] = useState(false);
 
-  // Fila de pré-preenchimento
-  const [XFila, setXFila] = useState<IMovimentoPagamento[]>([]);
 
   // Form fields
   const [XCondicaoId, setXCondicaoId] = useState<number>(0);
@@ -159,7 +157,8 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
           bandRes = await db.from("bandeira").select("bandeira_id, descricao").order("descricao");
         }
         console.log("PagamentoDialog: Bandeiras carregadas:", bandRes.data?.length || 0);
-        if (bandRes.data) setXBandeiras(bandRes.data);
+        const bandList = bandRes.data || [];
+        if (bandRes.data) setXBandeiras(bandList);
 
         // Fetch Operadoras - Sem filtro de exclusão para teste
         let operRes = await db.from("operadora").select("operadora_id, razao").eq("empresa_id", XEmpresaId).order("razao");
@@ -168,7 +167,37 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
           operRes = await db.from("operadora").select("operadora_id, razao").order("razao");
         }
         console.log("PagamentoDialog: Operadoras carregadas:", operRes.data?.length || 0);
-        if (operRes.data) setXOperadoras(operRes.data);
+        const operList = operRes.data || [];
+        if (operRes.data) setXOperadoras(operList);
+
+        // Pre-populate XLinhas if pre-loaded payments exist
+        if (pagtosPreCarregados && pagtosPreCarregados.length > 0) {
+          const preenchidos = pagtosPreCarregados.map(p => {
+            const cond = condList.find(c => c.condicao_id === p.condicao_id);
+            const band = bandList.find(b => b.bandeira_id === p.bandeira_id);
+            const oper = operList.find(o => o.operadora_id === p.operadora_id);
+            const vRecebido = Number(p.vl_pagamento || 0);
+            const qtParc = Number(p.n_parcelas || 1);
+            const vlParc = qtParc > 0 ? +(vRecebido / qtParc).toFixed(2) : vRecebido;
+
+            return {
+              uid: crypto.randomUUID(),
+              condicao_id: Number(p.condicao_id),
+              condicao_descricao: cond?.descricao || `Condição ${p.condicao_id}`,
+              bandeira_id: p.bandeira_id ? Number(p.bandeira_id) : null,
+              bandeira_descricao: band?.descricao || "",
+              operadora_id: p.operadora_id ? Number(p.operadora_id) : null,
+              operadora_descricao: oper?.razao || "",
+              numero_autoriza: p.numero_autorizacao || "",
+              qt_parcela: qtParc,
+              vl_parcela: vlParc,
+              vl_recebido: vRecebido,
+              plano_conta_id: cond?.plano_conta_id || null,
+              meio_pagamento_id: cond?.meio_pagamento_id ?? null,
+            };
+          });
+          setXLinhas(preenchidos);
+        }
 
       } catch (err: any) {
         console.error("PagamentoDialog: Erro ao carregar dados:", err);
@@ -179,48 +208,12 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
     setXLinhas([]);
     setXSelectedIdx(null);
     resetForm(totalPedido);
-    setXFila([...(pagtosPreCarregados || [])]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, XEmpresaId]);
+  }, [open, XEmpresaId, pagtosPreCarregados]);
 
-  // Pré-preenche o primeiro item da fila quando carrega condições
+  // Atualiza vl a pagar quando recalcula (sem edit)
   useEffect(() => {
-    if (!open) return;
-    if (XCondicoes.length === 0) return;
-    if (XEditUid) return;
-    if (totalPago + 0.0001 >= totalPedido) return;
-    if (XFila.length === 0) return;
-    const proximo = XFila[0];
-    aplicarPagtoFila(proximo);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [XCondicoes, XFila, open]);
-
-  // Pré-preenche o primeiro item da fila quando carrega condições
-  useEffect(() => {
-    if (!open) return;
-    if (XCondicoes.length === 0) return;
-    if (XEditUid) return;
-    if (totalPago + 0.0001 >= totalPedido) return;
-    if (XFila.length === 0) return;
-    const proximo = XFila[0];
-    aplicarPagtoFila(proximo);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [XCondicoes, XFila, open]);
-
-  const aplicarPagtoFila = (p: IMovimentoPagamento) => {
-    if (p.condicao_id) setXCondicaoId(Number(p.condicao_id));
-    if (p.bandeira_id) setXBandeiraId(Number(p.bandeira_id));
-    if (p.operadora_id) setXOperadoraId(Number(p.operadora_id));
-    if (p.numero_autorizacao) setXNrAutoriz(p.numero_autorizacao);
-    if (p.n_parcelas) setXQtParcela(Number(p.n_parcelas));
-    const restante = Math.max(0, totalPedido - totalPago);
-    const v = Number(p.vl_pagamento || 0);
-    setXVlPagar(fmtInput(v > 0 ? Math.min(v, restante) : restante));
-  };
-
-  // Atualiza vl a pagar quando recalcula (sem fila, sem edit)
-  useEffect(() => {
-    if (!XEditUid && XFila.length === 0) setXVlPagar(fmtInput(valorAPagar));
+    if (!XEditUid) setXVlPagar(fmtInput(valorAPagar));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valorAPagar, XEditUid]);
 
@@ -241,7 +234,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
 
   const confirmarLinha = () => {
     if (!XCondicaoId) { toast.error("Selecione a condição."); return; }
-    let vPagar = parseNum(XVlPagar);
+    const vPagar = parseNum(XVlPagar);
     if (vPagar <= 0) { toast.error("Informe um valor maior que zero."); return; }
     if (XQtParcela <= 0) { toast.error("Informe quantidade de parcelas."); return; }
     
@@ -283,9 +276,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
     setXLinhas(prev => XEditUid ? prev.map(l => l.uid === XEditUid ? linha : l) : [...prev, linha]);
     setXSelectedIdx(null);
 
-    // Avança a fila
-    const novaFila = XFila.slice(1);
-    setXFila(novaFila);
+
 
     // Calcula novo restante para próximo
     const novoTotalPago = totalPago - (XEditUid ? (XLinhas.find(l => l.uid === XEditUid)?.vl_recebido || 0) : 0) + vPagar;
@@ -357,7 +348,15 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
     { key: "vl_parcela", label: "Vlr Parcela", width: "100px", align: "right", render: r => fmt(r.vl_parcela) },
     { key: "vl_recebido", label: "Valor", width: "100px", align: "right", render: r => fmt(r.vl_recebido) },
     { key: "acoes", label: "", width: "40px", align: "center", render: r => (
-      <button onClick={() => excluirLinha(r)} className="text-rose-600 hover:text-rose-700 transition-colors" title="Remover Pagamento">
+      <button 
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          excluirLinha(r);
+        }} 
+        className="text-rose-600 hover:text-rose-700 transition-colors" 
+        title="Remover Pagamento"
+      >
         <Trash2 size={16} />
       </button>
     )},

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppContext } from "@/contexts/AppContext";
 import { toast } from "sonner";
-import { Unlock, X } from "lucide-react";
+import { Unlock, X, Lock } from "lucide-react";
 import { CurrencyInput } from "@/components/shared/CurrencyInput";
 
 const db = supabase as any;
@@ -54,7 +54,7 @@ const AberturaCaixaForm: React.FC<IProps> = ({
   const [XLoading, setXLoading] = useState(false);
   const [XSalvando, setXSalvando] = useState(false);
   const [XLoadingCaixas, setXLoadingCaixas] = useState(true);
-  const [XAvisoAberto, setXAvisoAberto] = useState<string>("");
+  const [XCaixaAbertoInfo, setXCaixaAbertoInfo] = useState<{ caixa_abertura_id: number; dt_abertura: string } | null>(null);
 
   // Carrega lista de caixas (apenas quando não veio fixo)
   const carregarCaixas = useCallback(async () => {
@@ -84,7 +84,7 @@ const AberturaCaixaForm: React.FC<IProps> = ({
     if (!XCaixaSel) {
       setXSaldoAnt(0);
       setXVlAbertura(0);
-      setXAvisoAberto("");
+      setXCaixaAbertoInfo(null);
       return;
     }
     setXLoading(true);
@@ -99,13 +99,12 @@ const AberturaCaixaForm: React.FC<IProps> = ({
         .order("caixa_abertura_id", { ascending: false })
         .limit(1);
       if (aberto && aberto[0]) {
-        setXAvisoAberto(
-          `Já existe um caixa aberto para este funcionário (data ${new Date(
-            aberto[0].dt_abertura + "T00:00:00"
-          ).toLocaleDateString("pt-BR")}). Feche-o antes de abrir um novo.`
-        );
+        setXCaixaAbertoInfo({
+          caixa_abertura_id: aberto[0].caixa_abertura_id,
+          dt_abertura: aberto[0].dt_abertura
+        });
       } else {
-        setXAvisoAberto("");
+        setXCaixaAbertoInfo(null);
       }
 
       // Pega último fechamento (status='F') anterior à data informada
@@ -139,6 +138,19 @@ const AberturaCaixaForm: React.FC<IProps> = ({
     } else if (XActiveTabId) {
       closeTab(XActiveTabId);
     }
+  };
+
+  const handleFecharCaixaAberto = () => {
+    if (!XCaixaAbertoInfo) return;
+    openTab({
+      title: "Fechamento de Caixa",
+      component: "fechamento-caixa",
+      params: {
+        caixa_abertura_id: XCaixaAbertoInfo.caixa_abertura_id,
+        dt_abertura: XCaixaAbertoInfo.dt_abertura
+      }
+    });
+    handleCancelar();
   };
 
   const confirmar = async () => {
@@ -287,13 +299,23 @@ const AberturaCaixaForm: React.FC<IProps> = ({
           </div>
         </div>
 
-        {XAvisoAberto && (
+        {XCaixaAbertoInfo && (
           <div className="text-xs text-destructive border border-destructive/40 bg-destructive/5 rounded p-2">
-            {XAvisoAberto}
+            Já existe um caixa aberto para este funcionário (data {new Date(
+              XCaixaAbertoInfo.dt_abertura + "T00:00:00"
+            ).toLocaleDateString("pt-BR")}). Feche-o antes de abrir um novo.
           </div>
         )}
 
         <div className="flex justify-end gap-2 pt-2 border-t border-border">
+          {XCaixaAbertoInfo && (
+            <button
+              onClick={handleFecharCaixaAberto}
+              className="text-sm px-4 py-1.5 rounded bg-amber-600 text-white hover:bg-amber-700 flex items-center gap-2 transition-colors mr-auto"
+            >
+              <Lock size={14} /> Fechar Caixa
+            </button>
+          )}
           <button
             onClick={handleCancelar}
             className="text-sm px-4 py-1.5 rounded border border-border hover:bg-accent flex items-center gap-2 transition-colors"
@@ -302,7 +324,7 @@ const AberturaCaixaForm: React.FC<IProps> = ({
           </button>
           <button
             onClick={confirmar}
-            disabled={XSalvando || XLoading}
+            disabled={XSalvando || XLoading || XCaixaAbertoInfo !== null}
             className="text-sm px-4 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2 transition-colors"
           >
             <Unlock size={14} />

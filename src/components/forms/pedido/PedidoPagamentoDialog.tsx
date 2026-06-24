@@ -38,7 +38,7 @@ interface IProps {
 }
 
 const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPedido, tpDesconto, onClose, onConfirmar }) => {
-  const { XEmpresaId } = useAppContext();
+  const { XEmpresaId, XEmpresaMatrizId } = useAppContext();
   const [XCondicoes, setXCondicoes] = useState<ICondicao[]>([]);
   const [XLinhas, setXLinhas] = useState<any[]>([]);
   const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
@@ -98,9 +98,37 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
           setXPcDesconto(dbPcDesc);
         }
 
-        // Fetch Conditions
-        const { data: condData } = await db.from("condicao_pagamento").select("condicao_id, descricao, qtd_parcelas, plano_conta_id, meio_pagamento_id").eq("excluido", false).order("descricao");
-        const conds = condData || [];
+        // Fetch Conditions for logged in company and headquarters
+        let condQuery = db.from("condicao_pagamento")
+          .select("condicao_id, descricao, qtd_parcelas, plano_conta_id, meio_pagamento_id, empresa_id")
+          .eq("excluido", false);
+
+        if (XEmpresaId === XEmpresaMatrizId) {
+          condQuery = condQuery.eq("empresa_id", XEmpresaId);
+        } else {
+          condQuery = condQuery.or(`empresa_id.eq.${XEmpresaId},empresa_id.eq.${XEmpresaMatrizId}`);
+        }
+
+        const { data: condData, error: condErr } = await condQuery;
+        if (condErr) {
+          toast.error("Erro ao carregar condições de pagamento: " + condErr.message);
+        }
+
+        // Deduplica priorizando a empresa logada
+        const rawConds = condData || [];
+        const condsMap = new Map<string, typeof rawConds[0]>();
+
+        rawConds.forEach(c => {
+          const key = c.descricao.trim().toLowerCase();
+          const existing = condsMap.get(key);
+          if (!existing || c.empresa_id === XEmpresaId) {
+            condsMap.set(key, c);
+          }
+        });
+
+        const conds = Array.from(condsMap.values());
+        conds.sort((a, b) => a.descricao.localeCompare(b.descricao));
+
         setXCondicoes(conds);
 
         // Fetch existing payments
@@ -138,7 +166,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
       }
     })();
     // Removemos totalPedido das dependências para evitar re-fetch infinito ao digitar desconto
-  }, [open, movimentoId, subtotalPedido]);
+  }, [open, movimentoId, subtotalPedido, XEmpresaId, XEmpresaMatrizId]);
 
   // Sincroniza o valor a pagar inicial apenas quando o totalPedido (calculado) mudar significativamente
   // ou quando o formulário for resetado
@@ -246,8 +274,17 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
     { key: "n_parcelas", label: "Parc.", width: "60px", align: "right" },
     { key: "vl_parcelas", label: "Vlr Parcela", width: "100px", align: "right", render: r => fmt(r.vl_parcelas) },
     { key: "vl_pagamento", label: "Valor", width: "100px", align: "right", render: r => fmt(r.vl_pagamento) },
-    { key: "acoes", label: "", width: "40px", align: "center", render: (r, idx) => (
-      <button onClick={() => setXLinhas(prev => prev.filter((_, i) => i !== idx))} className="text-rose-600">
+    { key: "acoes", label: "", width: "40px", align: "center", render: (r) => (
+      <button 
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setXLinhas(prev => prev.filter(l => l.uid !== r.uid));
+        }} 
+        className="text-rose-600 hover:text-rose-800 transition-colors p-1"
+        title="Excluir"
+      >
         <Trash2 size={16} />
       </button>
     )},

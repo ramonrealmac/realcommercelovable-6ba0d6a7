@@ -78,20 +78,6 @@ const FechamentoCaixaForm: React.FC<IFechamentoProps> = ({ initialAberturaId, in
     }
   }, [XEmpresaId, XDtIni, XDtFim]);
 
-  useEffect(() => {
-    carregar();
-  }, [carregar]);
-
-  useEffect(() => {
-    if (initialAberturaId && XAberturas.length > 0 && !XSel) {
-      const found = XAberturas.find(r => r.caixa_abertura_id === initialAberturaId);
-      if (found) {
-        setXSel(found);
-        carregarResumo(found);
-      }
-    }
-  }, [initialAberturaId, XAberturas, XSel, carregarResumo]);
-
   // ===== Carrega resumo por meio de pagamento da abertura selecionada =====
   const carregarResumo = useCallback(async (ab: IAberturaRow) => {
     setXResumo([]);
@@ -154,6 +140,20 @@ const FechamentoCaixaForm: React.FC<IFechamentoProps> = ({ initialAberturaId, in
       toast.error(err.message || "Erro ao carregar resumo.");
     }
   }, []);
+
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
+
+  useEffect(() => {
+    if (initialAberturaId && XAberturas.length > 0 && !XSel) {
+      const found = XAberturas.find(r => r.caixa_abertura_id === initialAberturaId);
+      if (found) {
+        setXSel(found);
+        carregarResumo(found);
+      }
+    }
+  }, [initialAberturaId, XAberturas, XSel, carregarResumo]);
 
   const selecionar = (ab: IAberturaRow) => {
     setXSel(ab);
