@@ -574,7 +574,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
                 <DataGrid
                   columns={cols}
                   data={XLinhas}
-                  maxHeight="420px"
+                  maxHeight="250px"
                   exportTitle="Pagamentos"
                   showRecordCount={false}
                   showExport={false}
@@ -584,7 +584,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
                   selectedIdx={XSelectedIdx}
                 />
               </div>
-              <div className="flex justify-start gap-2 pt-4">
+              <div className="flex justify-start gap-2 pt-4 pb-4 md:pb-2">
                 <button onClick={onClose} disabled={XSalvando}
                   className="text-xs px-4 py-2 rounded border border-border hover:bg-accent flex items-center gap-1">
                   <X size={14} /> Sair

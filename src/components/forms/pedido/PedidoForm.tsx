@@ -33,7 +33,7 @@ const buildGridCols = (
     },
     { key: "_vendedor", label: "Vendedor", width: "1fr", render: r => vendedores.find(v => v.id === r.funcionario_id)?.label || "" },
 
-    { key: "st_pedido", label: "Status", width: "110px", render: r => ST_PEDIDO_LABELS[r.st_pedido] || r.st_pedido },
+    { key: "st_pedido", label: "Status", width: "180px", render: r => ST_PEDIDO_LABELS[r.st_pedido] || r.st_pedido },
     { key: "vl_movimento", label: "Total", width: "120px", align: "right", render: r => Number(r.vl_movimento || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) },
     { key: "faturado", label: "Faturado", width: "90px" },
   ];

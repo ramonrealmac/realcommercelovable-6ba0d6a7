@@ -12,6 +12,7 @@ import OpcoesPagamentoDialog, { IImpressaoDados } from "./OpcoesPagamentoDialog"
 import DescontoDialog from "./DescontoDialog";
 import FuncoesDialog from "./FuncoesDialog";
 import CancelamentoDialog from "./CancelamentoDialog";
+import FaturarPedidoDialog from "./FaturarPedidoDialog";
 import EstoqueBloqueioDialog, { IEstoqueBloqueioItem } from "./EstoqueBloqueioDialog";
 import FechamentoCaixaForm from "./FechamentoCaixaForm";
 import AberturaCaixaForm from "./AberturaCaixaForm";
@@ -111,6 +112,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   const [XRefreshSeg, setXRefreshSeg] = useState<number>(caixa.tempo_refresh_pdv || 30);
   const [XOpenConfig, setXOpenConfig] = useState(false);
   const [XOpenFuncoes, setXOpenFuncoes] = useState(false);
+  const [XOpenEmissaoPedidos, setXOpenEmissaoPedidos] = useState(false);
   const [XOpenCanc, setXOpenCanc] = useState(false);
   const [XOpenFech, setXOpenFech] = useState(false);
   const [XOpenAbert, setXOpenAbert] = useState(false);
@@ -1119,6 +1121,14 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         onAbertura={() => setXOpenAbert(true)}
         onSuprimento={() => setXOpenSupr(true)}
         onSangria={() => setXOpenSang(true)}
+        onEmissaoPedidos={() => setXOpenEmissaoPedidos(true)}
+      />
+
+      <FaturarPedidoDialog
+        open={XOpenEmissaoPedidos}
+        funcionarioId={caixa.funcionario_id}
+        empresaId={XEmpresaId}
+        onClose={() => setXOpenEmissaoPedidos(false)}
       />
 
       <Dialog open={XOpenFech} onOpenChange={(o) => !o && setXOpenFech(false)}>

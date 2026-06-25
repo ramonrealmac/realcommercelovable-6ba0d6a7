@@ -43,6 +43,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
   const [XLinhas, setXLinhas] = useState<any[]>([]);
   const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
   const [XSalvando, setXSalvando] = useState(false);
+  const [XDeletadosDb, setXDeletadosDb] = useState<number[]>([]);
 
   // Database totals
   const [XDbTotals, setXDbTotals] = useState({ subtotal: 0, desconto: 0, total: 0 });
@@ -79,6 +80,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
     if (!open) return;
     setXLinhas([]);
     setXSelectedIdx(null);
+    setXDeletadosDb([]);
     (async () => {
       try {
         let dbMov = subtotalPedido;
@@ -143,6 +145,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
             const cond = conds.find((c: any) => c.condicao_id === p.condicao_id);
             return {
               uid: String(p.movimento_pagamento_id || crypto.randomUUID()),
+              movimento_pagamento_id: p.movimento_pagamento_id,
               condicao_id: p.condicao_id,
               condicao_descricao: cond?.descricao || `Condição ${p.condicao_id}`,
               n_parcelas: p.n_parcelas || 1,
@@ -269,6 +272,22 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
     }
   };
 
+  const handleClose = async () => {
+    if (XDeletadosDb.length > 0) {
+      try {
+        const { error } = await db.from("movimento_pagamento")
+          .update({ excluido: false })
+          .in("movimento_pagamento_id", XDeletadosDb);
+        if (error) {
+          toast.error("Erro ao restaurar pagamentos cancelados: " + error.message);
+        }
+      } catch (err: any) {
+        toast.error("Erro ao restaurar pagamentos cancelados: " + err.message);
+      }
+    }
+    onClose();
+  };
+
   const cols: IGridColumn[] = [
     { key: "condicao_descricao", label: "Condição", width: "1fr" },
     { key: "n_parcelas", label: "Parc.", width: "60px", align: "right" },
@@ -277,9 +296,31 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
     { key: "acoes", label: "", width: "40px", align: "center", render: (r) => (
       <button 
         type="button"
-        onClick={(e) => {
+        onClick={async (e) => {
           e.preventDefault();
           e.stopPropagation();
+          
+          if (!confirm("Deseja realmente excluir este pagamento?")) return;
+          
+          if (r.movimento_pagamento_id) {
+            try {
+              const { error } = await db.from("movimento_pagamento")
+                .update({ excluido: true })
+                .eq("movimento_pagamento_id", r.movimento_pagamento_id);
+              
+              if (error) {
+                toast.error("Erro ao excluir do banco de dados: " + error.message);
+                return;
+              }
+              
+              setXDeletadosDb(prev => [...prev, r.movimento_pagamento_id]);
+              toast.success("Pagamento excluído.");
+            } catch (err: any) {
+              toast.error("Erro ao excluir pagamento: " + err.message);
+              return;
+            }
+          }
+          
           setXLinhas(prev => prev.filter(l => l.uid !== r.uid));
         }} 
         className="text-rose-600 hover:text-rose-800 transition-colors p-1"
@@ -301,7 +342,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
   const editableDesc = tpDesconto === 'P';
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && !XSalvando && onClose()}>
+    <Dialog open={open} onOpenChange={(o) => !o && !XSalvando && handleClose()}>
       <DialogContent className="max-w-5xl p-0 overflow-hidden">
         <div className="flex items-center h-10 bg-topbar text-topbar-foreground px-4 gap-2">
           <CreditCard size={18} />
@@ -427,7 +468,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
             <DataGrid columns={cols} data={XLinhas} maxHeight="200px" showRecordCount={false} showExport={false} onRowClick={(_, idx) => setXSelectedIdx(idx)} selectedIdx={XSelectedIdx} />
 
             <div className="flex justify-between items-center pt-2 gap-2">
-              <button onClick={onClose} className="text-xs px-4 py-2 border border-border rounded hover:bg-accent whitespace-nowrap">Cancelar</button>
+              <button onClick={handleClose} className="text-xs px-4 py-2 border border-border rounded hover:bg-accent whitespace-nowrap">Cancelar</button>
               
               <div className="flex gap-2 w-full justify-end">
                 <button 

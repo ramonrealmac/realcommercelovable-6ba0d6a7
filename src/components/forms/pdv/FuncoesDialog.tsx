@@ -1,6 +1,6 @@
 import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowDownToLine, ArrowUpFromLine, Receipt, Printer, Ban, Lock, Unlock, X } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, Receipt, Printer, Ban, Lock, Unlock, X, FileText } from "lucide-react";
 import { toast } from "sonner";
 
 interface IProps {
@@ -13,9 +13,10 @@ interface IProps {
   onAbertura: () => void;
   onSuprimento: () => void;
   onSangria: () => void;
+  onEmissaoPedidos: () => void;
 }
 
-const FuncoesDialog: React.FC<IProps> = ({ open, podeCancelar, onClose, onCancelamento, onFechamento, onAbertura, onSuprimento, onSangria }) => {
+const FuncoesDialog: React.FC<IProps> = ({ open, podeCancelar, onClose, onCancelamento, onFechamento, onAbertura, onSuprimento, onSangria, onEmissaoPedidos }) => {
   const cards = [
     { key: "supr", label: "Suprimento", desc: "Entrada de dinheiro no caixa",
       icon: <ArrowDownToLine size={28} />, color: "text-emerald-600",
@@ -29,6 +30,9 @@ const FuncoesDialog: React.FC<IProps> = ({ open, podeCancelar, onClose, onCancel
     { key: "reimp", label: "Reimpressão", desc: "Reimprime cupom/NF",
       icon: <Printer size={28} />, color: "text-indigo-600",
       action: () => toast.info("Reimpressão será implementada em seguida."), enabled: false },
+    { key: "emissao_pedidos", label: "Faturar Pedido", desc: "Emissão de Cupom e NF de Pedidos",
+      icon: <FileText size={28} />, color: "text-cyan-600",
+      action: () => { onClose(); onEmissaoPedidos(); }, enabled: true },
     { key: "canc", label: "Cancelamento", desc: "Cancela uma venda",
       icon: <Ban size={28} />, color: "text-red-600",
       action: () => { onClose(); onCancelamento(); }, enabled: podeCancelar },

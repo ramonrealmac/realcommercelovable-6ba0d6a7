@@ -226,12 +226,27 @@ const AberturaCaixaForm: React.FC<IProps> = ({
       const { error } = await db.from("caixa_abertura").insert(novo);
       if (error) throw new Error(error.message);
       toast.success("Caixa aberto com sucesso.");
-      onAberto?.({
-        caixa_abertura_id: novoId,
-        funcionario_id: XCaixaSel,
-        dt_abertura: XDtAb,
-        vl_abertura: XVlAbertura,
-      });
+      
+      if (onAberto) {
+        onAberto({
+          caixa_abertura_id: novoId,
+          funcionario_id: XCaixaSel,
+          dt_abertura: XDtAb,
+          vl_abertura: XVlAbertura,
+        });
+      } else {
+        if (XActiveTabId) {
+          closeTab(XActiveTabId);
+        }
+        openTab({
+          title: "4.2. PDV/Caixa",
+          component: "pdv-caixa",
+          params: {
+            funcionario_id: XCaixaSel,
+            dt_abertura: XDtAb,
+          }
+        });
+      }
     } catch (err: any) {
       toast.error(err.message || "Erro ao abrir caixa.");
     } finally {
