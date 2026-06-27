@@ -44,10 +44,10 @@ const GRID_COLS: IGridColumn[] = [
 // ── Colunas sub-grids ────────────────────────────────────────────────────────
 const COLS_CFOP: IGridColumn[] = [
   { key: "cfop_id",            label: "CFOP",        width: "100px", align: "right", render: r => s(r.cfop?.cd_cfop ?? r.cfop_id) },
-  { key: "cfop_desc",          label: "Descrição",   width: "2fr",   render: r => s(r.cfop?.descricao) },
+  { key: "cfop_desc",          label: "Descrição",   width: "1.2fr", render: r => s(r.cfop?.descricao) },
   { key: "uf_destino",         label: "UF Dest.",    width: "80px",  align: "center", render: r => s(r.uf_destino) },
   { key: "ncm_filtro",         label: "NCM",         width: "110px", align: "center", render: r => s(r.ncm_filtro) },
-  { key: "grupo_nome",         label: "Gr. Trib.",   width: "130px", render: r => s(r.fiscal_grupo_produto?.nome) },
+  { key: "grupo_nome",         label: "Gr. Trib.",   width: "200px", render: r => s(r.fiscal_grupo_produto?.nome) },
   { key: "cliente_contribuinte", label: "Contribuinte", width: "110px", align: "center", render: r => boolLabel(r.cliente_contribuinte) },
 ];
 
@@ -60,6 +60,16 @@ const COLS_ITEM: IGridColumn[] = [
   { key: "grupo_nome",  label: "Gr. Trib.", width: "130px", render: r => s(r.fiscal_grupo_produto?.nome) },
 ];
 
+const COLS_IPI: IGridColumn[] = [
+  { key: "cst_csosn",   label: "CST IPI",   width: "100px", align: "center", render: r => s(r.cst_csosn) },
+  { key: "ipi_c_enq",   label: "cEnq",      width: "90px",  align: "center", render: r => s(r.ipi_c_enq) },
+  { key: "aliquota",    label: "Alíq. %",   width: "90px",  align: "right", render: r => toNum(r.aliquota) },
+  { key: "uf_destino",  label: "UF Dest.",  width: "80px",  align: "center", render: r => s(r.uf_destino) },
+  { key: "ncm_filtro",  label: "NCM",       width: "110px", align: "center", render: r => s(r.ncm_filtro) },
+  { key: "grupo_nome",  label: "Gr. Trib.", width: "130px", render: r => s(r.fiscal_grupo_produto?.nome) },
+];
+
+
 // ── Interface e Config ────────────────────────────────────────────────────────
 interface IFiscalRegra {
   fiscal_regra_id: number;
@@ -71,14 +81,6 @@ interface IFiscalRegra {
   empresa_id: number;
   excluido: boolean;
 }
-
-const CRUD_CONFIG: ICrudConfig<IFiscalRegra> = {
-  XTableName: "fiscal_regra",
-  XPrimaryKey: "fiscal_regra_id",
-  XTitle: "Regras Fiscais",
-  XOrderBy: "descricao",
-  XDefaultRecord: { descricao: "", observacao: null, tp_operacao_id: null, cfop_id: null, regime_trib: "*", empresa_id: 1, excluido: false },
-};
 
 // ── Componentes de UI internos ────────────────────────────────────────────────
 const Label = ({ children }: { children: React.ReactNode }) => (
@@ -104,6 +106,50 @@ const TextInput = ({ value, onChange, readOnly = false, type = "text", placehold
     className={`border border-border rounded px-3 py-1.5 text-sm w-full ${readOnly ? "bg-secondary" : "bg-card focus:ring-2 focus:ring-ring outline-none"}`}
   />
 );
+
+const DecimalInput = ({ value, onChange, readOnly = false, placeholder = "0,00" }: {
+  value: number;
+  onChange: (v: number) => void;
+  readOnly?: boolean;
+  placeholder?: string;
+}) => {
+  const formatValue = (val: number) => {
+    return Number(val || 0).toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
+  const [displayValue, setDisplayValue] = useState(formatValue(value));
+
+  useEffect(() => {
+    setDisplayValue(formatValue(value));
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (readOnly) return;
+    const digits = e.target.value.replace(/\D/g, "");
+    if (!digits) {
+      onChange(0);
+      return;
+    }
+    const num = parseInt(digits, 10) / 100;
+    onChange(num);
+  };
+
+  return (
+    <input
+      type="text"
+      readOnly={readOnly}
+      value={displayValue}
+      placeholder={placeholder}
+      onChange={handleChange}
+      className={`border border-border rounded px-3 py-1.5 text-sm w-full text-right ${
+        readOnly ? "bg-secondary" : "bg-card focus:ring-2 focus:ring-ring outline-none"
+      }`}
+    />
+  );
+};
 
 // Select nativo — sem portals Radix, sem crash em contextos dinâmicos
 const NatSel = ({ value, onChange, options, disabled = false }: {
@@ -243,14 +289,19 @@ function FiltroRow({ item, isEditing, set, fiscalGrupoList }: {
   );
 }
 
-function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoList }: {
-  regraId: number | null; tipo: string; isEditing: boolean; cfopList: any[]; empresaId: number; fiscalGrupoList: any[];
+function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoList, regimeRegra }: {
+  regraId: number | null; tipo: string; isEditing: boolean; cfopList: any[]; empresaId: number; fiscalGrupoList: any[]; regimeRegra?: string | null;
 }) {
   const isCfop = tipo === "CFOP";
   const table = isCfop ? "fiscal_regra_cfop" : "fiscal_regra_item";
   const pk = isCfop ? "fiscal_regra_cfop_id" : "fiscal_regra_item_id";
 
   const [rows, setRows] = useState<any[]>([]);
+  const [icmsList, setIcmsList] = useState<any[]>([]);
+  const [ipiList, setIpiList] = useState<any[]>([]);
+  const [ipiEnqList, setIpiEnqList] = useState<any[]>([]);
+  const [pisCofinsList, setPisCofinsList] = useState<any[]>([]);
+  const [ibsCbsList, setIbsCbsList] = useState<any[]>([]);
   const [selIdx, setSelIdx] = useState<number | null>(null);
   const [editing, setEditing] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
@@ -263,6 +314,25 @@ function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoLis
     }
     setLoading(true);
     console.log(`[SubGrid] ${tipo} carregando para regraId: ${regraId}`);
+
+    if (tipo === "ICMS") {
+      db.from("icms").select("icms_cst_csosn, icms_descricao, icms_tipo").order("icms_cst_csosn")
+        .then(({ data }: any) => setIcmsList(data || []));
+    }
+    if (tipo === "IPI") {
+      db.from("ipi").select("ipi_cst, ipi_descricao").order("ipi_cst")
+        .then(({ data }: any) => setIpiList(data || []));
+      db.from("ipi_enquadramento").select("ipi_enquadramento_codigo, ipi_enquadramento_descricao").order("ipi_enquadramento_codigo")
+        .then(({ data }: any) => setIpiEnqList(data || []));
+    }
+    if (tipo === "PIS" || tipo === "COFINS") {
+      db.from("piscofins").select("piscofins_cst, piscofins_descricao").order("piscofins_cst")
+        .then(({ data }: any) => setPisCofinsList(data || []));
+    }
+    if (tipo === "CBSIBS") {
+      db.from("ibscbs").select("ibscbs_cst, ibscbs_descricao").order("ibscbs_cst")
+        .then(({ data }: any) => setIbsCbsList(data || []));
+    }
     const sel = isCfop ? "*, cfop(cd_cfop, descricao), fiscal_grupo_produto(nome)" : "*, fiscal_grupo_produto(nome)";
     let q = db.from(table).select(sel).eq("fiscal_regra_id", regraId);
     if (!isCfop) q = q.eq("tipo_imposto", tipo);
@@ -365,9 +435,73 @@ function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoLis
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 p-3 border border-border rounded-md bg-secondary/20 items-end">
-              <Field label="CST/CSOSN"><TextInput value={editing.cst_csosn} onChange={v => set("cst_csosn", v)} /></Field>
-              <Field label="Alíquota %"><TextInput type="number" value={editing.aliquota} onChange={v => set("aliquota", Number(v))} /></Field>
-              <Field label="Redução BC %"><TextInput type="number" value={editing.base_reducao} onChange={v => set("base_reducao", Number(v))} /></Field>
+              {tipo === "ICMS" ? (
+                <Field label="CST/CSOSN *">
+                  <NatSel
+                    value={editing.cst_csosn ?? ""}
+                    onChange={v => set("cst_csosn", v)}
+                    options={[
+                      { value: "", label: "Selecione..." },
+                      ...(icmsList || [])
+                        .filter((item: any) => {
+                          if (regimeRegra === "*") return true;
+                          if (regimeRegra === "S") return item.icms_tipo === "CSOSN";
+                          return item.icms_tipo === "CST";
+                        })
+                        .map((item: any) => ({
+                          value: item.icms_cst_csosn,
+                          label: `${item.icms_cst_csosn} — ${item.icms_descricao}`
+                        }))
+                    ]}
+                  />
+                </Field>
+              ) : tipo === "IPI" ? (
+                <Field label="CST/CSOSN *">
+                  <NatSel
+                    value={editing.cst_csosn ?? ""}
+                    onChange={v => set("cst_csosn", v)}
+                    options={[
+                      { value: "", label: "Selecione..." },
+                      ...(ipiList || []).map((item: any) => ({
+                        value: item.ipi_cst,
+                        label: `${item.ipi_cst} — ${item.ipi_descricao}`
+                      }))
+                    ]}
+                  />
+                </Field>
+              ) : (tipo === "PIS" || tipo === "COFINS") ? (
+                <Field label="CST/CSOSN *">
+                  <NatSel
+                    value={editing.cst_csosn ?? ""}
+                    onChange={v => set("cst_csosn", v)}
+                    options={[
+                      { value: "", label: "Selecione..." },
+                      ...(pisCofinsList || []).map((item: any) => ({
+                        value: item.piscofins_cst,
+                        label: `${item.piscofins_cst} — ${item.piscofins_descricao}`
+                      }))
+                    ]}
+                  />
+                </Field>
+              ) : tipo === "CBSIBS" ? (
+                <Field label="CST/CSOSN *">
+                  <NatSel
+                    value={editing.cst_csosn ?? ""}
+                    onChange={v => set("cst_csosn", v)}
+                    options={[
+                      { value: "", label: "Selecione..." },
+                      ...(ibsCbsList || []).map((item: any) => ({
+                        value: item.ibscbs_cst,
+                        label: `${item.ibscbs_cst} — ${item.ibscbs_descricao}`
+                      }))
+                    ]}
+                  />
+                </Field>
+              ) : (
+                <Field label="CST/CSOSN"><TextInput value={editing.cst_csosn} onChange={v => set("cst_csosn", v)} /></Field>
+              )}
+              <Field label="Alíquota %"><DecimalInput value={editing.aliquota} onChange={v => set("aliquota", v)} /></Field>
+              <Field label="Redução BC %"><DecimalInput value={editing.base_reducao} onChange={v => set("base_reducao", v)} /></Field>
 
               {tipo === "ICMS" && <>
                 <Field label="Mod. BC">
@@ -377,8 +511,8 @@ function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoLis
                     options={Object.entries(MOD_BC).map(([k, l]) => ({ value: k, label: l }))}
                   />
                 </Field>
-                <Field label="MVA %"><TextInput type="number" value={editing.icms_st_mva} onChange={v => set("icms_st_mva", Number(v))} /></Field>
-                <Field label="Alíq. ST %"><TextInput type="number" value={editing.icms_st_aliquota} onChange={v => set("icms_st_aliquota", Number(v))} /></Field>
+                <Field label="MVA %"><DecimalInput value={editing.icms_st_mva} onChange={v => set("icms_st_mva", v)} /></Field>
+                <Field label="Alíq. ST %"><DecimalInput value={editing.icms_st_aliquota} onChange={v => set("icms_st_aliquota", v)} /></Field>
                 <Field label="Mod. BC ST">
                   <NatSel
                     value={String(editing.mod_bc_st ?? 4)}
@@ -386,24 +520,35 @@ function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoLis
                     options={Object.entries(MOD_BC_ST).map(([k, l]) => ({ value: k, label: l }))}
                   />
                 </Field>
-                <Field label="Red. BC ST %"><TextInput type="number" value={editing.icms_st_base_reducao} onChange={v => set("icms_st_base_reducao", Number(v))} /></Field>
+                <Field label="Red. BC ST %"><DecimalInput value={editing.icms_st_base_reducao} onChange={v => set("icms_st_base_reducao", v)} /></Field>
                 <Field label="Motivo Deson."><TextInput type="number" value={editing.motivo_desoneracao ?? ""} onChange={v => set("motivo_desoneracao", v ? Number(v) : null)} /></Field>
-                <Field label="Crédito SN %"><TextInput type="number" value={editing.p_cre_sn} onChange={v => set("p_cre_sn", Number(v))} /></Field>
+                <Field label="Crédito SN %"><DecimalInput value={editing.p_cre_sn} onChange={v => set("p_cre_sn", v)} /></Field>
               </>}
 
               {(tipo === "PIS" || tipo === "COFINS") && <>
-                <Field label="CST PIS/COF."><TextInput value={editing.cst_pis_cofins ?? ""} onChange={v => set("cst_pis_cofins", v)} /></Field>
                 <Field label="Nat. Receita"><TextInput value={editing.nat_receita_pis_cofins ?? ""} onChange={v => set("nat_receita_pis_cofins", v)} /></Field>
               </>}
 
               {tipo === "IPI" && (
-                <Field label="C. Enquadramento"><TextInput value={editing.ipi_c_enq ?? "999"} onChange={v => set("ipi_c_enq", v)} /></Field>
+                <Field label="C. Enquadramento *">
+                  <NatSel
+                    value={editing.ipi_c_enq ?? "999"}
+                    onChange={v => set("ipi_c_enq", v)}
+                    options={[
+                      { value: "", label: "Selecione..." },
+                      ...(ipiEnqList || []).map((item: any) => ({
+                        value: item.ipi_enquadramento_codigo,
+                        label: `${item.ipi_enquadramento_codigo} — ${item.ipi_enquadramento_descricao}`
+                      }))
+                    ]}
+                  />
+                </Field>
               )}
 
               {tipo === "CBSIBS" && <>
-                <Field label="IBS %"><TextInput type="number" value={editing.ibs_aliquota} onChange={v => set("ibs_aliquota", Number(v))} /></Field>
-                <Field label="CBS %"><TextInput type="number" value={editing.cbs_aliquota} onChange={v => set("cbs_aliquota", Number(v))} /></Field>
-                <Field label="IS %"><TextInput type="number" value={editing.is_aliquota} onChange={v => set("is_aliquota", Number(v))} /></Field>
+                <Field label="IBS %"><DecimalInput value={editing.ibs_aliquota} onChange={v => set("ibs_aliquota", v)} /></Field>
+                <Field label="CBS %"><DecimalInput value={editing.cbs_aliquota} onChange={v => set("cbs_aliquota", v)} /></Field>
+                <Field label="IS %"><DecimalInput value={editing.is_aliquota} onChange={v => set("is_aliquota", v)} /></Field>
               </>}
 
               <div className="col-span-2 lg:col-span-1 flex gap-2 pt-1">
@@ -423,7 +568,7 @@ function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoLis
         <div className="p-3 text-xs italic text-muted-foreground animate-pulse">Carregando dados...</div>
       ) : (
         <DataGrid
-          columns={isCfop ? COLS_CFOP : COLS_ITEM}
+          columns={isCfop ? COLS_CFOP : tipo === "IPI" ? COLS_IPI : COLS_ITEM}
           data={rows}
           maxHeight="320px"
           selectedIdx={selIdx}
@@ -445,37 +590,81 @@ function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoLis
 
 // ── Componente Principal ──────────────────────────────────────────────────────
 const FiscalRegraForm: React.FC = () => {
-  const { XEmpresaId } = useAppContext();
+  const { XEmpresaId, XEmpresaMatrizId, XEmpresas } = useAppContext();
+  const XEmpMatriz = XEmpresas.find(e => e.empresa_id === XEmpresaMatrizId);
+  const XEmpLabel = XEmpMatriz ? `${XEmpMatriz.empresa_id} - ${XEmpMatriz.identificacao}` : String(XEmpresaMatrizId);
+
+  const currentEmpresa = useMemo(() => {
+    return (XEmpresas || []).find(e => e.empresa_id === XEmpresaId) || null;
+  }, [XEmpresaId, XEmpresas]);
+
   const [cfopList, setCfopList] = useState<any[]>([]);
   const [tpOpList, setTpOpList] = useState<any[]>([]);
   const [fiscalGrupoList, setFiscalGrupoList] = useState<any[]>([]);
   const [subTab, setSubTab] = useState("principal");
 
+  const config = useMemo<ICrudConfig<IFiscalRegra>>(() => ({
+    XTableName: "fiscal_regra",
+    XPrimaryKey: "fiscal_regra_id",
+    XTitle: "Regras Fiscais",
+    XOrderBy: "descricao",
+    XEmpresaId: XEmpresaMatrizId,
+    XDefaultRecord: { 
+      descricao: "", 
+      observacao: null, 
+      tp_operacao_id: null, 
+      cfop_id: null, 
+      regime_trib: "*", 
+      empresa_id: XEmpresaMatrizId || 1, 
+      excluido: false 
+    },
+  }), [XEmpresaMatrizId]);
+
+  const XGroupEmpresaIds = useMemo(() => {
+    return (XEmpresas || [])
+      .filter(e => e && (e.empresa_matriz_id === XEmpresaMatrizId || e.empresa_id === XEmpresaMatrizId))
+      .map(e => e.empresa_id);
+  }, [XEmpresaMatrizId, XEmpresas]);
+
   useEffect(() => {
-    db.from("cfop").select("cfop_id, cd_cfop, descricao").order("cd_cfop")
-      .then(({ data }: any) => setCfopList(data || []));
-    db.from("tp_operacao").select("tp_operacao_id, descricao").order("descricao")
-      .then(({ data }: any) => setTpOpList(data || []));
-    db.from("fiscal_grupo_produto").select("fiscal_grupo_produto_id, nome, tp_imposto").order("nome")
-      .then(({ data }: any) => setFiscalGrupoList(data || []));
-  }, []);
+    if (XGroupEmpresaIds.length > 0) {
+      db.from("cfop").select("cfop_id, cd_cfop, descricao").in("empresa_id", XGroupEmpresaIds).order("cd_cfop")
+        .then(({ data }: any) => setCfopList(data || []));
+      db.from("tp_operacao").select("tp_operacao_id, descricao").in("empresa_id", XGroupEmpresaIds).order("descricao")
+        .then(({ data }: any) => setTpOpList(data || []));
+      db.from("fiscal_grupo_produto").select("fiscal_grupo_produto_id, nome, tp_imposto").in("empresa_id", XGroupEmpresaIds).order("nome")
+        .then(({ data }: any) => setFiscalGrupoList(data || []));
+    } else {
+      db.from("cfop").select("cfop_id, cd_cfop, descricao").order("cd_cfop")
+        .then(({ data }: any) => setCfopList(data || []));
+      db.from("tp_operacao").select("tp_operacao_id, descricao").order("descricao")
+        .then(({ data }: any) => setTpOpList(data || []));
+      db.from("fiscal_grupo_produto").select("fiscal_grupo_produto_id, nome, tp_imposto").order("nome")
+        .then(({ data }: any) => setFiscalGrupoList(data || []));
+    }
+  }, [XGroupEmpresaIds]);
 
   const REGIME_OPTIONS = Object.entries(REGIME_MAP).map(([value, label]) => ({ value, label }));
 
   return (
     <StandardCrudForm<IFiscalRegra>
-      config={CRUD_CONFIG}
+      config={config}
       XGridCols={GRID_COLS}
       renderCadastro={({ record, setField, mode, isEditing, currentRecord }) => (
         <div className="space-y-4">
-          {/* Topo: Código e Descrição */}
+          {/* Topo: Código, Empresa Matriz e Descrição */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 bg-secondary/10 p-4 rounded-lg border border-border shadow-sm">
             <div className="md:col-span-2">
               <Field label="Código">
                 <TextInput value={mode === "insert" ? "(Novo)" : s(currentRecord?.fiscal_regra_id)} readOnly />
               </Field>
             </div>
-            <div className="md:col-span-10">
+            <div className="md:col-span-3">
+              <Field label="Emp. Matriz">
+                <TextInput value={XEmpLabel} readOnly />
+              </Field>
+            </div>
+            <div className="md:col-span-7">
               <Field label="Descrição da Regra Fiscal *">
                 <TextInput 
                   value={record.descricao} 
@@ -560,7 +749,8 @@ const FiscalRegraForm: React.FC = () => {
                   tipo={t.key}
                   isEditing={true} // Permite editar sempre que houver regraId
                   cfopList={cfopList}
-                  empresaId={XEmpresaId || 1}
+                  empresaId={XEmpresaMatrizId || 1}
+                  regimeRegra={record.regime_trib}
                   fiscalGrupoList={fiscalGrupoList.filter(g => {
                     if (t.key === "CFOP") return true;
                     if (t.key === "ICMS") return g.tp_imposto === "ICMS";

@@ -19,7 +19,9 @@ interface IEmpresaVinculada {
   nome_fantasia: string;
   empresa_matriz_id: number | null;
   identificacao: string;
+  regime_trib?: string | null;
 }
+
 
 interface AuthGateProps {
   children: React.ReactNode;
@@ -274,7 +276,7 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
           console.log("[AuthGate] Usuário é superusuário. Carregando todas as empresas.");
           const { data: XEmpresas, error: XEmpError } = await (supabase as any)
             .from("empresa")
-            .select("empresa_id, razao_social, nome_fantasia, empresa_matriz_id, identificacao")
+            .select("empresa_id, razao_social, nome_fantasia, empresa_matriz_id, identificacao, regime_trib")
             .eq("excluido", false)
             .order("razao_social");
 
@@ -307,7 +309,7 @@ const AuthGate = ({ children, onEmpresaSelected }: AuthGateProps) => {
 
           const { data: XEmpresas, error: XEmpError } = await (supabase as any)
             .from("empresa")
-            .select("empresa_id, razao_social, nome_fantasia, empresa_matriz_id, identificacao")
+            .select("empresa_id, razao_social, nome_fantasia, empresa_matriz_id, identificacao, regime_trib")
             .in("empresa_id", XEmpresaIds)
             .eq("excluido", false)
             .order("razao_social");

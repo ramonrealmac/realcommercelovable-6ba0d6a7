@@ -13,7 +13,9 @@ export interface IEmpresaOption {
   nome_fantasia: string;
   empresa_matriz_id: number | null;
   identificacao: string;
+  regime_trib?: string | null;
 }
+
 
 interface AppContextType {
   XEmpresaId: number;

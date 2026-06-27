@@ -158,8 +158,10 @@ export const fiscalService = {
 
     // 2. Localizar a Regra Fiscal (Header)
     const hoje = new Date().toISOString().slice(0, 10);
+    const matrizId = empresa.empresa_matriz_id || empresa.empresa_id;
     const { data: regras } = await db.from("fiscal_regra")
       .select("*")
+      .eq("empresa_id", matrizId)
       .eq("tp_operacao_id", input.tp_operacao_id)
       .eq("excluido", false)
       .or(`regime_trib.eq.${empresa.regime_trib},regime_trib.is.null`);
