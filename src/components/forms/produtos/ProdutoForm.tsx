@@ -672,9 +672,17 @@ const ProdutoForm: React.FC = () => {
       fator_mult: parseFloat(XConvForm.fator_mult) || 1,
     };
     if (XConvMode === "edit" && XConvIdx >= 0) {
-      await db.from("produto_conversao").update({ ...XPay, dt_alteracao: new Date().toISOString() }).eq("conversao_id", XConversoes[XConvIdx].conversao_id);
+      const { error } = await db.from("produto_conversao").update({ ...XPay, dt_alteracao: new Date().toISOString() }).eq("conversao_id", XConversoes[XConvIdx].conversao_id);
+      if (error) {
+        toast.error("Erro ao atualizar conversão: " + error.message);
+        return;
+      }
     } else {
-      await db.from("produto_conversao").insert(XPay);
+      const { error } = await db.from("produto_conversao").insert(XPay);
+      if (error) {
+        toast.error("Erro ao salvar conversão: " + error.message);
+        return;
+      }
     }
     toast.success("Conversão salva.");
     setXConvMode("view");
@@ -683,7 +691,11 @@ const ProdutoForm: React.FC = () => {
   const handleConvExcluir = async () => {
     if (XConvIdx < 0 || !XCurrentRecord) return;
     if (!confirm("Excluir esta conversão?")) return;
-    await db.from("produto_conversao").update({ excluido: true }).eq("conversao_id", XConversoes[XConvIdx].conversao_id);
+    const { error } = await db.from("produto_conversao").update({ excluido: true }).eq("conversao_id", XConversoes[XConvIdx].conversao_id);
+    if (error) {
+      toast.error("Erro ao excluir conversão: " + error.message);
+      return;
+    }
     toast.success("Conversão excluída.");
     setXConvIdx(-1);
     loadSubData(XCurrentRecord.produto_id);

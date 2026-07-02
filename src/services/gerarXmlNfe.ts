@@ -191,7 +191,14 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
     xml += `<uTrib>${esc(it.unidade || 'UN')}</uTrib>`;
     xml += `<qTrib>${qt.toFixed(4)}</qTrib>`;
     xml += `<vUnTrib>${vUnit.toFixed(10)}</vUnTrib>`;
+    const vFreteItem = Number(it.vl_frete || 0);
+    const vSegItem = Number(it.vl_seguro || 0);
+    const vOutroItem = Number(it.vl_outro || 0);
+
+    if (vFreteItem > 0) xml += `<vFrete>${vFreteItem.toFixed(2)}</vFrete>`;
+    if (vSegItem > 0) xml += `<vSeg>${vSegItem.toFixed(2)}</vSeg>`;
     if (vDescItem > 0) xml += `<vDesc>${vDescItem.toFixed(2)}</vDesc>`;
+    if (vOutroItem > 0) xml += `<vOutro>${vOutroItem.toFixed(2)}</vOutro>`;
     xml += `<indTot>1</indTot>`;
     xml += `</prod>`;
 
@@ -200,14 +207,57 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
     xml += `<ICMS>`;
     if (isSimples) {
       const csosn = it.csosn || '102';
-      xml += `<ICMSSN${csosn}>`;
+      let tagGroup = '102';
+      if (csosn === '101') tagGroup = '101';
+      else if (['102', '103', '300', '400'].includes(csosn)) tagGroup = '102';
+      else if (csosn === '201') tagGroup = '201';
+      else if (['202', '203'].includes(csosn)) tagGroup = '202';
+      else if (csosn === '500') tagGroup = '500';
+      else if (csosn === '900') tagGroup = '900';
+
+      xml += `<ICMSSN${tagGroup}>`;
       xml += `<orig>${it.origem || 0}</orig>`;
       xml += `<CSOSN>${csosn}</CSOSN>`;
+
+      // CSOSN 101 / 201 / 900 → permite pCredSN/vCredICMSSN
       if (['101', '201', '900'].includes(csosn) && Number(it.pc_icms) > 0) {
         xml += `<pCredSN>${Number(it.pc_icms).toFixed(4)}</pCredSN>`;
         xml += `<vCredICMSSN>${Number(it.vl_icms || 0).toFixed(2)}</vCredICMSSN>`;
       }
-      xml += `</ICMSSN${csosn}>`;
+
+      // CSOSN 201 / 202 / 203 → ICMSST
+      if (['201', '202', '203'].includes(csosn)) {
+        xml += `<modBCST>${it.mod_bc_st ?? 4}</modBCST>`;
+        if (Number(it.mva_st || 0) > 0) xml += `<pMVAST>${Number(it.mva_st).toFixed(4)}</pMVAST>`;
+        xml += `<vBCST>${Number(it.vl_bc_st || 0).toFixed(2)}</vBCST>`;
+        xml += `<pICMSST>${Number(it.pc_icms_st || 0).toFixed(4)}</pICMSST>`;
+        xml += `<vICMSST>${Number(it.vl_icms_st || 0).toFixed(2)}</vICMSST>`;
+      }
+
+      // CSOSN 500 → ICMS cobrado anteriormente por ST
+      if (csosn === '500') {
+        xml += `<vBCSTRet>${Number(it.vl_bc_st_ret || 0).toFixed(2)}</vBCSTRet>`;
+        xml += `<pST>${Number(it.pc_icms_st_ret || it.pc_icms_st || 0).toFixed(4)}</pST>`;
+        xml += `<vICMSSubstituto>${Number(it.vl_icms_substituto || 0).toFixed(2)}</vICMSSubstituto>`;
+        xml += `<vICMSSTRet>${Number(it.vl_icms_st_ret || 0).toFixed(2)}</vICMSSTRet>`;
+      }
+
+      // CSOSN 900 → Também aceita campos próprios de ICMS
+      if (csosn === '900') {
+        xml += `<modBC>${it.mod_bc ?? 3}</modBC>`;
+        xml += `<vBC>${Number(it.vl_bc || vProdItem - vDescItem).toFixed(2)}</vBC>`;
+        xml += `<pICMS>${Number(it.pc_icms || 0).toFixed(4)}</pICMS>`;
+        xml += `<vICMS>${Number(it.vl_icms || 0).toFixed(2)}</vICMS>`;
+        if (Number(it.vl_icms_st || 0) > 0) {
+          xml += `<modBCST>${it.mod_bc_st ?? 4}</modBCST>`;
+          if (Number(it.mva_st || 0) > 0) xml += `<pMVAST>${Number(it.mva_st).toFixed(4)}</pMVAST>`;
+          xml += `<vBCST>${Number(it.vl_bc_st || 0).toFixed(2)}</vBCST>`;
+          xml += `<pICMSST>${Number(it.pc_icms_st || 0).toFixed(4)}</pICMSST>`;
+          xml += `<vICMSST>${Number(it.vl_icms_st || 0).toFixed(2)}</vICMSST>`;
+        }
+      }
+
+      xml += `</ICMSSN${tagGroup}>`;
     } else {
       const cst = it.cst_icms || '00';
       xml += `<ICMS${cst}>`;

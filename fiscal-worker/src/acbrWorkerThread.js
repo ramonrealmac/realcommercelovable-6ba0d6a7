@@ -719,8 +719,11 @@ const configurarHandle = (lib, handle, configPayload, prefix = 'NFE') => {
     if (!configPayload) return;
 
     // 1. SSLType (Protocolo de Segurança)
-    // Default para TLS 1.2 (SSLType = 5) se não informado
-    const sslType = configPayload.ssl_type !== undefined && configPayload.ssl_type !== null && configPayload.ssl_type !== "" ? String(configPayload.ssl_type) : "5";
+    // Default para TLS 1.2 (SSLType = 5) se não informado ou se for "AUTO"
+    let sslType = configPayload.ssl_type !== undefined && configPayload.ssl_type !== null && configPayload.ssl_type !== "" ? String(configPayload.ssl_type) : "5";
+    if (sslType.toUpperCase() === "AUTO") {
+        sslType = "5";
+    }
     lib.ConfigGravarValor(handle, "DFe", "SSLType", sslType);
 
     const tipoCertificado = configPayload.tipo_certificado || 'ARQUIVO';
@@ -731,16 +734,16 @@ const configurarHandle = (lib, handle, configPayload, prefix = 'NFE') => {
     let sslHttpLib = "1"; // 1=httpWinINet (nativo, melhor compatibilidade com SEFAZ)
     let sslXmlSignLib = "4"; // 4=xsLibXml2 (nativo)
 
-    if (configPayload.ssl_lib !== undefined && configPayload.ssl_lib !== null && configPayload.ssl_lib !== "") {
+    if (configPayload.ssl_lib !== undefined && configPayload.ssl_lib !== null && configPayload.ssl_lib !== "" && String(configPayload.ssl_lib).toUpperCase() !== "AUTO") {
         sslLib = String(configPayload.ssl_lib);
     }
-    if (configPayload.ssl_crypt_lib !== undefined && configPayload.ssl_crypt_lib !== null && configPayload.ssl_crypt_lib !== "") {
+    if (configPayload.ssl_crypt_lib !== undefined && configPayload.ssl_crypt_lib !== null && configPayload.ssl_crypt_lib !== "" && String(configPayload.ssl_crypt_lib).toUpperCase() !== "AUTO") {
         sslCryptLib = String(configPayload.ssl_crypt_lib);
     }
-    if (configPayload.ssl_http_lib !== undefined && configPayload.ssl_http_lib !== null && configPayload.ssl_http_lib !== "") {
+    if (configPayload.ssl_http_lib !== undefined && configPayload.ssl_http_lib !== null && configPayload.ssl_http_lib !== "" && String(configPayload.ssl_http_lib).toUpperCase() !== "AUTO") {
         sslHttpLib = String(configPayload.ssl_http_lib);
     }
-    if (configPayload.ssl_xml_sign_lib !== undefined && configPayload.ssl_xml_sign_lib !== null && configPayload.ssl_xml_sign_lib !== "") {
+    if (configPayload.ssl_xml_sign_lib !== undefined && configPayload.ssl_xml_sign_lib !== null && configPayload.ssl_xml_sign_lib !== "" && String(configPayload.ssl_xml_sign_lib).toUpperCase() !== "AUTO") {
         sslXmlSignLib = String(configPayload.ssl_xml_sign_lib);
     }
 
