@@ -42,88 +42,102 @@ interface IProps {
 
 const db = supabase as any;
 
-const XGridCols: IGridColumn[] = [
-  { key: "movimento_id", label: "ID Mov", width: "80px", align: "center" },
-  { key: "nr_nota", label: "Nota", width: "100px" },
-  { key: "serie", label: "Série", width: "60px", align: "center" },
-  { 
-    key: "tp_amb", 
-    label: "Ambiente", 
-    width: "100px", 
-    render: r => (
-      <span className={String(r.tp_amb) === "1" ? "text-green-600 font-medium" : "text-orange-600 font-medium"}>
-        {String(r.tp_amb) === "1" ? "Produção" : "Homologação"}
-      </span>
-    )
-  },
-  { key: "modelo", label: "Mod.", width: "50px", align: "center" },
-  { 
-    key: "tp_nf", 
-    label: "Tipo", 
-    width: "70px", 
-    render: r => (
-      <span className={String(r.tp_nf) === "0" ? "text-blue-600 font-medium" : "text-emerald-600 font-medium"}>
-        {String(r.tp_nf) === "0" ? "Entrada" : "Saída"}
-      </span>
-    )
-  },
-  { 
-    key: "fin_nfe", 
-    label: "Finalidade", 
-    width: "110px", 
-    render: r => {
-      const labels: any = { "1": "Normal", "2": "Complementar", "3": "Ajuste", "4": "Devolução" };
-      const colors: any = { 
-        "1": "text-slate-600", 
-        "2": "text-blue-600", 
-        "3": "text-amber-600", 
-        "4": "text-purple-600" 
-      };
-      const label = labels[String(r.fin_nfe)] || r.fin_nfe;
-      return (
-        <span className={`font-bold ${colors[String(r.fin_nfe)] || "text-gray-600"}`}>
-          {label}
-        </span>
-      );
-    }
-  },
-  { key: "dt_emissao", label: "Emissão", width: "110px", render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
-  { key: "nm_destinatario", label: "Destinatário", width: "250px" },
-  { key: "cnpj_destinatario", label: "CNPJ/CPF", width: "150px", render: r => formatCPFCNPJ(r.cnpj_destinatario) },
-  { key: "vl_total_nf", label: "Valor", width: "120px", align: "right", render: r => Number(r.vl_total_nf || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) },
-  { 
-    key: "st_nf", 
-    label: "Status", 
-    width: "140px", 
-    render: r => {
-      const labels: any = {
-        "E": "Autorizada",
-        "C": "Cancelada",
-        "D": "Denegada",
-        "P": "Pendente",
-        "A": "Aguardando",
-        "R": "Rejeitada",
-        "1": "Autorizada",
-        "2": "Denegada"
-      };
-      const label = labels[r.st_nf] || r.st_nf || "Pendente";
-      return (
-        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-          r.st_nf === "E" || r.st_nf === "1" ? "bg-green-100 text-green-700" :
-          r.st_nf === "C" ? "bg-red-100 text-red-700" :
-          r.st_nf === "D" || r.st_nf === "2" ? "bg-orange-100 text-orange-700" : 
-          r.st_nf === "R" ? "bg-red-100 text-red-700" :
-          r.st_nf === "A" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"
-        }`}>
-          {label}
-        </span>
-      );
-    }
-  },
-];
+
 
 const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
-  const { XEmpresaId, openTab } = useAppContext();
+  const { XEmpresaId, XEmpresas, openTab } = useAppContext();
+
+  const XGridCols: IGridColumn[] = [
+    { key: "movimento_id", label: "ID Mov", width: "80px", align: "center" },
+    { 
+      key: "empresa_id", 
+      label: "Emitente", 
+      width: "150px", 
+      render: r => {
+        const empIdStr = String(r.empresa_id).padStart(2, '0');
+        const emp = XEmpresas?.find(e => e.empresa_id === Number(r.empresa_id));
+        const nomeEmp = emp?.identificacao || emp?.razao_social || '';
+        return nomeEmp ? `${empIdStr} - ${nomeEmp}` : empIdStr;
+      }
+    },
+    { key: "nr_nota", label: "Nota", width: "100px" },
+    { key: "serie", label: "Série", width: "60px", align: "center" },
+    { 
+      key: "tp_amb", 
+      label: "Ambiente", 
+      width: "100px", 
+      render: r => (
+        <span className={String(r.tp_amb) === "1" ? "text-green-600 font-medium" : "text-orange-600 font-medium"}>
+          {String(r.tp_amb) === "1" ? "Produção" : "Homologação"}
+        </span>
+      )
+    },
+    { key: "modelo", label: "Mod.", width: "50px", align: "center" },
+    { 
+      key: "tp_nf", 
+      label: "Tipo", 
+      width: "70px", 
+      render: r => (
+        <span className={String(r.tp_nf) === "0" ? "text-blue-600 font-medium" : "text-emerald-600 font-medium"}>
+          {String(r.tp_nf) === "0" ? "Entrada" : "Saída"}
+        </span>
+      )
+    },
+    { 
+      key: "fin_nfe", 
+      label: "Finalidade", 
+      width: "110px", 
+      render: r => {
+        const labels: any = { "1": "Normal", "2": "Complementar", "3": "Ajuste", "4": "Devolução" };
+        const colors: any = { 
+          "1": "text-slate-600", 
+          "2": "text-blue-600", 
+          "3": "text-amber-600", 
+          "4": "text-purple-600" 
+        };
+        const label = labels[String(r.fin_nfe)] || r.fin_nfe;
+        return (
+          <span className={`font-bold ${colors[String(r.fin_nfe)] || "text-gray-600"}`}>
+            {label}
+          </span>
+        );
+      }
+    },
+    { key: "dt_emissao", label: "Emissão", width: "110px", render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
+    { key: "nm_destinatario", label: "Destinatário", width: "250px" },
+    { key: "cnpj_destinatario", label: "CNPJ/CPF", width: "150px", render: r => formatCPFCNPJ(r.cnpj_destinatario) },
+    { key: "vl_total_nf", label: "Valor", width: "120px", align: "right", render: r => Number(r.vl_total_nf || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) },
+    { 
+      key: "st_nf", 
+      label: "Status", 
+      width: "140px", 
+      render: r => {
+        const labels: any = {
+          "E": "Autorizada",
+          "C": "Cancelada",
+          "D": "Denegada",
+          "P": "Pendente",
+          "A": "Aguardando",
+          "R": "Rejeitada",
+          "1": "Autorizada",
+          "2": "Denegada"
+        };
+        const label = labels[r.st_nf] || r.st_nf || "Pendente";
+        return (
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+            r.st_nf === "E" || r.st_nf === "1" ? "bg-green-100 text-green-700" :
+            r.st_nf === "C" ? "bg-red-100 text-red-700" :
+            r.st_nf === "D" || r.st_nf === "2" ? "bg-orange-100 text-orange-700" : 
+            r.st_nf === "R" ? "bg-red-100 text-red-700" :
+            r.st_nf === "A" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"
+          }`}>
+            {label}
+          </span>
+        );
+      }
+    },
+  ];
+
   const [XData, setXData] = useState<any[]>([]);
   const [XLoading, setXLoading] = useState(false);
   const [XDtIni, setXDtIni] = useState(new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().substring(0, 10));
@@ -178,9 +192,33 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
     if (!XEmpresaId) return;
     setXLoading(true);
     try {
+      // Busca dados da empresa logada para identificar se é Matriz ou Filial
+      const { data: empData } = await db
+        .from("empresa")
+        .select("empresa_id, empresa_matriz_id")
+        .eq("empresa_id", XEmpresaId)
+        .single();
+
+      let empresaIds = [XEmpresaId];
+
+      const isMatriz = !empData?.empresa_matriz_id || empData.empresa_matriz_id === XEmpresaId;
+      if (isMatriz) {
+        // Se for Matriz, carrega todas as filiais
+        const { data: filiais } = await db
+          .from("empresa")
+          .select("empresa_id")
+          .eq("empresa_matriz_id", XEmpresaId);
+        if (filiais) {
+          empresaIds = filiais.map((f: any) => f.empresa_id);
+          if (!empresaIds.includes(XEmpresaId)) {
+            empresaIds.push(XEmpresaId);
+          }
+        }
+      }
+
       const { data, error } = await db.from("fiscal_nfe_cabecalho")
         .select("*, cadastro(razao_social, cnpj)")
-        .eq("empresa_id", XEmpresaId)
+        .in("empresa_id", empresaIds)
         .gte("dt_emissao", XDtIni)
         .lte("dt_emissao", XDtFim)
         .order("created_at", { ascending: false });
@@ -205,8 +243,8 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
     loadData();
     // Realtime subscription para atualizar status automaticamente
     const ch = (supabase as any).channel('nfe_changes')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fiscal_nfe_cabecalho', filter: `empresa_id=eq.${XEmpresaId}` }, () => loadData())
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fiscal_evento', filter: `empresa_id=eq.${XEmpresaId}` }, () => loadData())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fiscal_nfe_cabecalho' }, () => loadData())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fiscal_evento' }, () => loadData())
       .subscribe();
     return () => { try { (supabase as any).removeChannel(ch); } catch {} };
   }, [XEmpresaId, XDtIni, XDtFim]);
@@ -222,7 +260,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
       return;
     }
     toast.info("Enfileirando transmissão...");
-    const res = await fiscalEmissaoService.retransmitirDocumento(row.nfe_cabecalho_id, XEmpresaId);
+    const res = await fiscalEmissaoService.retransmitirDocumento(row.nfe_cabecalho_id, row.empresa_id || XEmpresaId);
     if (res.success) {
       toast.success("Evento de transmissão criado.");
       loadData();
@@ -235,7 +273,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
     if (!XEmpresaId) return;
     const tid = toast.loading("Validando XML contra Schemas (XSD)...");
     try {
-      const res = await (fiscalEmissaoService as any).validarDocumento(row.nfe_cabecalho_id, XEmpresaId);
+      const res = await (fiscalEmissaoService as any).validarDocumento(row.nfe_cabecalho_id, row.empresa_id || XEmpresaId);
       if (res.success) {
         toast.success(res.message || "XML Validado com sucesso!", { id: tid });
       } else {
@@ -253,7 +291,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
     }
     const tid = toast.loading("Gerando DANFE...");
     try {
-      const res = await fiscalEmissaoService.imprimirDocumento(row.nfe_cabecalho_id, XEmpresaId);
+      const res = await fiscalEmissaoService.imprimirDocumento(row.nfe_cabecalho_id, row.empresa_id || XEmpresaId);
       if (res.success && res.pdf_base64) {
         const binaryString = atob(res.pdf_base64);
         const bytes = new Uint8Array(binaryString.length);
@@ -338,9 +376,10 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
     setXEmailEnviando(true);
     const tid = toast.loading("Enviando e-mail...");
     try {
-      const totalSeg = await fiscalEmissaoService.obterTimeoutFiscalSeg(XEmpresaId);
+      const targetEmpresaId = XEmailTarget.empresa_id || XEmpresaId;
+      const totalSeg = await fiscalEmissaoService.obterTimeoutFiscalSeg(targetEmpresaId);
       setXProg({ open: true, titulo: "Enviando e-mail...", total: totalSeg });
-      const res = await fiscalEmissaoService.enviarEmail(XEmailTarget.nfe_cabecalho_id, XEmpresaId, XEmailDestino);
+      const res = await fiscalEmissaoService.enviarEmail(XEmailTarget.nfe_cabecalho_id, targetEmpresaId, XEmailDestino);
       setXProg(p => ({ ...p, open: false }));
       if (res.success) {
         toast.success("E-mail enfileirado.", { id: tid });
@@ -379,9 +418,10 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
     const tid = toast.loading("Enviando cancelamento para SEFAZ...");
     console.log("[ListaNfeEmitidaForm] Cancelando nota:", XCancelTarget);
     try {
-      const totalSeg = await fiscalEmissaoService.obterTimeoutFiscalSeg(XEmpresaId);
+      const targetEmpresaId = XCancelTarget.empresa_id || XEmpresaId;
+      const totalSeg = await fiscalEmissaoService.obterTimeoutFiscalSeg(targetEmpresaId);
       setXProg({ open: true, titulo: "Cancelando documento...", total: totalSeg });
-      const res = await fiscalEmissaoService.cancelarDocumento(XCancelTarget.nfe_cabecalho_id, XEmpresaId, XCancelJustificativa);
+      const res = await fiscalEmissaoService.cancelarDocumento(XCancelTarget.nfe_cabecalho_id, targetEmpresaId, XCancelJustificativa);
       setXProg(p => ({ ...p, open: false }));
       if (res.success) {
         toast.success("Nota cancelada com sucesso!", { id: tid });

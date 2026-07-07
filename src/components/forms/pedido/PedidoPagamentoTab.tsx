@@ -9,7 +9,27 @@ import PedidoPagamentoDialog from "./PedidoPagamentoDialog";
 
 const db = supabase as any;
 
-interface ICondicao { condicao_id: number; descricao: string; qtd_parcelas: number | null; }
+interface ICondicao {
+  condicao_id: number;
+  descricao: string;
+  tipo_prazo?: string | null;
+  qtd_parcelas: number | null;
+  intervalo?: number | null;
+  plano_conta_id?: number | null;
+  meio_pagamento_id?: number | null;
+  prazo_1?: number | null;
+  prazo_2?: number | null;
+  prazo_3?: number | null;
+  prazo_4?: number | null;
+  prazo_5?: number | null;
+  prazo_6?: number | null;
+  prazo_7?: number | null;
+  prazo_8?: number | null;
+  prazo_9?: number | null;
+  prazo_10?: number | null;
+  prazo_11?: number | null;
+  prazo_12?: number | null;
+}
 
 interface IProps {
   pedido: IMovimento | null;
@@ -41,6 +61,8 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
   const { XEmpresaId, XEmpresaMatrizId } = useAppContext();
   const [XPagtos, setXPagtos] = useState<IMovimentoPagamento[]>([]);
   const [XCondicoes, setXCondicoes] = useState<ICondicao[]>([]);
+  const [XPortadores, setXPortadores] = useState<{ portador_id: number; cd_portador: number; nome: string }[]>([]);
+  const [XMeiosPagamento, setXMeiosPagamento] = useState<{ meio_pagamento_id: number; codigo: string; descricao: string }[]>([]);
   const [XEdit, setXEdit] = useState<Partial<IMovimentoPagamento> | null>(null);
   const [XEditingId, setXEditingId] = useState<number | null>(null);
   const [XSelected, setXSelected] = useState<IMovimentoPagamento | null>(null);
@@ -68,10 +90,28 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
     }
   }, [pedido?.movimento_id]);
 
+  // Load portadores and medios de pagamento
+  useEffect(() => {
+    if (!XEmpresaId) return;
+    (async () => {
+      const { data: portadorData } = await db.from("portador")
+        .select("portador_id, cd_portador, nome")
+        .eq("empresa_id", XEmpresaId)
+        .eq("excluido", false);
+      if (portadorData) setXPortadores(portadorData);
+
+      const { data: mpData } = await db.from("meio_pagamento").select("meio_pagamento_id, codigo, descricao");
+      if (mpData) setXMeiosPagamento(mpData);
+    })();
+  }, [XEmpresaId]);
+
   useEffect(() => {
     (async () => {
       let query = db.from("condicao_pagamento")
-        .select("condicao_id, descricao, qtd_parcelas, empresa_id")
+        .select(`
+          condicao_id, descricao, tipo_prazo, qtd_parcelas, intervalo, plano_conta_id, meio_pagamento_id, empresa_id,
+          prazo_1, prazo_2, prazo_3, prazo_4, prazo_5, prazo_6, prazo_7, prazo_8, prazo_9, prazo_10, prazo_11, prazo_12
+        `)
         .eq("excluido", false);
 
       if (XEmpresaId === XEmpresaMatrizId) {
@@ -110,6 +150,32 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
   const subtotal = totalPedido + vlDesconto;
   const totalPago = XPagtos.reduce((a, p) => a + Number(p.vl_pagamento || 0), 0);
 
+const toIsoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+function calcularVencimentos(cond: any, n_parcelas: number, dtEmissao: Date): Date[] {
+  const dates: Date[] = [];
+  const tipoPrazo = cond?.tipo_prazo || "F";
+  
+  if (tipoPrazo === "F") {
+    const intervalo = cond?.intervalo || 30;
+    for (let i = 1; i <= n_parcelas; i++) {
+      const d = new Date(dtEmissao);
+      d.setDate(d.getDate() + (i * intervalo));
+      dates.push(d);
+    }
+  } else {
+    // Variável
+    for (let i = 1; i <= n_parcelas; i++) {
+      const prazoField = `prazo_${i}`;
+      const dias = cond && cond[prazoField] !== undefined && cond[prazoField] !== null ? Number(cond[prazoField]) : (i * 30);
+      const d = new Date(dtEmissao);
+      d.setDate(d.getDate() + dias);
+      dates.push(d);
+    }
+  }
+  return dates;
+}
+
   const handleConfirmarPagamento = async (linhas: any[], vlDesc: number, pcDesc: number, enviarAoCaixa?: boolean) => {
     if (!pedido?.movimento_id) return;
 
@@ -135,24 +201,91 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
       vl_pagamento: l.vl_pagamento,
       n_parcelas: l.n_parcelas,
       vl_parcelas: l.vl_parcelas,
-      tp_pagamento: l.tp_pagamento || "DI"
+      tp_pagamento: l.tp_pagamento || "DI",
+      portador_id: l.portador_id || null
     }));
 
     const { error: errPagtos } = await db.from("movimento_pagamento").insert(payload);
     if (errPagtos) { toast.error("Erro ao gravar pagamentos: " + errPagtos.message); return; }
 
-    toast.success("Pagamentos e desconto processados.");
+    // --- GERAR PARCELAS NO FINANCEIRO ---
+    // 1. Limpa parcelas anteriores do financeiro para este movimento_id
+    const { error: errDelFin } = await db.from("financeiro")
+      .delete()
+      .eq("movimento_id", pedido.movimento_id);
+    
+    if (errDelFin) { toast.error("Erro ao limpar financeiro anterior: " + errDelFin.message); return; }
+
+    // 2. Prepara as linhas de financeiro
+    const finRows: any[] = [];
+    const dtEmissao = new Date();
+
+    for (const l of linhas) {
+      const cond = XCondicoes.find(c => c.condicao_id === l.condicao_id);
+      const mpCode = XMeiosPagamento.find(m => m.meio_pagamento_id === cond?.meio_pagamento_id)?.codigo || "99";
+      const vencimentos = calcularVencimentos(cond, l.n_parcelas, dtEmissao);
+      
+      const totalVl = l.vl_pagamento;
+      const nParc = l.n_parcelas;
+      const vlParcBase = parseFloat((totalVl / nParc).toFixed(2));
+
+      for (let i = 1; i <= nParc; i++) {
+        const isLast = i === nParc;
+        const vlParc = isLast ? parseFloat((totalVl - (vlParcBase * (nParc - 1))).toFixed(2)) : vlParcBase;
+        const dtVencto = vencimentos[i - 1] || new Date();
+
+        finRows.push({
+          empresa_id: XEmpresaId,
+          movimento_id: pedido.movimento_id,
+          documento: `${pedido.nr_movimento || pedido.movimento_id}-${i}`,
+          parcela: i,
+          tp_documento_id: mpCode,
+          tp_conta: "R",
+          dt_emissao: toIsoDate(dtEmissao),
+          dt_vencto: toIsoDate(dtVencto),
+          portador_id: l.portador_id ? parseInt(String(l.portador_id)) : 0,
+          cadastro_id: pedido.cadastro_id || 0,
+          observacao1: `TITULO GERADO REF. PEDIDO N. ${pedido.nr_movimento || pedido.movimento_id}`,
+          vl_titulo: vlParc,
+          vl_desconto: 0,
+          vl_pago: 0,
+          vl_adicional: 0,
+          vl_despesa: 0,
+          planoconta_id: cond?.plano_conta_id || 0,
+          plano_id: cond?.plano_conta_id || 0,
+          ativo: "S",
+          status: "A"
+        });
+      }
+    }
+
+    if (finRows.length > 0) {
+      const { error: errFin } = await db.from("financeiro").insert(finRows);
+      if (errFin) { toast.error("Erro ao gravar parcelas no financeiro: " + errFin.message); return; }
+    }
+    // ------------------------------------
+
+    toast.success("Pagamentos e financeiro processados.");
     
     if (enviarAoCaixa && onMudarStatus) {
       await onMudarStatus("F");
     } else {
       await load();
-      if (onMudarStatus) onMudarStatus("REFRESH"); // Trigger header refresh
+      if (onMudarStatus) onMudarStatus("REFRESH");
     }
   };
 
   const cols: IGridColumn[] = [
     { key: "condicao_id", label: "Condição", width: "2fr", render: r => XCondicoes.find(c => c.condicao_id === r.condicao_id)?.descricao || r.condicao_id },
+    { 
+      key: "portador_id", 
+      label: "Portador", 
+      width: "1.5fr", 
+      render: r => {
+        const p = XPortadores.find(x => x.portador_id === r.portador_id);
+        return p ? `${p.cd_portador} - ${p.nome}` : (r.portador_id || "");
+      }
+    },
     { key: "vl_pagamento", label: "Valor", width: "120px", align: "right", render: r => fmt(r.vl_pagamento) },
     { key: "n_parcelas", label: "Parcelas", width: "100px", align: "right" },
     { key: "vl_parcelas", label: "Valor Parcela", width: "120px", align: "right", render: r => fmt(r.vl_parcelas) },
@@ -192,6 +325,7 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
         <PedidoPagamentoDialog
           open={XShowPagamento}
           movimentoId={pedido.movimento_id}
+          cadastroId={pedido.cadastro_id}
           subtotalPedido={subtotal}
           tpDesconto={pedido.tp_desconto || "N"}
           onClose={() => setXShowPagamento(false)}

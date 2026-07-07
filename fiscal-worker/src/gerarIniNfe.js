@@ -45,7 +45,11 @@ export function gerarIniNfe(params) {
   linhas.push(`tpAmb=${ambiente}`);
   linhas.push('finNFe=1');
   linhas.push('indFinal=1');
-  linhas.push('indPres=1');
+  const indPres = String(cabecalho?.ind_pres || '1');
+  linhas.push(`indPres=${indPres}`);
+  if (['2', '3', '4', '9'].includes(indPres)) {
+    linhas.push('indIntermed=0');
+  }
   linhas.push('procEmi=0');
   linhas.push('verProc=RealCommerce1.0');
   linhas.push('');
@@ -129,10 +133,13 @@ export function gerarIniNfe(params) {
     linhas.push(`uTrib=${it.unidade || 'UN'}`);
     linhas.push(`qTrib=${qt.toFixed(4)}`);
     linhas.push(`vUnTrib=${vUnit.toFixed(10)}`);
-    linhas.push('vFrete=0.00');
-    linhas.push('vSeg=0.00');
+    const vFreteItem = (isNFCe && cabecalho?.ind_pres !== '4') ? 0 : Number(it.vl_frete || 0);
+    const vSegItem = Number(it.vl_seguro || 0);
+    const vOutroItem = Number(it.vl_outro || 0);
+    linhas.push(`vFrete=${vFreteItem.toFixed(2)}`);
+    linhas.push(`vSeg=${vSegItem.toFixed(2)}`);
     linhas.push(`vDesc=${Number(it.vl_desconto || 0).toFixed(2)}`);
-    linhas.push('vOutro=0.00');
+    linhas.push(`vOutro=${vOutroItem.toFixed(2)}`);
     linhas.push('indTot=1');
     linhas.push('');
 
@@ -242,9 +249,9 @@ export function gerarIniNfe(params) {
   const isSimplesNacional = (empresa?.regime_trib || 'S') === 'S';
   const vICMS = isSimplesNacional ? 0 : arred(itens.reduce((s, it) => s + Number(it.vl_icms || 0), 0));
   const vBCICMS = isSimplesNacional ? 0 : arred(itens.reduce((s, it) => s + Number(it.vl_bc || 0), 0));
-  const vFrete = isNFCe ? 0 : Number(cabecalho?.vl_frete || 0);
+  const vFrete = (isNFCe && cabecalho?.ind_pres !== '4') ? 0 : Number(cabecalho?.vl_frete || 0);
   const vSeg = Number(cabecalho?.vl_seguro || 0);
-  const vOutro = Number(cabecalho?.vl_despesa || 0);
+  const vOutro = Number(cabecalho?.vl_despesa || 0) + Number(cabecalho?.vl_outro || 0);
   const vNF = arred(vProd + vIPI + vST + vFrete + vSeg + vOutro - vDesc);
 
   linhas.push('[Total]');

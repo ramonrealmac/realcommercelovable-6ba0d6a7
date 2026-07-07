@@ -22,8 +22,10 @@ const EstadoForm = lazy(() => import("@/components/forms/enderecos/EstadoForm"))
 const CidadeForm = lazy(() => import("@/components/forms/enderecos/CidadeForm"));
 const RotaForm = lazy(() => import("@/components/forms/enderecos/RotaForm"));
 const BancoForm = lazy(() => import("@/components/forms/financeiro/BancoForm"));
+const ContaForm = lazy(() => import("@/components/forms/financeiro/ContaForm"));
 const CondicaoPagamentoForm = lazy(() => import("@/components/forms/financeiro/CondicaoPagamentoForm"));
 const PlanoContaForm = lazy(() => import("@/components/forms/financeiro/PlanoContaForm"));
+const PortadorForm = lazy(() => import("@/components/forms/financeiro/PortadorForm"));
 const TpOperacaoForm = lazy(() => import("@/components/forms/fiscal/TpOperacaoForm"));
 const CfopForm = lazy(() => import("@/components/forms/fiscal/CfopForm"));
 const FiscalGrupoProdutoForm = lazy(() => import("@/components/forms/fiscal/FiscalGrupoProdutoForm"));
@@ -97,6 +99,8 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "cidades": return <CidadeForm />;
       case "rotas": return <RotaForm />;
       case "bancos": return <BancoForm />;
+      case "contas": return <ContaForm />;
+      case "portadores": return <PortadorForm />;
       case "cond-pagamento": return <CondicaoPagamentoForm />;
       case "plano-contas": return <PlanoContaForm />;
       case "tipo-operacoes": return <TpOperacaoForm />;

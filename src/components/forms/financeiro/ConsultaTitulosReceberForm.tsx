@@ -34,7 +34,7 @@ const fmtDate = (v: string | null | undefined) => {
 };
 
 const ConsultaTitulosReceberForm: React.FC = () => {
-  const { openTab } = useAppContext();
+  const { openTab, XEmpresaId, XEmpresaMatrizId, XEmpresas } = useAppContext();
 
   const [XClientes, setXClientes] = useState<IClienteOpt[]>([]);
   const [XPlanos, setXPlanos] = useState<IPlanoOpt[]>([]);
@@ -84,6 +84,18 @@ const ConsultaTitulosReceberForm: React.FC = () => {
         .order("dt_emissao", { ascending: false })
         .limit(1000);
 
+      if (XEmpresaId === XEmpresaMatrizId) {
+        // Matriz: traz dados da matriz e de suas filiais
+        const filialIds = XEmpresas
+          .filter(e => e.empresa_matriz_id === XEmpresaMatrizId)
+          .map(e => e.empresa_id);
+        const targetIds = filialIds.length > 0 ? filialIds : [XEmpresaId];
+        q = q.in("empresa_id", targetIds);
+      } else {
+        // Filial: traz apenas dados da própria filial
+        q = q.eq("empresa_id", XEmpresaId);
+      }
+
       if (XClienteId) q = q.eq("cadastro_id", Number(XClienteId));
       if (XDtEmissao) q = q.eq("dt_emissao", XDtEmissao);
       if (XDtVencto) q = q.eq("dt_vencto", XDtVencto);
@@ -126,7 +138,7 @@ const ConsultaTitulosReceberForm: React.FC = () => {
     } finally {
       setXLoading(false);
     }
-  }, [XClienteId, XDtEmissao, XDtVencto, XSituacao, XPlanoId]);
+  }, [XClienteId, XDtEmissao, XDtVencto, XSituacao, XPlanoId, XEmpresaId, XEmpresaMatrizId, XEmpresas]);
 
   useEffect(() => { loadGrid(); }, [loadGrid]);
 

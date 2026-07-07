@@ -89,7 +89,11 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
   xml += `<tpAmb>${ambiente}</tpAmb>`;
   xml += `<finNFe>${cabecalho.fin_nfe || '1'}</finNFe>`;
   xml += `<indFinal>${isConsumidorFinal}</indFinal>`;
-  xml += `<indPres>1</indPres>`;
+  const indPres = cabecalho.ind_pres || '1';
+  xml += `<indPres>${indPres}</indPres>`;
+  if (['2', '3', '4', '9'].includes(String(indPres))) {
+    xml += `<indIntermed>0</indIntermed>`;
+  }
   xml += `<procEmi>0</procEmi>`;
   xml += `<verProc>RealCommerce2.0</verProc>`;
   xml += `</ide>`;
@@ -191,7 +195,7 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
     xml += `<uTrib>${esc(it.unidade || 'UN')}</uTrib>`;
     xml += `<qTrib>${qt.toFixed(4)}</qTrib>`;
     xml += `<vUnTrib>${vUnit.toFixed(10)}</vUnTrib>`;
-    const vFreteItem = Number(it.vl_frete || 0);
+    const vFreteItem = (isNFCe && cabecalho.ind_pres !== '4') ? 0 : Number(it.vl_frete || 0);
     const vSegItem = Number(it.vl_seguro || 0);
     const vOutroItem = Number(it.vl_outro || 0);
 
@@ -316,9 +320,9 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
   });
 
   // <total>
-  const vFrete = isNFCe ? 0 : Number(cabecalho.vl_frete || 0);
+  const vFrete = (isNFCe && cabecalho.ind_pres !== '4') ? 0 : Number(cabecalho.vl_frete || 0);
   const vSeg = Number(cabecalho.vl_seguro || 0);
-  const vOutro = Number(cabecalho.vl_despesa || 0);
+  const vOutro = Number(cabecalho.vl_despesa || 0) + Number(cabecalho.vl_outro || 0);
   const vNF = arred(vProdTotal + vST + vFrete + vSeg + vOutro - vDescTotal);
 
   xml += `<total>`;

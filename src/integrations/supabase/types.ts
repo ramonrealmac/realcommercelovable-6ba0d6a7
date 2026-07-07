@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -1884,7 +1884,6 @@ export type Database = {
       }
       condicao_pagamento: {
         Row: {
-          cd_condicao: number | null
           cd_condicao_pagamento: number | null
           condicao_id: number
           descricao: string
@@ -1911,7 +1910,6 @@ export type Database = {
           tipo_prazo: string | null
         }
         Insert: {
-          cd_condicao?: number | null
           cd_condicao_pagamento?: number | null
           condicao_id?: number
           descricao: string
@@ -1938,7 +1936,6 @@ export type Database = {
           tipo_prazo?: string | null
         }
         Update: {
-          cd_condicao?: number | null
           cd_condicao_pagamento?: number | null
           condicao_id?: number
           descricao?: string

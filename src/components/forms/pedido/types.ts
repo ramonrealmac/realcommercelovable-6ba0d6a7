@@ -72,6 +72,7 @@ export interface IMovimentoPagamento {
   vl_parcelas: number;
   obs_pagamento: string;
   nr_autorizacao: string;
+  portador_id?: number | null;
 }
 
 export const ST_PEDIDO_LABELS: Record<string, string> = {
