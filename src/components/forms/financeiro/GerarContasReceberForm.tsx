@@ -684,12 +684,24 @@ const GerarContasReceberForm: React.FC = () => {
               </div>
               <div>
                 <label className={lbl}>Status</label>
-                <input 
-                  readOnly 
-                  tabIndex={-1} 
-                  value={getStatusLabel(record)} 
-                  className={readonlyLeftCls} 
-                />
+                {(() => {
+                  const label = getStatusLabel(record);
+                  let colorClass = "text-zinc-950 dark:text-zinc-50"; // default
+                  if (label === "PAGTO PARCIAL") {
+                    colorClass = "text-[#0033ff] dark:text-[#4d88ff]";
+                  } else if (label === "BAIXADO") {
+                    colorClass = "text-emerald-600 dark:text-emerald-400";
+                  } else if (label === "CANCELADO") {
+                    colorClass = "text-zinc-400 dark:text-zinc-500";
+                  } else if (label === "VENCIDO") {
+                    colorClass = "text-red-600 dark:text-red-400";
+                  }
+                  return (
+                    <div className={`h-[34px] flex items-center font-bold text-base ${colorClass}`}>
+                      {label}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>

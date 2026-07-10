@@ -37,6 +37,9 @@ interface IProps {
   open: boolean;
   onClose: () => void;
   onSelect: (produto: IProdutoRow, deposito_id?: number) => void;
+  hideStockPromoFilters?: boolean;
+  hideDepositGrid?: boolean;
+  customFields?: CampoKey[];
 }
 
 const fmtNum = (v: number, dec = 2) =>
@@ -64,8 +67,8 @@ const COLUMNS_CONFIG: Record<CampoKey, { label: string; width: string; align?: "
   gtin: { label: "GTIN", width: "115px" },
   nome: { label: "Nome", width: "1fr" },
   unidade: { label: "Unid.", width: "55px", align: "center" },
-  preco: { label: "Preço", width: "90px", align: "right" },
-  preco_promo: { label: "Promoção", width: "95px", align: "right" },
+  preco: { label: "Preço", width: "120px", align: "right" },
+  preco_promo: { label: "Promoção", width: "120px", align: "right" },
   estoque_disp: { label: "Est. Disp.", width: "95px", align: "right" },
   estoque_emp: { label: "Est. Emp.", width: "95px", align: "right" },
   reservado: { label: "Reserv.", width: "90px", align: "right" },
@@ -156,7 +159,14 @@ export async function buscarProdutoPorCodigo(
   };
 }
 
-const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
+const ProdutoSearchDialog: React.FC<IProps> = ({
+  open,
+  onClose,
+  onSelect,
+  hideStockPromoFilters = false,
+  hideDepositGrid = false,
+  customFields
+}) => {
   const { XEmpresaId, XEmpresaMatrizId, XEmpresas } = useAppContext();
   const [XTermo, setXTermo] = useState("");
   const [XRows, setXRows] = useState<IProdutoRow[]>([]);
@@ -170,6 +180,9 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
   const [XCfgOpen, setXCfgOpen] = useState(false);
   const [XSortBy, setXSortBy] = useState<{ key: CampoKey; asc: boolean } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  const [XDecQty, setXDecQty] = useState(2);
+  const [XDecVal, setXDecVal] = useState(2);
 
   const sortedRows = useMemo(() => {
     if (!XSortBy) return XRows;
@@ -211,8 +224,8 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
     gtin: 115,
     nome: 300,
     unidade: 55,
-    preco: 90,
-    preco_promo: 95,
+    preco: 120,
+    preco_promo: 120,
     estoque_disp: 95,
     estoque_emp: 95,
     reservado: 90,
@@ -251,8 +264,8 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
           gtin: parsed.gtin ?? DEFAULT_WIDTHS.gtin,
           nome: parsed.nome ?? DEFAULT_WIDTHS.nome,
           unidade: parsed.unidade ?? DEFAULT_WIDTHS.unidade,
-          preco: parsed.preco ?? DEFAULT_WIDTHS.preco,
-          preco_promo: parsed.preco_promo ?? DEFAULT_WIDTHS.preco_promo,
+          preco: Math.max(parsed.preco ?? DEFAULT_WIDTHS.preco, 120),
+          preco_promo: Math.max(parsed.preco_promo ?? DEFAULT_WIDTHS.preco_promo, 120),
           estoque_disp: parsed.estoque_disp ?? DEFAULT_WIDTHS.estoque_disp,
           estoque_emp: parsed.estoque_emp ?? DEFAULT_WIDTHS.estoque_emp,
           reservado: parsed.reservado ?? DEFAULT_WIDTHS.reservado,
@@ -305,7 +318,11 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
   const gridTemplateColumns = useMemo(() => {
     return CAMPOS_DISPONIVEIS
       .filter(c => XCampos.includes(c.key))
-      .map(c => `${XColWidths[c.key]}px`)
+      .map(c => {
+        const conf = COLUMNS_CONFIG[c.key];
+        if (conf?.width === "1fr") return "1fr";
+        return `${XColWidths[c.key]}px`;
+      })
       .join(" ");
   }, [XCampos, XColWidths]);
 
@@ -318,12 +335,39 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
   // Carrega configuração de campos da empresa
   useEffect(() => {
     if (!open || !XEmpresaId) return;
+    if (customFields) {
+      setXCampos(customFields);
+      return;
+    }
     (async () => {
       const { data } = await db.from("empresa")
         .select("pdv_pesquisa_campos")
         .eq("empresa_id", XEmpresaId)
         .maybeSingle();
       setXCampos(parseCampos(data?.pdv_pesquisa_campos));
+    })();
+  }, [open, XEmpresaId, customFields]);
+
+  // Carrega casas decimais de quantidade (qtde venda) e valores (valor venda)
+  useEffect(() => {
+    if (!open || !XEmpresaId) return;
+    (async () => {
+      try {
+        const { data } = await db.from("empresa")
+          .select("qt_venda_qt_decimais, vl_venda_qt_decimais")
+          .eq("empresa_id", XEmpresaId)
+          .maybeSingle();
+        if (data) {
+          if (data.qt_venda_qt_decimais != null) {
+            setXDecQty(Number(data.qt_venda_qt_decimais));
+          }
+          if (data.vl_venda_qt_decimais != null) {
+            setXDecVal(Number(data.vl_venda_qt_decimais));
+          }
+        }
+      } catch (e) {
+        console.warn("Falha ao obter casas decimais no ProdutoSearchDialog:", e);
+      }
     })();
   }, [open, XEmpresaId]);
 
@@ -398,7 +442,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
       let codBarraProdIds: number[] = [];
       const { data: cbData } = await db.from("produto_codbarra")
         .select("produto_id")
-        .ilike("cod_barra", `%${t}%`)
+        .ilike("cod_barra", `${t}%`)
         .in("empresa_id", ids)
         .eq("excluido", false)
         .limit(20);
@@ -408,9 +452,9 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
       
       const cbFilter = codBarraProdIds.length > 0 ? `,produto_id.in.(${codBarraProdIds.join(",")})` : "";
       if (/^\d+$/.test(t)) {
-        q = q.or(`cd_produto.eq.${t},referencia.ilike.%${t}%,gtin.ilike.%${t}%,nome.ilike.%${t}%${cbFilter}`);
+        q = q.or(`cd_produto_text.ilike.${t}%,referencia.ilike.${t}%,gtin.ilike.${t}%,nome.ilike.${t}%${cbFilter}`);
       } else {
-        q = q.or(`nome.ilike.%${t}%,referencia.ilike.%${t}%,gtin.ilike.%${t}%${cbFilter}`);
+        q = q.or(`nome.ilike.${t}%,referencia.ilike.${t}%,gtin.ilike.${t}%${cbFilter}`);
       }
     }
     if (XSoPromo) q = q.eq("st_promo", "S");
@@ -420,10 +464,34 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
     const limitVal = (XSoEstoque && t) ? 250 : 100;
     q = q.order("nome").limit(limitVal);
 
+    let exactProd: any = null;
+    if (t && /^\d+$/.test(t)) {
+      try {
+        const { data: exactData } = await db.from("produto")
+          .select("produto_id, cd_produto, nome, unidade_id, preco_venda, preco_promocional, st_promo, referencia, gtin")
+          .in("empresa_id", ids)
+          .eq("cd_produto", Number(t))
+          .eq("excluido", false)
+          .limit(1)
+          .maybeSingle();
+        if (exactData) {
+          exactProd = exactData;
+        }
+      } catch (e) {
+        console.warn("Falha ao buscar cd_produto exato:", e);
+      }
+    }
+
     const { data: prods, error } = await q;
     if (error || !prods) { setXLoading(false); setXRows([]); return; }
 
-    const prodIds = prods.map((p: any) => p.produto_id);
+    let prodsList = [...prods];
+    if (exactProd) {
+      prodsList = prodsList.filter((p: any) => p.produto_id !== exactProd.produto_id);
+      prodsList.unshift(exactProd);
+    }
+
+    const prodIds = prodsList.map((p: any) => p.produto_id);
     let estMap: Record<number, { disp: number; res: number; naEmp: number }> = {};
 
     // 🔍 DEBUG — remover após diagnóstico
@@ -466,7 +534,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
     console.groupEnd();
     // 🔍 fim DEBUG
 
-    let rows: IProdutoRow[] = (prods as any[]).map(p => ({
+    let rows: IProdutoRow[] = prodsList.map(p => ({
       produto_id: p.produto_id,
       cd_produto: p.cd_produto,
       nome: p.nome,
@@ -607,7 +675,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
       chips.push(<span key={key}>{node}</span>);
     };
 
-    push("codigo", <span className="font-mono text-blue-600 dark:text-blue-400">#{r.cd_produto ?? r.produto_id}</span>);
+    push("codigo", <span className="font-mono text-blue-600 dark:text-blue-400">{r.cd_produto ?? r.produto_id}</span>);
     push("referencia", r.referencia ? <span className="font-mono text-muted-foreground">Ref: {r.referencia}</span> : null);
     push("gtin", r.gtin ? <span className="font-mono text-muted-foreground">GTIN: {r.gtin}</span> : null);
     push("nome", <span className="text-blue-800 dark:text-blue-300 font-medium break-words">{r.nome}</span>);
@@ -616,12 +684,12 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
     const showPromo = r.st_promo && r.preco_promocional > 0;
     push("preco",
       showPromo
-        ? <span className="line-through text-muted-foreground font-mono">R$ {fmtNum(r.preco_venda)}</span>
-        : <span className="text-black dark:text-white font-mono">R$ {fmtNum(r.preco_venda)}</span>
+        ? <span className="line-through text-muted-foreground font-mono">R$ {fmtNum(r.preco_venda, XDecVal)}</span>
+        : <span className="text-black dark:text-white font-mono">R$ {fmtNum(r.preco_venda, XDecVal)}</span>
     );
     push("preco_promo",
       showPromo
-        ? <span className="text-green-600 dark:text-green-400 font-semibold font-mono">R$ {fmtNum(r.preco_promocional)}</span>
+        ? <span className="text-green-600 dark:text-green-400 font-semibold font-mono">R$ {fmtNum(r.preco_promocional, XDecVal)}</span>
         : null
     );
 
@@ -629,13 +697,13 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
       v > 0 ? "text-black dark:text-white" : "text-red-600 dark:text-red-400 font-semibold";
 
     push("estoque_disp",
-      <span className={`font-mono ${corEst(r.estoque_disponivel)}`}>Estq: {fmtNum(r.estoque_disponivel, 3)}</span>
+      <span className={`font-mono ${corEst(r.estoque_disponivel)}`}>Estq: {fmtNum(r.estoque_disponivel, XDecQty)}</span>
     );
     push("estoque_emp",
-      <span className={`font-mono ${corEst(r.estoque_na_empresa)}`}>Emp: {fmtNum(r.estoque_na_empresa, 3)}</span>
+      <span className={`font-mono ${corEst(r.estoque_na_empresa)}`}>Emp: {fmtNum(r.estoque_na_empresa, XDecQty)}</span>
     );
     push("reservado",
-      <span className="font-mono text-amber-600 dark:text-amber-400">Res: {fmtNum(r.estoque_reservado, 3)}</span>
+      <span className="font-mono text-amber-600 dark:text-amber-400">Res: {fmtNum(r.estoque_reservado, XDecQty)}</span>
     );
 
     return chips;
@@ -649,7 +717,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
 
     switch (key) {
       case "codigo":
-        return <span className="font-mono text-blue-600 dark:text-blue-400">#{r.cd_produto ?? r.produto_id}</span>;
+        return <span className="font-mono text-blue-600 dark:text-blue-400">{r.cd_produto ?? r.produto_id}</span>;
       case "referencia":
         return r.referencia ? <span className="font-mono text-muted-foreground">{r.referencia}</span> : <span className="text-muted-foreground/30">-</span>;
       case "gtin":
@@ -660,18 +728,18 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
         return r.unidade_id ? <span className="text-muted-foreground">{r.unidade_id}</span> : <span className="text-muted-foreground/30">-</span>;
       case "preco":
         return showPromo
-          ? <span className="line-through text-muted-foreground font-mono">R$ {fmtNum(r.preco_venda)}</span>
-          : <span className="text-black dark:text-white font-mono font-medium">R$ {fmtNum(r.preco_venda)}</span>;
+          ? <span className="line-through text-muted-foreground font-mono">R$ {fmtNum(r.preco_venda, XDecVal)}</span>
+          : <span className="text-black dark:text-white font-mono font-medium">R$ {fmtNum(r.preco_venda, XDecVal)}</span>;
       case "preco_promo":
         return showPromo
-          ? <span className="text-green-600 dark:text-green-400 font-semibold font-mono">R$ {fmtNum(r.preco_promocional)}</span>
+          ? <span className="text-green-600 dark:text-green-400 font-semibold font-mono">R$ {fmtNum(r.preco_promocional, XDecVal)}</span>
           : <span className="text-muted-foreground/30">-</span>;
       case "estoque_disp":
-        return <span className={corEst(r.estoque_disponivel)}>{fmtNum(r.estoque_disponivel, 3)}</span>;
+        return <span className={corEst(r.estoque_disponivel)}>{fmtNum(r.estoque_disponivel, XDecQty)}</span>;
       case "estoque_emp":
-        return <span className={corEst(r.estoque_na_empresa)}>{fmtNum(r.estoque_na_empresa, 3)}</span>;
+        return <span className={corEst(r.estoque_na_empresa)}>{fmtNum(r.estoque_na_empresa, XDecQty)}</span>;
       case "reservado":
-        return <span className="font-mono text-amber-600 dark:text-amber-400">{fmtNum(r.estoque_reservado, 3)}</span>;
+        return <span className="font-mono text-amber-600 dark:text-amber-400">{fmtNum(r.estoque_reservado, XDecQty)}</span>;
       default:
         return null;
     }
@@ -680,7 +748,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent 
-        className="max-w-[95vw] lg:max-w-[90vw] xl:max-w-[85vw] h-[90vh] flex flex-col p-0 overflow-hidden [&>button[class*='absolute']]:text-white/80 [&>button[class*='absolute']]:hover:text-white [&>button[class*='absolute']]:top-4 [&>button[class*='absolute']]:right-4 border border-border"
+        className="max-w-[1150px] w-[95vw] h-[90vh] flex flex-col p-0 overflow-hidden [&>button[class*='absolute']]:text-white/80 [&>button[class*='absolute']]:hover:text-white [&>button[class*='absolute']]:top-4 [&>button[class*='absolute']]:right-4 border border-border"
         onOpenAutoFocus={(e) => {
           e.preventDefault();
           inputRef.current?.focus();
@@ -691,65 +759,67 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
         </DialogHeader>
 
         {/* Toolbar de Filtros (evita sobreposição com botão Fechar) */}
-        <div className="flex items-center justify-between gap-4 px-6 h-[25px] bg-muted/40 border-b border-border text-xs shrink-0 select-none">
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-1.5 cursor-pointer font-medium text-muted-foreground hover:text-foreground">
-              <input 
-                type="checkbox" 
-                checked={XSoEstoque} 
-                onChange={e => setXSoEstoque(e.target.checked)} 
-                className="rounded border-muted-foreground/30 text-primary focus:ring-primary w-3.5 h-3.5 m-0" 
-              />
-              <span className="leading-none mt-[1px]">Com estoque</span>
-            </label>
-            <label className="flex items-center gap-1.5 cursor-pointer font-medium text-muted-foreground hover:text-foreground">
-              <input 
-                type="checkbox" 
-                checked={XSoPromo} 
-                onChange={e => setXSoPromo(e.target.checked)} 
-                className="rounded border-muted-foreground/30 text-primary focus:ring-primary w-3.5 h-3.5 m-0" 
-              />
-              <span className="leading-none mt-[1px]">Em promoção</span>
-            </label>
-          </div>
+        {!hideStockPromoFilters && (
+          <div className="flex items-center justify-between gap-4 px-6 h-[25px] bg-muted/40 border-b border-border text-xs shrink-0 select-none">
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-1.5 cursor-pointer font-medium text-muted-foreground hover:text-foreground">
+                <input 
+                  type="checkbox" 
+                  checked={XSoEstoque} 
+                  onChange={e => setXSoEstoque(e.target.checked)} 
+                  className="rounded border-muted-foreground/30 text-primary focus:ring-primary w-3.5 h-3.5 m-0" 
+                />
+                <span className="leading-none mt-[1px]">Com estoque</span>
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer font-medium text-muted-foreground hover:text-foreground">
+                <input 
+                  type="checkbox" 
+                  checked={XSoPromo} 
+                  onChange={e => setXSoPromo(e.target.checked)} 
+                  className="rounded border-muted-foreground/30 text-primary focus:ring-primary w-3.5 h-3.5 m-0" 
+                />
+                <span className="leading-none mt-[1px]">Em promoção</span>
+              </label>
+            </div>
 
-          <Popover open={XCfgOpen} onOpenChange={setXCfgOpen}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                title="Configurar campos exibidos"
-                className="flex items-center justify-center gap-1 px-2.5 py-0 h-[20px] rounded border border-border bg-card hover:bg-accent text-[11px] font-medium"
-              >
-                <Settings2 className="w-3.5 h-3.5" /> <span className="leading-none">Campos</span>
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-60 p-2" align="end">
-              <div className="text-xs font-semibold text-muted-foreground mb-2 px-1">
-                Campos exibidos
-              </div>
-              <div className="space-y-1">
-                {CAMPOS_DISPONIVEIS.map(c => (
-                  <label
-                    key={c.key}
-                    className={`flex items-center gap-2 px-2 py-1 rounded text-sm cursor-pointer hover:bg-accent ${c.obrigatorio ? "opacity-60 cursor-not-allowed" : ""}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={XCampos.includes(c.key)}
-                      disabled={c.obrigatorio}
-                      onChange={() => toggleCampo(c.key)}
-                    />
-                    {c.label}
-                    {c.obrigatorio && <span className="text-[10px] text-muted-foreground ml-auto">obrig.</span>}
-                  </label>
-                ))}
-              </div>
-              <div className="text-[10px] text-muted-foreground mt-2 px-1">
-                Salvo automaticamente na empresa.
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
+            <Popover open={XCfgOpen} onOpenChange={setXCfgOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  title="Configurar campos exibidos"
+                  className="flex items-center justify-center gap-1 px-2.5 py-0 h-[20px] rounded border border-border bg-card hover:bg-accent text-[11px] font-medium"
+                >
+                  <Settings2 className="w-3.5 h-3.5" /> <span className="leading-none">Campos</span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-60 p-2" align="end">
+                <div className="text-xs font-semibold text-muted-foreground mb-2 px-1">
+                  Campos exibidos
+                </div>
+                <div className="space-y-1">
+                  {CAMPOS_DISPONIVEIS.map(c => (
+                    <label
+                      key={c.key}
+                      className={`flex items-center gap-2 px-2 py-1 rounded text-sm cursor-pointer hover:bg-accent ${c.obrigatorio ? "opacity-60 cursor-not-allowed" : ""}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={XCampos.includes(c.key)}
+                        disabled={c.obrigatorio}
+                        onChange={() => toggleCampo(c.key)}
+                      />
+                      {c.label}
+                      {c.obrigatorio && <span className="text-[10px] text-muted-foreground ml-auto">obrig.</span>}
+                    </label>
+                  ))}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-2 px-1">
+                  Salvo automaticamente na empresa.
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+        )}
 
         <div className="px-6 pt-1.5 pb-6 flex-1 flex flex-col min-h-0 space-y-4">
           <div className="relative shrink-0">
@@ -865,56 +935,59 @@ const ProdutoSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
           </div>
 
           {/* 2ª Grade — estoque por depósito do produto selecionado */}
-          <div className="border border-border rounded overflow-hidden shrink-0 bg-card">
-            <div className="px-3 py-1.5 bg-muted/50 text-[11px] font-semibold text-muted-foreground border-b border-border">
-              Estoque por depósito {XSelectedIdx != null ? `— ${sortedRows[XSelectedIdx]?.nome}` : ""}
-            </div>
-            <div className="grid grid-cols-12 gap-2 px-3 py-1.5 bg-muted text-[11px] font-semibold text-muted-foreground">
-              <div className="col-span-6">Depósito</div>
-              <div className="col-span-2 text-right">Físico</div>
-              <div className="col-span-2 text-right">Reserv.</div>
-              <div className="col-span-2 text-right">Disponível</div>
-            </div>
-            <div className="overflow-y-auto h-[126px] flex flex-col">
-              {XSelectedIdx == null && (
-                <div className="flex-1 flex items-center justify-center text-[11px] text-muted-foreground p-3">
-                  Selecione um produto para ver o estoque por depósito.
-                </div>
-              )}
-              {XLoadingEst && (
-                <div className="flex-1 flex items-center justify-center text-[11px] text-muted-foreground p-3">
-                  Carregando...
-                </div>
-              )}
-              {!XLoadingEst && XSelectedIdx != null && XEstDeps.length === 0 && (
-                <div className="flex-1 flex items-center justify-center text-[11px] text-muted-foreground p-3">
-                  Sem registros de estoque para este produto.
-                </div>
-              )}
-              {!XLoadingEst && XEstDeps.map((d, i) => {
-                const zebra = i % 2 === 1 ? "bg-muted/30" : "";
-                return (
-                  <div
-                    key={d.deposito_id}
-                    onDoubleClick={() => {
-                      const p = sortedRows[XSelectedIdx!];
-                      onSelect(p, d.deposito_id);
-                      onClose();
-                    }}
-                    className={`grid grid-cols-12 gap-2 px-3 py-1 text-[11px] border-t border-border cursor-pointer shrink-0 hover:bg-accent/50 ${zebra}`}
-                    title="Duplo clique: seleciona produto e depósito"
-                  >
-                    <div className="col-span-6 truncate">{d.deposito_nome}</div>
-                    <div className="col-span-2 text-right font-mono">{fmtNum(d.estoque_fisico, 3)}</div>
-                    <div className="col-span-2 text-right font-mono text-muted-foreground">{fmtNum(d.estoque_reservado, 3)}</div>
-                    <div className={`col-span-2 text-right font-mono rounded px-1 ${corEstoqueDep(d)}`}>
-                      {fmtNum(d.estoque_disponivel, 3)}
-                    </div>
+          {!hideDepositGrid && (
+            <div className="border border-border rounded overflow-hidden shrink-0 bg-card">
+              <div className="px-3 py-1 bg-muted/50 text-[11px] font-semibold text-muted-foreground border-b border-border">
+                Estoque por depósito {XSelectedIdx != null ? `— ${sortedRows[XSelectedIdx]?.nome}` : ""}
+              </div>
+              <div className="grid gap-2 px-3 py-1 bg-muted text-[11px] font-semibold text-muted-foreground" style={{ gridTemplateColumns: "1fr 120px 120px 120px" }}>
+                <div>Depósito</div>
+                <div className="text-right">Físico</div>
+                <div className="text-right">Reserv.</div>
+                <div className="text-right">Disponível</div>
+              </div>
+              <div className="overflow-y-auto h-[88px] flex flex-col">
+                {XSelectedIdx == null && (
+                  <div className="flex-1 flex items-center justify-center text-[11px] text-muted-foreground p-2">
+                    Selecione um produto para ver o estoque por depósito.
                   </div>
-                );
-              })}
+                )}
+                {XLoadingEst && (
+                  <div className="flex-1 flex items-center justify-center text-[11px] text-muted-foreground p-2">
+                    Carregando...
+                  </div>
+                )}
+                {!XLoadingEst && XSelectedIdx != null && XEstDeps.length === 0 && (
+                  <div className="flex-1 flex items-center justify-center text-[11px] text-muted-foreground p-2">
+                    Sem registros de estoque para este produto.
+                  </div>
+                )}
+                {!XLoadingEst && XEstDeps.map((d, i) => {
+                  const zebra = i % 2 === 1 ? "bg-muted/30" : "";
+                  return (
+                    <div
+                      key={d.deposito_id}
+                      onDoubleClick={() => {
+                        const p = sortedRows[XSelectedIdx!];
+                        onSelect(p, d.deposito_id);
+                        onClose();
+                      }}
+                      className={`grid gap-2 px-3 py-0.5 text-[11px] border-t border-border cursor-pointer shrink-0 hover:bg-accent/50 ${zebra}`}
+                      style={{ gridTemplateColumns: "1fr 120px 120px 120px" }}
+                      title="Duplo clique: seleciona produto e depósito"
+                    >
+                      <div className="truncate">{d.deposito_nome}</div>
+                      <div className="text-right font-mono">{fmtNum(d.estoque_fisico, XDecQty)}</div>
+                      <div className="text-right font-mono text-muted-foreground">{fmtNum(d.estoque_reservado, XDecQty)}</div>
+                      <div className={`text-right font-mono rounded px-1 ${corEstoqueDep(d)}`}>
+                        {fmtNum(d.estoque_disponivel, XDecQty)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           <p className="text-xs text-muted-foreground shrink-0">
             Clique para selecionar e ver estoque por depósito. <strong>Duplo clique</strong> seleciona o produto;

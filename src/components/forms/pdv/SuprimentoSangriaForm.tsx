@@ -1,8 +1,10 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppContext } from "@/contexts/AppContext";
 import { toast } from "sonner";
 import { ArrowDownToLine, ArrowUpFromLine, Save, X, Search } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { CurrencyInput } from "@/components/shared/CurrencyInput";
 
 const db = supabase as any;
 const fmt = (v: number) =>
@@ -54,7 +56,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
   const { XEmpresaId } = useAppContext();
   const isSup = tipo === "SUP";
   const titulo = isSup ? "Suprimento de Caixa" : "Sangria de Caixa";
-  const naturezaEsperada = isSup ? "C" : "D";
+  const naturezaEsperada = isSup ? "R" : "D";
   const corPrincipal = isSup ? "emerald" : "rose";
   const Icone = isSup ? ArrowDownToLine : ArrowUpFromLine;
 
@@ -62,7 +64,8 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
   const [XCaixas, setXCaixas] = useState<ICaixaAberto[]>([]);
   const [XCaixaSel, setXCaixaSel] = useState<number | "">(funcionarioId ?? "");
   const [XDtMov, setXDtMov] = useState<string>(dtMovimento || hoje());
-  const [XValor, setXValor] = useState<string>("");
+  const [XValor, setXValor] = useState<number>(0);
+  const [XSearchOpen, setXSearchOpen] = useState(false);
   const [XDescricao, setXDescricao] = useState<string>("");
   const [XPlanos, setXPlanos] = useState<IPlanoConta[]>([]);
   const [XPlanoId, setXPlanoId] = useState<number | "">("");
@@ -82,6 +85,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
         .select("caixa_abertura_id, empresa_id, funcionario_id, dt_abertura, status")
         .eq("empresa_id", XEmpresaId)
         .eq("status", "A")
+        .eq("dt_abertura", XDtMov)
         .order("dt_abertura", { ascending: false });
       if (error) throw new Error(error.message);
       const rows = (data || []) as ICaixaAberto[];
@@ -96,13 +100,20 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
       }
       const lista = rows.map((r) => ({ ...r, funcionario_nome: nomes[r.funcionario_id] || "" }));
       setXCaixas(lista);
-      if (!XCaixaSel && lista.length > 0) setXCaixaSel(lista[0].funcionario_id);
+      if (lista.length > 0) {
+        // Se o caixa atualmente selecionado não está na nova lista, seleciona o primeiro
+        if (!lista.some(c => c.funcionario_id === Number(XCaixaSel))) {
+          setXCaixaSel(lista[0].funcionario_id);
+        }
+      } else {
+        setXCaixaSel("");
+      }
     } catch (err: any) {
       toast.error(err.message || "Erro ao carregar caixas abertos.");
     } finally {
       setXLoading(false);
     }
-  }, [XEmpresaId]);
+  }, [XEmpresaId, XDtMov, XCaixaSel]);
 
   // ===== Carrega planos de conta filtrados pela natureza =====
   const carregarPlanos = useCallback(async () => {
@@ -114,6 +125,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
         .eq("empresa_id", XEmpresaId)
         .eq("excluido", false)
         .eq("tp_natureza", naturezaEsperada)
+        .eq("tp_conta", "A")
         .order("conta", { ascending: true });
       if (error) throw new Error(error.message);
       setXPlanos((data || []) as IPlanoConta[]);
@@ -164,7 +176,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
     if (!XEmpresaId) return toast.error("Empresa não definida.");
     if (!XCaixaSel) return toast.error("Selecione um caixa aberto.");
     if (!caixaSelecionado) return toast.error("Caixa selecionado não está aberto.");
-    const vl = Number(String(XValor).replace(",", "."));
+    const vl = XValor;
     if (!vl || vl <= 0) return toast.error("Informe um valor válido.");
     if (!XDescricao.trim()) return toast.error("Informe a descrição.");
     if (!XPlanoId) return toast.error("Selecione o plano de contas.");
@@ -194,6 +206,10 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
         .limit(1);
       if (((cmExist || []) as any[]).length > 0) {
         caixaMovimentoId = (cmExist as any[])[0].caixa_movimento_id;
+        await db
+          .from("caixa_movimento")
+          .update({ caixa_abertura_id: caixaSelecionado.caixa_abertura_id })
+          .eq("caixa_movimento_id", caixaMovimentoId);
       } else {
         const newCmId = await nextId("caixa_movimento", "caixa_movimento_id");
         const { error: errCm } = await db.from("caixa_movimento").insert({
@@ -207,6 +223,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
           historico: XDescricao,
           vl_movimento: isSup ? vl : -vl,
           excluido: false,
+          caixa_abertura_id: caixaSelecionado.caixa_abertura_id,
         });
         if (errCm) throw new Error(errCm.message);
         caixaMovimentoId = newCmId;
@@ -218,7 +235,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
       const { error: errMov } = await db.from("movimento").insert({
         movimento_id: newMovId,
         empresa_id: XEmpresaId,
-        cadastro_id: XCadastroSel?.cadastro_id ?? null,
+        cadastro_id: XCadastroSel?.cadastro_id && XCadastroSel.cadastro_id !== 0 ? XCadastroSel.cadastro_id : null,
         tp_movimento: tipo,
         tp_origem: "CAIXA",
         st_pedido: "T",
@@ -266,10 +283,10 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
         caixa_movimento_item_id: newCmiId,
         caixa_movimento_id: caixaMovimentoId,
         empresa_id: caixaSelecionado.empresa_id,
-        condicao_id: 0,
-        prazo_pagamento_id: 0,
-        bandeira_id: 0,
-        operadora_id: 0,
+        condicao_id: null,
+        prazo_pagamento_id: null,
+        bandeira_id: null,
+        operadora_id: null,
         numero_autoriza: "",
         qt_parcela: 1,
         vl_parcela: isSup ? vl : -vl,
@@ -281,7 +298,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
       if (errCmi) throw new Error(errCmi.message);
 
       toast.success(`${titulo} registrado com sucesso.`);
-      setXValor("");
+      setXValor(0);
       setXDescricao("");
       setXCadastroSel(null);
       setXCadastroBusca("");
@@ -293,71 +310,93 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
     }
   };
 
-  return (
-    <div className={embutido ? "space-y-3" : "p-4 space-y-4"}>
-      {!embutido && (
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Icone size={18} className={`text-${corPrincipal}-600`} /> {titulo}
-        </h2>
-      )}
+  const handleResponsavelKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+      setXSearchOpen(true);
+    }
+  };
 
-      <div className="border border-border rounded p-3 bg-card space-y-3">
+  const conteudo = (
+    <div className="w-full max-w-md bg-card border border-border rounded-lg shadow-sm overflow-hidden text-card-foreground">
+      <div className="flex items-center h-10 bg-topbar text-topbar-foreground px-4 gap-2 shrink-0">
+        <Icone size={18} />
+        <h2 className="text-sm font-semibold">{titulo}</h2>
+      </div>
+
+      <div className="p-6 space-y-4">
         {/* Caixa + Data */}
         <div className="grid grid-cols-12 gap-3">
-          <div className="col-span-7">
+          <div className="col-span-7 space-y-1">
             <label className="text-xs text-muted-foreground block">Caixa Aberto (Funcionário)</label>
             <select
+              id="ss_caixa_select"
               value={XCaixaSel}
               onChange={(e) => setXCaixaSel(Number(e.target.value))}
               disabled={!!funcionarioId || XLoading}
-              className="w-full border border-border rounded px-2 py-1 text-sm bg-white text-black"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  document.getElementById("ss_valor_input")?.focus();
+                }
+              }}
+              className="w-full border border-border rounded px-2 py-2 text-sm bg-card disabled:opacity-70 focus:ring-2 focus:ring-ring outline-none text-foreground"
             >
               <option value="">-- Selecione --</option>
               {XCaixas.map((c) => (
                 <option key={c.caixa_abertura_id} value={c.funcionario_id}>
-                  {c.funcionario_nome} — {new Date(c.dt_abertura + "T00:00:00").toLocaleDateString("pt-BR")}
+                  {c.funcionario_nome || `Caixa #${c.funcionario_id}`}
                 </option>
               ))}
             </select>
           </div>
-          <div className="col-span-5">
+          <div className="col-span-5 space-y-1">
             <label className="text-xs text-muted-foreground block">Data Movimento</label>
             <input
               type="date"
               value={XDtMov}
               onChange={(e) => setXDtMov(e.target.value)}
-              className="w-full border border-border rounded px-2 py-1 text-sm bg-white text-black"
+              disabled
+              className="w-full border border-border rounded px-2 py-2 text-sm bg-card focus:ring-2 focus:ring-ring outline-none opacity-70"
             />
           </div>
         </div>
 
         {/* Valor + Plano */}
         <div className="grid grid-cols-12 gap-3">
-          <div className="col-span-4">
+          <div className="col-span-4 space-y-1">
             <label className="text-xs text-muted-foreground block">Valor (R$)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
+            <CurrencyInput
+              id="ss_valor_input"
               value={XValor}
-              onChange={(e) => setXValor(e.target.value)}
-              className="w-full border border-border rounded px-2 py-1 text-sm text-right bg-white text-black"
+              onChange={setXValor}
+              decimals={2}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  document.getElementById("ss_plano_select")?.focus();
+                }
+              }}
+              className="w-full border border-border rounded px-2 py-2 text-sm text-right bg-card focus:ring-2 focus:ring-ring outline-none text-foreground"
               placeholder="0,00"
             />
-            {XValor && (
-              <div className="text-[11px] text-muted-foreground mt-0.5 text-right">
-                {fmt(Number(String(XValor).replace(",", ".")))}
-              </div>
-            )}
           </div>
-          <div className="col-span-8">
+          <div className="col-span-8 space-y-1">
             <label className="text-xs text-muted-foreground block">
               Plano de Contas ({isSup ? "Crédito" : "Débito"})
             </label>
             <select
+              id="ss_plano_select"
               value={XPlanoId}
               onChange={(e) => setXPlanoId(Number(e.target.value))}
-              className="w-full border border-border rounded px-2 py-1 text-sm bg-white text-black"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  document.getElementById("ss_descricao_input")?.focus();
+                }
+              }}
+              className="w-full border border-border rounded px-2 py-2 text-sm bg-card focus:ring-2 focus:ring-ring outline-none text-foreground"
             >
               <option value="">-- Selecione --</option>
               {XPlanos.map((p) => (
@@ -371,74 +410,96 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
         </div>
 
         {/* Descrição */}
-        <div>
+        <div className="space-y-1">
           <label className="text-xs text-muted-foreground block">Descrição / Histórico</label>
           <input
+            id="ss_descricao_input"
             type="text"
             value={XDescricao}
             onChange={(e) => setXDescricao(e.target.value)}
-            className="w-full border border-border rounded px-2 py-1 text-sm bg-white text-black"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                document.getElementById("ss_responsavel_input")?.focus();
+              }
+            }}
+            className="w-full border border-border rounded px-2 py-2 text-sm bg-card focus:ring-2 focus:ring-ring outline-none text-foreground"
             placeholder={isSup ? "Ex.: Troco inicial, reforço de caixa..." : "Ex.: Pagamento de fornecedor, retirada..."}
             maxLength={250}
           />
         </div>
 
         {/* Responsável */}
-        <div>
+        <div className="space-y-1">
           <label className="text-xs text-muted-foreground block">
             Responsável (Cadastro) <span className="text-muted-foreground">- opcional</span>
           </label>
-          {XCadastroSel ? (
-            <div className="flex items-center justify-between border border-border rounded px-2 py-1.5 bg-muted/30">
-              <span className="text-sm">
-                {XCadastroSel.razao_social}
-                {XCadastroSel.cnpj ? ` (${XCadastroSel.cnpj})` : ""}
-              </span>
+          <div className="flex gap-2">
+            <input
+              id="ss_responsavel_input"
+              type="text"
+              value={XCadastroSel ? (XCadastroSel.razao_social || "") : ""}
+              onKeyDown={handleResponsavelKeyDown}
+              placeholder="Enter para pesquisar..."
+              className="flex-1 border border-border rounded px-2 py-2 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary cursor-pointer text-foreground"
+              readOnly
+              onClick={() => setXSearchOpen(true)}
+            />
+            <button
+              type="button"
+              onClick={() => setXSearchOpen(true)}
+              className="px-3 py-2 border border-border rounded bg-card hover:bg-accent flex items-center justify-center text-foreground"
+              title="Pesquisar responsável"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+            {XCadastroSel && (
               <button
+                type="button"
                 onClick={() => setXCadastroSel(null)}
-                className="text-rose-500 hover:text-rose-700"
+                className="px-2 py-2 border border-border rounded bg-card text-rose-500 hover:text-rose-700 flex items-center justify-center"
                 title="Remover"
               >
-                <X size={14} />
+                <X className="w-4 h-4" />
               </button>
-            </div>
-          ) : (
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={XCadastroBusca}
-                onChange={(e) => setXCadastroBusca(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && buscarCadastros()}
-                placeholder="Digite o nome e tecle Enter..."
-                className="flex-1 border border-border rounded px-2 py-1 text-sm bg-white text-black"
-              />
-              <button
-                onClick={buscarCadastros}
-                className="text-sm px-3 py-1.5 rounded border border-border flex items-center gap-1"
-              >
-                <Search size={14} /> Buscar
-              </button>
-            </div>
-          )}
-          {XCadastros.length > 0 && !XCadastroSel && (
-            <div className="border border-border rounded mt-1 max-h-32 overflow-auto bg-card">
-              {XCadastros.map((c) => (
-                <div
-                  key={c.cadastro_id}
-                  onClick={() => {
-                    setXCadastroSel(c);
-                    setXCadastros([]);
-                    setXCadastroBusca("");
-                  }}
-                  className="px-2 py-1 text-sm hover:bg-accent cursor-pointer border-b border-border last:border-0"
-                >
-                  {c.razao_social}
-                  {c.cnpj ? ` — ${c.cnpj}` : ""}
-                </div>
-              ))}
-            </div>
-          )}
+            )}
+          </div>
         </div>
+
+        {/* Dialog de busca de funcionário */}
+        <FuncionarioSearchDialog
+          open={XSearchOpen}
+          onClose={() => setXSearchOpen(false)}
+          empresaId={XEmpresaId || 0}
+          onSelect={async (f) => {
+            setXSearchOpen(false);
+            
+            // Busca o cadastro correspondente ao funcionario_id
+            let cadastroId: number | null = null;
+            try {
+              const { data } = await db
+                .from("cadastro")
+                .select("cadastro_id")
+                .eq("funcionario_id", f.funcionario_id)
+                .limit(1);
+              if (data && data[0]) {
+                cadastroId = data[0].cadastro_id;
+              }
+            } catch (err) {
+              console.error("Erro ao buscar cadastro correspondente:", err);
+            }
+
+            setXCadastroSel({
+              cadastro_id: cadastroId || 0,
+              razao_social: f.nome,
+              cnpj: ""
+            });
+
+            setTimeout(() => {
+              document.getElementById("ss_confirmar_btn")?.focus();
+            }, 100);
+          }}
+        />
 
         {/* Ações */}
         <div className="flex justify-end gap-2 pt-2 border-t border-border">
@@ -446,16 +507,17 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
             <button
               onClick={onCancelar}
               disabled={XSalvando}
-              className="text-sm px-4 py-1.5 rounded border border-border hover:bg-accent flex items-center gap-2 disabled:opacity-50"
+              className="text-sm px-4 py-1.5 rounded border border-border hover:bg-accent flex items-center gap-2 disabled:opacity-50 transition-colors bg-card"
             >
               <X size={14} className="text-rose-500" /> Cancelar
             </button>
           )}
           <button
+            id="ss_confirmar_btn"
             onClick={salvar}
             disabled={XSalvando}
-            className={`text-sm px-4 py-1.5 rounded text-white flex items-center gap-2 disabled:opacity-50 ${
-              isSup ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700"
+            className={`text-sm px-4 py-1.5 rounded text-white flex items-center gap-2 disabled:opacity-50 transition-colors focus:ring-2 focus:ring-ring outline-none ${
+              isSup ? "bg-emerald-600 hover:bg-emerald-700 focus:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700 focus:bg-rose-700"
             }`}
           >
             <Save size={14} /> {XSalvando ? "Salvando..." : `Confirmar ${isSup ? "Suprimento" : "Sangria"}`}
@@ -463,6 +525,191 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
         </div>
       </div>
     </div>
+  );
+
+  if (embutido) {
+    return <div className="flex justify-center p-2">{conteudo}</div>;
+  }
+
+  return (
+    <div className="h-full flex items-center justify-center bg-muted/20 p-6">{conteudo}</div>
+  );
+};
+
+interface IFuncionarioSearchDialogProps {
+  open: boolean;
+  onClose: () => void;
+  onSelect: (f: { funcionario_id: number; cd_funcionario?: number | null; nome: string }) => void;
+  empresaId: number;
+}
+
+const FuncionarioSearchDialog: React.FC<IFuncionarioSearchDialogProps> = ({ open, onClose, onSelect, empresaId }) => {
+  const [XTermo, setXTermo] = useState("");
+  const [XRows, setXRows] = useState<{ funcionario_id: number; cd_funcionario?: number | null; nome: string | null }[]>([]);
+  const [XLoading, setXLoading] = useState(false);
+  const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const buscar = useCallback(async (termo: string) => {
+    setXLoading(true);
+    let q = supabase.from("funcionario")
+      .select("funcionario_id, cd_funcionario, nome")
+      .eq("empresa_id", empresaId)
+      .order("nome")
+      .limit(100);
+      
+    const t = termo.trim();
+    if (t) {
+      q = q.ilike("nome", `%${t}%`);
+    }
+    const { data, error } = await q;
+    setXLoading(false);
+    if (!error && data) {
+      setXRows(data as any[]);
+      setXSelectedIdx(null);
+    }
+  }, [empresaId]);
+
+  useEffect(() => {
+    if (open) {
+      setXTermo("");
+      buscar("");
+      setXSelectedIdx(null);
+    }
+  }, [open, buscar]);
+
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => buscar(XTermo), 300);
+    return () => clearTimeout(t);
+  }, [XTermo, open, buscar]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (XRows.length === 0 || XLoading) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setXSelectedIdx(prev => {
+        const next = prev === null ? 0 : Math.min(prev + 1, XRows.length - 1);
+        setTimeout(() => {
+          const el = listRef.current?.querySelector(`[data-index="${next}"]`) as HTMLElement;
+          el?.scrollIntoView({ block: "nearest" });
+        }, 10);
+        return next;
+      });
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setXSelectedIdx(prev => {
+        const next = prev === null ? 0 : Math.max(prev - 1, 0);
+        setTimeout(() => {
+          const el = listRef.current?.querySelector(`[data-index="${next}"]`) as HTMLElement;
+          el?.scrollIntoView({ block: "nearest" });
+        }, 10);
+        return next;
+      });
+    } else if (e.key === "Enter") {
+      const selected = XSelectedIdx !== null ? XSelectedIdx : 0;
+      if (XRows[selected]) {
+        e.preventDefault();
+        onSelect({
+          funcionario_id: XRows[selected].funcionario_id,
+          cd_funcionario: XRows[selected].cd_funcionario,
+          nome: XRows[selected].nome || ""
+        });
+        onClose();
+      }
+    }
+  };
+
+  const gridTemplateColumns = "100px 1fr";
+
+  return (
+    <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
+      <DialogContent className="max-w-3xl bg-card text-card-foreground border border-border">
+        <DialogHeader>
+          <DialogTitle className="text-sm font-semibold">Pesquisar Funcionário</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              type="text"
+              autoFocus
+              value={XTermo}
+              onChange={(e) => setXTermo(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Digite o nome do funcionário..."
+              className="w-full pl-9 pr-9 py-2 border border-border rounded text-sm bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+            />
+            {XTermo && (
+              <button onClick={() => setXTermo("")} className="absolute right-2 top-1/2 -translate-y-1/2 p-1">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            )}
+          </div>
+
+          <div className="border border-border rounded overflow-hidden bg-card">
+            <div ref={listRef} className="h-[300px] overflow-y-auto flex flex-col">
+              {/* Header da Tabela/Grid */}
+              {!XLoading && XRows.length > 0 && (
+                <div 
+                  className="grid gap-3 px-3 py-2 text-xs font-semibold text-muted-foreground bg-muted/40 border-b border-border sticky top-0 bg-card z-10 shrink-0 select-none"
+                  style={{ gridTemplateColumns }}
+                >
+                  <div>Código</div>
+                  <div className="text-left">Nome</div>
+                </div>
+              )}
+
+              {XLoading && (
+                <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-6">
+                  Carregando...
+                </div>
+              )}
+              {!XLoading && XRows.length === 0 && (
+                <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-6">
+                  Nenhum funcionário encontrado.
+                </div>
+              )}
+              {!XLoading && XRows.map((r, idx) => {
+                const sel = XSelectedIdx === idx;
+                const zebra = idx % 2 === 1 ? "bg-muted/10" : "";
+                return (
+                  <button
+                    key={r.funcionario_id}
+                    data-index={idx}
+                    onDoubleClick={() => {
+                      onSelect({
+                        funcionario_id: r.funcionario_id,
+                        cd_funcionario: r.cd_funcionario,
+                        nome: r.nome || ""
+                      });
+                      onClose();
+                    }}
+                    onClick={() => {
+                      onSelect({
+                        funcionario_id: r.funcionario_id,
+                        cd_funcionario: r.cd_funcionario,
+                        nome: r.nome || ""
+                      });
+                      onClose();
+                    }}
+                    className={`w-full grid gap-3 px-3 py-2.5 text-sm border-b border-border/60 shrink-0 break-words items-center transition-colors text-left ${
+                      sel ? "bg-primary/15 font-medium" : `${zebra} hover:bg-accent/50`
+                    }`}
+                    style={{ gridTemplateColumns }}
+                  >
+                    <div className="font-mono text-foreground text-left">{r.cd_funcionario ?? r.funcionario_id}</div>
+                    <div className="text-foreground break-words text-left">{r.nome || ""}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">Clique ou use as setas e Enter para selecionar. Resultados limitados a 100.</p>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

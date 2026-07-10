@@ -173,24 +173,36 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
       setXFormMode("view");
     }
     // Invalida o cache para que outras abas que usem a mesma tabela se atualizem sozinhas
-    await queryClient.invalidateQueries({ queryKey: [config.XTableName] });
-    await loadData();
-    // Try to keep selection on the saved record
+    queryClient.removeQueries({ queryKey: [config.XTableName] });
+    const refetchResult = await refetch();
+    // Seleciona o registro salvo diretamente na lista retornada pelo refetch
     if (savedRec && (savedRec as any)[config.XPrimaryKey] !== undefined) {
       const pkVal = (savedRec as any)[config.XPrimaryKey];
-      setTimeout(() => {
-        setXData(curr => {
-          const idx = curr.findIndex(r => (r as any)[config.XPrimaryKey] === pkVal);
-          if (idx >= 0) setXCurrentIdx(idx);
-          return curr;
-        });
-      }, 0);
+      const freshList = (refetchResult?.data as any)?.list as T[] | undefined;
+      if (freshList) {
+        const idx = freshList.findIndex(r => (r as any)[config.XPrimaryKey] === pkVal);
+        if (idx >= 0) {
+          setXData(freshList);
+          setXCurrentIdx(idx);
+        }
+      } else {
+        // Fallback: aguarda o próximo render com XData atualizado
+        setTimeout(() => {
+          setXData(curr => {
+            const idx = curr.findIndex(r => (r as any)[config.XPrimaryKey] === pkVal);
+            if (idx >= 0) setXCurrentIdx(idx);
+            return curr;
+          });
+        }, 0);
+      }
     }
-  }, [XEditRecord, XFormMode, XCurrentRecord, config, loadData]);
+  }, [XEditRecord, XFormMode, XCurrentRecord, config, refetch, queryClient]);
 
   const handleExcluir = useCallback(async () => {
     if (!XCurrentRecord) return;
     if (!confirm("Deseja realmente excluir este registro?")) return;
+
+    const pkVal = XCurrentRecord[config.XPrimaryKey];
 
     if (config.XOnDelete) {
       try {
@@ -206,13 +218,13 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
         // Hard delete
         const { error: err } = await db.from(config.XTableName)
           .delete()
-          .eq(config.XPrimaryKey, XCurrentRecord[config.XPrimaryKey]);
+          .eq(config.XPrimaryKey, pkVal);
         error = err;
       } else {
         // Soft delete (default)
         const { error: err } = await db.from(config.XTableName)
           .update({ excluido: true, dt_alteracao: new Date().toISOString() })
-          .eq(config.XPrimaryKey, XCurrentRecord[config.XPrimaryKey]);
+          .eq(config.XPrimaryKey, pkVal);
         error = err;
       }
 
@@ -220,11 +232,17 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
       toast.success("Registro excluído.");
     }
     
-    // Invalida o cache
-    await queryClient.invalidateQueries({ queryKey: [config.XTableName] });
-    await loadData();
+    // Remove imediatamente o registro excluído do estado local (evita que o cache antigo mantenha na tela)
+    setXData(prev => {
+      const newList = prev.filter(r => r[config.XPrimaryKey] !== pkVal);
+      return newList;
+    });
     setXCurrentIdx(i => Math.max(0, i - 1));
-  }, [XCurrentRecord, config, loadData]);
+
+    // Remove o cache e força nova busca
+    queryClient.removeQueries({ queryKey: [config.XTableName] });
+    await loadData();
+  }, [XCurrentRecord, config, loadData, queryClient]);
 
   const handleFirst = useCallback(() => setXCurrentIdx(0), []);
   const handlePrev = useCallback(() => setXCurrentIdx(i => Math.max(0, i - 1)), []);

@@ -78,6 +78,8 @@ const ConsultaTitulosReceberForm: React.FC = () => {
 
   const [XPlanos, setXPlanos] = useState<IPlanoOpt[]>([]);
   const [XPortadores, setXPortadores] = useState<{ portador_id: number; cd_portador: number; nome: string }[]>([]);
+  const [XMeiosPagamento, setXMeiosPagamento] = useState<{ codigo: string; descricao: string }[]>([]);
+  const [XBaixaMeioPagamentoId, setXBaixaMeioPagamentoId] = useState<string>("");
 
   // Action overlays & form states
   const [XActionType, setXActionType] = useState<"BAIXAR" | "ESTORNAR" | "CANCELAR" | null>(null);
@@ -125,16 +127,25 @@ const ConsultaTitulosReceberForm: React.FC = () => {
   // Carregar listas dos filtros
   useEffect(() => {
     (async () => {
-      const { data: plData } = await supabase
-        .from("plano_conta")
-        .select("plano_conta_id, nome")
-        .eq("tp_conta", "A")
-        .eq("tp_natureza", "R")
-        .eq("excluido", false)
-        .order("nome");
+      const [{ data: plData }, { data: mpData }] = await Promise.all([
+        supabase
+          .from("plano_conta")
+          .select("plano_conta_id, nome")
+          .eq("tp_conta", "A")
+          .eq("tp_natureza", "R")
+          .eq("excluido", false)
+          .order("nome"),
+        supabase
+          .from("meio_pagamento")
+          .select("codigo, descricao")
+          .order("descricao")
+      ]);
       
       const planData = (plData as { plano_conta_id: number; nome: string }[] | null) ?? [];
       setXPlanos(planData.map((p) => ({ plano_id: p.plano_conta_id, nome: p.nome })));
+
+      const mpList = (mpData as { codigo: string; descricao: string }[] | null) ?? [];
+      setXMeiosPagamento(mpList);
     })();
   }, []);
 
@@ -411,6 +422,7 @@ const ConsultaTitulosReceberForm: React.FC = () => {
       setXBaixaVlJurosStr("0,00");
       setXBaixaPortadorId(fin.portador_id || 0);
       setXBaixaPlanoId(fin.plano_id || fin.planoconta_id || 0);
+      setXBaixaMeioPagamentoId(fin.tp_documento_id ? String(fin.tp_documento_id) : "");
       
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : String(e);
@@ -496,6 +508,66 @@ const ConsultaTitulosReceberForm: React.FC = () => {
         
         if (insErr) throw insErr;
 
+        // If cash (Dinheiro = "01"): update cash register balance + insert caixa_movimento + insert caixa_movimento_item
+        if (XBaixaMeioPagamentoId === "01" && XBaixaCaixaAberturaId) {
+          const vlPago = parseMoneyToFloat(XBaixaVlPagoStr);
+          
+          // 1. Get current balance
+          const { data: cxData, error: cxErr } = await supabase
+            .from("caixa_abertura")
+            .select("vl_fechamento")
+            .eq("caixa_abertura_id", XBaixaCaixaAberturaId)
+            .single();
+            
+          if (!cxErr && cxData) {
+            const currentVal = Number(cxData.vl_fechamento ?? 0);
+            
+            // 2. Update balance
+            const { error: updCxErr } = await supabase
+              .from("caixa_abertura")
+              .update({ vl_fechamento: currentVal + vlPago })
+              .eq("caixa_abertura_id", XBaixaCaixaAberturaId);
+              
+            if (updCxErr) throw updCxErr;
+          }
+          
+          // 3. Insert caixa_movimento
+          const { data: newCm, error: errCm } = await supabase
+            .from("caixa_movimento")
+            .insert({
+              empresa_id,
+              colaborador_id: XBaixaFuncionarioId,
+              funcionario_id: XBaixaFuncionarioId,
+              dt_movimento: XBaixaDtPagamento,
+              tp_movimento: "V", // V = Venda/Recebimento
+              tp_operacao: "E", // E = Entrada
+              historico: `RECEBIMENTO TITULO ${XActionRow.titulo || XActionRow.documento || ""}`,
+              vl_movimento: vlPago,
+              excluido: false,
+              caixa_abertura_id: XBaixaCaixaAberturaId
+            })
+            .select("caixa_movimento_id")
+            .single();
+            
+          if (errCm) throw errCm;
+          
+          if (newCm) {
+            // 4. Insert caixa_movimento_item
+            const { error: errCmi } = await supabase
+              .from("caixa_movimento_item")
+              .insert({
+                empresa_id,
+                caixa_movimento_id: newCm.caixa_movimento_id,
+                vl_recebido: vlPago,
+                excluido: false,
+                meio_pagamento_id: 1, // 1 = Dinheiro
+                plano_conta_id: XBaixaPlanoId
+              });
+              
+            if (errCmi) throw errCmi;
+          }
+        }
+
         // Query all active financeiro_baixa records for this title to sum values
         const { data: bxs, error: qErr } = await supabase
           .from("financeiro_baixa")
@@ -531,7 +603,8 @@ const ConsultaTitulosReceberForm: React.FC = () => {
             status: novoStatus,
             portador_id: XBaixaPortadorId,
             plano_id: XBaixaPlanoId,
-            planoconta_id: XBaixaPlanoId
+            planoconta_id: XBaixaPlanoId,
+            tp_documento_id: XBaixaMeioPagamentoId || null
           })
           .eq("financeiro_id", financeiro_id);
 
@@ -608,8 +681,9 @@ const ConsultaTitulosReceberForm: React.FC = () => {
   const rowColor = (sit: string | null | undefined) => {
     const s = (sit ?? "").toUpperCase();
     if (s === "BAIXADO") return "text-emerald-600 dark:text-emerald-400";
-    if (s === "VENCIDO" || s === "CANCELADO") return "text-red-600 dark:text-red-400";
-    if (s === "PAGTO PARCIAL" || s === "PAGAMENTO PARCIAL") return "text-blue-600 dark:text-blue-400";
+    if (s === "VENCIDO") return "text-red-600 dark:text-red-400";
+    if (s === "CANCELADO") return "text-zinc-400 dark:text-zinc-500";
+    if (s === "PAGTO PARCIAL" || s === "PAGAMENTO PARCIAL") return "text-[#0033ff] dark:text-[#4d88ff] font-semibold";
     return "";
   };
 
@@ -1017,7 +1091,23 @@ const ConsultaTitulosReceberForm: React.FC = () => {
                     />
                   </div>
 
-                  <div className="col-span-2">
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Meio de Pagamento</label>
+                    <select
+                      value={XBaixaMeioPagamentoId}
+                      onChange={(e) => setXBaixaMeioPagamentoId(e.target.value)}
+                      className="w-full border border-border rounded px-3 py-2 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                    >
+                      <option value="">Selecione...</option>
+                      {XMeiosPagamento.map((m) => (
+                        <option key={m.codigo} value={m.codigo}>
+                          {m.descricao}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-span-2 sm:col-span-1">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Portador</label>
                     <select
                       value={XBaixaPortadorId}

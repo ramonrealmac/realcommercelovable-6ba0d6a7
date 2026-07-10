@@ -1,13 +1,15 @@
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   Plus, Save, Pencil, Trash2, RefreshCw, Search, Filter,
-  HelpCircle, LogOut, List
+  HelpCircle, LogOut, List, X
 } from "lucide-react";
 import { useAppContext } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import { baseService } from "@/utils/baseService";
+import ProdutoSearchDialog from "@/components/forms/pedido/ProdutoSearchDialog";
+import { CurrencyInput } from "@/components/shared/CurrencyInput";
 
 const db = supabase as any;
 
@@ -54,11 +56,40 @@ const EstoqueForm: React.FC = () => {
   const [XEditMode, setXEditMode] = useState<"none" | "insert" | "edit">("none");
 
   const [XEditProdutoId, setXEditProdutoId] = useState<number | "">("");
+  const [XEditProdutoCd, setXEditProdutoCd] = useState<string>("");
+  const [XEditProdutoNome, setXEditProdutoNome] = useState("");
+  const [XOpenProduto, setXOpenProduto] = useState(false);
   const [XEditDepositoId, setXEditDepositoId] = useState<number | "">("");
   const [XEditEndereco, setXEditEndereco] = useState("");
   const [XEditEstoqueMinimo, setXEditEstoqueMinimo] = useState(0);
   const [XEditEstoquePadrao, setXEditEstoquePadrao] = useState(0);
   const [XEditEstoqueInventario, setXEditEstoqueInventario] = useState(0);
+
+  const depositoRef = useRef<HTMLSelectElement>(null);
+  const enderecoRef = useRef<HTMLInputElement>(null);
+  const minimoRef = useRef<HTMLInputElement>(null);
+  const padraoRef = useRef<HTMLInputElement>(null);
+  const inventarioRef = useRef<HTMLInputElement>(null);
+  const confirmarRef = useRef<HTMLButtonElement>(null);
+
+  const [XQtDecimais, setXQtDecimais] = useState<number>(2);
+
+  useEffect(() => {
+    if (!XEmpresaId) return;
+    (async () => {
+      try {
+        const { data } = await db.from("empresa")
+          .select("qt_venda_qt_decimais")
+          .eq("empresa_id", XEmpresaId)
+          .maybeSingle();
+        if (data && data.qt_venda_qt_decimais != null) {
+          setXQtDecimais(Number(data.qt_venda_qt_decimais));
+        }
+      } catch (e) {
+        console.warn("Falha ao obter casas decimais da empresa:", e);
+      }
+    })();
+  }, [XEmpresaId]);
 
   /* ─── Group empresa IDs (same empresa_matriz_id) ─── */
   const XGroupEmpresaIds = useMemo(() => {
@@ -77,15 +108,43 @@ const EstoqueForm: React.FC = () => {
     const XIds = XGroupEmpresaIds.length > 0 ? XGroupEmpresaIds : [XEmpresaId];
     
     // 1. Fetch stock and deposit records first
-    const [{ data: XEstData }, { data: XDepData }] = await Promise.all([
-      db.from("estoque").select("*").in("empresa_id", XIds).eq("excluido", false).order("estoque_id"),
-      db.from("deposito").select("deposito_id, nome, empresa_id, st_privado, endereco").in("empresa_id", XIds).eq("excluido", false).order("nome"),
-    ]);
+    const XEstData: IEstoque[] = [];
+    let from = 0;
+    const step = 1000;
+    try {
+      while (true) {
+        const { data, error } = await db
+          .from("estoque")
+          .select("*")
+          .in("empresa_id", XIds)
+          .eq("excluido", false)
+          .order("estoque_id")
+          .range(from, from + step - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        XEstData.push(...data);
+        if (data.length < step) break;
+        from += step;
+      }
+    } catch (err) {
+      console.error("Erro ao carregar registros de estoque:", err);
+    }
 
-    // Filter deposits: own company = all, sister companies = only public (st_privado=false)
-    const XFilteredDeps = (XDepData || []).filter((d: IDeposito) =>
-      d.empresa_id === XEmpresaId || d.st_privado === false
-    );
+    let XDepData: IDeposito[] = [];
+    try {
+      const { data } = await db
+        .from("deposito")
+        .select("deposito_id, nome, empresa_id, st_privado, endereco")
+        .in("empresa_id", XIds)
+        .eq("excluido", false)
+        .order("nome");
+      if (data) XDepData = data;
+    } catch (err) {
+      console.error("Erro ao carregar depósitos:", err);
+    }
+
+    // Filter deposits: include all deposits (remove private filter)
+    const XFilteredDeps = XDepData;
     // Filter estoques to only show those in visible deposits
     const XVisibleDepIds = new Set(XFilteredDeps.map((d: IDeposito) => d.deposito_id));
     const XFilteredEst = (XEstData || []).filter((e: IEstoque) => XVisibleDepIds.has(e.deposito_id));
@@ -93,23 +152,47 @@ const EstoqueForm: React.FC = () => {
     // 2. Extract unique product IDs from stock records to ensure they are loaded regardless of query limits
     const XEstProdIds = [...new Set(XFilteredEst.map((e: IEstoque) => e.produto_id).filter(Boolean))];
 
-    // 3. Fetch referenced products AND the first 1000 products by name in parallel
-    const [{ data: XProdEstData }, { data: XProdRecentData }] = await Promise.all([
-      XEstProdIds.length > 0
-        ? db.from("produto").select("produto_id, nome, cd_produto, descricao").in("produto_id", XEstProdIds)
-        : Promise.resolve({ data: [] }),
-      db.from("produto").select("produto_id, nome, cd_produto, descricao").eq("empresa_id", XEmpresaMatrizId).eq("excluido", false).order("nome").limit(1000)
-    ]);
+    // 3. Fetch referenced products in chunks of 150 (avoids URL size limit errors) AND the first 1000 products by name
+    const XProdEstDataList: IProduto[] = [];
+    const chunkSize = 150;
+    for (let i = 0; i < XEstProdIds.length; i += chunkSize) {
+      const chunk = XEstProdIds.slice(i, i + chunkSize);
+      try {
+        const { data } = await db
+          .from("produto")
+          .select("produto_id, nome, cd_produto, descricao")
+          .in("produto_id", chunk);
+        if (data) XProdEstDataList.push(...data);
+      } catch (err) {
+        console.error("Erro ao carregar lote de produtos do estoque:", err);
+      }
+    }
+
+    let XProdRecentData: IProduto[] = [];
+    try {
+      const { data } = await db
+        .from("produto")
+        .select("produto_id, nome, cd_produto, descricao")
+        .eq("empresa_id", XEmpresaMatrizId)
+        .eq("excluido", false)
+        .order("nome")
+        .limit(1000);
+      if (data) XProdRecentData = data;
+    } catch (err) {
+      console.error("Erro ao carregar produtos recentes:", err);
+    }
 
     // 4. Merge products to remove duplicates
     const XMergedProdsMap = new Map<number, IProduto>();
     (XProdRecentData || []).forEach((p: IProduto) => XMergedProdsMap.set(p.produto_id, p));
-    (XProdEstData || []).forEach((p: IProduto) => XMergedProdsMap.set(p.produto_id, p));
+    XProdEstDataList.forEach((p: IProduto) => XMergedProdsMap.set(p.produto_id, p));
     const XMergedProds = Array.from(XMergedProdsMap.values());
 
     setXEstoques(XFilteredEst);
     setXProdutos(XMergedProds);
     setXDepositos(XFilteredDeps);
+    console.log('Debug: Loaded Depositos', XFilteredDeps);
+    console.log('Debug: Loaded Estoques count', XFilteredEst.length);
   }, [XEmpresaId, XEmpresaMatrizId, XGroupEmpresaIds]);
 
   useEffect(() => {
@@ -144,6 +227,13 @@ const EstoqueForm: React.FC = () => {
     return m;
   }, [XDepositos]);
 
+  const fmtQty = useCallback((v: number) => {
+    return Number(v || 0).toLocaleString("pt-BR", { 
+      minimumFractionDigits: XQtDecimais, 
+      maximumFractionDigits: XQtDecimais 
+    });
+  }, [XQtDecimais]);
+
   const XColumns: IGridColumn[] = useMemo(() => [
     {
       key: "cd_codigo", label: "Código", width: "120px",
@@ -161,22 +251,46 @@ const EstoqueForm: React.FC = () => {
       getValue: (r: IEstoque) => XEmpresaMap[r.empresa_id] || "",
     },
     {
-      key: "deposito_id", label: "Depósito", width: "160px",
+      key: "deposito_nome", label: "Depósito", width: "160px",
       render: (r: IEstoque) => `${r.deposito_id} - ${XDepositoMap[r.deposito_id] || ""}`,
-      getValue: (r: IEstoque) => XDepositoMap[r.deposito_id] || "",
+      getValue: (r: IEstoque) => `${r.deposito_id} - ${XDepositoMap[r.deposito_id] || ""}`,
     },
     {
       key: "endereco", label: "Endereço", width: "120px",
       render: (r: IEstoque) => XDepositoEnderecoMap[r.deposito_id] || r.endereco || "",
       getValue: (r: IEstoque) => XDepositoEnderecoMap[r.deposito_id] || r.endereco || "",
     },
-    { key: "estoque_fisico", label: "Físico", width: "90px", align: "right" as const },
-    { key: "estoque_reservado", label: "Reservado", width: "90px", align: "right" as const },
-    { key: "estoque_disponivel", label: "Disponível", width: "90px", align: "right" as const },
-    { key: "estoque_minimo", label: "Mínimo", width: "90px", align: "right" as const },
-    { key: "estoque_padrao", label: "Padrão", width: "90px", align: "right" as const },
-    { key: "estoque_inventario", label: "Inventário", width: "90px", align: "right" as const },
-  ], [XProdutoCdMap, XProdutoDescMap, XDepositoMap, XEmpresaMap, XDepositoEnderecoMap]);
+    { 
+      key: "estoque_fisico", label: "Físico", width: "95px", align: "right" as const,
+      render: (r: IEstoque) => fmtQty(r.estoque_fisico),
+      getValue: (r: IEstoque) => fmtQty(r.estoque_fisico)
+    },
+    { 
+      key: "estoque_reservado", label: "Reservado", width: "95px", align: "right" as const,
+      render: (r: IEstoque) => fmtQty(r.estoque_reservado),
+      getValue: (r: IEstoque) => fmtQty(r.estoque_reservado)
+    },
+    { 
+      key: "estoque_disponivel", label: "Disponível", width: "95px", align: "right" as const,
+      render: (r: IEstoque) => fmtQty(r.estoque_disponivel),
+      getValue: (r: IEstoque) => fmtQty(r.estoque_disponivel)
+    },
+    { 
+      key: "estoque_minimo", label: "Mínimo", width: "95px", align: "right" as const,
+      render: (r: IEstoque) => fmtQty(r.estoque_minimo),
+      getValue: (r: IEstoque) => fmtQty(r.estoque_minimo)
+    },
+    { 
+      key: "estoque_padrao", label: "Padrão", width: "95px", align: "right" as const,
+      render: (r: IEstoque) => fmtQty(r.estoque_padrao),
+      getValue: (r: IEstoque) => fmtQty(r.estoque_padrao)
+    },
+    { 
+      key: "estoque_inventario", label: "Inventário", width: "95px", align: "right" as const,
+      render: (r: IEstoque) => fmtQty(r.estoque_inventario),
+      getValue: (r: IEstoque) => fmtQty(r.estoque_inventario)
+    },
+  ], [XProdutoCdMap, XProdutoDescMap, XDepositoMap, XEmpresaMap, XDepositoEnderecoMap, fmtQty]);
 
   // Keep custom filter for estoque since it uses getValue/render
   const XFiltered = XEstoques.filter(e => {
@@ -218,6 +332,8 @@ const EstoqueForm: React.FC = () => {
   const handleIncluir = () => {
     setXEditMode("insert");
     setXEditProdutoId("");
+    setXEditProdutoCd("");
+    setXEditProdutoNome("");
     setXEditDepositoId("");
     setXEditEndereco("");
     setXEditEstoqueMinimo(0);
@@ -287,6 +403,11 @@ const EstoqueForm: React.FC = () => {
       setXEditMode("edit");
       setXEditingEstoque(estData);
       setXEditProdutoId(estData.produto_id);
+      
+      const product = XProdutos.find(p => p.produto_id === estData.produto_id);
+      setXEditProdutoCd(product ? String(product.cd_produto || "") : "");
+      setXEditProdutoNome(product ? product.nome || "" : "");
+
       setXEditDepositoId(estData.deposito_id);
       setXEditEndereco(estData.endereco || "");
       setXEditEstoqueMinimo(estData.estoque_minimo ?? 0);
@@ -315,7 +436,6 @@ const EstoqueForm: React.FC = () => {
         endereco: XEditEndereco.trim(),
         estoque_fisico: 0,
         estoque_reservado: 0,
-        estoque_disponivel: 0,
         estoque_minimo: XEditEstoqueMinimo,
         estoque_padrao: XEditEstoquePadrao,
         estoque_inventario: XEditEstoqueInventario,
@@ -390,35 +510,61 @@ const EstoqueForm: React.FC = () => {
           </span>
           <div className="flex flex-col gap-0.5">
             <label className="text-[10px] text-muted-foreground">Produto *</label>
-            <select value={XEditProdutoId} onChange={(e) => setXEditProdutoId(e.target.value ? Number(e.target.value) : "")} disabled={XEditMode === "edit"} className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-56 disabled:opacity-50 disabled:bg-secondary">
-              <option value="">Selecione...</option>
-              {XProdutos.map(p => (<option key={p.produto_id} value={p.produto_id}>{p.cd_produto ?? p.produto_id} - {p.descricao || p.nome}</option>))}
-            </select>
+            <div className="flex items-center gap-1">
+              <div 
+                onClick={() => XEditMode === "insert" && setXOpenProduto(true)}
+                className={`bg-card border border-border rounded px-2.5 py-1 text-sm outline-none focus:ring-2 focus:ring-ring w-[320px] flex justify-between items-center overflow-hidden h-[34px] ${XEditMode === "insert" ? "cursor-pointer" : "opacity-60 bg-secondary cursor-not-allowed"}`}
+              >
+                <span className={`truncate flex-1 text-left mr-2 ${XEditProdutoId ? "text-foreground" : "text-muted-foreground"}`}>
+                  {XEditProdutoId ? `${XEditProdutoCd || XEditProdutoId} - ${XEditProdutoNome}` : "Selecione..."}
+                </span>
+                {XEditProdutoId && XEditMode === "insert" && (
+                  <X 
+                    className="w-3.5 h-3.5 hover:text-rose-500 shrink-0" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setXEditProdutoId("");
+                      setXEditProdutoCd("");
+                      setXEditProdutoNome("");
+                    }}
+                  />
+                )}
+              </div>
+              <button 
+                type="button"
+                onClick={() => XEditMode === "insert" && setXOpenProduto(true)}
+                disabled={XEditMode === "edit"}
+                className="p-1.5 border border-border rounded hover:bg-accent shrink-0 disabled:opacity-50 h-[34px] flex items-center justify-center"
+              >
+                <Search className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
           </div>
           <div className="flex flex-col gap-0.5">
             <label className="text-[10px] text-muted-foreground">Depósito *</label>
-            <select value={XEditDepositoId} onChange={(e) => setXEditDepositoId(e.target.value ? Number(e.target.value) : "")} disabled={XEditMode === "edit"} className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-44 disabled:opacity-50 disabled:bg-secondary">
+            <select ref={depositoRef} value={XEditDepositoId} onChange={(e) => setXEditDepositoId(e.target.value ? Number(e.target.value) : "")} disabled={XEditMode === "edit"} className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-44 disabled:opacity-50 disabled:bg-secondary" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); enderecoRef.current?.focus(); } }}>
               <option value="">Selecione...</option>
               {XDepositos.map(d => (<option key={d.deposito_id} value={d.deposito_id}>{d.deposito_id} - {d.nome}</option>))}
             </select>
           </div>
           <div className="flex flex-col gap-0.5">
             <label className="text-[10px] text-muted-foreground">Endereço</label>
-            <input type="text" value={XEditEndereco} onChange={(e) => setXEditEndereco(e.target.value)} maxLength={20} className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-32" onKeyDown={(e) => { if (e.key === "Enter") handleSalvar(); if (e.key === "Escape") setXEditMode("none"); }} />
+            <input ref={enderecoRef} type="text" value={XEditEndereco} onChange={(e) => setXEditEndereco(e.target.value)} maxLength={20} className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-32" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); minimoRef.current?.focus(); } if (e.key === "Escape") setXEditMode("none"); }} />
           </div>
           <div className="flex flex-col gap-0.5">
             <label className="text-[10px] text-muted-foreground">Mínimo</label>
-            <input type="number" value={XEditEstoqueMinimo} onChange={(e) => setXEditEstoqueMinimo(Number(e.target.value))} className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-20 text-right" onKeyDown={(e) => { if (e.key === "Enter") handleSalvar(); if (e.key === "Escape") setXEditMode("none"); }} />
+            <CurrencyInput ref={minimoRef} value={XEditEstoqueMinimo} onChange={setXEditEstoqueMinimo} decimals={XQtDecimais} className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-20 text-right" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); padraoRef.current?.focus(); } if (e.key === "Escape") setXEditMode("none"); }} />
           </div>
           <div className="flex flex-col gap-0.5">
             <label className="text-[10px] text-muted-foreground">Padrão</label>
-            <input type="number" value={XEditEstoquePadrao} onChange={(e) => setXEditEstoquePadrao(Number(e.target.value))} className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-20 text-right" onKeyDown={(e) => { if (e.key === "Enter") handleSalvar(); if (e.key === "Escape") setXEditMode("none"); }} />
+            <CurrencyInput ref={padraoRef} value={XEditEstoquePadrao} onChange={setXEditEstoquePadrao} decimals={XQtDecimais} className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-20 text-right" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); inventarioRef.current?.focus(); } if (e.key === "Escape") setXEditMode("none"); }} />
           </div>
           <div className="flex flex-col gap-0.5">
             <label className="text-[10px] text-muted-foreground">Inventário</label>
-            <input type="number" value={XEditEstoqueInventario} onChange={(e) => setXEditEstoqueInventario(Number(e.target.value))} className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-20 text-right" onKeyDown={(e) => { if (e.key === "Enter") handleSalvar(); if (e.key === "Escape") setXEditMode("none"); }} />
+            <CurrencyInput ref={inventarioRef} value={XEditEstoqueInventario} onChange={setXEditEstoqueInventario} decimals={XQtDecimais} className="border border-border rounded px-2 py-1 text-sm bg-card outline-none focus:ring-2 focus:ring-ring w-20 text-right" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmarRef.current?.focus(); } if (e.key === "Escape") setXEditMode("none"); }} />
           </div>
           <button
+            ref={confirmarRef}
             onClick={handleSalvar}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-transparent text-emerald-600 hover:bg-accent transition-all hover:scale-105"
           >
@@ -456,6 +602,22 @@ const EstoqueForm: React.FC = () => {
           exportTitle="Estoque"
         />
       </div>
+
+      <ProdutoSearchDialog
+        open={XOpenProduto}
+        onClose={() => setXOpenProduto(false)}
+        onSelect={(p) => {
+          setXEditProdutoId(p.produto_id);
+          setXEditProdutoCd(String(p.cd_produto || ""));
+          setXEditProdutoNome(p.nome);
+          setTimeout(() => {
+            depositoRef.current?.focus();
+          }, 100);
+        }}
+        hideStockPromoFilters={true}
+        hideDepositGrid={true}
+        customFields={["codigo", "nome"]}
+      />
     </div>
   );
 };
