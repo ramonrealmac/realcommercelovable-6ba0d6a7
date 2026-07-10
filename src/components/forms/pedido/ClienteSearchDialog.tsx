@@ -4,7 +4,29 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Search, X, Settings2 } from "lucide-react";
 
-const db = supabase as any;
+// Usando cliente supabase tipado diretamente
+
+const COL_WIDTHS: Record<CampoKey, string> = {
+  codigo: "80px",
+  cnpj: "140px",
+  razao_social: "1.5fr",
+  fantasia: "1fr",
+  telefone: "120px",
+  email: "1.2fr",
+  endereco: "1.5fr",
+  bairro: "1fr"
+};
+
+const fmtCnpjCpf = (v: string | null | undefined): string => {
+  if (!v) return "";
+  const clean = v.replace(/\D/g, "");
+  if (clean.length === 11) {
+    return clean.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+  } else if (clean.length === 14) {
+    return clean.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+  }
+  return v;
+};
 
 export interface IClienteRow {
   cadastro_id: number;
@@ -41,7 +63,7 @@ const CAMPOS_DISPONIVEIS: { key: CampoKey; label: string; obrigatorio?: boolean 
 
 const CAMPOS_DEFAULT: CampoKey[] = ["codigo", "cnpj", "razao_social", "fantasia"];
 
-const parseCampos = (raw: any): CampoKey[] => {
+const parseCampos = (raw: unknown): CampoKey[] => {
   try {
     const arr = typeof raw === "string" ? JSON.parse(raw) : raw;
     if (Array.isArray(arr) && arr.length) return arr as CampoKey[];
@@ -58,10 +80,12 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
   const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  const gridTemplateColumns = XCampos.map(k => COL_WIDTHS[k] || "1fr").join(" ");
+
   useEffect(() => {
     if (!open || !empresaId) return;
     (async () => {
-      const { data } = await db.from("empresa")
+      const { data } = await supabase.from("empresa")
         .select("pdv_pesquisa_campos_cliente")
         .eq("empresa_id", empresaId)
         .maybeSingle();
@@ -72,7 +96,7 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
   const salvarCampos = async (novos: CampoKey[]) => {
     setXCampos(novos);
     if (!empresaId) return;
-    await db.from("empresa")
+    await supabase.from("empresa")
       .update({ pdv_pesquisa_campos_cliente: JSON.stringify(novos) })
       .eq("empresa_id", empresaId);
   };
@@ -86,7 +110,7 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
 
   const buscar = useCallback(async (termo: string) => {
     setXLoading(true);
-    let q = db.from("cadastro")
+    let q = supabase.from("cadastro")
       .select("cadastro_id, cd_cadastro, cnpj, razao_social, nome_fantasia, fone_geral, email, endereco_cidade_id, endereco_bairro, endereco_logradouro")
       .eq("excluido", false)
       .eq("st_cliente", "S")
@@ -152,26 +176,7 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
     }
   };
 
-  const renderChips = (r: IClienteRow) => {
-    const sep = <span className="text-muted-foreground/40 select-none">·</span>;
-    const chips: React.ReactNode[] = [];
-    const push = (key: CampoKey, node: React.ReactNode) => {
-      if (!XCampos.includes(key) || node == null) return;
-      if (chips.length > 0) chips.push(<React.Fragment key={`s-${key}`}>{sep}</React.Fragment>);
-      chips.push(<span key={key}>{node}</span>);
-    };
-
-    push("codigo", <span className="font-mono text-blue-600 dark:text-blue-400">#{r.cd_cadastro ?? r.cadastro_id}</span>);
-    push("cnpj", r.cnpj ? <span className="font-mono text-muted-foreground">{r.cnpj}</span> : null);
-    push("razao_social", <span className="text-blue-800 dark:text-blue-300 font-medium break-words">{r.razao_social || ""}</span>);
-    push("fantasia", r.nome_fantasia ? <span className="text-foreground">{r.nome_fantasia}</span> : null);
-    push("telefone", r.fone_geral ? <span className="font-mono text-emerald-700 dark:text-emerald-400">📞 {r.fone_geral}</span> : null);
-    push("email", r.email ? <span className="text-muted-foreground">{r.email}</span> : null);
-    push("endereco", r.endereco_logradouro ? <span className="text-muted-foreground">{r.endereco_logradouro}</span> : null);
-    push("bairro", r.endereco_bairro ? <span className="text-muted-foreground">{r.endereco_bairro}</span> : null);
-
-    return chips;
-  };
+  // Layout ajustado para colunas alinhadas em grid em vez de chips flexbox
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -235,8 +240,21 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
             )}
           </div>
 
-          <div className="border border-border rounded overflow-hidden">
+          <div className="border border-border rounded overflow-hidden bg-card">
             <div ref={listRef} className="h-[460px] overflow-y-auto flex flex-col">
+              {/* Header da Tabela/Grid */}
+              {!XLoading && XRows.length > 0 && (
+                <div 
+                  className="grid gap-3 px-3 py-2 text-xs font-semibold text-muted-foreground bg-muted/40 border-b border-border sticky top-0 bg-card z-10 shrink-0 select-none"
+                  style={{ gridTemplateColumns }}
+                >
+                  {XCampos.map(k => {
+                    const def = CAMPOS_DISPONIVEIS.find(c => c.key === k);
+                    return <div key={k}>{def?.label ?? k}</div>;
+                  })}
+                </div>
+              )}
+
               {XLoading && (
                 <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-6">
                   Carregando...
@@ -249,18 +267,45 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
               )}
               {!XLoading && XRows.map((r, idx) => {
                 const sel = XSelectedIdx === idx;
-                const zebra = idx % 2 === 1 ? "bg-muted/30" : "";
+                const zebra = idx % 2 === 1 ? "bg-muted/10" : "";
                 return (
                   <button
                     key={r.cadastro_id}
                     data-index={idx}
                     onDoubleClick={() => { onSelect(r); onClose(); }}
                     onClick={() => { onSelect(r); onClose(); }}
-                    className={`w-full flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-sm text-left border-t border-border shrink-0 break-words ${
-                      sel ? "bg-primary/15" : `${zebra} hover:bg-accent/50`
+                    className={`w-full grid gap-3 px-3 py-2.5 text-sm text-left border-b border-border/60 shrink-0 break-words items-center transition-colors ${
+                      sel ? "bg-primary/15 font-medium" : `${zebra} hover:bg-accent/50`
                     }`}
+                    style={{ gridTemplateColumns }}
                   >
-                    {renderChips(r)}
+                    {XCampos.map(k => {
+                      if (k === "codigo") {
+                        return <div key={k} className="font-mono text-foreground text-left">{r.cd_cadastro ?? r.cadastro_id}</div>;
+                      }
+                      if (k === "cnpj") {
+                        return <div key={k} className="font-mono text-muted-foreground text-xs">{fmtCnpjCpf(r.cnpj)}</div>;
+                      }
+                      if (k === "razao_social") {
+                        return <div key={k} className="text-foreground break-words">{r.razao_social || ""}</div>;
+                      }
+                      if (k === "fantasia") {
+                        return <div key={k} className="text-muted-foreground break-words">{r.nome_fantasia || ""}</div>;
+                      }
+                      if (k === "telefone") {
+                        return <div key={k} className="font-mono text-muted-foreground text-xs">{r.fone_geral || ""}</div>;
+                      }
+                      if (k === "email") {
+                        return <div key={k} className="text-muted-foreground text-xs truncate" title={r.email || ""}>{r.email || ""}</div>;
+                      }
+                      if (k === "endereco") {
+                        return <div key={k} className="text-muted-foreground text-xs truncate" title={r.endereco_logradouro || ""}>{r.endereco_logradouro || ""}</div>;
+                      }
+                      if (k === "bairro") {
+                        return <div key={k} className="text-muted-foreground text-xs truncate" title={r.endereco_bairro || ""}>{r.endereco_bairro || ""}</div>;
+                      }
+                      return <div key={k}></div>;
+                    })}
                   </button>
                 );
               })}

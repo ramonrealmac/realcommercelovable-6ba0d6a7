@@ -39,6 +39,7 @@ const ListaNfeEmitidaForm = lazy(() => import("@/components/forms/nfe/ListaNfeEm
 const NfeEmitidaForm = lazy(() => import("@/components/forms/nfe/NfeEmitidaForm"));
 const ConsultaTitulosReceberForm = lazy(() => import("@/components/forms/financeiro/ConsultaTitulosReceberForm"));
 const BaixaPorClienteForm = lazy(() => import("@/components/forms/financeiro/BaixaPorClienteForm"));
+const GerarContasReceberForm = lazy(() => import("@/components/forms/financeiro/GerarContasReceberForm"));
 const LiberacaoPedidosForm = lazy(() => import("@/components/forms/financeiro/LiberacaoPedidosForm"));
 const MontagemRotaForm = lazy(() => import("@/components/forms/entrega/MontagemRotaForm"));
 const RotasMontadasForm = lazy(() => import("@/components/forms/entrega/RotasMontadasForm"));
@@ -81,6 +82,7 @@ const TabLoadingFallback = () => (
 );
 
 // Componente estável: evita desmontagem ao re-renderizar AppContent
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TabContent = memo(({ component, params }: { component: string; params?: any }) => {
   const renderContent = () => {
     switch (component) {
@@ -117,6 +119,7 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "nfe-emitidas": return <ListaNfeEmitidaForm initialFilterId={params?.nfe_cabecalho_id} />;
       case "nfe-form": return <NfeEmitidaForm initialId={params?.nfe_cabecalho_id} />;
       case "consulta-titulos-receber": return <ConsultaTitulosReceberForm />;
+      case "gerar-contas-receber": return <GerarContasReceberForm />;
       case "baixa-por-cliente": return <BaixaPorClienteForm />;
       case "liberacao-pedidos": return <LiberacaoPedidosForm />;
       case "montagem-rota": return <MontagemRotaForm />;

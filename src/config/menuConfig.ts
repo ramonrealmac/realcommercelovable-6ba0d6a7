@@ -209,7 +209,9 @@ export const MENU_CONFIG: MenuItem[] = [
         title: "Contas a Receber",
         icon: FileUp,
         children: [
-          { id: "consulta-titulos-receber", title: "Consulta de Títulos", icon: FileText },
+          { id: "consulta-titulos-receber", title: "Gerenciador de Títulos", icon: FileText },
+          { id: "gerar-contas-receber", title: "Títulos Emitidos", icon: Plus },
+          { id: "baixa-por-cliente", title: "Baixa por Cliente", icon: DollarSign },
         ],
       },
       { id: "contas-pagar", title: "Contas a Pagar", icon: FileDown },

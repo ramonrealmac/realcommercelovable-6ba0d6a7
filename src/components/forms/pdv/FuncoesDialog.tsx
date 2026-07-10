@@ -1,12 +1,13 @@
 import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowDownToLine, ArrowUpFromLine, Receipt, Printer, Ban, Lock, Unlock, X, FileText } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, Receipt, Printer, Ban, Lock, Unlock, X, FileText, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 interface IProps {
   open: boolean;
   /** caixa.caixa_cnc_venda === 'S' habilita Cancelamento */
   podeCancelar: boolean;
+  podeEstornar: boolean;
   onClose: () => void;
   onCancelamento: () => void;
   onFechamento: () => void;
@@ -14,9 +15,22 @@ interface IProps {
   onSuprimento: () => void;
   onSangria: () => void;
   onEmissaoPedidos: () => void;
+  onEstorno: () => void;
 }
 
-const FuncoesDialog: React.FC<IProps> = ({ open, podeCancelar, onClose, onCancelamento, onFechamento, onAbertura, onSuprimento, onSangria, onEmissaoPedidos }) => {
+const FuncoesDialog: React.FC<IProps> = ({ 
+  open, 
+  podeCancelar, 
+  podeEstornar, 
+  onClose, 
+  onCancelamento, 
+  onFechamento, 
+  onAbertura, 
+  onSuprimento, 
+  onSangria, 
+  onEmissaoPedidos,
+  onEstorno 
+}) => {
   const cards = [
     { key: "supr", label: "Suprimento", desc: "Entrada de dinheiro no caixa",
       icon: <ArrowDownToLine size={28} />, color: "text-emerald-600",
@@ -36,6 +50,9 @@ const FuncoesDialog: React.FC<IProps> = ({ open, podeCancelar, onClose, onCancel
     { key: "canc", label: "Cancelamento", desc: "Cancela uma venda",
       icon: <Ban size={28} />, color: "text-red-600",
       action: () => { onClose(); onCancelamento(); }, enabled: podeCancelar },
+    { key: "estorno", label: "Estornar Venda", desc: "Reverte venda recebida",
+      icon: <RotateCcw size={28} />, color: "text-amber-500",
+      action: () => { onClose(); onEstorno(); }, enabled: podeEstornar },
     { key: "abert", label: "Abertura", desc: "Abertura do caixa",
       icon: <Unlock size={28} />, color: "text-emerald-600",
       action: () => { onClose(); onAbertura(); }, enabled: true },

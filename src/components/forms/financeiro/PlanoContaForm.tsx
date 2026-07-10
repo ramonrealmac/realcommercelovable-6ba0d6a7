@@ -19,7 +19,7 @@ const XGridCols: IGridColumn[] = [
   { key: "conta", label: "Conta", width: "150px" },
   { key: "nome", label: "Nome", width: "1fr" },
   { key: "tp_conta", label: "Tipo", width: "100px", render: (r) => r.tp_conta === "S" ? "Sintética" : "Analítica" },
-  { key: "tp_natureza", label: "Natureza", width: "100px", render: (r) => r.tp_natureza === "D" ? "Devedora" : "Credora" },
+  { key: "tp_natureza", label: "Natureza", width: "100px", render: (r) => r.tp_natureza === "R" ? "Receita" : r.tp_natureza === "D" ? "Despesa" : r.tp_natureza },
 ];
 
 const PlanoContaForm: React.FC = () => {
@@ -52,7 +52,7 @@ const PlanoContaForm: React.FC = () => {
         XPrimaryKey: "plano_conta_id",
         XTitle: "Plano de Contas",
         XEmpresaId: XEmpresaMatrizId,
-        XDefaultRecord: { conta: "", nome: "", tp_conta: "A", tp_natureza: "D" },
+        XDefaultRecord: { conta: "", nome: "", tp_conta: "A", tp_natureza: "R" },
         XOnBeforeSave: (rec) => {
           if (!rec.conta?.trim()) throw new Error("A Conta é obrigatória.");
           if (!rec.nome?.trim()) throw new Error("O Nome é obrigatório.");
@@ -125,13 +125,13 @@ const PlanoContaForm: React.FC = () => {
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Natureza</label>
                 <select
-                  value={record.tp_natureza || "D"}
+                  value={record.tp_natureza || "R"}
                   onChange={(e) => setField("tp_natureza", e.target.value)}
                   disabled={!isEditing}
                   className={`w-full border border-border rounded px-3 py-1.5 text-sm h-[34px] ${isEditing ? "bg-card focus:ring-2 focus:ring-ring outline-none" : "bg-secondary"}`}
                 >
-                  <option value="D">Devedora</option>
-                  <option value="C">Credora</option>
+                  <option value="R">Receita</option>
+                  <option value="D">Despesa</option>
                 </select>
               </div>
             </div>

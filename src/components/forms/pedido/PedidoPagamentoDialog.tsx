@@ -1,19 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
-import GridActionToolbar, { gridActions } from "@/components/grid/GridActionToolbar";
 import { useAppContext } from "@/contexts/AppContext";
-import { CreditCard, ShoppingCart, Wallet, ArrowRightLeft, Calculator, X, Delete, Trash2, Check, Percent, Send, Lock } from "lucide-react";
+import { CreditCard, ShoppingCart, Wallet, ArrowRightLeft, Calculator, Delete, Trash2, Percent, Lock } from "lucide-react";
 import { CurrencyInput } from "@/components/shared/CurrencyInput";
-
-const db = supabase as any;
 
 const fmt = (v: number) => (v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const NO_SPIN = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
-const parseNum = (v: any) => {
+const parseNum = (v: string | number | null | undefined) => {
   if (v === undefined || v === null || v === "") return 0;
   if (typeof v === "number") return v;
   const s = String(v).replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
@@ -21,10 +18,24 @@ const parseNum = (v: any) => {
   return isNaN(n) ? 0 : n;
 };
 
-const fmtInput = (v: any) => {
+const fmtInput = (v: string | number | null | undefined) => {
   const n = typeof v === "number" ? v : parseNum(v);
   return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
+
+interface IPagamentoLinha {
+  uid: string;
+  movimento_pagamento_id?: number;
+  condicao_id: number;
+  condicao_descricao: string;
+  n_parcelas: number;
+  vl_parcelas: number;
+  vl_pagamento: number;
+  tp_pagamento: string;
+  empresa_id: number;
+  movimento_id: number;
+  portador_id: number | null;
+}
 
 interface ICondicao {
   condicao_id: number;
@@ -55,13 +66,13 @@ interface IProps {
   subtotalPedido: number; // vl_movimento + vl_desconto
   tpDesconto: string;
   onClose: () => void;
-  onConfirmar: (pagtos: any[], vlDesconto: number, pcDesconto: number, enviarAoCaixa?: boolean) => Promise<void>;
+  onConfirmar: (pagtos: IPagamentoLinha[], vlDesconto: number, pcDesconto: number, enviarAoCaixa?: boolean) => Promise<void>;
 }
 
 const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId, subtotalPedido, tpDesconto, onClose, onConfirmar }) => {
   const { XEmpresaId, XEmpresaMatrizId } = useAppContext();
   const [XCondicoes, setXCondicoes] = useState<ICondicao[]>([]);
-  const [XLinhas, setXLinhas] = useState<any[]>([]);
+  const [XLinhas, setXLinhas] = useState<IPagamentoLinha[]>([]);
   const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
   const [XSalvando, setXSalvando] = useState(false);
   const [XDeletadosDb, setXDeletadosDb] = useState<number[]>([]);
@@ -111,7 +122,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
       try {
         let dbMov = subtotalPedido;
         // Fetch current movement for totals
-        const { data: mov } = await db.from("movimento")
+        const { data: mov } = await supabase.from("movimento")
           .select("vl_desconto, pc_desconto, vl_movimento, vl_produto")
           .eq("movimento_id", movimentoId).single();
         
@@ -127,7 +138,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
         }
 
         // 1. Fetch Portadores
-        const { data: portadorData } = await db.from("portador")
+        const { data: portadorData } = await supabase.from("portador")
           .select("portador_id, cd_portador, nome, banco_id")
           .eq("empresa_id", XEmpresaId)
           .eq("excluido", false)
@@ -139,7 +150,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
         let defaultCondId = 0;
         let defaultPortadorId = 0;
         if (cadastroId) {
-          const { data: cli } = await db.from("cadastro")
+          const { data: cli } = await supabase.from("cadastro")
             .select("condicao_id, portador_id")
             .eq("cadastro_id", cadastroId)
             .single();
@@ -150,7 +161,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
         }
 
         // 3. Fetch Conditions for logged in company and headquarters
-        let condQuery = db.from("condicao_pagamento")
+        let condQuery = supabase.from("condicao_pagamento")
           .select(`
             condicao_id, descricao, tipo_prazo, qtd_parcelas, intervalo, plano_conta_id, meio_pagamento_id, empresa_id,
             prazo_1, prazo_2, prazo_3, prazo_4, prazo_5, prazo_6, prazo_7, prazo_8, prazo_9, prazo_10, prazo_11, prazo_12
@@ -186,15 +197,15 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
         setXCondicoes(conds);
 
         // 4. Fetch existing payments
-        const { data: pagtoData } = await db.from("movimento_pagamento")
+        const { data: pagtoData } = await supabase.from("movimento_pagamento")
           .select("*")
           .eq("movimento_id", movimentoId)
           .eq("excluido", false)
           .order("movimento_pagamento_id");
 
         if (pagtoData && pagtoData.length > 0) {
-          const linhasMapeadas = pagtoData.map((p: any) => {
-            const cond = conds.find((c: any) => c.condicao_id === p.condicao_id);
+          const linhasMapeadas: IPagamentoLinha[] = pagtoData.map((p) => {
+            const cond = conds.find((c) => c.condicao_id === p.condicao_id);
             return {
               uid: String(p.movimento_pagamento_id || crypto.randomUUID()),
               movimento_pagamento_id: p.movimento_pagamento_id,
@@ -234,8 +245,9 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
             setXPortadorId(0);
           }
         }
-      } catch (err: any) {
-        toast.error("Erro ao carregar dados: " + err.message);
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        toast.error("Erro ao carregar dados: " + errMsg);
       }
     })();
   }, [open, movimentoId, cadastroId, subtotalPedido, XEmpresaId, XEmpresaMatrizId]);
@@ -254,12 +266,12 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
     const cond = XCondicoes.find(c => c.condicao_id === XCondicaoId);
     if (!cond) return XPortadores;
 
-    const mpId = cond.meio_pagamento_id;
-    if (mpId === 1) {
-      // Dinheiro (Cash) -> banco_id is null
+    const mpId = cond.meio_pagamento_id || 0;
+    if ([1, 5, 14, 91].includes(mpId)) {
+      // Dinheiro / Crediário / Duplicata / Posterior -> banco_id is null or 0
       return XPortadores.filter(p => p.banco_id === null || p.banco_id === 0);
-    } else if ([3, 4, 15, 16, 17, 20].includes(mpId || 0)) {
-      // Banks / Cards / Boletos -> banco_id is NOT null
+    } else if ([3, 4, 15, 16, 17, 20].includes(mpId)) {
+      // Banks / Cards / Boletos / Pix -> banco_id is NOT null and NOT 0
       return XPortadores.filter(p => p.banco_id !== null && p.banco_id !== 0);
     }
     return XPortadores;
@@ -365,8 +377,9 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
     try {
       await onConfirmar(XLinhas, vlDescNum, XPcDesconto, enviarAoCaixa);
       onClose();
-    } catch (err: any) {
-      toast.error("Erro: " + err.message);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      toast.error("Erro: " + errMsg);
     } finally {
       setXSalvando(false);
     }
@@ -375,14 +388,15 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
   const handleClose = async () => {
     if (XDeletadosDb.length > 0) {
       try {
-        const { error } = await db.from("movimento_pagamento")
+        const { error } = await supabase.from("movimento_pagamento")
           .update({ excluido: false })
           .in("movimento_pagamento_id", XDeletadosDb);
         if (error) {
           toast.error("Erro ao restaurar pagamentos cancelados: " + error.message);
         }
-      } catch (err: any) {
-        toast.error("Erro ao restaurar pagamentos cancelados: " + err.message);
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        toast.error("Erro ao restaurar pagamentos cancelados: " + errMsg);
       }
     }
     onClose();
@@ -413,7 +427,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
           
           if (r.movimento_pagamento_id) {
             try {
-              const { error } = await db.from("movimento_pagamento")
+              const { error } = await supabase.from("movimento_pagamento")
                 .update({ excluido: true })
                 .eq("movimento_pagamento_id", r.movimento_pagamento_id);
               
@@ -424,8 +438,9 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
               
               setXDeletadosDb(prev => [...prev, r.movimento_pagamento_id]);
               toast.success("Pagamento excluído.");
-            } catch (err: any) {
-              toast.error("Erro ao excluir pagamento: " + err.message);
+            } catch (err: unknown) {
+              const errMsg = err instanceof Error ? err.message : String(err);
+              toast.error("Erro ao excluir pagamento: " + errMsg);
               return;
             }
           }

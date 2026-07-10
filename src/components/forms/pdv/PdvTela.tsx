@@ -13,6 +13,7 @@ import DescontoDialog from "./DescontoDialog";
 import FuncoesDialog from "./FuncoesDialog";
 import CancelamentoDialog from "./CancelamentoDialog";
 import FaturarPedidoDialog from "./FaturarPedidoDialog";
+import EstornoDialog from "./EstornoDialog";
 import EstoqueBloqueioDialog, { IEstoqueBloqueioItem } from "./EstoqueBloqueioDialog";
 import FechamentoCaixaForm from "./FechamentoCaixaForm";
 import AberturaCaixaForm from "./AberturaCaixaForm";
@@ -104,6 +105,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   // Permissões do caixa
   const XPodeInfVend = caixa.caixa_inf_vend === "S";
   const XPodeCancVenda = caixa.caixa_cnc_venda === "S";
+  const XPodeEstornarVenda = caixa.caixa_edit_venda === "S" || caixa.caixa_cnc_venda === "S";
 
   // Configurações por funcionário
   const [XFontePed, setXFontePed] = useState<number>(caixa.tamanho_fonte_pedidos || 12);
@@ -114,6 +116,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   const [XOpenFuncoes, setXOpenFuncoes] = useState(false);
   const [XOpenEmissaoPedidos, setXOpenEmissaoPedidos] = useState(false);
   const [XOpenCanc, setXOpenCanc] = useState(false);
+  const [XOpenEstorno, setXOpenEstorno] = useState(false);
   const [XOpenFech, setXOpenFech] = useState(false);
   const [XOpenAbert, setXOpenAbert] = useState(false);
   const [XOpenSupr, setXOpenSupr] = useState(false);
@@ -1115,6 +1118,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       <FuncoesDialog
         open={XOpenFuncoes}
         podeCancelar={XPodeCancVenda}
+        podeEstornar={XPodeEstornarVenda}
         onClose={() => setXOpenFuncoes(false)}
         onCancelamento={() => setXOpenCanc(true)}
         onFechamento={() => setXOpenFech(true)}
@@ -1122,6 +1126,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         onSuprimento={() => setXOpenSupr(true)}
         onSangria={() => setXOpenSang(true)}
         onEmissaoPedidos={() => setXOpenEmissaoPedidos(true)}
+        onEstorno={() => setXOpenEstorno(true)}
       />
 
       <FaturarPedidoDialog
@@ -1192,6 +1197,13 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         caixaNome={caixa.nome}
         onClose={() => setXOpenCanc(false)}
         onCancelado={carregarPedidos}
+      />
+
+      <EstornoDialog
+        open={XOpenEstorno}
+        caixaNome={caixa.nome}
+        onClose={() => setXOpenEstorno(false)}
+        onEstornado={carregarPedidos}
       />
 
       <ConfigurarDialog
