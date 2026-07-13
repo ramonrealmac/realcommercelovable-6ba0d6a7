@@ -431,6 +431,8 @@ const PedidoForm: React.FC = () => {
 
   // Lookups independentes — falha em um não bloqueia os outros
   useEffect(() => {
+    if (!XEmpresaId) return;
+
     const load = async (
       query: Promise<{ data: any; error: any }>,
       setter: (data: any[]) => void,
@@ -442,12 +444,12 @@ const PedidoForm: React.FC = () => {
     };
 
     load(
-      db.from("funcionario").select("funcionario_id, cd_funcionario, nome").order("nome").limit(500),
+      db.from("funcionario").select("funcionario_id, cd_funcionario, nome").eq("empresa_id", XEmpresaId).order("nome").limit(500),
       (d) => setXVendedores(d.map((c: any) => ({ id: c.funcionario_id, label: `${c.cd_funcionario ?? c.funcionario_id} - ${c.nome}` }))),
       "funcionario",
     );
     load(
-      db.from("tp_operacao").select("tp_operacao_id, descricao").order("descricao"),
+      db.from("tp_operacao").select("tp_operacao_id, descricao").eq("empresa_id", XEmpresaId).order("descricao"),
       (d) => setXTpOperacoes(d.map((t: any) => ({ id: t.tp_operacao_id, label: t.descricao }))),
       "tp_operacao",
     );
@@ -456,7 +458,7 @@ const PedidoForm: React.FC = () => {
       (d) => setXCidades(d.map((c: any) => ({ id: c.cidade_id, label: `${c.descricao} - ${c.estado_id || ""}` }))),
       "cidade",
     );
-  }, []);
+  }, [XEmpresaId]);
 
   // Carrega rotas filtradas pela empresa ativa
   useEffect(() => {

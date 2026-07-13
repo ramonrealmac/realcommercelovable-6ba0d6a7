@@ -32,7 +32,7 @@ const EstornoDialog: React.FC<IProps> = ({ open, onClose, onEstornado }) => {
   const [XSalvando, setXSalvando] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !XEmpresaId) return;
     setXSelId(0);
     (async () => {
       const { data } = await db.from("movimento")

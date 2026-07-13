@@ -114,8 +114,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
   const vlParcela = XQtParcela > 0 ? +(vlPagarNum / XQtParcela).toFixed(2) : vlPagarNum;
 
   useEffect(() => {
-    if (!open) return;
-    setXLinhas([]);
+    if (!open || !movimentoId || !XEmpresaId) return;
     setXSelectedIdx(null);
     setXDeletadosDb([]);
     (async () => {
@@ -160,19 +159,14 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
           }
         }
 
-        // 3. Fetch Conditions for logged in company and headquarters
+        // 3. Fetch Conditions for logged in company
         let condQuery = supabase.from("condicao_pagamento")
           .select(`
             condicao_id, descricao, tipo_prazo, qtd_parcelas, intervalo, plano_conta_id, meio_pagamento_id, empresa_id,
             prazo_1, prazo_2, prazo_3, prazo_4, prazo_5, prazo_6, prazo_7, prazo_8, prazo_9, prazo_10, prazo_11, prazo_12
           `)
+          .eq("empresa_id", XEmpresaId)
           .eq("excluido", false);
-
-        if (XEmpresaId === XEmpresaMatrizId) {
-          condQuery = condQuery.eq("empresa_id", XEmpresaId);
-        } else {
-          condQuery = condQuery.or(`empresa_id.eq.${XEmpresaId},empresa_id.eq.${XEmpresaMatrizId}`);
-        }
 
         const { data: condData, error: condErr } = await condQuery;
         if (condErr) {

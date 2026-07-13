@@ -457,15 +457,16 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
   }, []);
 
   const loadLookups = useCallback(async () => {
+    if (!XEmpresaId) return;
     const [r1, r2, r3, r4, r5, r6, r7, r8] = await Promise.all([
       db.from("cidade").select("cidade_id,descricao,estado_id,cd_ibge").eq("excluido", false).order("descricao"),
-      db.from("cadastro_grupo").select("cadastro_grupo_id,nome").eq("excluido", false).order("nome"),
+      db.from("cadastro_grupo").select("cadastro_grupo_id,nome").eq("empresa_id", XEmpresaId).eq("excluido", false).order("nome"),
       db.from("tipo_cadastro").select("tp_cadastro_id,nome").eq("excluido", false).order("nome"),
-      db.from("condicao_pagamento").select("condicao_id,descricao").eq("excluido", false).order("descricao"),
-      db.from("portador").select("portador_id,nome").eq("excluido", false).order("nome"),
-      db.from("rota").select("rota_id,descricao").eq("excluido", false).order("descricao"),
-      db.from("tabela_preco").select("tabela_id,descricao").eq("excluido", false).order("descricao"),
-      db.from("cadastro").select("cadastro_id,razao_social").eq("st_vendedor", "S").eq("excluido", false).order("razao_social"),
+      db.from("condicao_pagamento").select("condicao_id,descricao").eq("empresa_id", XEmpresaId).eq("excluido", false).order("descricao"),
+      db.from("portador").select("portador_id,nome").eq("empresa_id", XEmpresaId).eq("excluido", false).order("nome"),
+      db.from("rota").select("rota_id,descricao").eq("empresa_id", XEmpresaId).eq("excluido", false).order("descricao"),
+      db.from("tabela_preco").select("tabela_id,descricao").eq("empresa_id", XEmpresaId).eq("excluido", false).order("descricao"),
+      db.from("cadastro").select("cadastro_id,razao_social").eq("empresa_id", XEmpresaId).eq("st_vendedor", "S").eq("excluido", false).order("razao_social"),
     ]);
     setXCidades(r1.data || []);
     setXGrupos(r2.data || []);
@@ -475,7 +476,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
     setXRotas(r6.data || []);
     setXTabelas(r7.data || []);
     setXVendedores(r8.data || []);
-  }, []);
+  }, [XEmpresaId]);
 
   const loadData = useCallback(async (savedId?: number, filters?: Record<string, string>) => {
     setXLoading(true);
@@ -598,7 +599,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
     loadLookups();
     setXCurrentIdx(0);
     setXFormMode("view");
-  }, [XEmpresaMatrizId]);
+  }, [XEmpresaMatrizId, XEmpresaId, loadLookups, skipInitialLoad]);
 
   // Auto-insert: dispara DEPOIS do effect acima via setTimeout(0)
   useEffect(() => {

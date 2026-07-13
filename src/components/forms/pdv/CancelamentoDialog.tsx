@@ -31,7 +31,7 @@ const CancelamentoDialog: React.FC<IProps> = ({ open, caixaNome, onClose, onCanc
   const [XSalvando, setXSalvando] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !XEmpresaId) return;
     setXSelId(0); setXMotivo("");
     (async () => {
       const { data } = await db.from("movimento")

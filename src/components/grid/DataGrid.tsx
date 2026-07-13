@@ -34,6 +34,8 @@ interface DataGridProps {
   showRecordCount?: boolean;
   showExport?: boolean;
   headerClassName?: string;
+  onSortChange?: (sorts: ISortItem[]) => void;
+  sorts?: ISortItem[];
 }
 
 // --- Sorting logic ---
@@ -154,7 +156,7 @@ function applySorting<T>(data: T[], sorts: ISortItem[], columns: IGridColumn[]):
 }
 
 // --- Export helpers ---
-function exportAsText(columns: IGridColumn[], data: any[], title: string) {
+export function exportAsText(columns: IGridColumn[], data: any[], title: string) {
   const visibleCols = columns;
   const widths = visibleCols.map(c => {
     const labelStr = c.exportLabel || (typeof c.label === "string" ? c.label : "");
@@ -170,7 +172,7 @@ function exportAsText(columns: IGridColumn[], data: any[], title: string) {
   downloadFile(text, `${title}.txt`, "text/plain");
 }
 
-function exportAsCsv(columns: IGridColumn[], data: any[], title: string) {
+export function exportAsCsv(columns: IGridColumn[], data: any[], title: string) {
   const visibleCols = columns;
   const header = visibleCols.map(c => `"${c.exportLabel || (typeof c.label === "string" ? c.label : "")}"`).join(";");
   const rows = data.map(r => visibleCols.map(c => `"${String(c.getValue ? c.getValue(r) : (r as any)[c.key] ?? "")}"`).join(";"));
@@ -179,7 +181,7 @@ function exportAsCsv(columns: IGridColumn[], data: any[], title: string) {
   downloadFile("\uFEFF" + csv, `${title}.csv`, "text/csv;charset=utf-8");
 }
 
-function exportAsPdf(columns: IGridColumn[], data: any[], title: string) {
+export function exportAsPdf(columns: IGridColumn[], data: any[], title: string) {
   const visibleCols = columns;
   const w = window.open("", "_blank");
   if (!w) return;
@@ -231,8 +233,12 @@ const DataGrid: React.FC<DataGridProps> = ({
   showRecordCount = true,
   showExport = true,
   headerClassName,
+  onSortChange,
+  sorts,
 }) => {
-  const [XSorts, setXSorts] = useState<ISortItem[]>([]);
+  const [XInternalSorts, setXInternalSorts] = useState<ISortItem[]>([]);
+  const XSorts = sorts !== undefined ? sorts : XInternalSorts;
+
   const [XHiddenCols, setXHiddenCols] = useState<Set<string>>(new Set());
   const [XContextMenu, setXContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [XShowExport, setXShowExport] = useState(false);
@@ -252,15 +258,23 @@ const DataGrid: React.FC<DataGridProps> = ({
   const XVisibleCols = useMemo(() => columns.filter(c => !XHiddenCols.has(c.key)), [columns, XHiddenCols]);
 
   const handleSort = (key: string) => {
-    setXSorts(prev => {
-      const current = prev.find(s => s.key === key);
-      if (!current) return [{ key, dir: "asc" }];
-      if (current.dir === "asc") return [{ key, dir: "desc" }];
-      return [{ key, dir: "asc" }];
-    });
+    const current = XSorts.find(s => s.key === key);
+    let next: ISortItem[];
+    if (!current) next = [{ key, dir: "asc" }];
+    else if (current.dir === "asc") next = [{ key, dir: "desc" }];
+    else next = [{ key, dir: "asc" }];
+
+    if (onSortChange) {
+      onSortChange(next);
+    } else {
+      setXInternalSorts(next);
+    }
   };
 
-  const XSortedData = useMemo(() => applySorting(data, XSorts, columns), [data, XSorts, columns]);
+  const XSortedData = useMemo(() => {
+    if (onSortChange) return data; // Se controlada/server-side, não ordena no client-side
+    return applySorting(data, XSorts, columns);
+  }, [data, XSorts, columns, onSortChange]);
 
   const [XColWidths, setXColWidths] = useState<Record<string, string>>({});
   const headerRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -432,10 +446,6 @@ const DataGrid: React.FC<DataGridProps> = ({
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    if (XSortedData.length > 0) {
-                      if (onRowClick) onRowClick(XSortedData[0], 0);
-                      if (onRowDoubleClick) onRowDoubleClick(XSortedData[0], 0);
-                    }
                   }
                 }}
                 className="px-2 py-1 text-xs border-r border-border outline-none last:border-r-0 bg-card min-w-0"

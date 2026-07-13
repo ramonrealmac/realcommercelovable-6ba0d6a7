@@ -31,7 +31,8 @@ const FormDateField: React.FC<FormDateFieldProps> = ({ label, value, onChange, r
 
   const XDisplayValue = (() => {
     if (!value) return "";
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) return value;
+    // Se for formato brasileiro DD/MM/AAAA ou parcial (apenas dígitos e barras), exibe como está
+    if (/^[\d/]+$/.test(value)) return value;
     return formatDateBR(value);
   })();
 
@@ -84,7 +85,7 @@ const FormDateField: React.FC<FormDateFieldProps> = ({ label, value, onChange, r
           onChange={handleInputChange}
           placeholder="DD/MM/AAAA"
           maxLength={10}
-          className="flex-1 border border-border rounded px-3 py-1.5 text-sm bg-card focus:ring-2 focus:ring-ring outline-none"
+          className="w-full min-w-0 flex-1 border border-border rounded px-3 py-1.5 text-sm bg-card focus:ring-2 focus:ring-ring outline-none"
         />
         <Popover open={XOpen} onOpenChange={setXOpen}>
           <PopoverTrigger asChild>

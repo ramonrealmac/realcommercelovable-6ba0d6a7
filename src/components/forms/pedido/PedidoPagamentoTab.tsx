@@ -118,19 +118,15 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
   }, [XEmpresaId]);
 
   useEffect(() => {
+    if (!XEmpresaId) return;
     (async () => {
       let query = supabase.from("condicao_pagamento")
         .select(`
           condicao_id, descricao, tipo_prazo, qtd_parcelas, intervalo, plano_conta_id, meio_pagamento_id, empresa_id,
           prazo_1, prazo_2, prazo_3, prazo_4, prazo_5, prazo_6, prazo_7, prazo_8, prazo_9, prazo_10, prazo_11, prazo_12
         `)
+        .eq("empresa_id", XEmpresaId)
         .eq("excluido", false);
-
-      if (XEmpresaId === XEmpresaMatrizId) {
-        query = query.eq("empresa_id", XEmpresaId);
-      } else {
-        query = query.or(`empresa_id.eq.${XEmpresaId},empresa_id.eq.${XEmpresaMatrizId}`);
-      }
 
       const { data, error } = await query;
       if (error) {

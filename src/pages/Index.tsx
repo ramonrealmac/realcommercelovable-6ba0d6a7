@@ -16,6 +16,7 @@ const LinhaProdutoForm = lazy(() => import("@/components/forms/produtos/LinhaPro
 const GrupoProdutosForm = lazy(() => import("@/components/forms/produtos/GrupoProdutosForm"));
 const SubgrupoProdutosForm = lazy(() => import("@/components/forms/produtos/SubgrupoProdutosForm"));
 const UnidadeForm = lazy(() => import("@/components/forms/produtos/UnidadeForm"));
+const TabelaPrecoForm = lazy(() => import("@/components/forms/produtos/TabelaPrecoForm"));
 const EstoqueForm = lazy(() => import("@/components/forms/estoques/EstoqueForm"));
 const DepositoForm = lazy(() => import("@/components/forms/estoques/DepositoForm"));
 const EstadoForm = lazy(() => import("@/components/forms/enderecos/EstadoForm"));
@@ -26,6 +27,8 @@ const ContaForm = lazy(() => import("@/components/forms/financeiro/ContaForm"));
 const CondicaoPagamentoForm = lazy(() => import("@/components/forms/financeiro/CondicaoPagamentoForm"));
 const PlanoContaForm = lazy(() => import("@/components/forms/financeiro/PlanoContaForm"));
 const PortadorForm = lazy(() => import("@/components/forms/financeiro/PortadorForm"));
+const OperadoraForm = lazy(() => import("@/components/forms/financeiro/OperadoraForm"));
+const BandeiraForm = lazy(() => import("@/components/forms/financeiro/BandeiraForm"));
 const TpOperacaoForm = lazy(() => import("@/components/forms/fiscal/TpOperacaoForm"));
 const CfopForm = lazy(() => import("@/components/forms/fiscal/CfopForm"));
 const FiscalGrupoProdutoForm = lazy(() => import("@/components/forms/fiscal/FiscalGrupoProdutoForm"));
@@ -95,6 +98,7 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "grupo-produtos": return <GrupoProdutosForm />;
       case "subgrupo-produtos": return <SubgrupoProdutosForm />;
       case "unidades": return <UnidadeForm />;
+      case "tabelas-preco": return <TabelaPrecoForm />;
       case "estoque": return <EstoqueForm />;
       case "depositos": return <DepositoForm />;
       case "estados": return <EstadoForm />;
@@ -104,6 +108,8 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "contas": return <ContaForm />;
       case "portadores": return <PortadorForm />;
       case "cond-pagamento": return <CondicaoPagamentoForm />;
+      case "operadoras-cartoes": return <OperadoraForm />;
+      case "bandeiras-cartoes": return <BandeiraForm />;
       case "plano-contas": return <PlanoContaForm />;
       case "tipo-operacoes": return <TpOperacaoForm />;
       case "cfop": return <CfopForm />;

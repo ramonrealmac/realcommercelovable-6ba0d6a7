@@ -159,8 +159,10 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
 
   // Carrega pedidos fechados
   const carregarPedidos = useCallback(async () => {
+    if (!XEmpresaId) return;
     const { data, error } = await db.from("vw_pedidos_caixa_union")
-      .select("movimento_id, nr_movimento, cadastro_id, cliente_nome, vendedor_id, vendedor_nome, vl_movimento, dt_emissao, is_external, origem, tp_origem")
+      .select("movimento_id, nr_movimento, cadastro_id, cliente_nome, vendedor_id, vendedor_nome, vl_movimento, dt_emissao, is_external, origem, tp_origem, empresa_id")
+      .eq("empresa_id", XEmpresaId)
       .order("dt_emissao", { ascending: false })
       .limit(200);
     if (error) { toast.error(error.message); return; }
@@ -178,7 +180,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       origem: m.origem || "LOCAL",
       tp_origem: m.tp_origem || null
     })));
-  }, []);
+  }, [XEmpresaId]);
 
   // Subtotal e lógica de recebimento necessária para finalizarVenda
   const subtotal = XCart.reduce((a, c) => a + c.qt_item * c.vl_unitario, 0);
