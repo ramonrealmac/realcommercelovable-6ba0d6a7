@@ -80,9 +80,53 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
   const [XCalcOp, setXCalcOp] = useState<string | null>(null);
   const [XCalcReset, setXCalcReset] = useState(false);
 
-  const bandeiraRef = useRef<HTMLSelectElement>(null);
   const condicaoRef = useRef<HTMLSelectElement>(null);
+  const bandeiraRef = useRef<HTMLSelectElement>(null);
+  const operadoraRef = useRef<HTMLSelectElement>(null);
+  const nrAutorizRef = useRef<HTMLInputElement>(null);
+  const vlPagarRef = useRef<HTMLInputElement>(null);
+  const confirmarRef = useRef<HTMLButtonElement>(null);
   const finalizarRef = useRef<HTMLButtonElement>(null);
+
+  // Keyboard navigation: Enter moves to next field, Alt+ArrowDown opens select
+  const handleSelectKeyDown = (
+    e: React.KeyboardEvent<HTMLSelectElement>,
+    nextRef: React.RefObject<HTMLElement | null>,
+    skipWhen?: () => boolean
+  ) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (skipWhen && skipWhen()) {
+        // Skip disabled fields, find next enabled one
+        const chain = [bandeiraRef, operadoraRef, nrAutorizRef, vlPagarRef, confirmarRef, finalizarRef];
+        const nextIdx = chain.indexOf(nextRef as any);
+        if (nextIdx >= 0) {
+          for (let i = nextIdx; i < chain.length; i++) {
+            const el = chain[i].current;
+            if (el && !(el as any).disabled && (el as any).tabIndex !== -1) {
+              el.focus();
+              return;
+            }
+          }
+        }
+        vlPagarRef.current?.focus();
+      } else {
+        nextRef.current?.focus();
+      }
+    }
+    // ArrowUp/Down changes value without opening dropdown (native behavior)
+    // Alt+ArrowDown opens the dropdown (native browser behavior)
+  };
+
+  const handleInputKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    nextRef: React.RefObject<HTMLElement | null>
+  ) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      nextRef.current?.focus();
+    }
+  };
 
   const totalPago = useMemo(() => Number(XLinhas.reduce((a, l) => a + Number(l.vl_recebido || 0), 0).toFixed(2)), [XLinhas]);
   const valorAPagar = Number(Math.max(0, totalPedido - totalPago).toFixed(2));
@@ -456,6 +500,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
             <div className="col-span-7 max-md:col-span-1 max-md:col-start-1 max-md:snap-start max-md:px-3 max-md:pt-2">
               <label className="text-[10px] font-bold text-muted-foreground uppercase leading-tight mb-1.5 block">Condição</label>
               <select ref={condicaoRef} value={XCondicaoId} onChange={e => setCondicao(Number(e.target.value))}
+                onKeyDown={e => handleSelectKeyDown(e, bandeiraRef, () => !camposCartaoEditaveis)}
                 className={`w-full border border-border rounded px-2 py-1 text-sm h-9 ${brancoCls}`}>
                 <option value={0}>--</option>
                 {XCondicoes.map(c => <option key={c.condicao_id} value={c.condicao_id}>{c.descricao}</option>)}
@@ -480,6 +525,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
                 ref={bandeiraRef}
                 value={XBandeiraId}
                 onChange={e => setXBandeiraId(Number(e.target.value))}
+                onKeyDown={e => handleSelectKeyDown(e, operadoraRef)}
                 disabled={!camposCartaoEditaveis}
                 tabIndex={camposCartaoEditaveis ? 0 : -1}
                 className={`w-full border border-border rounded px-2 py-1 text-sm h-9 ${camposCartaoEditaveis ? brancoCls : cinzaCls}`}>
@@ -504,7 +550,8 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[10px] font-bold text-muted-foreground uppercase leading-tight mb-1.5 block">Operadora</label>
-                  <select value={XOperadoraId} onChange={e => setXOperadoraId(Number(e.target.value))}
+                  <select ref={operadoraRef} value={XOperadoraId} onChange={e => setXOperadoraId(Number(e.target.value))}
+                    onKeyDown={e => handleSelectKeyDown(e, nrAutorizRef)}
                     disabled={!camposCartaoEditaveis}
                     tabIndex={camposCartaoEditaveis ? 0 : -1}
                     className={`w-full border border-border rounded px-2 py-1 text-sm h-9 ${camposCartaoEditaveis ? brancoCls : cinzaCls}`}>
@@ -514,7 +561,8 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-muted-foreground uppercase leading-tight mb-1.5 block">Nº Autorização</label>
-                  <input value={XNrAutoriz} onChange={e => setXNrAutoriz(e.target.value)}
+                  <input ref={nrAutorizRef} value={XNrAutoriz} onChange={e => setXNrAutoriz(e.target.value)}
+                    onKeyDown={e => handleInputKeyDown(e, vlPagarRef)}
                     disabled={!camposCartaoEditaveis}
                     tabIndex={camposCartaoEditaveis ? 0 : -1}
                     className={`w-full border border-border rounded px-2 py-1 text-sm h-9 ${camposCartaoEditaveis ? brancoCls : cinzaCls}`} />
@@ -539,11 +587,13 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
                 <div className="col-span-2">
                   <label className="text-[10px] font-bold text-muted-foreground uppercase leading-tight mb-1.5 block">Vlr a Pagar</label>
                   <input
+                    ref={vlPagarRef}
                     type="text"
                     value={XVlPagar}
                     onChange={e => setXVlPagar(e.target.value)}
                     onBlur={() => setXVlPagar(fmtInput(XVlPagar))}
                     onFocus={(e) => e.target.select()}
+                    onKeyDown={e => handleInputKeyDown(e, confirmarRef)}
                     className={`w-full border border-border rounded px-2 py-1 text-sm text-right h-9 font-bold ${brancoCls}`}
                   />
                 </div>
@@ -559,7 +609,8 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
                   </div>
                 </div>
                 <div className="col-span-3 flex gap-1">
-                  <button onClick={confirmarLinha}
+                  <button ref={confirmarRef} onClick={confirmarLinha}
+                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); confirmarLinha(); } }}
                     className="flex-1 h-9 rounded bg-emerald-500 text-white flex items-center justify-center gap-1 hover:bg-emerald-600 transition-colors text-xs font-bold">
                     ✓ Confirmar
                   </button>
@@ -601,13 +652,14 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
                 />
               </div>
               <div className="flex justify-start gap-2 pt-4 pb-4 md:pb-2">
+                <button ref={finalizarRef} onClick={finalizar} disabled={XSalvando || valorAPagar > 0.001}
+                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); finalizar(); } }}
+                  className="text-xs px-6 py-2 rounded bg-primary text-primary-foreground disabled:opacity-50 font-bold h-9">
+                  {XSalvando ? "Gravando..." : "Finalizar Recebimento →"}
+                </button>
                 <button onClick={onClose} disabled={XSalvando}
                   className="text-xs px-4 py-2 rounded border border-border hover:bg-accent flex items-center gap-1">
                   <X size={14} /> Sair
-                </button>
-                <button ref={finalizarRef} onClick={finalizar} disabled={XSalvando || valorAPagar > 0.001}
-                  className="text-xs px-6 py-2 rounded bg-primary text-primary-foreground disabled:opacity-50 font-bold h-9">
-                  {XSalvando ? "Gravando..." : "Finalizar Recebimento →"}
                 </button>
               </div>
             </div>

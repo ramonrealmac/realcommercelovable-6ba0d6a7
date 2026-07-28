@@ -352,9 +352,14 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
             onKeyDown={async (e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                if (onSalvar) {
-                  await onSalvar();
-                  setInnerTab("itens");
+                e.stopPropagation();
+                if (mode === "insert") {
+                  if (onSalvar) {
+                    const saved = await onSalvar();
+                    if (saved) {
+                      setInnerTab("itens");
+                    }
+                  }
                 }
               }
             }}
@@ -875,8 +880,8 @@ const PedidoForm: React.FC = () => {
         XExtraTabs={[
           {
             key: "itens", label: "Itens do Pedido",
-            render: ({ record, currentRecord, mode }) => {
-              const ped = (mode === "insert" ? record : (currentRecord || record)) as IMovimento;
+            render: ({ record }) => {
+              const ped = record as IMovimento;
               return (
                 <PedidoItensTab
                   pedido={ped?.movimento_id ? ped : null}
@@ -1013,8 +1018,8 @@ const PedidoForm: React.FC = () => {
           },
           {
             key: "pagamento", label: "Forma de Pagamento",
-            render: ({ record, currentRecord, mode, setInnerTab }) => {
-              const ped = (mode === "insert" ? record : (currentRecord || record)) as IMovimento;
+            render: ({ record, setInnerTab }) => {
+              const ped = record as IMovimento;
               return (
                 <PedidoPagamentoTab
                   pedido={ped?.movimento_id ? ped : null}

@@ -99,14 +99,7 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
     setXFormMode("view");
   }, [loadData]);
 
-  // Sync edit record when entering edit mode
-  useEffect(() => {
-    if (XFormMode === "edit" && XCurrentRecord) {
-      setXEditRecord({ ...XCurrentRecord });
-    } else if (XFormMode === "insert") {
-      setXEditRecord({ ...config.XDefaultRecord });
-    }
-  }, [XFormMode]);
+  // Sync edit record when entering edit mode is handled directly in handleEditar and handleIncluir handlers to avoid race conditions.
 
   const handleIncluir = useCallback(() => {
     setXEditRecord({ ...config.XDefaultRecord });
@@ -125,11 +118,11 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
     let payload = { ...XEditRecord };
     if (config.XValidator) {
       const r = config.XValidator.safeParse(payload);
-      if (!r.success) { toast.error(r.error.errors[0]?.message || "Dados inválidos."); return; }
+      if (!r.success) { toast.error(r.error.errors[0]?.message || "Dados inválidos."); return null; }
     }
     if (config.XOnBeforeSave) {
       try { payload = await config.XOnBeforeSave(payload, XFormMode); }
-      catch (e: any) { toast.error(e?.message || "Validação falhou."); return; }
+      catch (e: any) { toast.error(e?.message || "Validação falhou."); return null; }
     }
     if (config.XEmpresaId !== undefined && !payload.empresa_id) {
       (payload as any).empresa_id = config.XEmpresaId;
@@ -142,11 +135,11 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
         if (res) savedRec = res as Partial<T>;
       } catch (e: any) {
         toast.error(e?.message || "Erro ao salvar.");
-        return;
+        return null;
       }
     } else if (XFormMode === "insert") {
       const { data: ins, error } = await db.from(config.XTableName).insert(payload).select().single();
-      if (error) { toast.error("Erro: " + error.message); return; }
+      if (error) { toast.error("Erro: " + error.message); return null; }
       savedRec = (ins || payload) as Partial<T>;
       toast.success("Registro incluído com sucesso.");
     } else if (XCurrentRecord) {
@@ -157,7 +150,7 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
         .update({ ...updatePayload, dt_alteracao: new Date().toISOString() })
         .eq(config.XPrimaryKey, XCurrentRecord[config.XPrimaryKey])
         .select().single();
-      if (error) { toast.error("Erro: " + error.message); return; }
+      if (error) { toast.error("Erro: " + error.message); return null; }
       savedRec = (upd || { ...XCurrentRecord, ...payload }) as Partial<T>;
       toast.success("Registro alterado com sucesso.");
     }
@@ -196,6 +189,7 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
         }, 0);
       }
     }
+    return savedRec;
   }, [XEditRecord, XFormMode, XCurrentRecord, config, refetch, queryClient]);
 
   const handleExcluir = useCallback(async () => {
