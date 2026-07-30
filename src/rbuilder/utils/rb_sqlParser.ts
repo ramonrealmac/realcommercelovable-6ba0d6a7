@@ -15,7 +15,7 @@ export function rbSubstituirVariaveis(
       const escapedKey = XNome.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const filterRegex = new RegExp(
         `((?:AND\\s+|OR\\s+|WHERE\\s+)?)` +
-        `([\\w\\.\\(\\)\\"\\'\\\`\\s\\-]+?)` +
+        `([\\w\\.\\(\\)\\"\\'\\\`\\-\\,]+?)` +
         `\\s*` +
         `(=|>=|<=|<|>|!=|<>|\\b(?:NOT\\s+)?LIKE\\b|\\b(?:NOT\\s+)?ILIKE\\b|\\b(?:NOT\\s+)?IN\\b)` +
         `\\s*` +
