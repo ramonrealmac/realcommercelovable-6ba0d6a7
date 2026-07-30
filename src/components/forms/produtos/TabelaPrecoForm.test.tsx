@@ -67,15 +67,15 @@ describe("ItensGrid (Tabela de Preço Server-Side)", () => {
         update: vi.fn().mockResolvedValue({ data: null, error: null }),
         maybeSingle: vi.fn().mockResolvedValue(null),
         then: vi.fn().mockImplementation((callback: any) => {
-          // Retorna dados falsos de produtos da tabela para a grid renderizar
-          callback({
+          // Retorna dados falsos de produtos da tabela para a grid renderizar de forma assíncrona
+          return Promise.resolve({
             data: [
               { tabela_item_id: 1, tabela_id: 10, produto_id: 100, cd_produto: "100", nm_produto: "PRODUTO TESTE A", preco: 15.5 },
               { tabela_item_id: 2, tabela_id: 10, produto_id: 101, cd_produto: "101", nm_produto: "PRODUTO TESTE B", preco: 25.0 }
             ],
             count: 2,
             error: null
-          });
+          }).then(callback);
         })
       };
       return builder;
@@ -114,7 +114,7 @@ describe("ItensGrid (Tabela de Preço Server-Side)", () => {
         order: vi.fn().mockReturnThis(),
         range: vi.fn().mockReturnThis(),
         then: vi.fn().mockImplementation((callback: any) => {
-          callback({ data: [], count: 0, error: null });
+          return Promise.resolve({ data: [], count: 0, error: null }).then(callback);
         })
       };
       return builder;
@@ -145,12 +145,14 @@ describe("ItensGrid (Tabela de Preço Server-Side)", () => {
           }
           const subBuilder = {
             eq: vi.fn().mockImplementation(() => subBuilder),
-            then: vi.fn().mockImplementation((cb: any) => cb({ error: null }))
+            then: vi.fn().mockImplementation((cb: any) => {
+              return Promise.resolve({ error: null }).then(cb);
+            })
           };
           return subBuilder;
         }),
         then: vi.fn().mockImplementation((callback: any) => {
-          callback({ data: [], count: 0, error: null });
+          return Promise.resolve({ data: [], count: 0, error: null }).then(callback);
         })
       };
       return builder;

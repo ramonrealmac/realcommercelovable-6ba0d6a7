@@ -30,6 +30,7 @@ interface AppContextType {
   XActiveTabId: string | null;
   openTab: (tab: Omit<AppTab, "id">) => void;
   closeTab: (id: string) => void;
+  closeAllTabs: () => void;
   setActiveTab: (id: string) => void;
   XSidebarOpen: boolean;
   toggleSidebar: () => void;
@@ -115,6 +116,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   }, [XActiveTabId]);
 
+  const closeAllTabs = useCallback(() => {
+    setXTabs([]);
+    setXActiveTabId(null);
+  }, []);
+
   const toggleSidebar = useCallback(() => setXSidebarOpen(p => !p), []);
   const closeSidebar = useCallback(() => setXSidebarOpen(false), []);
 
@@ -123,7 +129,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       XEmpresaId, setXEmpresaId,
       XEmpresaMatrizId, setXEmpresaMatrizId,
       XEmpresas, setXEmpresas,
-      XTabs, XActiveTabId, openTab, closeTab, setActiveTab: setXActiveTabId,
+      XTabs, XActiveTabId, openTab, closeTab, closeAllTabs, setActiveTab: setXActiveTabId,
       XSidebarOpen, toggleSidebar, closeSidebar,
       XLogomarca, setXLogomarca,
       XChatBotVisible, toggleChatBot,

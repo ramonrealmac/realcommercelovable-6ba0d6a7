@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Menu, LogOut, KeyRound, Shield, Users, UserCog, Bot, BotOff, Search } from "lucide-react";
+import { Menu, LogOut, KeyRound, Shield, Users, UserCog, Bot, BotOff, Search, XSquare } from "lucide-react";
 import { useAppContext } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import ShortcutsBar from "./ShortcutsBar";
@@ -7,7 +7,7 @@ import ChatInternoTopBarButton from "@/components/chat-interno/ChatInternoTopBar
 import ProdutoSearchDialog from "@/components/forms/pedido/ProdutoSearchDialog";
 
 const TopBar = () => {
-  const { XEmpresaId, setXEmpresaId, setXEmpresaMatrizId, XEmpresas, toggleSidebar, openTab, XChatBotVisible, toggleChatBot } = useAppContext();
+  const { XEmpresaId, setXEmpresaId, setXEmpresaMatrizId, XEmpresas, toggleSidebar, openTab, XTabs, closeAllTabs, XChatBotVisible, toggleChatBot } = useAppContext();
 
   const [XMenuOpen, setXMenuOpen] = useState(false);
   const [XSearchOpen, setXSearchOpen] = useState(false);
@@ -86,6 +86,17 @@ const TopBar = () => {
       </div>
 
       <div className="hidden md:block flex-1" />
+
+      {XTabs.length > 1 && (
+        <button
+          onClick={closeAllTabs}
+          className="p-1.5 hover:bg-destructive/20 hover:text-destructive rounded flex items-center gap-1.5 transition-colors"
+          title="Fechar todas as abas"
+        >
+          <XSquare size={20} />
+          <span className="text-xs hidden lg:inline font-medium">Fechar Abas</span>
+        </button>
+      )}
 
       <button
         onClick={() => setXSearchOpen(true)}

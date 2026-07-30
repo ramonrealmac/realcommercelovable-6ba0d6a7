@@ -1,10 +1,15 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import GridActionToolbar, { gridActions } from "@/components/grid/GridActionToolbar";
-import { Link } from "lucide-react";
-import type { INfeItem } from "./types";
+import { Link, Search, Key, Upload } from "lucide-react";
+import type { INfeItem, INfeXmlItem } from "./types";
+import { useAppContext } from "@/contexts/AppContext";
+import ProdutoSearchDialog from "../pedido/ProdutoSearchDialog";
+import { parseNfeXml } from "./NfeXmlParser";
+import { formatCPFCNPJ } from "@/lib/validators";
+import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 
 const db = supabase;
 type XFieldValue = string | number | boolean | null | undefined;
@@ -34,25 +39,51 @@ interface NfeItensTabProps {
   nfeCabecalhoId: number | null;
   empresaId: number;
   podeEditar: boolean;
+  hideVinculo?: boolean;
+  itensImportados?: INfeXmlItem[];
+  onItensImportadosChanged?: (itens: INfeXmlItem[]) => void;
   onTotaisChanged?: (totais: { vl_total: number; vl_ipi: number; vl_icms_st: number }) => void;
+  onRefreshCabecalho?: () => void;
+  finNfe?: number;
+  onItensChanged?: (itens: any[]) => void;
 }
 
-const COLS: IGridColumn[] = [
-  { key: "nr_item",       label: "Item",        width: "60px",   align: "right" },
-  { key: "cd_prod_fornec",label: "Cód. Forn.",  width: "100px" },
-  { key: "_produto",      label: "Produto",     width: "2fr",    render: (r) => r._produto_nome || <span className="text-destructive italic text-xs">sem vínculo</span> },
-  { key: "nm_produto",    label: "Desc. NF",    width: "2fr" },
-  { key: "ncm",           label: "NCM",         width: "90px" },
-  { key: "cest",          label: "CEST",        width: "90px" },
-  { key: "cfop",          label: "CFOP",        width: "70px" },
-  { key: "unidade",       label: "Un.",         width: "60px",   align: "center" },
-  { key: "qt_entrada",    label: "Qtd.",        width: "100px",  align: "right", render: (r) => fmt4(r.qt_entrada) },
-  { key: "vl_unit",       label: "Vlr. Unit.",  width: "110px",  align: "right", render: (r) => fmt2(r.vl_unit) },
-  { key: "vl_desconto",   label: "Desc.",       width: "90px",   align: "right", render: (r) => fmt2(r.vl_desconto) },
-  { key: "vl_ipi",        label: "IPI",         width: "90px",   align: "right", render: (r) => fmt2(r.vl_ipi) },
-  { key: "vl_icms_st",    label: "ICMS-ST",     width: "90px",   align: "right", render: (r) => fmt2(r.vl_icms_st) },
-  { key: "vl_total",      label: "Total",       width: "110px",  align: "right", render: (r) => fmt2(r.vl_total) },
-];
+const salvarVinculoProdutoFornecedor = async (
+  empresaId: number,
+  cadastroId: number,
+  produtoId: number,
+  cdProdFornec: string,
+  nmProdFornec: string,
+  fatorConversao: number
+) => {
+  if (!produtoId || !cdProdFornec || !cadastroId) return;
+  const { data: existing } = await db.from("produto_fornecedor")
+    .select("produto_fornecedor_id")
+    .eq("empresa_id", empresaId)
+    .eq("cadastro_id", cadastroId)
+    .eq("cd_prod_fornec", cdProdFornec)
+    .eq("excluido", false)
+    .maybeSingle();
+
+  if (existing) {
+    await db.from("produto_fornecedor").update({
+      produto_id: produtoId,
+      nm_prod_fornec: nmProdFornec || "",
+      fator_conversao: fatorConversao,
+      updated_at: new Date().toISOString(),
+    }).eq("produto_fornecedor_id", existing.produto_fornecedor_id);
+  } else {
+    await db.from("produto_fornecedor").insert({
+      empresa_id:     empresaId,
+      produto_id:     produtoId,
+      cadastro_id:    cadastroId,
+      cd_prod_fornec: cdProdFornec,
+      nm_prod_fornec: nmProdFornec || "",
+      fator_conversao: fatorConversao,
+      excluido:       false,
+    });
+  }
+};
 
 const XPercentKeys = new Set([
   "pc_ipi", "pc_icms", "pc_icms_st", "pc_pis", "pc_cofins", "pc_fcp_st", "pc_ibs", "pc_cbs", "pc_is",
@@ -69,7 +100,7 @@ const XNumericKeys = new Set([...XPercentKeys, ...XQuantityKeys, ...XValueKeys])
 
 const XTextKeys = [
   "cd_prod_fornec", "nm_produto", "ncm", "cfop", "unidade", "gtin", "csosn", "cest", "c_enq",
-  "cst_icms", "cst_ipi", "cst_pis", "cst_cofins", "cst_ibs", "cst_cbs", "cst_is",
+  "cst_icms", "cst_ipi", "cst_pis", "cst_cofins", "cst_ibs", "cst_cbs", "cst_is", "cfop_entrada",
 ];
 
 const decimalsFor = (XKey: string) => {
@@ -152,6 +183,8 @@ const emptyItem = (): XFormItem => ({
   vl_bc_pis: 0,
   vl_bc_cofins: 0,
   produto_id: undefined,
+  deposito_id: undefined,
+  cfop_entrada: "",
 });
 
 const formatItemForEdit = (XItem: XFormItem) => {
@@ -166,27 +199,435 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
   nfeCabecalhoId,
   empresaId,
   podeEditar,
+  hideVinculo = false,
+  itensImportados,
+  onItensImportadosChanged,
   onTotaisChanged,
+  onRefreshCabecalho,
+  finNfe,
+  onItensChanged,
 }) => {
+  const { XTabs, openTab, closeTab } = useAppContext();
   const [XItens, setXItens] = useState<XItemRow[]>([]);
   const [XCurrentIdx, setXCurrentIdx] = useState<number | null>(null);
   const [XMode, setXMode] = useState<"view" | "edit" | "insert">("view");
   const [XF, setXF] = useState<XFormItem>(formatItemForEdit(emptyItem()));
-  const [XProdutos, setXProdutos] = useState<{ produto_id: number; nome: string; referencia?: string }[]>([]);
+  const [XProdutos, setXProdutos] = useState<{ produto_id: number; nome: string; referencia?: string; cd_produto?: number | null }[]>([]);
+  const [XCfops, setXCfops] = useState<{ cd_cfop: string; descricao: string }[]>([]);
+
+
+  const { handleKeyDown } = useEnterTraversal();
+
+  const [XSearchOpen, setXSearchOpen] = useState(false);
+  const [XSearchItemNr, setXSearchItemNr] = useState<number | null>(null);
+
+  const [XChavesRef, setXChavesRef] = useState<any[]>([]);
+  const [XCabecalho, setXCabecalho] = useState<any>(null);
+
+  const loadCabecalho = useCallback(async () => {
+    if (!nfeCabecalhoId) {
+      setXCabecalho(null);
+      return;
+    }
+    const { data, error } = await db.from("fiscal_nfe_cabecalho")
+      .select("*, cadastro:cadastro_id(cadastro_id, cnpj, razao_social)")
+      .eq("nfe_cabecalho_id", nfeCabecalhoId)
+      .maybeSingle();
+    if (!error && data) {
+      setXCabecalho(data);
+    }
+  }, [nfeCabecalhoId]);
+
+  const loadChavesRef = useCallback(async () => {
+    if (!nfeCabecalhoId) {
+      setXChavesRef([]);
+      return;
+    }
+    const { data, error } = await db.from("fiscal_nfe_referenciada")
+      .select("*")
+      .eq("nfe_cabecalho_id", nfeCabecalhoId)
+      .order("nfe_referenciada_id");
+    if (!error && data) {
+      setXChavesRef(data);
+    }
+  }, [nfeCabecalhoId]);
+
+  useEffect(() => {
+    loadCabecalho();
+    loadChavesRef();
+  }, [nfeCabecalhoId, loadCabecalho, loadChavesRef]);
+
+  const recalculateNfeTotals = async (cabId: number) => {
+    const { data: itens, error: errItens } = await db.from("fiscal_nfe_item")
+      .select("*")
+      .eq("nfe_cabecalho_id", cabId)
+      .eq("excluido", false);
+
+    if (errItens) return;
+
+    let vl_produto = 0;
+    let vl_desconto = 0;
+    let vl_frete = 0;
+    let vl_seguro = 0;
+    let vl_outro = 0;
+    let vl_ipi = 0;
+    let vl_icms = 0;
+    let vl_icms_st = 0;
+    let vl_pis = 0;
+    let vl_cofins = 0;
+    let vl_ibs = 0;
+    let vl_cbs = 0;
+    let vl_is = 0;
+    let vl_bc = 0;
+    let vl_bc_st = 0;
+
+    for (const item of (itens || [])) {
+      vl_produto += Number(item.vl_total || 0);
+      vl_desconto += Number(item.vl_desconto || 0);
+      vl_frete += Number(item.vl_frete || 0);
+      vl_seguro += Number(item.vl_seguro || 0);
+      vl_outro += Number(item.vl_outro || 0);
+      vl_ipi += Number(item.vl_ipi || 0);
+      vl_icms += Number(item.vl_icms || 0);
+      vl_icms_st += Number(item.vl_icms_st || 0);
+      vl_pis += Number(item.vl_pis || 0);
+      vl_cofins += Number(item.vl_cofins || 0);
+      vl_ibs += Number(item.vl_ibs || 0);
+      vl_cbs += Number(item.vl_cbs || 0);
+      vl_is += Number(item.vl_is || 0);
+      vl_bc += Number(item.vl_bc || 0);
+      vl_bc_st += Number(item.vl_bc_st || 0);
+    }
+
+    const vl_total_nf = vl_produto - vl_desconto + vl_frete + vl_seguro + vl_outro + vl_icms_st + vl_ipi + vl_ibs + vl_cbs + vl_is;
+
+    await db.from("fiscal_nfe_cabecalho").update({
+      vl_produto,
+      vl_desconto,
+      vl_frete,
+      vl_seguro,
+      vl_despesa: vl_outro,
+      vl_ipi,
+      vl_icms,
+      vl_icms_st,
+      vl_pis,
+      vl_cofins,
+      vl_ibs,
+      vl_cbs,
+      vl_is,
+      vl_bc,
+      vl_bc_st,
+      vl_total_nf,
+      updated_at: new Date().toISOString()
+    }).eq("nfe_cabecalho_id", cabId);
+  };
+
+
+
+  const handleRemoverChaveRef = async (idx: number) => {
+    const item = XChavesRef[idx];
+    if (item.nfe_referenciada_id) {
+      if (!confirm("Excluir esta chave referenciada e todos os seus itens importados?")) return;
+
+      // 1. Buscar o XML completo na base local para saber quais itens deletar
+      const { data: nfeRec } = await db.from("fiscal_nfe_recebida")
+        .select("xml_completo")
+        .eq("chave_nfe", item.chave_ref)
+        .maybeSingle();
+
+      const xmlString = nfeRec?.xml_completo;
+      if (xmlString) {
+        const dados = parseNfeXml(xmlString);
+        if (dados) {
+          // Loop para deduzir ou excluir os itens da grid
+          for (const xmlItem of dados.itens) {
+            const existingItem = XItens.find(it => it.cd_prod_fornec === xmlItem.cd_prod_fornec && !it.excluido);
+            if (existingItem) {
+              const currentQty = Number(existingItem.qt_entrada) || 0;
+              const newQty = currentQty - xmlItem.qt_entrada;
+              
+              if (newQty <= 0) {
+                // Soft delete do item
+                await db.from("fiscal_nfe_item")
+                  .update({ excluido: true, updated_at: new Date().toISOString() })
+                  .eq("nfe_item_id", existingItem.nfe_item_id);
+              } else {
+                // Deduz valores proporcionalmente
+                const novelTotal = Math.round((newQty * (Number(existingItem.vl_unit) || 0) + Number.EPSILON) * 100) / 100;
+                await db.from("fiscal_nfe_item").update({
+                  qt_entrada: newQty,
+                  qt_tributavel: newQty,
+                  vl_total: novelTotal,
+                  vl_desconto: Math.max(0, (Number(existingItem.vl_desconto) || 0) - (xmlItem.vl_desconto || 0)),
+                  vl_frete: Math.max(0, (Number(existingItem.vl_frete) || 0) - (xmlItem.vl_frete || 0)),
+                  vl_seguro: Math.max(0, (Number(existingItem.vl_seguro) || 0) - (xmlItem.vl_seguro || 0)),
+                  vl_outro: Math.max(0, (Number(existingItem.vl_outro) || 0) - (xmlItem.vl_outro || 0)),
+                  vl_icms: Math.max(0, (Number(existingItem.vl_icms) || 0) - (xmlItem.vl_icms || 0)),
+                  vl_icms_st: Math.max(0, (Number(existingItem.vl_icms_st) || 0) - (xmlItem.vl_icms_st || 0)),
+                  vl_ipi: Math.max(0, (Number(existingItem.vl_ipi) || 0) - (xmlItem.vl_ipi || 0)),
+                  vl_pis: Math.max(0, (Number(existingItem.vl_pis) || 0) - (xmlItem.vl_pis || 0)),
+                  vl_cofins: Math.max(0, (Number(existingItem.vl_cofins) || 0) - (xmlItem.vl_cofins || 0)),
+                  updated_at: new Date().toISOString()
+                }).eq("nfe_item_id", existingItem.nfe_item_id);
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Excluir o vínculo da chave referenciada
+      const { error } = await db.from("fiscal_nfe_referenciada")
+        .delete()
+        .eq("nfe_referenciada_id", item.nfe_referenciada_id);
+
+      if (error) {
+        toast.error("Erro ao excluir chave: " + error.message);
+        return;
+      }
+      toast.success("Chave referenciada e seus itens removidos com sucesso.");
+      
+      // 3. Recalcular os totais da NF-e e recarregar os dados
+      await recalculateNfeTotals(nfeCabecalhoId);
+      await loadItens();
+      if (onRefreshCabecalho) onRefreshCabecalho();
+    }
+    setXChavesRef(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleUploadXml = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".xml")) {
+      toast.error("Selecione um arquivo XML de NF-e.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const content = ev.target?.result as string;
+      await processXmlImport(content);
+    };
+    reader.readAsText(file, "UTF-8");
+    e.target.value = "";
+  };
+
+  const processXmlImport = async (xmlString: string) => {
+    try {
+      const dados = parseNfeXml(xmlString);
+      if (!dados) {
+        toast.error("Não foi possível interpretar o arquivo XML. Verifique se é uma NF-e válida.");
+        return;
+      }
+
+      const keyRef = dados.chave_nfe;
+      if (!keyRef || keyRef.length !== 44) {
+        toast.error("Chave de acesso inválida no XML.");
+        return;
+      }
+
+      if (!nfeCabecalhoId) {
+        toast.error("Salve a NF-e antes de importar.");
+        return;
+      }
+
+      // Verificar se a chave já está referenciada na grid
+      if (XChavesRef.some(ch => ch.chave_ref === keyRef)) {
+        toast.error(`A chave ${keyRef} já está referenciada nesta nota.`);
+        return;
+      }
+
+      // Validar destinatário
+      const { data: cabRec, error: cabErr } = await db.from("fiscal_nfe_cabecalho")
+        .select("cadastro_id, cadastro:cadastro_id(cnpj, razao_social)")
+        .eq("nfe_cabecalho_id", nfeCabecalhoId)
+        .maybeSingle();
+
+      if (cabErr || !cabRec) {
+        toast.error("Erro ao verificar destinatário da NF-e.");
+        return;
+      }
+
+      const cnpjDestXml = dados.emitente.cnpj.replace(/\D/g, "");
+      const cnpjDestCab = cabRec.cadastro?.cnpj?.replace(/\D/g, "") || "";
+
+      if (cnpjDestXml !== cnpjDestCab) {
+        toast.error(
+          `O XML não pertence à empresa destinatária selecionada.\nEmitente XML: ${formatCPFCNPJ(cnpjDestXml)} (${dados.emitente.razao_social})\nDestinatário NF-e: ${formatCPFCNPJ(cnpjDestCab)} (${cabRec.cadastro?.razao_social || "Não identificado"})`
+        );
+        return;
+      }
+
+      // 1. Salvar a chave referenciada no banco de dados
+      const { data: newRef, error: refErr } = await db.from("fiscal_nfe_referenciada")
+        .insert({ nfe_cabecalho_id: nfeCabecalhoId, chave_ref: keyRef })
+        .select()
+        .single();
+
+      if (refErr) {
+        toast.error("Erro ao salvar chave referenciada no banco: " + refErr.message);
+        return;
+      }
+
+      // 2. Salvar ou atualizar o XML completo em fiscal_nfe_recebida para deleções futuras
+      await db.from("fiscal_nfe_recebida").upsert({
+        empresa_id: empresaId,
+        chave_nfe: keyRef,
+        cnpj_emitente: dados.emitente.cnpj,
+        nm_emitente: dados.emitente.razao_social,
+        dt_emissao: dados.dt_emissao,
+        vl_total: dados.vl_total_nf,
+        nr_nota: dados.nr_nota,
+        serie: dados.serie,
+        xml_completo: xmlString,
+        st_download: true,
+        updated_at: new Date().toISOString()
+      }, { onConflict: "chave_nfe" });
+
+      // 3. Buscar o depósito padrão para os itens importados
+      const { data: depData } = await db.from("deposito")
+        .select("deposito_id")
+        .eq("excluido", false)
+        .order("nome")
+        .limit(1);
+      const defaultDepositoId = depData?.[0]?.deposito_id || null;
+
+      toast.loading("Processando itens do XML...", { id: "import-xml" });
+      
+      let itensAdicionados = 0;
+      let itensAtualizados = 0;
+
+      for (const xmlItem of dados.itens) {
+        const existingItem = XItens.find(item => item.cd_prod_fornec === xmlItem.cd_prod_fornec && !item.excluido);
+
+        let produtoId = null;
+        if (!existingItem?.produto_id) {
+          const { data: pfVinc } = await db.from("produto_fornecedor")
+            .select("produto_id")
+            .eq("empresa_id", empresaId)
+            .eq("cadastro_id", cabRec.cadastro_id)
+            .eq("cd_prod_fornec", xmlItem.cd_prod_fornec)
+            .eq("excluido", false)
+            .maybeSingle();
+          if (pfVinc) {
+            produtoId = pfVinc.produto_id;
+          }
+        } else {
+          produtoId = existingItem.produto_id;
+        }
+
+        if (existingItem) {
+          const novaQtd = (Number(existingItem.qt_entrada) || 0) + xmlItem.qt_entrada;
+          const novoTotal = Math.round((novaQtd * (Number(existingItem.vl_unit) || 0) + Number.EPSILON) * 100) / 100;
+          
+          await db.from("fiscal_nfe_item").update({
+            qt_entrada: novaQtd,
+            qt_tributavel: novaQtd,
+            vl_total: novoTotal,
+            vl_desconto: (Number(existingItem.vl_desconto) || 0) + (xmlItem.vl_desconto || 0),
+            vl_frete: (Number(existingItem.vl_frete) || 0) + (xmlItem.vl_frete || 0),
+            vl_seguro: (Number(existingItem.vl_seguro) || 0) + (xmlItem.vl_seguro || 0),
+            vl_outro: (Number(existingItem.vl_outro) || 0) + (xmlItem.vl_outro || 0),
+            vl_icms: (Number(existingItem.vl_icms) || 0) + (xmlItem.vl_icms || 0),
+            vl_icms_st: (Number(existingItem.vl_icms_st) || 0) + (xmlItem.vl_icms_st || 0),
+            vl_ipi: (Number(existingItem.vl_ipi) || 0) + (xmlItem.vl_ipi || 0),
+            vl_pis: (Number(existingItem.vl_pis) || 0) + (xmlItem.vl_pis || 0),
+            vl_cofins: (Number(existingItem.vl_cofins) || 0) + (xmlItem.vl_cofins || 0),
+            updated_at: new Date().toISOString()
+          }).eq("nfe_item_id", existingItem.nfe_item_id);
+
+          itensAtualizados++;
+        } else {
+          const payload = {
+            nfe_cabecalho_id: nfeCabecalhoId,
+            empresa_id: empresaId,
+            produto_id: produtoId,
+            deposito_id: defaultDepositoId,
+            nr_item: XItens.length + itensAdicionados + 1,
+            cd_prod_fornec: xmlItem.cd_prod_fornec,
+            nm_produto: xmlItem.nm_produto.toUpperCase(),
+            ncm: xmlItem.ncm?.replace(/\D/g, "") || "",
+            cfop: xmlItem.cfop?.replace(/\D/g, "") || "",
+            unidade: xmlItem.unidade || "",
+            gtin: xmlItem.gtin?.replace(/\D/g, "") || "",
+            origem: xmlItem.origem || 0,
+            csosn: xmlItem.csosn?.replace(/\D/g, "") || "",
+            cest: xmlItem.cest?.replace(/\D/g, "") || "",
+            qt_entrada: xmlItem.qt_entrada,
+            qt_tributavel: xmlItem.qt_entrada,
+            vl_unit: xmlItem.vl_unit,
+            vl_unit_tributavel: xmlItem.vl_unit,
+            vl_desconto: xmlItem.vl_desconto || 0,
+            vl_total: xmlItem.vl_total,
+            cst_icms: xmlItem.cst_icms || "",
+            vl_bc: xmlItem.vl_bc || 0,
+            pc_icms: xmlItem.pc_icms || 0,
+            vl_icms: xmlItem.vl_icms || 0,
+            pc_fcp: xmlItem.pc_fcp || 0,
+            vl_fcp: xmlItem.vl_fcp || 0,
+            mod_bc_st: xmlItem.vl_bc_st ? 4 : 0,
+            pc_mva: xmlItem.pc_mva || 0,
+            vl_bc_st: xmlItem.vl_bc_st || 0,
+            pc_icms_st: xmlItem.pc_icms_st || 0,
+            vl_icms_st: xmlItem.vl_icms_st || 0,
+            cst_ipi: xmlItem.cst_ipi || "",
+            vl_bc_ipi: xmlItem.vl_bc_ipi || 0,
+            pc_ipi: xmlItem.pc_ipi || 0,
+            vl_ipi: xmlItem.vl_ipi || 0,
+            cst_pis: xmlItem.cst_pis || "",
+            vl_bc_pis: xmlItem.vl_bc_pis || 0,
+            pc_pis: xmlItem.pc_pis || 0,
+            vl_pis: xmlItem.vl_pis || 0,
+            cst_cofins: xmlItem.cst_cofins || "",
+            vl_bc_cofins: xmlItem.vl_bc_cofins || 0,
+            pc_cofins: xmlItem.pc_cofins || 0,
+            vl_cofins: xmlItem.vl_cofins || 0,
+          };
+          await db.from("fiscal_nfe_item").insert(payload);
+          itensAdicionados++;
+        }
+      }
+
+      await recalculateNfeTotals(nfeCabecalhoId);
+      toast.success(`Importação concluída: Chave ${keyRef} registrada. ${itensAdicionados} itens novos adicionados e ${itensAtualizados} somados.`, { id: "import-xml" });
+      
+      await loadChavesRef();
+      await loadItens();
+      if (onRefreshCabecalho) onRefreshCabecalho();
+
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Erro ao processar XML: " + err.message, { id: "import-xml" });
+    }
+  };
 
   const loadItens = useCallback(async () => {
-    if (!nfeCabecalhoId) { setXItens([]); return; }
+    if (!nfeCabecalhoId) {
+      if (itensImportados) {
+        setXItens(itensImportados as any[]);
+      } else {
+        setXItens([]);
+      }
+      return;
+    }
     const { data, error } = await db.from("fiscal_nfe_item").select("*").eq("nfe_cabecalho_id", nfeCabecalhoId).eq("excluido", false).order("nr_item");
     if (error) { toast.error("Erro ao carregar itens: " + error.message); return; }
 
     const rows: XItemRow[] = data || [];
     const prodIds = [...new Set(rows.map((r) => r.produto_id).filter(Boolean))];
-    const prodMap: Record<number, string> = {};
+    const prodNames: Record<number, string> = {};
+    const prodCodes: Record<number, string> = {};
     if (prodIds.length > 0) {
-      const { data: prods } = await db.from("produto").select("produto_id, nome").in("produto_id", prodIds);
-      ((prods || []) as XProdutoOption[]).forEach((p) => { prodMap[p.produto_id] = p.nome; });
+      const { data: prods } = await db.from("produto").select("produto_id, nome, cd_produto").in("produto_id", prodIds);
+      (prods || []).forEach((p: any) => {
+        prodNames[p.produto_id] = p.nome;
+        prodCodes[p.produto_id] = p.cd_produto ? String(p.cd_produto) : "";
+      });
     }
-    const enriched = rows.map((r) => ({ ...r, _produto_nome: r.produto_id ? (prodMap[r.produto_id] || `#${r.produto_id}`) : null }));
+    const enriched = rows.map((r) => ({
+      ...r,
+      _produto_nome: r.produto_id ? (prodNames[r.produto_id] || `#${r.produto_id}`) : null,
+      _produto_codigo: r.produto_id ? (prodCodes[r.produto_id] || "") : null
+    }));
     setXItens(enriched);
 
     if (onTotaisChanged) {
@@ -195,17 +636,130 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
       const vl_icms_st = enriched.reduce((a: number, i) => a + Number(i.vl_icms_st || 0), 0);
       onTotaisChanged({ vl_total, vl_ipi, vl_icms_st });
     }
-  }, [nfeCabecalhoId, onTotaisChanged]);
+  }, [nfeCabecalhoId, onTotaisChanged, itensImportados]);
 
   useEffect(() => {
     const loadProdutos = async () => {
-      const { data } = await db.from("produto").select("produto_id, nome, referencia").eq("excluido", false).order("nome").limit(500);
+      const { data } = await db.from("produto").select("produto_id, nome, referencia, cd_produto").eq("excluido", false).order("nome").limit(500);
       setXProdutos(data || []);
     };
     loadProdutos();
   }, []);
 
+  useEffect(() => {
+    const loadCfops = async () => {
+      const { data } = await db.from("cfop").select("cd_cfop, descricao").eq("excluido", false).order("cd_cfop");
+      setXCfops(data || []);
+    };
+    loadCfops();
+  }, []);
+
   useEffect(() => { loadItens(); }, [loadItens]);
+
+  useEffect(() => {
+    if (!nfeCabecalhoId && itensImportados) {
+      setXItens(itensImportados as any[]);
+    }
+  }, [nfeCabecalhoId, itensImportados]);
+
+  useEffect(() => {
+    if (onItensChanged) {
+      onItensChanged(XItens);
+    }
+  }, [XItens, onItensChanged]);
+
+  const handleUpdateItemField = async (item: XItemRow, key: string, val: any) => {
+    const itemIndex = XItens.findIndex(it => it.nr_item === item.nr_item);
+    if (itemIndex === -1) return;
+    const targetItem = XItens[itemIndex];
+    
+    // Update local state first
+    const newItens = [...XItens];
+    newItens[itemIndex] = {
+      ...targetItem,
+      [key]: val
+    };
+    setXItens(newItens);
+    
+    if (onItensImportadosChanged) {
+      onItensImportadosChanged(newItens as any[]);
+    }
+    
+    // If it's a saved note, write to database
+    if (nfeCabecalhoId && targetItem.nfe_item_id) {
+      const { error } = await db.from("fiscal_nfe_item")
+        .update({ [key]: val, updated_at: new Date().toISOString() })
+        .eq("nfe_item_id", targetItem.nfe_item_id);
+      if (error) {
+        toast.error("Erro ao atualizar item: " + error.message);
+      }
+    }
+  };
+
+  const handleSelectProduto = async (p: any) => {
+    if (XSearchItemNr === null) return;
+    const itemIndex = XItens.findIndex(it => it.nr_item === XSearchItemNr);
+    if (itemIndex === -1) return;
+    const item = XItens[itemIndex];
+    const produtoId = p.produto_id;
+    const produtoNome = p.nome;
+    const produtoCodigo = p.cd_produto ? String(p.cd_produto) : "";
+
+    if (nfeCabecalhoId) {
+      const { error } = await db.from("fiscal_nfe_item")
+        .update({ produto_id: produtoId })
+        .eq("nfe_item_id", item.nfe_item_id);
+
+      if (error) {
+        toast.error("Erro ao atualizar vínculo: " + error.message);
+        return;
+      }
+
+      const { data: cabRec } = await db.from("fiscal_nfe_cabecalho")
+        .select("cadastro_id")
+        .eq("nfe_cabecalho_id", nfeCabecalhoId)
+        .maybeSingle();
+
+      if (cabRec?.cadastro_id && item.cd_prod_fornec) {
+        await salvarVinculoProdutoFornecedor(
+          empresaId,
+          cabRec.cadastro_id,
+          produtoId,
+          item.cd_prod_fornec,
+          item.nm_produto || "",
+          1
+        );
+      }
+
+      toast.success("Produto vinculado com sucesso!");
+      loadItens();
+    } else {
+      const newItens = [...XItens];
+      newItens[itemIndex] = {
+        ...item,
+        produto_id: produtoId,
+        _produto_nome: produtoNome,
+        _produto_codigo: produtoCodigo,
+      };
+      setXItens(newItens);
+      if (onItensImportadosChanged) {
+        onItensImportadosChanged(newItens as any[]);
+      }
+      toast.success("Produto selecionado!");
+    }
+    setXSearchOpen(false);
+    setXSearchItemNr(null);
+  };
+
+  const handleCadastrarProduto = () => {
+    const existingTab = XTabs.find(t => t.component === "produtos");
+    if (existingTab) closeTab(existingTab.id);
+    openTab({
+      title: "Produtos",
+      component: "produtos",
+    });
+    toast.info("Cadastre o produto no estoque. Em seguida, retorne para esta tela para associar o item.");
+  };
 
   const set = (key: string, val: XFieldValue) => setXF(prev => ({ ...prev, [key]: val }));
   const recalcTotal = (f: Partial<INfeItem>) => {
@@ -230,7 +784,11 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
   const handleEditar = () => {
     if (XCurrentIdx === null) return;
     setXMode("edit");
-    setXF(formatItemForEdit({ ...XItens[XCurrentIdx], produto_id: XItens[XCurrentIdx].produto_id || undefined }));
+    setXF(formatItemForEdit({ 
+      ...XItens[XCurrentIdx], 
+      produto_id: XItens[XCurrentIdx].produto_id || undefined,
+      deposito_id: XItens[XCurrentIdx].deposito_id || undefined
+    }));
   };
 
   const buildPayload = () => {
@@ -238,6 +796,8 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
       nfe_cabecalho_id: nfeCabecalhoId,
       empresa_id: empresaId,
       produto_id: XF.produto_id ? Number(XF.produto_id) : null,
+      deposito_id: XF.deposito_id ? Number(XF.deposito_id) : null,
+      cfop_entrada: XF.cfop_entrada ? String(XF.cfop_entrada) : null,
       nr_item: parseInt(String(XF.nr_item || XItens.length + 1), 10) || XItens.length + 1,
     };
 
@@ -280,7 +840,9 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
     }
     setXMode("view");
     setXCurrentIdx(null);
+    await recalculateNfeTotals(nfeCabecalhoId);
     await loadItens();
+    if (onRefreshCabecalho) onRefreshCabecalho();
   };
 
   const handleExcluir = async () => {
@@ -292,7 +854,9 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
     if (error) { toast.error("Erro ao excluir item: " + error.message); return; }
     toast.success("Item excluído.");
     setXCurrentIdx(null);
+    await recalculateNfeTotals(nfeCabecalhoId);
     await loadItens();
+    if (onRefreshCabecalho) onRefreshCabecalho();
   };
 
   const isEditing = XMode === "edit" || XMode === "insert";
@@ -338,114 +902,302 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
     </fieldset>
   );
 
+  const gridColumns = useMemo<IGridColumn[]>(() => {
+    const cols: IGridColumn[] = [
+      { key: "nr_item",       label: "Item",        width: "60px",   align: "right" },
+      { key: "cd_prod_fornec",label: "Cód. Forn.",  width: "90px" },
+    ];
+
+    if (!hideVinculo) {
+      cols.push({ 
+        key: "_produto",      
+        label: "Vincular Produto Estoque",     
+        width: "140px",    
+        render: (r) => {
+          const hasVinc = !!r.produto_id;
+          return (
+            <button
+              type="button"
+              disabled={!podeEditar}
+              onClick={() => {
+                setXSearchItemNr(r.nr_item);
+                setXSearchOpen(true);
+              }}
+              className={`w-full flex items-center justify-between gap-1 px-2 py-0.5 border rounded text-xs select-none transition-all outline-none text-left min-h-[26px] ${
+                hasVinc 
+                  ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 hover:bg-emerald-500/10" 
+                  : "border-input bg-card hover:bg-accent text-muted-foreground"
+              }`}
+            >
+              <span className="truncate">
+                {r.produto_id ? String(r._produto_codigo || "") : ""}
+              </span>
+              <Search className="w-3.5 h-3.5 opacity-60 shrink-0 ml-1" />
+            </button>
+          );
+        }
+      });
+    }
+
+    cols.push(
+      { key: "nm_produto",    label: "Desc. NF",    width: "1fr" },
+      { key: "ncm",           label: "NCM",         width: "75px" },
+      { key: "cest",          label: "CEST",        width: "75px" },
+      { key: "cfop",          label: "CFOP Orig.",  width: "95px" },
+      { 
+        key: "cfop_entrada",  
+        label: "CFOP Ent.",    
+        width: "90px", 
+        render: (r) => {
+          const origCfop = String(r.cfop || "").trim();
+          const firstChar = origCfop.charAt(0);
+          
+          let allowedPrefix = "1";
+          if (firstChar === "2" || firstChar === "6") {
+            allowedPrefix = "2";
+          } else if (firstChar === "3" || firstChar === "7") {
+            allowedPrefix = "3";
+          } else if (firstChar === "1" || firstChar === "5") {
+            allowedPrefix = "1";
+          }
+          
+          const filteredCfops = XCfops.filter(c => c.cd_cfop.startsWith(allowedPrefix));
+          const selectedCfop = filteredCfops.find(c => c.cd_cfop === r.cfop_entrada);
+          
+          return (
+            <select
+              disabled={!podeEditar}
+              value={r.cfop_entrada ?? ""}
+              title={selectedCfop ? selectedCfop.descricao : "Selecione o CFOP de Entrada"}
+              onChange={async (e) => {
+                await handleUpdateItemField(r, "cfop_entrada", e.target.value || null);
+              }}
+              style={{ width: "70px" }}
+              className="border border-border rounded px-1.5 py-0.5 text-xs bg-card focus:ring-1 focus:ring-ring outline-none truncate"
+            >
+              <option value="">—</option>
+              {filteredCfops.map(c => (
+                <option key={c.cd_cfop} value={c.cd_cfop} title={c.descricao}>
+                  {c.cd_cfop} — {c.descricao}
+                </option>
+              ))}
+            </select>
+          );
+        }
+      },
+      { key: "unidade",       label: "Un.",         width: "60px",   align: "center" },
+      { key: "qt_entrada",    label: "Qtd.",        width: "90px",   align: "right", render: (r) => fmt4(r.qt_entrada) },
+      { key: "vl_unit",       label: "Vlr. Unit.",  width: "90px",   align: "right", render: (r) => fmt2(r.vl_unit) },
+      { key: "vl_desconto",   label: "Desc.",       width: "90px",   align: "right", render: (r) => fmt2(r.vl_desconto) },
+      { key: "vl_icms",       label: "ICMS",        width: "90px",   align: "right", render: (r) => fmt2(r.vl_icms) },
+      { key: "vl_icms_st",    label: "ICMS-ST",     width: "90px",   align: "right", render: (r) => fmt2(r.vl_icms_st) },
+      { key: "vl_ipi",        label: "IPI",         width: "90px",   align: "right", render: (r) => fmt2(r.vl_ipi) },
+      { key: "vl_pis",        label: "PIS",         width: "90px",   align: "right", render: (r) => fmt2(r.vl_pis) },
+      { key: "vl_cofins",     label: "COFINS",      width: "90px",   align: "right", render: (r) => fmt2(r.vl_cofins) },
+      { key: "vl_total",      label: "Total",       width: "90px",   align: "right", render: (r) => fmt2(r.vl_total) }
+    );
+
+    return cols;
+  }, [podeEditar, hideVinculo, XCfops, XItens]);
+
   return (
     <div className="space-y-4">
-      {isEditing && (
-        <div className="p-3 bg-card rounded border border-border space-y-3 max-h-[70vh] overflow-y-auto">
-          {renderSection("Identificação", (
+      {/* Grid de Chaves NF-e Referenciadas (Origem) */}
+      {!hideVinculo && Number(finNfe) === 4 && (
+        <div className="border border-border rounded-lg p-4 bg-card shadow-sm space-y-3">
+          <div className="flex justify-between items-center pb-2 border-b border-border">
+            <div>
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                <Key className="w-4 h-4 text-primary" />
+                Chaves NF-e Referenciadas (Origem)
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Insira as chaves referenciadas e faça a importação do XML para atualizar os itens a serem devolvidos.
+              </p>
+            </div>
+            {podeEditar && (
               <>
-            {renderNum({ k: "nr_item", label: "Item", span: 1 })}
-            {renderTxt({ k: "cd_prod_fornec", label: "Cód. Forn.", span: 2 })}
-            {renderTxt({ k: "gtin", label: "GTIN", span: 2, digits: true, max: 14 })}
-            {renderTxt({ k: "ncm", label: "NCM", span: 2, digits: true, max: 8 })}
-            {renderTxt({ k: "cest", label: "CEST", span: 1, digits: true, max: 7 })}
-            {renderTxt({ k: "cfop", label: "CFOP", span: 1, digits: true, max: 4 })}
-            {renderTxt({ k: "unidade", label: "Un.", span: 1 })}
-            {renderTxt({ k: "c_enq", label: "cEnq", span: 2, digits: true, max: 3 })}
-            <div className="col-span-8">
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Descrição NF</label>
-              <input value={XF.nm_produto || ""} onChange={e => set("nm_produto", e.target.value.toUpperCase())} className={inputCls} />
-            </div>
-            <div className="col-span-4">
-              <label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1"><Link size={12}/> Produto Vinculado</label>
-              <select value={XF.produto_id ?? ""} onChange={e => set("produto_id", e.target.value ? parseInt(e.target.value) : undefined)} className={inputCls}>
-                <option value="">— Selecione —</option>
-                {XProdutos.map(p => <option key={p.produto_id} value={p.produto_id}>{p.produto_id} — {p.nome}</option>)}
-              </select>
-            </div>
-          </>
-            ))}
+                <input
+                  type="file"
+                  id="file-xml-add"
+                  accept=".xml"
+                  className="hidden"
+                  onChange={handleUploadXml}
+                />
+                <button
+                  type="button"
+                  disabled={!nfeCabecalhoId}
+                  onClick={() => document.getElementById("file-xml-add")?.click()}
+                  className="px-2.5 py-1 text-xs font-bold border border-primary/20 text-primary rounded bg-primary/5 hover:bg-primary/10 disabled:opacity-40 disabled:pointer-events-none transition-all uppercase"
+                  title={!nfeCabecalhoId ? "Salve a nota fiscal antes de gerenciar chaves referenciadas" : ""}
+                >
+                  + Adicionar Chave (Importar XML)
+                </button>
+              </>
+            )}
+          </div>
 
-          {renderSection("Quantidades e Valores", (
-            <>
-            {renderNum({ k: "qt_entrada", label: "Quantidade", span: 2 })}
-            {renderNum({ k: "qt_tributavel", label: "Qtd. Tributável", span: 2 })}
-            {renderNum({ k: "vl_unit", label: "Vlr. Unitário", span: 2 })}
-            {renderNum({ k: "vl_unit_tributavel", label: "Vlr. Unit. Trib.", span: 2 })}
-            {renderNum({ k: "vl_desconto", label: "Desconto", span: 2 })}
-            {renderNum({ k: "vl_frete", label: "Frete", span: 2 })}
-            {renderNum({ k: "vl_seguro", label: "Seguro", span: 2 })}
-            {renderNum({ k: "vl_outro", label: "Outras Desp.", span: 2 })}
-            {renderNum({ k: "vl_total", label: "Total", span: 2 })}
-          </>
+          <div className="space-y-3">
+            {XChavesRef.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic py-2">
+                {!nfeCabecalhoId 
+                  ? "Salve a NF-e para gerenciar as chaves de origem." 
+                  : "Nenhuma chave referenciada vinculada. Clique em \"Adicionar Chave (Importar XML)\" para começar."}
+              </p>
+            ) : (
+              <div className="grid grid-cols-12 gap-3 font-semibold text-xs text-muted-foreground px-2">
+                <div className="col-span-11">Chave de Acesso (44 dígitos)</div>
+                <div className="col-span-1 text-right">Ações</div>
+              </div>
+            )}
+
+            {XChavesRef.map((ch, idx) => (
+              <div key={ch.nfe_referenciada_id || idx} className="grid grid-cols-12 gap-3 items-center">
+                <div className="col-span-11 relative">
+                  <input
+                    type="text"
+                    readOnly
+                    value={ch.chave_ref || ""}
+                    className="w-full border border-border rounded pl-3 pr-12 py-1.5 text-xs font-mono bg-secondary text-foreground outline-none cursor-default"
+                    placeholder="Chave de acesso carregada do XML"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground font-mono">
+                    {(ch.chave_ref || "").length}/44
+                  </span>
+                </div>
+                <div className="col-span-1 flex items-center justify-end">
+                  {podeEditar && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoverChaveRef(idx)}
+                      className="p-1.5 border border-destructive/20 text-destructive rounded hover:bg-destructive/5 transition-colors"
+                      title="Remover chave e excluir itens correspondentes"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
             ))}
+          </div>
+        </div>
+      )}
+      {isEditing && (
+        <div className="p-3 bg-card rounded border border-border space-y-3 max-h-[70vh] overflow-y-auto" onKeyDown={handleKeyDown}>
+          {renderSection("Identificação", (
+            <>
+              {renderNum({ k: "nr_item", label: "Item", span: 1 })}
+              {renderTxt({ k: "cd_prod_fornec", label: "Cód. Forn.", span: 2 })}
+              {renderTxt({ k: "gtin", label: "GTIN", span: 2, digits: true, max: 14 })}
+              {renderTxt({ k: "ncm", label: "NCM", span: 2, digits: true, max: 8 })}
+              {renderTxt({ k: "cest", label: "CEST", span: 1, digits: true, max: 7 })}
+              {renderTxt({ k: "cfop", label: "CFOP", span: 1, digits: true, max: 4 })}
+              {renderTxt({ k: "unidade", label: "Un.", span: 1 })}
+              {renderTxt({ k: "c_enq", label: "cEnq", span: 2, digits: true, max: 3 })}
+              <div className="col-span-3">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Descrição NF</label>
+                <input value={XF.nm_produto || ""} onChange={e => set("nm_produto", e.target.value.toUpperCase())} className={inputCls} />
+              </div>
+              <div className="col-span-3">
+                <label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1"><Link size={12}/> Produto Vinculado</label>
+                <select value={XF.produto_id ?? ""} onChange={e => set("produto_id", e.target.value ? parseInt(e.target.value) : undefined)} className={inputCls}>
+                  <option value="">— Selecione —</option>
+                  {XProdutos.map(p => (
+                    <option key={p.produto_id} value={p.produto_id}>
+                      {p.cd_produto ? `${p.cd_produto} — ` : ""}{p.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="col-span-3">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">CFOP de Entrada</label>
+                <select value={XF.cfop_entrada ?? ""} onChange={e => set("cfop_entrada", e.target.value || undefined)} className={inputCls}>
+                  <option value="">— Selecione —</option>
+                  {XCfops.map(c => (
+                    <option key={c.cd_cfop} value={c.cd_cfop}>
+                      {c.cd_cfop} — {c.descricao}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          ))}
+
+          {renderSection("Valores Unitários", (
+            <>
+              {renderNum({ k: "qt_entrada", label: "Qtd. Entrada", span: 2 })}
+              {renderNum({ k: "vl_unit", label: "Valor Unit.", span: 2 })}
+              {renderNum({ k: "vl_desconto", label: "Desconto", span: 2 })}
+              {renderNum({ k: "vl_frete", label: "Frete", span: 2 })}
+              {renderNum({ k: "vl_seguro", label: "Seguro", span: 2 })}
+              {renderNum({ k: "vl_outro", label: "Outras Desp.", span: 2 })}
+              {renderNum({ k: "vl_total", label: "Total", span: 2 })}
+            </>
+          ))}
 
           {renderSection("ICMS", (
             <>
-            {renderNum({ k: "origem", label: "Origem", span: 1 })}
-            {renderTxt({ k: "cst_icms", label: "CST", span: 1, digits: true, max: 3 })}
-            {renderTxt({ k: "csosn", label: "CSOSN", span: 1, digits: true, max: 4 })}
-            {renderNum({ k: "mod_bc", label: "Mod. BC", span: 1 })}
-            {renderNum({ k: "vl_bc", label: "BC ICMS", span: 2 })}
-            {renderNum({ k: "pc_red_bc", label: "Red. BC %", span: 2 })}
-            {renderNum({ k: "pc_icms", label: "ICMS %", span: 2 })}
-            {renderNum({ k: "vl_icms", label: "Vlr. ICMS", span: 2 })}
-            {renderNum({ k: "pc_fcp", label: "FCP %", span: 2 })}
-            {renderNum({ k: "vl_fcp", label: "Vlr. FCP", span: 2 })}
-            {renderNum({ k: "vl_icms_deson", label: "ICMS Deson.", span: 2 })}
-          </>
-            ))}
+              {renderNum({ k: "origem", label: "Origem", span: 1 })}
+              {renderTxt({ k: "cst_icms", label: "CST", span: 1, digits: true, max: 3 })}
+              {renderTxt({ k: "csosn", label: "CSOSN", span: 1, digits: true, max: 4 })}
+              {renderNum({ k: "mod_bc", label: "Mod. BC", span: 1 })}
+              {renderNum({ k: "vl_bc", label: "BC ICMS", span: 2 })}
+              {renderNum({ k: "pc_red_bc", label: "Red. BC %", span: 2 })}
+              {renderNum({ k: "pc_icms", label: "ICMS %", span: 2 })}
+              {renderNum({ k: "vl_icms", label: "Vlr. ICMS", span: 2 })}
+              {renderNum({ k: "vl_icms_deson", label: "ICMS Deson.", span: 2 })}
+            </>
+          ))}
 
-          {renderSection("ICMS-ST / FCP-ST / Crédito SN", (
+          {renderSection("ICMS-ST / Crédito SN", (
             <>
-            {renderNum({ k: "mod_bc_st", label: "Mod. BC ST", span: 1 })}
-            {renderNum({ k: "pc_mva", label: "MVA %", span: 2 })}
-            {renderNum({ k: "vl_bc_st", label: "BC ST", span: 2 })}
-            {renderNum({ k: "pc_red_bc_st", label: "Red. BC ST %", span: 2 })}
-            {renderNum({ k: "pc_icms_st", label: "ICMS-ST %", span: 2 })}
-            {renderNum({ k: "vl_icms_st", label: "Vlr. ICMS-ST", span: 2 })}
-            {renderNum({ k: "pc_fcp_st", label: "FCP-ST %", span: 2 })}
-            {renderNum({ k: "vl_fcp_st", label: "Vlr. FCP-ST", span: 2 })}
-            {renderNum({ k: "pc_cred_sn", label: "Créd. SN %", span: 2 })}
-            {renderNum({ k: "vl_cred_sn", label: "Vlr. Créd. SN", span: 2 })}
-          </>
-            ))}
+              {renderNum({ k: "mod_bc_st", label: "Mod. BC ST", span: 1 })}
+              {renderNum({ k: "pc_mva", label: "MVA %", span: 2 })}
+              {renderNum({ k: "vl_bc_st", label: "BC ST", span: 2 })}
+              {renderNum({ k: "pc_red_bc_st", label: "Red. BC ST %", span: 2 })}
+              {renderNum({ k: "pc_icms_st", label: "ICMS-ST %", span: 2 })}
+              {renderNum({ k: "vl_icms_st", label: "Vlr. ICMS-ST", span: 2 })}
+              {renderNum({ k: "pc_cred_sn", label: "Créd. SN %", span: 2 })}
+              {renderNum({ k: "vl_cred_sn", label: "Vlr. Créd. SN", span: 2 })}
+            </>
+          ))}
 
           {renderSection("IPI", (
             <>
-            {renderTxt({ k: "cst_ipi", label: "CST IPI", span: 2, digits: true, max: 2 })}
-            {renderNum({ k: "vl_bc_ipi", label: "BC IPI", span: 2 })}
-            {renderNum({ k: "pc_ipi", label: "IPI %", span: 2 })}
-            {renderNum({ k: "vl_ipi", label: "Vlr. IPI", span: 2 })}
-          </>
-            ))}
+              {renderTxt({ k: "cst_ipi", label: "CST IPI", span: 2, digits: true, max: 2 })}
+              {renderNum({ k: "vl_bc_ipi", label: "BC IPI", span: 2 })}
+              {renderNum({ k: "pc_ipi", label: "IPI %", span: 2 })}
+              {renderNum({ k: "vl_ipi", label: "Vlr. IPI", span: 2 })}
+            </>
+          ))}
 
           {renderSection("PIS / COFINS", (
             <>
-            {renderTxt({ k: "cst_pis", label: "CST PIS", span: 2, digits: true, max: 2 })}
-            {renderNum({ k: "vl_bc_pis", label: "BC PIS", span: 2 })}
-            {renderNum({ k: "pc_pis", label: "PIS %", span: 2 })}
-            {renderNum({ k: "vl_pis", label: "Vlr. PIS", span: 2 })}
-            {renderTxt({ k: "cst_cofins", label: "CST COFINS", span: 2, digits: true, max: 2 })}
-            {renderNum({ k: "vl_bc_cofins", label: "BC COFINS", span: 2 })}
-            {renderNum({ k: "pc_cofins", label: "COFINS %", span: 2 })}
-            {renderNum({ k: "vl_cofins", label: "Vlr. COFINS", span: 2 })}
-          </>
-            ))}
+              {renderTxt({ k: "cst_pis", label: "CST PIS", span: 2, digits: true, max: 2 })}
+              {renderNum({ k: "vl_bc_pis", label: "BC PIS", span: 2 })}
+              {renderNum({ k: "pc_pis", label: "PIS %", span: 2 })}
+              {renderNum({ k: "vl_pis", label: "Vlr. PIS", span: 2 })}
+              {renderTxt({ k: "cst_cofins", label: "CST COFINS", span: 2, digits: true, max: 2 })}
+              {renderNum({ k: "vl_bc_cofins", label: "BC COFINS", span: 2 })}
+              {renderNum({ k: "pc_cofins", label: "COFINS %", span: 2 })}
+              {renderNum({ k: "vl_cofins", label: "Vlr. COFINS", span: 2 })}
+            </>
+          ))}
 
-          {renderSection("IBS / CBS / IS (Reforma)", (
+          {renderSection("IBS / CBS (Reforma)", (
             <>
-            {renderTxt({ k: "cst_ibs", label: "CST IBS", span: 2, digits: true, max: 3 })}
-            {renderNum({ k: "pc_ibs", label: "IBS %", span: 2 })}
-            {renderNum({ k: "vl_ibs", label: "Vlr. IBS", span: 2 })}
-            {renderTxt({ k: "cst_cbs", label: "CST CBS", span: 2, digits: true, max: 3 })}
-            {renderNum({ k: "pc_cbs", label: "CBS %", span: 2 })}
-            {renderNum({ k: "vl_cbs", label: "Vlr. CBS", span: 2 })}
-            {renderTxt({ k: "cst_is", label: "CST IS", span: 2, digits: true, max: 3 })}
-            {renderNum({ k: "pc_is", label: "IS %", span: 2 })}
-            {renderNum({ k: "vl_is", label: "Vlr. IS", span: 2 })}
-          </>
-            ))}
+              {renderTxt({ k: "cst_ibs", label: "CST IBS", span: 2, digits: true, max: 3 })}
+              {renderNum({ k: "pc_ibs", label: "IBS %", span: 2 })}
+              {renderNum({ k: "vl_ibs", label: "Vlr. IBS", span: 2 })}
+              {renderTxt({ k: "cst_cbs", label: "CST CBS", span: 2, digits: true, max: 3 })}
+              {renderNum({ k: "pc_cbs", label: "CBS %", span: 2 })}
+              {renderNum({ k: "vl_cbs", label: "Vlr. CBS", span: 2 })}
+            </>
+          ))}
+
 
           <div className="flex gap-2 justify-end pt-2 sticky bottom-0 bg-card border-t border-border">
             <button type="button" onClick={handleSalvar} className="px-4 py-2 text-xs font-bold rounded border border-border bg-primary text-primary-foreground hover:bg-primary/90 transition-all">
@@ -459,26 +1211,55 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
       )}
 
       <DataGrid
-        columns={COLS}
+        columns={gridColumns}
         data={XItens}
         maxHeight="340px"
         exportTitle="Itens da NF-e"
         showRecordCount={false}
         selectedIdx={XCurrentIdx}
         onRowClick={(_, idx) => setXCurrentIdx(idx)}
-        onRowDoubleClick={(_, idx) => { setXCurrentIdx(idx); if (podeEditar && !isEditing) { setXMode("edit"); setXF(formatItemForEdit({ ...XItens[idx], produto_id: XItens[idx].produto_id || undefined })); } }}
+        onRowDoubleClick={(_, idx) => {
+          setXCurrentIdx(idx);
+          if (podeEditar) {
+            if (isEditing) {
+              setXSearchItemNr(XItens[idx].nr_item);
+              setXSearchOpen(true);
+            } else {
+              setXMode("edit");
+              setXF(formatItemForEdit({ ...XItens[idx], produto_id: XItens[idx].produto_id || undefined }));
+            }
+          }
+        }}
         toolbarLeft={podeEditar ? (
-          <GridActionToolbar
-            actions={[
-              gridActions.incluir(handleNovo, isEditing),
-              gridActions.alterar(handleEditar, XCurrentIdx === null || isEditing),
-              null,
-              gridActions.excluir(handleExcluir, XCurrentIdx === null || isEditing),
-              gridActions.atualizar(loadItens),
-            ]}
-            count={`${XItens.length} item(s)`}
-          />
+          <div className="flex gap-2 items-center">
+            <GridActionToolbar
+              actions={[
+                gridActions.incluir(handleNovo, isEditing),
+                gridActions.alterar(handleEditar, XCurrentIdx === null || isEditing),
+                null,
+                gridActions.excluir(handleExcluir, XCurrentIdx === null || isEditing),
+                gridActions.atualizar(loadItens),
+              ]}
+              count={`${XItens.length} item(s)`}
+            />
+            <button
+              type="button"
+              onClick={handleCadastrarProduto}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border rounded text-xs font-bold transition-all uppercase animate-pulse"
+            >
+              Novo Produto
+            </button>
+          </div>
         ) : undefined}
+      />
+
+      <ProdutoSearchDialog
+        open={XSearchOpen}
+        onClose={() => {
+          setXSearchOpen(false);
+          setXSearchItemIdx(null);
+        }}
+        onSelect={handleSelectProduto}
       />
     </div>
   );

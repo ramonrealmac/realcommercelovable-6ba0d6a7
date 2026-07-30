@@ -30,7 +30,7 @@ const XGridCols: IGridColumn[] = [
   { 
     key: "st_nf", 
     label: "Status", 
-    width: "180px", 
+    width: "200px", 
     render: r => {
       const labels: any = {
         "0": "Pendente",
@@ -39,19 +39,21 @@ const XGridCols: IGridColumn[] = [
         "210220": "Desconhecida",
         "210240": "Não Realizada"
       };
-      const stManif = labels[r.st_manifesto] || r.st_manifesto;
-      const stDownload = r.st_download ? " (XML OK)" : " (Sem XML)";
+      const stManif = labels[r.st_manifesto] || r.st_manifesto || "Pendente";
+      const stDownload = r.st_download ? "(XML OK)" : "(Sem XML)";
       
       return (
-        <div className="flex flex-col gap-1">
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase text-center ${
-            r.st_manifesto === "210200" ? "bg-green-100 text-green-700" :
-            r.st_manifesto === "210210" ? "bg-blue-100 text-blue-700" :
-            r.st_manifesto === "0" ? "bg-gray-100 text-gray-600" : "bg-red-100 text-red-700"
-          }`}>
+        <div className="flex items-center gap-1.5 flex-nowrap">
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase whitespace-nowrap ${
+              r.st_manifesto === "210200" ? "bg-green-100 text-green-700" :
+              r.st_manifesto === "210210" ? "bg-blue-100 text-blue-700" :
+              r.st_manifesto === "0" || !r.st_manifesto ? "bg-gray-100 text-gray-700" : "bg-red-100 text-red-700"
+            }`}
+          >
             {stManif}
           </span>
-          <span className={`text-[9px] text-center font-medium ${r.st_download ? "text-green-600" : "text-amber-600"}`}>
+          <span className={`text-[10px] font-semibold whitespace-nowrap ${r.st_download ? "text-green-600" : "text-amber-600"}`}>
             {stDownload}
           </span>
         </div>
@@ -60,6 +62,23 @@ const XGridCols: IGridColumn[] = [
   },
 ];
 
+const formatDateToYYYYMMDD = (d: Date): string => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const normalizeDateValue = (val: string): string => {
+  if (!val) return "";
+  const parts = val.split("-");
+  if (parts.length > 0 && parts[0].length > 4) {
+    parts[0] = parts[0].substring(parts[0].length - 4);
+    return parts.join("-");
+  }
+  return val;
+};
+
 const NfeRecebidasForm: React.FC = () => {
   // Sincronização Estabilizada: 2026-05-06 18:43
   const { XEmpresaId } = useAppContext();
@@ -67,8 +86,12 @@ const NfeRecebidasForm: React.FC = () => {
   const [XLoading, setXLoading] = useState(false);
   const [XCNPJ, setXCNPJ] = useState("");
   const [XUF, setXUF] = useState(""); 
-  const [XDtIni, setXDtIni] = useState(new Date(new Date().setDate(new Date().getDate() - 90)).toISOString().substring(0, 10));
-  const [XDtFim, setXDtFim] = useState(new Date().toISOString().substring(0, 10));
+  const [XDtIni, setXDtIni] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 90);
+    return formatDateToYYYYMMDD(d);
+  });
+  const [XDtFim, setXDtFim] = useState(() => formatDateToYYYYMMDD(new Date()));
   const [XStatusFilter, setXStatusFilter] = useState("");
   const [XSearchFilters, setXSearchFilters] = useState<Record<string, string>>({});
   const [XLogOpen, setXLogOpen] = useState(false);
@@ -77,8 +100,18 @@ const NfeRecebidasForm: React.FC = () => {
   const [XAlertMsg, setXAlertMsg] = useState("");
   const [XManifOpen, setXManifOpen] = useState(false);
   const [XSelectedNfe, setXSelectedNfe] = useState<any>(null);
+  const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
   const [XManifTipo, setXManifTipo] = useState("");
   const [XJustificativa, setXJustificativa] = useState("");
+  const [XAppliedFilters, setXAppliedFilters] = useState<{
+    dtIni: string;
+    dtFim: string;
+    status: string;
+  }>({
+    dtIni: XDtIni,
+    dtFim: XDtFim,
+    status: ""
+  });
 
   const handleOpenManif = (row: any, tipo: string) => {
     setXSelectedNfe(row);
@@ -115,12 +148,44 @@ const NfeRecebidasForm: React.FC = () => {
         throw new Error(resp.replace("ERRO:", "").trim());
       }
 
-      // Atualiza status localmente
-      const { error } = await db.from("fiscal_nfe_recebida")
-        .update({ st_manifesto: tipo, updated_at: new Date().toISOString() })
-        .eq("nfe_recebida_id", row.nfe_recebida_id);
+      // Atualiza status localmente (ou insere no fiscal_nfe_recebida se o registro veio do cabeçalho de entrada)
+      if (typeof row.nfe_recebida_id === "number" || (!String(row.nfe_recebida_id).startsWith("cab-") && !isNaN(Number(row.nfe_recebida_id)))) {
+        const { error } = await db.from("fiscal_nfe_recebida")
+          .update({ st_manifesto: tipo, updated_at: new Date().toISOString() })
+          .eq("nfe_recebida_id", row.nfe_recebida_id);
 
-      if (error) throw error;
+        if (error) throw error;
+      } else if (row.chave_nfe) {
+        const { data: existing } = await db.from("fiscal_nfe_recebida")
+          .select("nfe_recebida_id")
+          .eq("chave_nfe", row.chave_nfe)
+          .eq("empresa_id", XEmpresaId)
+          .maybeSingle();
+
+        if (existing) {
+          const { error } = await db.from("fiscal_nfe_recebida")
+            .update({ st_manifesto: tipo, updated_at: new Date().toISOString() })
+            .eq("nfe_recebida_id", existing.nfe_recebida_id);
+          if (error) throw error;
+        } else {
+          const { error } = await db.from("fiscal_nfe_recebida")
+            .insert({
+              empresa_id: XEmpresaId,
+              chave_nfe: row.chave_nfe,
+              nr_nota: row.nr_nota,
+              serie: row.serie,
+              dt_emissao: row.dt_emissao,
+              nm_emitente: row.nm_emitente,
+              cnpj_emitente: row.cnpj_emitente,
+              vl_total: row.vl_total,
+              st_manifesto: tipo,
+              st_download: true,
+              updated_at: new Date().toISOString()
+            });
+          if (error) throw error;
+        }
+      }
+
       toast.success("Manifesto enviado com sucesso!");
       setXManifOpen(false);
       loadData();
@@ -136,7 +201,6 @@ const NfeRecebidasForm: React.FC = () => {
       const u = Number(ultNsu || 0);
       const m = Number(maxNsu || 0);
       
-      // 1. Atualiza o sequencial oficial do sistema para a próxima sincronização
       const records = [];
       if (u > 0) {
         records.push({ empresa_id: XEmpresaId, tabela: "fiscal_evento", nm_campo1: "ultNSU", nm_campo2: "", ult_seq: u });
@@ -166,9 +230,6 @@ const NfeRecebidasForm: React.FC = () => {
         }
       }
 
-      // 2. Mantém compatibilidade com a tabela de log antiga se necessário, 
-      // mas o foco agora é a fiscal_evento que o enviarComando já preencheu.
-      // Vou apenas logar no console que o NSU avançou.
       console.log(`[NSU] Avançou para ${u}. Próxima consulta usará este valor.`);
       
     } catch (e) {
@@ -177,36 +238,91 @@ const NfeRecebidasForm: React.FC = () => {
   };
 
   const XFilteredData = XData.filter(row => {
-    // Local data grid filters (colunas)
     for (const [key, val] of Object.entries(XSearchFilters)) {
       if (!val) continue;
       const rowVal = String(row[key] || "").toLowerCase();
       if (!rowVal.includes(val.toLowerCase())) return false;
     }
-    // Filtro de Status (cliente)
-    if (XStatusFilter && row.st_manifesto !== XStatusFilter) return false;
+    if (XAppliedFilters.status) {
+      const st = row.st_manifesto || "0";
+      if (st !== XAppliedFilters.status) return false;
+    }
     return true;
   });
 
-  const loadData = async () => {
+  const loadData = async (filtersToApply?: { dtIni: string; dtFim: string; status: string }) => {
     if (!XEmpresaId) {
       console.warn("loadData cancelado: XEmpresaId não definido.");
       return;
     }
+
+    const currentFilters = filtersToApply || XAppliedFilters;
+    const { dtIni, dtFim } = currentFilters;
+
     setXLoading(true);
     try {
-      let query = db.from("fiscal_nfe_recebida")
+      let queryDfe = db.from("fiscal_nfe_recebida")
         .select("*")
         .eq("empresa_id", XEmpresaId);
 
-      if (XDtIni) query = query.gte("dt_emissao", XDtIni);
-      if (XDtFim) query = query.lte("dt_emissao", XDtFim);
+      if (dtIni) queryDfe = queryDfe.gte("dt_emissao", dtIni);
+      if (dtFim) queryDfe = queryDfe.lte("dt_emissao", `${dtFim}T23:59:59`);
 
-      const { data, error } = await query.order("dt_emissao", { ascending: false });
+      const { data: dfeData, error: dfeErr } = await queryDfe.order("dt_emissao", { ascending: false });
+      if (dfeErr) throw dfeErr;
 
-      if (error) throw error;
-      console.log(`[NFe] ${data?.length || 0} registros (empresa ${XEmpresaId}, ${XDtIni} → ${XDtFim})`);
-      setXData(data || []);
+      let queryCab = db.from("fiscal_nfe_cabecalho")
+        .select("nfe_cabecalho_id, empresa_id, nr_nota, serie, dt_emissao, dt_entrada, chave_nfe, vl_total_nf, st_nf, cadastro_id, cadastro:cadastro_id(razao_social, nome_fantasia, cnpj)")
+        .eq("empresa_id", XEmpresaId)
+        .eq("tp_nf", 0)
+        .eq("excluido", false);
+
+      if (dtIni) queryCab = queryCab.gte("dt_emissao", dtIni);
+      if (dtFim) queryCab = queryCab.lte("dt_emissao", `${dtFim}T23:59:59`);
+
+      const { data: cabData, error: cabErr } = await queryCab;
+      if (cabErr) {
+        console.error("Erro ao carregar notas de entrada da base local:", cabErr);
+      }
+
+      const combined: any[] = [...(dfeData || [])];
+      const existingChaves = new Set(combined.map(r => r.chave_nfe).filter(Boolean));
+      const existingNotas = new Set(combined.map(r => `${r.nr_nota}-${r.serie}`));
+
+      if (cabData && cabData.length > 0) {
+        for (const cab of cabData) {
+          const key = cab.chave_nfe;
+          const notaKey = `${cab.nr_nota}-${cab.serie}`;
+          if ((key && existingChaves.has(key)) || existingNotas.has(notaKey)) {
+            const dfeRow = combined.find(r => (key && r.chave_nfe === key) || (`${r.nr_nota}-${r.serie}` === notaKey));
+            if (dfeRow) {
+              dfeRow.st_entrada_sistema = cab.st_nf;
+            }
+            continue;
+          }
+          const forn = cab.cadastro;
+          combined.push({
+            nfe_recebida_id: `cab-${cab.nfe_cabecalho_id}`,
+            empresa_id: cab.empresa_id,
+            chave_nfe: cab.chave_nfe || "",
+            nr_nota: cab.nr_nota,
+            serie: cab.serie,
+            dt_emissao: cab.dt_emissao || cab.dt_entrada,
+            nm_emitente: forn?.razao_social || forn?.nome_fantasia || "NOTA DE ENTRADA REGISTRADA",
+            cnpj_emitente: forn?.cnpj || "",
+            vl_total: cab.vl_total_nf,
+            st_manifesto: "0",
+            st_download: true,
+            st_entrada_sistema: cab.st_nf,
+            origem_entrada: true,
+          });
+        }
+      }
+
+      combined.sort((a, b) => new Date(b.dt_emissao || 0).getTime() - new Date(a.dt_emissao || 0).getTime());
+
+      console.log(`[NFe] ${combined.length} registros (empresa ${XEmpresaId}, ${dtIni} → ${dtFim})`);
+      setXData(combined);
     } catch (e: any) {
       console.error("Erro ao carregar NF-e:", e);
       toast.error("Erro ao carregar dados: " + e.message);
@@ -217,7 +333,6 @@ const NfeRecebidasForm: React.FC = () => {
 
   useEffect(() => {
     if (XEmpresaId) {
-      // Busca CNPJ e UF da empresa atual
       db.from("empresa")
         .select("*")
         .eq("empresa_id", XEmpresaId)
@@ -233,8 +348,7 @@ const NfeRecebidasForm: React.FC = () => {
             setXCNPJ(cleanCnpj);
           }
 
-          // Busca a UF da cidade pelo Código IBGE (2 primeiros dígitos)
-          setXUF(""); // Reset UF
+          setXUF("");
           if (data?.endereco_cidade_id) {
             const { data: cityData } = await db.from("cidade")
               .select("cd_ibge, descricao")
@@ -244,14 +358,9 @@ const NfeRecebidasForm: React.FC = () => {
             if (cityData?.cd_ibge && cityData.cd_ibge.length >= 2) {
               const code = cityData.cd_ibge.substring(0, 2);
               setXUF(code);
-            } else {
-              toast.error(`Cidade vinculada (${cityData?.descricao || data.endereco_cidade_id}) não possui Código IBGE válido. Verifique o cadastro de cidades.`);
             }
-          } else {
-            toast.error("Empresa sem cidade vinculada no cadastro. Não será possível sincronizar NF-e.");
           }
 
-          // Busca configuração fiscal da empresa
           const { data: fiscalData } = await db.from("fiscal_config")
             .select("dfe_maxnsu_busca")
             .eq("empresa_id", XEmpresaId)
@@ -259,15 +368,28 @@ const NfeRecebidasForm: React.FC = () => {
           
           if (fiscalData?.dfe_maxnsu_busca) {
             setXMaxLoops(Number(fiscalData.dfe_maxnsu_busca));
-            console.log(`[Config] max_nsu_busca configurado para ${fiscalData.dfe_maxnsu_busca} loops.`);
           }
         });
-      
+
       loadData();
     }
   }, [XEmpresaId]);
 
+  const handleFiltrar = () => {
+    if (XDtIni && XDtFim && XDtFim < XDtIni) {
+      toast.error("A data final não pode ser menor que a data inicial.");
+      return;
+    }
+    const nextFilters = { dtIni: XDtIni, dtFim: XDtFim, status: XStatusFilter };
+    setXAppliedFilters(nextFilters);
+    loadData(nextFilters);
+  };
+
   const handleSincronizar = async (forceStart: boolean = false) => {
+    if (XDtIni && XDtFim && XDtFim < XDtIni) {
+      toast.error("A data final não pode ser menor que a data inicial.");
+      return;
+    }
     if (!XCNPJ) { toast.error("CNPJ não informado."); return; }
     setXLoading(true);
     
@@ -672,7 +794,11 @@ const NfeRecebidasForm: React.FC = () => {
           showFilters
           filterValues={XSearchFilters}
           onFilterChange={(k, v) => setXSearchFilters(prev => ({ ...prev, [k]: v }))}
-          onRowDoubleClick={(row) => { setXSelectedNfe(row); setXLogOpen(true); }}
+          selectedIdx={XSelectedIdx}
+          onRowClick={(row, idx) => {
+            setXSelectedIdx(idx);
+            setXSelectedNfe(row);
+          }}
           exportTitle="NF-e Recebidas"
           showRecordCount
           maxHeight="calc(100vh - 300px)"
@@ -680,12 +806,24 @@ const NfeRecebidasForm: React.FC = () => {
             <div className="flex items-center gap-2 bg-secondary/30 p-1 rounded-lg border border-border mr-4">
               <div className="flex flex-col px-2">
                 <span className="text-[9px] text-muted-foreground uppercase font-bold">Início</span>
-                <input type="date" value={XDtIni} onChange={e => setXDtIni(e.target.value)} className="bg-transparent border-none text-xs p-0 focus:ring-0 w-24" />
+                <input 
+                  type="date" 
+                  value={XDtIni} 
+                  max="9999-12-31" 
+                  onChange={e => setXDtIni(normalizeDateValue(e.target.value))} 
+                  className="bg-transparent border-none text-xs p-0 focus:ring-0 w-24" 
+                />
               </div>
               <div className="h-6 w-px bg-border" />
               <div className="flex flex-col px-2">
                 <span className="text-[9px] text-muted-foreground uppercase font-bold">Fim</span>
-                <input type="date" value={XDtFim} onChange={e => setXDtFim(e.target.value)} className="bg-transparent border-none text-xs p-0 focus:ring-0 w-24" />
+                <input 
+                  type="date" 
+                  value={XDtFim} 
+                  max="9999-12-31" 
+                  onChange={e => setXDtFim(normalizeDateValue(e.target.value))} 
+                  className="bg-transparent border-none text-xs p-0 focus:ring-0 w-24" 
+                />
               </div>
               <div className="h-6 w-px bg-border" />
               <div className="flex flex-col px-2">
@@ -718,7 +856,7 @@ const NfeRecebidasForm: React.FC = () => {
               
               <div className="flex gap-1 ml-2">
                 <button 
-                  onClick={loadData}
+                  onClick={handleFiltrar}
                   disabled={XLoading}
                   className="bg-secondary text-secondary-foreground px-3 py-1.5 rounded-md text-xs font-bold hover:bg-secondary/80 transition-colors disabled:opacity-50"
                 >
@@ -742,9 +880,15 @@ const NfeRecebidasForm: React.FC = () => {
                   ALINHAR
                 </button>
                 <button 
-                  onClick={() => setXLogOpen(true)}
+                  onClick={() => {
+                    if (!XSelectedNfe) {
+                      toast.info("Selecione uma NF-e para visualizar o log.");
+                      return;
+                    }
+                    setXLogOpen(true);
+                  }}
                   className="bg-secondary text-secondary-foreground px-3 py-1.5 rounded-md text-xs font-bold hover:bg-secondary/80 transition-colors flex items-center gap-1 border border-border shadow-sm"
-                  title="Ver Log de Comandos MonitorFiscal"
+                  title="Ver Log DFE da nota selecionada"
                 >
                   <Terminal className="w-3 h-3" />
                   LOG
@@ -757,8 +901,10 @@ const NfeRecebidasForm: React.FC = () => {
 
       <MonitorFiscalLogDialog 
         isOpen={XLogOpen} 
-        onClose={() => setXLogOpen(false)} 
+        onClose={() => { setXLogOpen(false); setXSelectedNfe(null); }} 
         empresaId={XEmpresaId} 
+        chaveNfe={XSelectedNfe?.chave_nfe}
+        nfeCabecalhoId={XSelectedNfe?.nfe_cabecalho_id || (String(XSelectedNfe?.nfe_recebida_id || "").startsWith("cab-") ? Number(String(XSelectedNfe?.nfe_recebida_id).replace("cab-", "")) : undefined)}
       />
 
       <Dialog open={XManifOpen} onOpenChange={setXManifOpen}>

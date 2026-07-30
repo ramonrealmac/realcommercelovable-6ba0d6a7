@@ -11,6 +11,8 @@ import { NFE_ST_LABELS } from "./types";
 import { Search, Send } from "lucide-react";
 import { formatCPFCNPJ } from "@/lib/validators";
 import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
+import { useEnterTraversal } from "@/hooks/useEnterTraversal";
+import ClienteSearchDialog, { IClienteRow } from "../pedido/ClienteSearchDialog";
 
 const db = supabase as any;
 
@@ -71,6 +73,8 @@ const XDefault: Partial<INfeCabecalho> = {
   dt_saida: new Date().toISOString().substring(0, 10),
 };
 
+
+
 const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
   const { XEmpresaId, XEmpresaMatrizId } = useAppContext();
 
@@ -78,6 +82,37 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
   const [XDepositos, setXDepositos] = useState<{ deposito_id: number; nome: string }[]>([]);
   const XClienteCacheRef = useRef<Record<number, IClienteInfo>>(XClienteCache);
   useEffect(() => { XClienteCacheRef.current = XClienteCache; }, [XClienteCache]);
+
+  const [XSearchOpen, setXSearchOpen] = useState(false);
+  const [XSearchTipo, setXSearchTipo] = useState<"cliente" | "fornecedor">("cliente");
+  const [XSearchTarget, setXSearchTarget] = useState<((c: IClienteRow) => void) | null>(null);
+
+  const destinatarioInputRef = useRef<HTMLInputElement>(null);
+  const naturezaOperacaoInputRef = useRef<HTMLInputElement>(null);
+
+  const { handleKeyDown } = useEnterTraversal();
+
+  const handleSearchDestinatario = (rec: any, setF: (k: string, v: any) => void) => {
+    const isDevolucao = rec.fin_nfe === 4;
+    setXSearchTipo(isDevolucao ? "fornecedor" : "cliente");
+    setXSearchTarget(() => (c: IClienteRow) => {
+      setXClienteCache(prev => ({
+        ...prev,
+        [c.cadastro_id]: {
+          id: c.cadastro_id,
+          cd_cadastro: c.cd_cadastro,
+          cnpj: c.cnpj || "",
+          razao: c.razao_social || "",
+          fantasia: c.nome_fantasia || ""
+        }
+      }));
+      setF("cadastro_id", c.cadastro_id as any);
+      setTimeout(() => {
+        naturezaOperacaoInputRef.current?.focus();
+      }, 150);
+    });
+    setXSearchOpen(true);
+  };
 
   const XRefreshRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -126,7 +161,8 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
   };
 
   return (
-    <StandardCrudForm<INfeCabecalho>
+    <>
+      <StandardCrudForm<INfeCabecalho>
       config={{
         XTableName: "fiscal_nfe_cabecalho",
         XPrimaryKey: "nfe_cabecalho_id",
@@ -144,7 +180,12 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
         },
         XOnBeforeSave: (rec: any) => {
           if (rec.tp_nf === undefined || rec.tp_nf === null) rec.tp_nf = 1;
+          delete rec.chaves_ref;
+          delete rec.chave_ref;
           return { ...rec, empresa_id: rec.empresa_id || XEmpresaId };
+        },
+        XOnAfterSave: async (rec: any, mode: any) => {
+          // As chaves referenciadas e itens são gerenciados e salvos dinamicamente na aba de itens
         },
       }}
       XGridCols={gridCols}
@@ -194,9 +235,16 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
           render: ({ record, currentRecord }) => {
             const id = (currentRecord || record)?.nfe_cabecalho_id || null;
             const st = (currentRecord || record)?.st_nf || "A";
+            const finNfe = Number((currentRecord || record)?.fin_nfe || 1);
             const podeEditar = !["E", "C", "D", "1", "2"].includes(String(st));
             return (
-              <NfeItensTab nfeCabecalhoId={id} empresaId={XEmpresaId} podeEditar={podeEditar} />
+              <NfeItensTab 
+                nfeCabecalhoId={id} 
+                empresaId={XEmpresaId} 
+                podeEditar={podeEditar} 
+                hideVinculo={finNfe !== 4} 
+                onRefreshCabecalho={() => XRefreshRef.current?.()}
+              />
             );
           },
         },
@@ -278,13 +326,9 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
         const stAtual = (record.st_nf || "A") as TNfeSt;
 
         return (
-          <div className="space-y-4">
+          <div className="space-y-4" onKeyDown={handleKeyDown}>
             {/* Linha 1 */}
             <div className="grid grid-cols-12 gap-3 items-end">
-              <div className="col-span-1">
-                <label className="text-xs text-muted-foreground">ID</label>
-                <input readOnly value={record.nfe_cabecalho_id ?? (mode === "insert" ? "(Novo)" : "")} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right" />
-              </div>
               <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Pedido</label>
                 <input readOnly value={(record as any).pedido_id ?? (record as any).movimento_id ?? ""} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right" title="Nº do pedido (movimento) que originou esta nota" />
@@ -333,68 +377,11 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
               </div>
             </div>
 
-            {/* Linha 2: Destinatário + Depósito */}
-            <div className="grid grid-cols-12 gap-3">
-              <div className="col-span-8">
-                <label className="text-xs text-muted-foreground">Destinatário <span className="text-destructive">*</span></label>
-                <div className="flex gap-1">
-                  <input
-                    readOnly
-                    value={record.cadastro_id ? (XClienteCache[record.cadastro_id]?.razao || `#${XClienteCache[record.cadastro_id]?.cd_cadastro ?? record.cadastro_id}`) : ""}
-                    placeholder="Selecione o destinatário..."
-                    className="flex-1 border border-border rounded px-2 py-1 text-sm bg-secondary"
-                  />
-                  {isEditing && (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const val = prompt("Digite o CNPJ/CPF ou parte da Razão Social:");
-                        if (!val) return;
-                        const digits = val.replace(/\D/g, "");
-                        let q = db.from("cadastro").select("cadastro_id,cd_cadastro,cnpj,razao_social")
-                          .eq("empresa_id", XEmpresaMatrizId).eq("excluido", false);
-                        if (/^\d+$/.test(val) && val.length < 8) {
-                          q = q.eq("cd_cadastro", parseInt(val));
-                        } else if (digits.length >= 8) {
-                          q = q.ilike("cnpj", `%${digits}%`);
-                        } else {
-                          q = q.ilike("razao_social", `%${val}%`);
-                        }
-                        const { data } = await q.limit(10);
-                        if (!data?.length) { toast.warning("Nenhum cadastro encontrado."); return; }
-                        const opcoes = data.map((c: any) => `${c.cd_cadastro ?? c.cadastro_id} — ${formatCPFCNPJ(c.cnpj)} — ${c.razao_social}`).join("\n");
-                        const escolha = prompt(`Escolha (informe o código):\n${opcoes}`);
-                        if (!escolha) return;
-                        const id = parseInt(escolha);
-                        if (!id) return;
-                        const found = data.find((c: any) => c.cd_cadastro === id || c.cadastro_id === id);
-                        if (found) {
-                          setXClienteCache(prev => ({ ...prev, [found.cadastro_id]: { id: found.cadastro_id, cd_cadastro: found.cd_cadastro, cnpj: found.cnpj, razao: found.razao_social } }));
-                          setField("cadastro_id" as any, found.cadastro_id as any);
-                        }
-                      }}
-                      className="px-2 py-1 border border-border rounded bg-card hover:bg-accent"
-                      title="Pesquisar destinatário"
-                    >
-                      <Search className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div className="col-span-4">
-                <label className="text-xs text-muted-foreground">Depósito de Saída</label>
-                <select disabled={ro} value={record.deposito_id ?? ""} onChange={e => setField("deposito_id" as any, (e.target.value ? Number(e.target.value) : null) as any)} className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
-                  <option value="">— Selecione —</option>
-                  {XDepositos.map(d => <option key={d.deposito_id} value={d.deposito_id}>{d.nome}</option>)}
-                </select>
-              </div>
-            </div>
-
-            {/* Linha 3: Natureza Operação + Finalidade + Tipo Emissão */}
+            {/* Linha 2: Natureza Operação + Finalidade + Tipo Emissão */}
             <div className="grid grid-cols-12 gap-3">
               <div className="col-span-6">
                 <label className="text-xs text-muted-foreground">Natureza da Operação <span className="text-destructive">*</span></label>
-                <input readOnly={ro} value={record.nat_op ?? ""} onChange={e => setField("nat_op" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
+                <input ref={naturezaOperacaoInputRef} readOnly={ro} value={record.nat_op ?? ""} onChange={e => setField("nat_op" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
               <div className="col-span-3">
                 <label className="text-xs text-muted-foreground">Finalidade NF-e</label>
@@ -415,6 +402,59 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                 </select>
               </div>
             </div>
+
+            {/* Linha 3: Destinatário */}
+            <div className="grid grid-cols-12 gap-3">
+              <div className="col-span-12">
+                <label className="text-xs text-muted-foreground">Destinatário <span className="text-destructive">*</span></label>
+                <div className="flex gap-1">
+                  <input
+                    ref={destinatarioInputRef}
+                    readOnly={!isEditing}
+                    value={record.cadastro_id ? (XClienteCache[record.cadastro_id]?.razao || `#${XClienteCache[record.cadastro_id]?.cd_cadastro ?? record.cadastro_id}`) : ""}
+                    placeholder="Pressione Enter para pesquisar..."
+                    className="flex-1 border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none cursor-pointer"
+                    data-lookup="true"
+                    data-required="true"
+                    data-lookup-key="destinatario"
+                    onKeyDown={(e) => {
+                      if (!isEditing) return;
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!record.cadastro_id) {
+                          handleSearchDestinatario(record, setField);
+                        }
+                      }
+                    }}
+                  />
+                  {isEditing && (
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => handleSearchDestinatario(record, setField)}
+                      className="px-2 py-1 border border-border rounded bg-card hover:bg-accent"
+                      title="Pesquisar destinatário"
+                      data-lookup-trigger="true"
+                      data-lookup-key="destinatario"
+                    >
+                      <Search className="w-4 h-4" />
+                    </button>
+                  )}
+                  {record.cadastro_id && isEditing && (
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setField("cadastro_id", null as any)}
+                      className="px-2 py-1 border border-border rounded bg-card hover:bg-accent text-xs"
+                      title="Limpar"
+                    >×</button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Chaves Referenciadas migradas para a aba de itens */}
 
             {/* Totais */}
             <div className="border border-border rounded p-3 bg-card">
@@ -472,6 +512,14 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
         );
       }}
     />
+      <ClienteSearchDialog
+        open={XSearchOpen}
+        onClose={() => setXSearchOpen(false)}
+        empresaId={XEmpresaId}
+        tipo={XSearchTipo}
+        onSelect={(c) => XSearchTarget?.(c)}
+      />
+    </>
   );
 };
 

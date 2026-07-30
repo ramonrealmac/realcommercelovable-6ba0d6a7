@@ -80,6 +80,16 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
   xml += `<serie>${serie}</serie>`;
   xml += `<nNF>${nNF}</nNF>`;
   xml += `<dhEmi>${dhEmi}</dhEmi>`;
+  if (Number(cabecalho.fin_nfe) === 4) {
+    const chaves: string[] = (cabecalho as any).chaves_ref || [];
+    const finalChaves = chaves.length > 0 
+      ? chaves 
+      : ((cabecalho as any).chave_ref ? [(cabecalho as any).chave_ref] : []);
+
+    finalChaves.forEach(ch => {
+      xml += `<NFref><refNFe>${ch}</refNFe></NFref>`;
+    });
+  }
   xml += `<tpNF>${cabecalho.tp_nf || '1'}</tpNF>`;
   xml += `<idDest>${(cadastro?.endereco_uf !== empresa.endereco_uf) ? '2' : '1'}</idDest>`; 
   xml += `<cMunFG>${cMunEmit}</cMunFG>`;
@@ -356,7 +366,14 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
 
   // <pag>
   xml += `<pag>`;
-  if (pagamentos?.length) {
+  const isDevolucao = Number(cabecalho.fin_nfe) === 4;
+
+  if (isDevolucao) {
+    xml += `<detPag>`;
+    xml += `<tPag>90</tPag>`;
+    xml += `<vPag>0.00</vPag>`;
+    xml += `</detPag>`;
+  } else if (pagamentos?.length) {
     pagamentos.forEach(p => {
       xml += `<detPag>`;
       xml += `<tPag>${mapearFormaPagamento(p.t_pag || p.tp_pagamento || 'DINHEIRO')}</tPag>`;

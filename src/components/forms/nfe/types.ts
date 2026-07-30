@@ -52,6 +52,7 @@ export interface INfeCabecalho {
   vl_is: number;
   vl_total_nf: number;
   obs_nf: string;
+  obs_fisco: string;
   xml_nf: string | null;
   excluido: boolean;
 }
@@ -61,6 +62,8 @@ export interface INfeItem {
   nfe_cabecalho_id: number;
   empresa_id: number;
   produto_id: number | null;
+  deposito_id?: number | null;
+  cfop_entrada?: string | null;
   nr_item: number;
   cd_prod_fornec: string;
   nm_produto: string;
@@ -169,6 +172,15 @@ export interface INfeXmlItem {
   vl_ibs?: number;
   vl_cbs?: number;
   vl_is?: number;
+  vl_icms?: number;
+  vl_bc?: number;
+  vl_fcp?: number;
+  vl_cred_sn?: number;
+  pc_cred_sn?: number;
+  pc_fcp?: number;
+  pc_red_bc?: number;
+  pc_red_bc_st?: number;
+  vl_icms_deson?: number;
   pc_ipi: number;
   pc_icms: number;
   pc_icms_st: number;
@@ -187,6 +199,11 @@ export interface INfeXmlItem {
   cst_is?: string;
   pc_mva: number;
   vl_bc_st: number;
+  produto_id?: number | null;
+  _produto_nome?: string | null;
+  _produto_codigo?: string | null;
+  deposito_id?: number | null;
+  cfop_entrada?: string | null;
 }
 
 export interface INfeDadosXml {
@@ -203,6 +220,7 @@ export interface INfeDadosXml {
   vl_seguro: number;
   vl_despesa: number;
   vl_ipi: number;
+  vl_icms?: number;
   vl_icms_st: number;
   vl_pis?: number;
   vl_cofins?: number;
@@ -211,7 +229,10 @@ export interface INfeDadosXml {
   vl_is?: number;
   vl_total_nf: number;
   obs_nf: string;
+  obs_fisco: string;
   itens: INfeXmlItem[];
   xmlRaw: string;
+  fin_nfe?: number;
+  destinatario_cnpj?: string;
 }
 

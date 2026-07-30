@@ -182,8 +182,7 @@ export const MENU_CONFIG: MenuItem[] = [
         title: "Entradas",
         icon: ArrowDownToLine,
         children: [
-          { id: "nova-entrada", title: "Nova Entrada", icon: FilePen },
-          { id: "minhas-entradas", title: "Minhas Entradas", icon: ClipboardCheck },
+          { id: "nova-entrada", title: "Compras", icon: ShoppingCart },
           { id: "nfe-recebidas", title: "NF-e Recebidas (DFe)", icon: FileDown },
           { id: "devolucao-nfe-entrada", title: "Devolução de NF-e de Entrada", icon: ArrowUpFromLine },
         ],

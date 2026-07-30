@@ -420,8 +420,12 @@ const processarEvento = async (evento) => {
                 const xmlParaSalvar = resultado.xml_nfe || resultado.xml_retorno;
                 if (xmlParaSalvar) updateNfe.xml_nf = xmlParaSalvar;
 
-                await supabase.from('fiscal_nfe_cabecalho').update(updateNfe).eq('nfe_cabecalho_id', nfeCabecalhoId);
-                logger.info(`NF-e #${nfeCabecalhoId} atualizada (Emissão)`);
+                const { error: errUpd } = await supabase.from('fiscal_nfe_cabecalho').update(updateNfe).eq('nfe_cabecalho_id', nfeCabecalhoId);
+                if (errUpd) {
+                    logger.error(`Erro ao atualizar fiscal_nfe_cabecalho #${nfeCabecalhoId} (Emissão): ${errUpd.message}`);
+                } else {
+                    logger.info(`NF-e #${nfeCabecalhoId} atualizada (Emissão)`);
+                }
             } else if (isCancelamento && resultado.sucesso) {
                 const updateCancel = {
                     st_nf: 'C',
@@ -430,8 +434,12 @@ const processarEvento = async (evento) => {
                     dt_cancelamento: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 };
-                await supabase.from('fiscal_nfe_cabecalho').update(updateCancel).eq('nfe_cabecalho_id', nfeCabecalhoId);
-                logger.info(`NF-e #${nfeCabecalhoId} atualizada (Cancelamento)`);
+                const { error: errCancel } = await supabase.from('fiscal_nfe_cabecalho').update(updateCancel).eq('nfe_cabecalho_id', nfeCabecalhoId);
+                if (errCancel) {
+                    logger.error(`Erro ao atualizar fiscal_nfe_cabecalho #${nfeCabecalhoId} (Cancelamento): ${errCancel.message}`);
+                } else {
+                    logger.info(`NF-e #${nfeCabecalhoId} atualizada (Cancelamento)`);
+                }
             }
         }
 
@@ -568,14 +576,18 @@ const processarEvento = async (evento) => {
 
         if (nfeCabecalhoId && isEmissao) {
             try {
-                await supabase.from('fiscal_nfe_cabecalho').update({
+                const { error: errCab } = await supabase.from('fiscal_nfe_cabecalho').update({
                     st_nf: 'R',
                     x_motivo: error.message.substring(0, 250),
                     updated_at: new Date().toISOString()
                 }).eq('nfe_cabecalho_id', nfeCabecalhoId);
-                logger.info(`NF-e #${nfeCabecalhoId} marcada como Rejeitada (R) devido a falha crítica.`);
+                if (errCab) {
+                    logger.error(`Erro ao marcar NF-e #${nfeCabecalhoId} como Rejeitada (R) após falha: ${errCab.message}`);
+                } else {
+                    logger.info(`NF-e #${nfeCabecalhoId} marcada como Rejeitada (R) devido a falha crítica.`);
+                }
             } catch (updateErr) {
-                logger.error(`Não foi possível atualizar cabeçalho da NF-e após falha: ${updateErr.message}`);
+                logger.error(`Erro inesperado ao atualizar cabeçalho da NF-e após falha: ${updateErr.message}`);
             }
         }
 

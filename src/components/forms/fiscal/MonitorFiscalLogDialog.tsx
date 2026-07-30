@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAppContext } from "@/contexts/AppContext";
 import {
   Dialog,
   DialogContent,
@@ -15,13 +16,15 @@ const db = supabase as any;
 interface MonitorFiscalLogDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  empresaId: number;
+  empresaId?: number;
   nfeCabecalhoId?: number;
   mdfManifestoId?: number;
+  chaveNfe?: string;
 }
 
-const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen, onClose, empresaId, nfeCabecalhoId, mdfManifestoId }) => {
-  // Versão de Diagnóstico: 2026-05-14 17:17 (MDF-e support added)
+const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen, onClose, empresaId, nfeCabecalhoId, mdfManifestoId, chaveNfe }) => {
+  const { XEmpresaId } = useAppContext();
+  const activeEmpresaId = empresaId || XEmpresaId;
   const [XData, setXData] = useState<any[]>([]);
   const [XLoading, setXLoading] = useState(false);
   const [XSelected, setXSelected] = useState<any>(null);
@@ -165,19 +168,31 @@ const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen,
 
   const loadLogs = async () => {
     if (!isOpen) return;
+    setXData([]); // Limpa o log anterior antes de carregar a nova seleção
+    if (!activeEmpresaId) return;
+
     setXLoading(true);
-    setXData([]);
     try {
       let query = db
         .from("fiscal_evento")
         .select("*")
-        .eq("empresa_id", empresaId);
+        .eq("empresa_id", activeEmpresaId);
 
-      if (nfeCabecalhoId) {
+      if (nfeCabecalhoId && chaveNfe && chaveNfe.trim()) {
+        const cleanKey = chaveNfe.trim();
+        query = query.or(`nfe_cabecalho_id.eq.${nfeCabecalhoId},comando.ilike.%${cleanKey}%,resposta.ilike.%${cleanKey}%`);
+      } else if (nfeCabecalhoId) {
         query = query.eq("nfe_cabecalho_id", nfeCabecalhoId);
-      }
-      if (mdfManifestoId) {
+      } else if (mdfManifestoId) {
         query = query.eq("mdf_manifesto_id", mdfManifestoId);
+      } else if (chaveNfe && chaveNfe.trim()) {
+        const cleanKey = chaveNfe.trim();
+        query = query.or(`comando.ilike.%${cleanKey}%,resposta.ilike.%${cleanKey}%`);
+      } else {
+        // Se nenhum identificador de NF-e/MDF-e for informado, não retorna logs de outras notas
+        setXData([]);
+        setXLoading(false);
+        return;
       }
 
       const { data, error } = await query
@@ -198,7 +213,7 @@ const MonitorFiscalLogDialog: React.FC<MonitorFiscalLogDialogProps> = ({ isOpen,
       loadLogs();
       setXFilters({});
     }
-  }, [isOpen, empresaId, nfeCabecalhoId, mdfManifestoId]);
+  }, [isOpen, activeEmpresaId, nfeCabecalhoId, mdfManifestoId, chaveNfe]);
 
   return (
     <>

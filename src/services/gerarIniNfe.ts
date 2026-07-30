@@ -68,7 +68,7 @@ export function gerarIniNfe(params: GerarIniParams): string {
   linhas.push(`tpImp=${isNFCe ? '4' : '1'}`); // 4=DANFE NFCe, 1=Retrato
   linhas.push(`tpEmis=1`);                  // 1=Normal
   linhas.push(`tpAmb=${ambiente}`);
-  linhas.push(`finNFe=1`);                  // 1=Normal
+  linhas.push(`finNFe=${cabecalho.fin_nfe || 1}`);
   linhas.push(`indFinal=1`);                // 1=Consumidor final
   const indPres = String(cabecalho.ind_pres || '1');
   linhas.push(`indPres=${indPres}`);                 // Operação de presença
@@ -78,6 +78,20 @@ export function gerarIniNfe(params: GerarIniParams): string {
   linhas.push(`procEmi=0`);
   linhas.push(`verProc=RealCommerce1.0`);
   linhas.push(``);
+
+  if (Number(cabecalho.fin_nfe) === 4) {
+    const chaves: string[] = (cabecalho as any).chaves_ref || [];
+    const finalChaves = chaves.length > 0 
+      ? chaves 
+      : ((cabecalho as any).chave_ref ? [(cabecalho as any).chave_ref] : []);
+
+    finalChaves.forEach((ch, idx) => {
+      const nr = String(idx + 1).padStart(3, '0');
+      linhas.push(`[NFRef${nr}]`);
+      linhas.push(`refNFe=${ch}`);
+      linhas.push(``);
+    });
+  }
 
   // ──────────────────────────────────────────────
   // [Emitente]
@@ -290,7 +304,15 @@ export function gerarIniNfe(params: GerarIniParams): string {
   // ──────────────────────────────────────────────
   // [pagNNN] — pagamentos
   // ──────────────────────────────────────────────
-  if (pagamentos?.length) {
+  const isDevolucao = Number(cabecalho.fin_nfe) === 4;
+
+  if (isDevolucao) {
+    linhas.push(`[pag001]`);
+    linhas.push(`tPag=90`);
+    linhas.push(`vPag=0.00`);
+    linhas.push(`indPag=0`);
+    linhas.push(``);
+  } else if (pagamentos?.length) {
     for (let i = 0; i < pagamentos.length; i++) {
       const p = pagamentos[i];
       const nr = String(i + 1).padStart(3, '0');

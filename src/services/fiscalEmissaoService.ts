@@ -261,9 +261,19 @@ export const fiscalEmissaoService = {
       // Busca dados dos itens inseridos para garantir integridade no conteúdo gerado
       const { data: nfeItens } = await db.from("fiscal_nfe_item").select("*").eq("nfe_cabecalho_id", cabId);
       const { data: nfePagtos } = await db.from("fiscal_nfe_pagamento").select("*").eq("nfe_cabecalho_id", cabId);
+      const { data: nfeRefs } = await db.from("fiscal_nfe_referenciada")
+        .select("chave_ref")
+        .eq("nfe_cabecalho_id", cabId)
+        .order("nfe_referenciada_id");
+      const chavesRef = nfeRefs?.map((d: any) => d.chave_ref).filter(Boolean) || [];
 
       const params = {
-        cabecalho: { ...nfeCabecalho, nfe_cabecalho_id: cabId },
+        cabecalho: { 
+          ...nfeCabecalho, 
+          nfe_cabecalho_id: cabId, 
+          chave_ref: chavesRef[0] || "", 
+          chaves_ref: chavesRef 
+        },
         itens: nfeItens || [],
         pagamentos: nfePagtos || [],
         empresa: empresa,

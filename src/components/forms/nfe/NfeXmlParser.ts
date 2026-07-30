@@ -41,6 +41,7 @@ export function parseNfeXml(xmlString: string): INfeDadosXml | null {
     const serie    = txt(ide, "serie");
     const dt_emissao = txt(ide, "dhEmi") || txt(ide, "dEmi");
     const dt_saida   = txt(ide, "dhSaiEnt") || txt(ide, "dSaiEnt") || dt_emissao;
+    const fin_nfe    = num(ide, "finNFe") || 1;
 
     // Emitente
     const emit = infNFe.querySelector("emit");
@@ -60,6 +61,10 @@ export function parseNfeXml(xmlString: string): INfeDadosXml | null {
       email:               "",
     };
 
+    // Destinatário
+    const dest = infNFe.querySelector("dest");
+    const destinatario_cnpj = (txt(dest, "CNPJ") || txt(dest, "CPF")).replace(/\D/g, "");
+
     // Totais
     const total  = infNFe.querySelector("total ICMSTot");
     const vl_produto = num(total, "vProd");
@@ -68,6 +73,7 @@ export function parseNfeXml(xmlString: string): INfeDadosXml | null {
     const vl_seguro   = num(total, "vSeg");
     const vl_despesa  = num(total, "vOutro");
     const vl_ipi_total= num(total, "vIPI");
+    const vl_icms_total= num(total, "vICMS");
     const vl_st_total = num(total, "vST");
     const vl_pis_total= num(total, "vPIS");
     const vl_cofins_total= num(total, "vCOFINS");
@@ -75,6 +81,7 @@ export function parseNfeXml(xmlString: string): INfeDadosXml | null {
 
     // Informações adicionais
     const obs_nf = txt(infNFe.querySelector("infAdic"), "infCpl");
+    const obs_fisco = txt(infNFe.querySelector("infAdic"), "infAdFisco");
 
     // Itens (det)
     const dets = Array.from(infNFe.querySelectorAll("det"));
@@ -109,6 +116,15 @@ export function parseNfeXml(xmlString: string): INfeDadosXml | null {
         vl_pis:        num(pis, "vPIS"),
         vl_cofins:     num(cofins, "vCOFINS"),
         vl_fcp_st:     num(icmsTag, "vFCPST"),
+        vl_icms:       num(icmsTag, "vICMS"),
+        vl_bc:         num(icmsTag, "vBC"),
+        vl_fcp:        num(icmsTag, "vFCP"),
+        vl_cred_sn:    num(icmsTag, "vCredICMSSN"),
+        pc_cred_sn:    num(icmsTag, "pCredSN"),
+        pc_fcp:        num(icmsTag, "pFCP"),
+        pc_red_bc:     num(icmsTag, "pRedBC"),
+        pc_red_bc_st:  num(icmsTag, "pRedBCST"),
+        vl_icms_deson: num(icmsTag, "vICMSDeson"),
         // Alíquotas
         pc_ipi:        num(ipi, "pIPI"),
         pc_icms:       num(icmsTag, "pICMS"),
@@ -141,13 +157,17 @@ export function parseNfeXml(xmlString: string): INfeDadosXml | null {
       vl_seguro,
       vl_despesa,
       vl_ipi: vl_ipi_total,
+      vl_icms: vl_icms_total,
       vl_icms_st: vl_st_total,
       vl_pis: vl_pis_total,
       vl_cofins: vl_cofins_total,
       vl_total_nf,
       obs_nf,
+      obs_fisco,
       itens,
       xmlRaw: xmlString,
+      fin_nfe,
+      destinatario_cnpj,
     };
   } catch (err: any) {
     console.error("[NfeXmlParser]", err);

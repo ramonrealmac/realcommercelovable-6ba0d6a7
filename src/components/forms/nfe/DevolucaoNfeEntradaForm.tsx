@@ -39,6 +39,18 @@ const cfopDevolucaoSugerido = (cfopEntrada: string): string => {
   return "5202";
 };
 
+const maskMoney = (value: string | number): string => {
+  const cleanValue = String(value).replace(/\D/g, "");
+  if (!cleanValue) return "";
+  const numValue = parseInt(cleanValue, 10) / 100;
+  return numValue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const parseMoneyToFloat = (val: string): number => {
+  const clean = val.replace(/\./g, "").replace(",", ".");
+  return parseFloat(clean) || 0;
+};
+
 interface DevolucaoNfeEntradaFormProps {
   initialNfeId?: number;
 }
@@ -64,7 +76,12 @@ const DevolucaoNfeEntradaForm: React.FC<DevolucaoNfeEntradaFormProps> = ({ initi
   const [XNovoNfeId, setXNovoNfeId] = useState<number | null>(null);
 
   useEffect(() => {
-    db.from("deposito").select("deposito_id,nome").eq("excluido", false).order("nome")
+    if (!XEmpresaId) return;
+    db.from("deposito")
+      .select("deposito_id,nome")
+      .eq("empresa_id", XEmpresaId)
+      .eq("excluido", false)
+      .order("nome")
       .then(({ data }: any) => {
         setXDepositos(data || []);
         if (data?.length === 1) setXDepositoId(data[0].deposito_id);
@@ -128,22 +145,66 @@ const DevolucaoNfeEntradaForm: React.FC<DevolucaoNfeEntradaFormProps> = ({ initi
         .eq("excluido", false)
         .order("nr_item");
       if (error) throw error;
-      const list: IItemDevolucao[] = (itens || []).map((it: any) => ({
-        nfe_item_id: it.nfe_item_id,
-        produto_id: it.produto_id,
-        cd_produto: it.cd_prod_fornec || (it.produto_id ? String(it.produto_id) : ""),
-        nm_produto: it.nm_produto || "",
-        unidade: it.unidade || "UN",
-        qt_origem: Number(it.qt_entrada || 0),
-        qt_devolver: 0,
-        vl_unit: Number(it.vl_unit || 0),
-        vl_total_origem: Number(it.vl_total || 0),
-        cfop_origem: it.cfop || "",
-        cfop_devolucao: cfopDevolucaoSugerido(it.cfop || ""),
-        ncm: it.ncm || "",
-        gtin: it.gtin || "",
-        origem_item: it,
-      }));
+
+      const itensSemCfopEntrada = (itens || []).filter((it: any) => !it.cfop_entrada);
+      if (itensSemCfopEntrada.length > 0) {
+        const itensStr = itensSemCfopEntrada.map((it: any) => `#${it.nr_item} (${it.nm_produto || "Sem Descrição"})`).join(", ");
+        toast.error(`Não é possível realizar a devolução. O(s) item(ns) ${itensStr} está(ão) sem CFOP de entrada informado na nota de origem.`);
+        return;
+      }
+
+      // Query database for cfop_correspondente of the items' CFOPs
+      const uniqueCfops = Array.from(new Set((itens || []).map((it: any) => it.cfop_entrada).filter(Boolean))) as string[];
+      let cfopMap: Record<string, string> = {};
+      let missingCfops: string[] = [];
+      
+      if (uniqueCfops.length > 0) {
+        const { data: cfopData } = await db.from("cfop")
+          .select("cd_cfop, cfop_correspondente")
+          .in("cd_cfop", uniqueCfops)
+          .eq("excluido", false);
+          
+        const foundCfops = new Map<string, string>();
+        if (cfopData) {
+          cfopData.forEach((row: any) => {
+            if (row.cfop_correspondente) {
+              foundCfops.set(row.cd_cfop, row.cfop_correspondente);
+              cfopMap[row.cd_cfop] = row.cfop_correspondente;
+            }
+          });
+        }
+        
+        uniqueCfops.forEach(cfop => {
+          if (!foundCfops.has(cfop)) {
+            missingCfops.push(cfop);
+          }
+        });
+      }
+
+      if (missingCfops.length > 0) {
+        toast.error(`Não é possível realizar a devolução. O(s) CFOP(s): ${missingCfops.join(", ")} não possui(em) CFOP correspondente cadastrado. Por favor, acesse a tela de cadastro de CFOP e configure-os.`);
+        return;
+      }
+
+      const list: IItemDevolucao[] = (itens || []).map((it: any) => {
+        const cfopKey = it.cfop_entrada;
+        return {
+          nfe_item_id: it.nfe_item_id,
+          produto_id: it.produto_id,
+          cd_produto: it.cd_prod_fornec || (it.produto_id ? String(it.produto_id) : ""),
+          nm_produto: it.nm_produto || "",
+          unidade: it.unidade || "UN",
+          qt_origem: Number(it.qt_entrada || 0),
+          qt_devolver: 0,
+          vl_unit: Number(it.vl_unit || 0),
+          vl_total_origem: Number(it.vl_total || 0),
+          cfop_origem: cfopKey,
+          cfop_devolucao: cfopMap[cfopKey] || cfopDevolucaoSugerido(cfopKey),
+          ncm: it.ncm || "",
+          gtin: it.gtin || "",
+          origem_item: it,
+        };
+      });
       setXSelecionada(nfe);
       setXItens(list);
       setXStep(2);
@@ -155,7 +216,8 @@ const DevolucaoNfeEntradaForm: React.FC<DevolucaoNfeEntradaFormProps> = ({ initi
   };
 
   const setQt = (idx: number, v: string) => {
-    const n = parseFloat(v.replace(",", ".")) || 0;
+    const formatted = maskMoney(v);
+    const n = parseMoneyToFloat(formatted);
     setXItens(prev => prev.map((it, i) => i === idx ? { ...it, qt_devolver: Math.max(0, Math.min(n, it.qt_origem)) } : it));
   };
   const setCfop = (idx: number, v: string) => {
@@ -180,6 +242,43 @@ const DevolucaoNfeEntradaForm: React.FC<DevolucaoNfeEntradaFormProps> = ({ initi
       const obs = `Devolução referente à NF-e nº ${XSelecionada.nr_nota}/${XSelecionada.serie} — Chave: ${XSelecionada.chave_nfe || "-"}`;
       const vlProduto = itensValidos.reduce((s, it) => s + it.qt_devolver * it.vl_unit, 0);
 
+      // Calcular rateio proporcional dos impostos e despesas
+      let sumBc = 0;
+      let sumIcms = 0;
+      let sumIcmsSt = 0;
+      let sumBcSt = 0;
+      let sumIpi = 0;
+      let sumPis = 0;
+      let sumCofins = 0;
+      let sumIbs = 0;
+      let sumCbs = 0;
+      let sumIs = 0;
+      let sumDesconto = 0;
+      let sumFrete = 0;
+      let sumSeguro = 0;
+      let sumOutro = 0;
+
+      itensValidos.forEach(it => {
+        const o = it.origem_item;
+        const fator = it.qt_devolver / Math.max(1e-9, it.qt_origem);
+        sumBc += Number(o.vl_bc || 0) * fator;
+        sumIcms += Number(o.vl_icms || 0) * fator;
+        sumIcmsSt += Number(o.vl_icms_st || 0) * fator;
+        sumBcSt += Number(o.vl_bc_st || 0) * fator;
+        sumIpi += Number(o.vl_ipi || 0) * fator;
+        sumPis += Number(o.vl_pis || 0) * fator;
+        sumCofins += Number(o.vl_cofins || 0) * fator;
+        sumIbs += Number(o.vl_ibs || 0) * fator;
+        sumCbs += Number(o.vl_cbs || 0) * fator;
+        sumIs += Number(o.vl_is || 0) * fator;
+        sumDesconto += Number(o.vl_desconto || 0) * fator;
+        sumFrete += Number(o.vl_frete || 0) * fator;
+        sumSeguro += Number(o.vl_seguro || 0) * fator;
+        sumOutro += Number(o.vl_outro || 0) * fator;
+      });
+
+      const vlTotalNf = vlProduto + sumIpi + sumIcmsSt + sumFrete + sumSeguro + sumOutro - sumDesconto;
+
       const { data: novo, error: eCab } = await db.from("fiscal_nfe_cabecalho").insert({
         empresa_id: XEmpresaId,
         cadastro_id: XSelecionada.cadastro_id,
@@ -198,16 +297,34 @@ const DevolucaoNfeEntradaForm: React.FC<DevolucaoNfeEntradaFormProps> = ({ initi
         dt_emissao: new Date().toISOString().substring(0, 10),
         dt_saida: new Date().toISOString().substring(0, 10),
         vl_produto: vlProduto,
-        vl_desconto: 0, vl_frete: 0, vl_seguro: 0, vl_despesa: 0, vl_outro: 0,
-        vl_ipi: 0, vl_icms: 0, vl_icms_st: 0, vl_pis: 0, vl_cofins: 0,
-        vl_ibs: 0, vl_cbs: 0, vl_is: 0, vl_bc: 0,
-        vl_total_nf: vlProduto,
+        vl_desconto: sumDesconto, 
+        vl_frete: sumFrete, 
+        vl_seguro: sumSeguro, 
+        vl_despesa: 0, 
+        vl_outro: sumOutro,
+        vl_ipi: sumIpi, 
+        vl_icms: sumIcms, 
+        vl_icms_st: sumIcmsSt, 
+        vl_pis: sumPis, 
+        vl_cofins: sumCofins,
+        vl_ibs: sumIbs, 
+        vl_cbs: sumCbs, 
+        vl_is: sumIs, 
+        vl_bc: sumBc,
+        vl_total_nf: vlTotalNf,
         obs_nf: obs,
         excluido: false,
       }).select("nfe_cabecalho_id").single();
       if (eCab) throw eCab;
 
       const novoId = novo.nfe_cabecalho_id;
+      if (XSelecionada.chave_nfe) {
+        await db.from("fiscal_nfe_referenciada").insert({
+          nfe_cabecalho_id: novoId,
+          chave_ref: XSelecionada.chave_nfe
+        });
+      }
+
       const itensPayload = itensValidos.map((it, idx) => {
         const o = it.origem_item;
         const fator = it.qt_devolver / Math.max(1e-9, it.qt_origem);
@@ -230,10 +347,13 @@ const DevolucaoNfeEntradaForm: React.FC<DevolucaoNfeEntradaFormProps> = ({ initi
           qt_tributavel: it.qt_devolver,
           vl_unit: it.vl_unit,
           vl_unit_tributavel: it.vl_unit,
-          vl_desconto: 0,
-          vl_total: it.qt_devolver * it.vl_unit,
-          vl_frete: 0, vl_seguro: 0, vl_outro: 0,
-          // impostos rateados proporcionalmente
+          vl_total: Number(o.vl_total || 0) * fator,
+          vl_desconto: Number(o.vl_desconto || 0) * fator,
+          vl_frete: Number(o.vl_frete || 0) * fator,
+          vl_seguro: Number(o.vl_seguro || 0) * fator,
+          vl_outro: Number(o.vl_outro || 0) * fator,
+          
+          // impostos e bases de cálculo rateados proporcionalmente
           vl_bc: Number(o.vl_bc || 0) * fator,
           vl_icms: Number(o.vl_icms || 0) * fator,
           vl_icms_st: Number(o.vl_icms_st || 0) * fator,
@@ -245,6 +365,21 @@ const DevolucaoNfeEntradaForm: React.FC<DevolucaoNfeEntradaFormProps> = ({ initi
           vl_ibs: Number(o.vl_ibs || 0) * fator,
           vl_cbs: Number(o.vl_cbs || 0) * fator,
           vl_is: Number(o.vl_is || 0) * fator,
+          
+          vl_bc_pis: Number(o.vl_bc_pis || o.vl_bc || 0) * fator,
+          vl_bc_cofins: Number(o.vl_bc_cofins || o.vl_bc || 0) * fator,
+          vl_bc_ipi: Number(o.vl_bc_ipi || o.vl_bc || 0) * fator,
+          vl_cred_sn: Number(o.vl_cred_sn || 0) * fator,
+          vl_fcp: Number(o.vl_fcp || 0) * fator,
+          vl_icms_deson: Number(o.vl_icms_deson || 0) * fator,
+          
+          mod_bc: o.mod_bc,
+          mod_bc_st: o.mod_bc_st,
+          pc_red_bc: Number(o.pc_red_bc || 0),
+          pc_red_bc_st: Number(o.pc_red_bc_st || 0),
+          pc_cred_sn: Number(o.pc_cred_sn || 0),
+          pc_fcp: Number(o.pc_fcp || 0),
+          
           pc_icms: Number(o.pc_icms || 0),
           pc_icms_st: Number(o.pc_icms_st || 0),
           pc_ipi: Number(o.pc_ipi || 0),
@@ -257,8 +392,8 @@ const DevolucaoNfeEntradaForm: React.FC<DevolucaoNfeEntradaFormProps> = ({ initi
           pc_mva: Number(o.pc_mva || 0),
           cst_icms: o.cst_icms || "",
           cst_ipi: o.cst_ipi || "",
-          cst_pis: o.cst_pis || "49",
-          cst_cofins: o.cst_cofins || "49",
+          cst_pis: o.cst_pis || "",
+          cst_cofins: o.cst_cofins || "",
           cst_ibs: o.cst_ibs || "",
           cst_cbs: o.cst_cbs || "",
           cst_is: o.cst_is || "",
@@ -444,7 +579,7 @@ const DevolucaoNfeEntradaForm: React.FC<DevolucaoNfeEntradaFormProps> = ({ initi
                     <div className="col-span-2 text-right">
                       <input
                         type="text"
-                        value={it.qt_devolver === 0 ? "" : String(it.qt_devolver).replace(".", ",")}
+                        value={it.qt_devolver === 0 ? "" : maskMoney(it.qt_devolver.toFixed(2))}
                         onChange={e => setQt(idx, e.target.value)}
                         placeholder="0,00"
                         className={`w-full text-right px-2 py-1 text-xs border rounded font-mono ${it.qt_devolver > 0 ? "border-primary bg-primary/5 font-bold" : "border-border bg-background"}`}

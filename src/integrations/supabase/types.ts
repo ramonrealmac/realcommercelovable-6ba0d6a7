@@ -1502,6 +1502,8 @@ export type Database = {
           excluido: boolean | null
           obs_produto: string | null
           obs_rodape: string | null
+          cfop_correspondente: string | null
+          descricao_correspondente: string | null
         }
         Insert: {
           aplicacao?: string | null
@@ -1514,6 +1516,8 @@ export type Database = {
           excluido?: boolean | null
           obs_produto?: string | null
           obs_rodape?: string | null
+          cfop_correspondente?: string | null
+          descricao_correspondente?: string | null
         }
         Update: {
           aplicacao?: string | null
@@ -1526,6 +1530,8 @@ export type Database = {
           excluido?: boolean | null
           obs_produto?: string | null
           obs_rodape?: string | null
+          cfop_correspondente?: string | null
+          descricao_correspondente?: string | null
         }
         Relationships: [
           {
@@ -4494,6 +4500,7 @@ export type Database = {
           cd_prod_fornec: string
           cest: string
           cfop: string
+          cfop_entrada: string | null
           created_at: string
           csosn: string
           cst_cbs: string
@@ -4503,6 +4510,7 @@ export type Database = {
           cst_ipi: string
           cst_is: string
           cst_pis: string
+          deposito_id: number | null
           empresa_id: number
           excluido: boolean
           gtin: string
@@ -4563,6 +4571,7 @@ export type Database = {
           cd_prod_fornec?: string
           cest?: string
           cfop?: string
+          cfop_entrada?: string | null
           created_at?: string
           csosn?: string
           cst_cbs?: string
@@ -4572,6 +4581,7 @@ export type Database = {
           cst_ipi?: string
           cst_is?: string
           cst_pis?: string
+          deposito_id?: number | null
           empresa_id: number
           excluido?: boolean
           gtin?: string
@@ -4632,6 +4642,7 @@ export type Database = {
           cd_prod_fornec?: string
           cest?: string
           cfop?: string
+          cfop_entrada?: string | null
           created_at?: string
           csosn?: string
           cst_cbs?: string
@@ -4641,6 +4652,7 @@ export type Database = {
           cst_ipi?: string
           cst_is?: string
           cst_pis?: string
+          deposito_id?: number | null
           empresa_id?: number
           excluido?: boolean
           gtin?: string
@@ -4717,6 +4729,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_produtos_disponiveis"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nfe_item_deposito_id_fkey"
+            columns: ["deposito_id"]
+            isOneToOne: false
+            referencedRelation: "deposito"
+            referencedColumns: ["deposito_id"]
           },
         ]
       }

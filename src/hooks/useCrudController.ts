@@ -30,10 +30,13 @@ export interface ICrudConfig<T extends Record<string, any>> {
   XUsePagination?: boolean;           // Ativa carregamento paginado via range
   XPageSize?: number;                 // Tamanho da página (default 50)
   XKeepEditAfterInsert?: boolean;
+  XInitialMode?: TFormMode;
+  XResetModeOnSelect?: boolean;
+  XConfirmDiscardOnSelect?: boolean;
 }
 
 export function useCrudController<T extends Record<string, any>>(config: ICrudConfig<T>) {
-  const [XFormMode, setXFormMode] = useState<TFormMode>("view");
+  const [XFormMode, setXFormMode] = useState<TFormMode>(config.XInitialMode || "view");
   const [XData, setXData] = useState<T[]>([]);
   const [XCurrentIdx, setXCurrentIdx] = useState(0);
   const [XEditRecord, setXEditRecord] = useState<Partial<T>>(config.XDefaultRecord);
@@ -96,8 +99,8 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
   useEffect(() => {
     loadData();
     setXCurrentIdx(0);
-    setXFormMode("view");
-  }, [loadData]);
+    setXFormMode(config.XInitialMode || "view");
+  }, [loadData, config.XInitialMode]);
 
   // Sync edit record when entering edit mode is handled directly in handleEditar and handleIncluir handlers to avoid race conditions.
 

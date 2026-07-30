@@ -116,7 +116,7 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "fiscal-grupo-produtos": return <FiscalGrupoProdutoForm />;
       case "fiscal-regras": return <FiscalRegraForm />;
       case "pedidos": return <PedidoForm />;
-      case "nova-entrada":
+      case "nova-entrada": return <NotaFiscalEntradaForm />;
       case "minhas-entradas": return <NotaFiscalEntradaForm />;
       case "nfe-recebidas": return <NfeRecebidasForm />;
       case "devolucao-nfe-entrada": return <DevolucaoNfeEntradaForm initialNfeId={params?.nfe_cabecalho_id} />;

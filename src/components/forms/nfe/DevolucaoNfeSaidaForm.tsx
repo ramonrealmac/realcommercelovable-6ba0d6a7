@@ -40,6 +40,18 @@ const cfopDevolucaoSugerido = (cfopSaida: string): string => {
   return "1202";
 };
 
+const maskMoney = (value: string | number): string => {
+  const cleanValue = String(value).replace(/\D/g, "");
+  if (!cleanValue) return "";
+  const numValue = parseInt(cleanValue, 10) / 100;
+  return numValue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const parseMoneyToFloat = (val: string): number => {
+  const clean = val.replace(/\./g, "").replace(",", ".");
+  return parseFloat(clean) || 0;
+};
+
 interface DevolucaoNfeSaidaFormProps {
   initialNfeId?: number;
 }
@@ -65,7 +77,12 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
   const [XNovoNfeId, setXNovoNfeId] = useState<number | null>(null);
 
   useEffect(() => {
-    db.from("deposito").select("deposito_id,nome").eq("excluido", false).order("nome")
+    if (!XEmpresaId) return;
+    db.from("deposito")
+      .select("deposito_id,nome")
+      .eq("empresa_id", XEmpresaId)
+      .eq("excluido", false)
+      .order("nome")
       .then(({ data }: any) => {
         setXDepositos(data || []);
         if (data?.length === 1) setXDepositoId(data[0].deposito_id);
@@ -157,7 +174,8 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
   };
 
   const setQt = (idx: number, v: string) => {
-    const n = parseFloat(v.replace(",", ".")) || 0;
+    const formatted = maskMoney(v);
+    const n = parseMoneyToFloat(formatted);
     setXItens(prev => prev.map((it, i) => i === idx ? { ...it, qt_devolver: Math.max(0, Math.min(n, it.qt_origem)) } : it));
   };
   const setCfop = (idx: number, v: string) => {
@@ -210,6 +228,13 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
       if (eCab) throw eCab;
 
       const novoId = novo.nfe_cabecalho_id;
+      if (XSelecionada.chave_nfe) {
+        await db.from("fiscal_nfe_referenciada").insert({
+          nfe_cabecalho_id: novoId,
+          chave_ref: XSelecionada.chave_nfe
+        });
+      }
+
       const itensPayload = itensValidos.map((it, idx) => {
         const o = it.origem_item;
         const fator = it.qt_devolver / Math.max(1e-9, it.qt_origem);
@@ -438,7 +463,7 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
                     <div className="col-span-2 text-right">
                       <input
                         type="text"
-                        value={it.qt_devolver === 0 ? "" : String(it.qt_devolver).replace(".", ",")}
+                        value={it.qt_devolver === 0 ? "" : maskMoney(it.qt_devolver.toFixed(2))}
                         onChange={e => setQt(idx, e.target.value)}
                         placeholder="0,00"
                         className={`w-full text-right px-2 py-1 text-xs border rounded font-mono ${it.qt_devolver > 0 ? "border-primary bg-primary/5 font-bold" : "border-border bg-background"}`}

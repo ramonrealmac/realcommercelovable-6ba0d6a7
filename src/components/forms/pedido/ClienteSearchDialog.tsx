@@ -46,6 +46,7 @@ interface IProps {
   onClose: () => void;
   onSelect: (cliente: IClienteRow) => void;
   empresaId: number;
+  tipo?: "cliente" | "fornecedor";
 }
 
 type CampoKey = "codigo" | "cnpj" | "razao_social" | "fantasia" | "telefone" | "email" | "endereco" | "bairro";
@@ -71,7 +72,7 @@ const parseCampos = (raw: unknown): CampoKey[] => {
   return CAMPOS_DEFAULT;
 };
 
-const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empresaId }) => {
+const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empresaId, tipo = "cliente" }) => {
   const [XTermo, setXTermo] = useState("");
   const [XRows, setXRows] = useState<IClienteRow[]>([]);
   const [XLoading, setXLoading] = useState(false);
@@ -113,9 +114,15 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
     let q = supabase.from("cadastro")
       .select("cadastro_id, cd_cadastro, cnpj, razao_social, nome_fantasia, fone_geral, email, endereco_cidade_id, endereco_bairro, endereco_logradouro")
       .eq("excluido", false)
-      .eq("st_cliente", "S")
-      .eq("empresa_id", empresaId)
-      .order("razao_social")
+      .eq("empresa_id", empresaId);
+
+    if (tipo === "fornecedor") {
+      q = q.or("st_fornecedor.eq.S,st_transportador.eq.S");
+    } else {
+      q = q.eq("st_cliente", "S");
+    }
+
+    q = q.order("razao_social")
       .limit(100);
     const t = termo.trim();
     if (t) {
@@ -131,7 +138,7 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
       setXRows((data || []) as IClienteRow[]);
       setXSelectedIdx(null);
     }
-  }, [empresaId]);
+  }, [empresaId, tipo]);
 
   useEffect(() => {
     if (open) { setXTermo(""); buscar(""); setXSelectedIdx(null); }
@@ -183,7 +190,7 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <div className="flex items-center justify-between gap-4 flex-wrap">
-            <DialogTitle>Pesquisar Cliente</DialogTitle>
+            <DialogTitle>{tipo === "fornecedor" ? "Pesquisar Fornecedor" : "Pesquisar Cliente"}</DialogTitle>
             <Popover open={XCfgOpen} onOpenChange={setXCfgOpen}>
               <PopoverTrigger asChild>
                 <button
@@ -262,7 +269,7 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
               )}
               {!XLoading && XRows.length === 0 && (
                 <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-6">
-                  Nenhum cliente encontrado.
+                  {tipo === "fornecedor" ? "Nenhum fornecedor encontrado." : "Nenhum cliente encontrado."}
                 </div>
               )}
               {!XLoading && XRows.map((r, idx) => {

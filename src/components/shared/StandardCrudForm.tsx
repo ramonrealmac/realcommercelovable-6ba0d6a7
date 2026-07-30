@@ -167,8 +167,20 @@ function StandardCrudForm<T extends Record<string, any>>({
   }, [XInitialId, ctrl.XData, config.XPrimaryKey]);
 
   const handleSelectFromSearch = (row: any) => {
+    if (config.XConfirmDiscardOnSelect && ctrl.XIsEditing) {
+      const confirmDiscard = window.confirm(
+        "Você possui alterações não salvas. Deseja realmente descartar e visualizar o registro selecionado?"
+      );
+      if (!confirmDiscard) return;
+    }
     const idx = ctrl.XData.findIndex(r => r[config.XPrimaryKey] === row[config.XPrimaryKey]);
-    if (idx >= 0) { ctrl.setXCurrentIdx(idx); setXInnerTab("cadastro"); }
+    if (idx >= 0) {
+      ctrl.setXCurrentIdx(idx);
+      if (config.XResetModeOnSelect) {
+        ctrl.setXFormMode("view");
+      }
+      setXInnerTab("cadastro");
+    }
   };
 
   const handleSair = () => {
