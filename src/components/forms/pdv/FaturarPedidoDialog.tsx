@@ -47,6 +47,10 @@ const FaturarPedidoDialog: React.FC<IProps> = ({ open, funcionarioId, empresaId,
   });
 
   const carregarPedidos = useCallback(async () => {
+    if (!empresaId) {
+      setXPedidos([]);
+      return;
+    }
     setXLoadingPedidos(true);
     setXSelectedIdx(null);
     setXSelectedPedido(null);

@@ -1,19 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
-import GridActionToolbar, { gridActions } from "@/components/grid/GridActionToolbar";
 import { useAppContext } from "@/contexts/AppContext";
-import { CreditCard, ShoppingCart, Wallet, ArrowRightLeft, Calculator, X, Delete, Trash2, Check, Percent, Send, Lock } from "lucide-react";
+import { CreditCard, ShoppingCart, Wallet, ArrowRightLeft, Calculator, Delete, Trash2, Percent, Lock } from "lucide-react";
 import { CurrencyInput } from "@/components/shared/CurrencyInput";
-
-const db = supabase as any;
 
 const fmt = (v: number) => (v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const NO_SPIN = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
-const parseNum = (v: any) => {
+const parseNum = (v: string | number | null | undefined) => {
   if (v === undefined || v === null || v === "") return 0;
   if (typeof v === "number") return v;
   const s = String(v).replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
@@ -21,26 +18,61 @@ const parseNum = (v: any) => {
   return isNaN(n) ? 0 : n;
 };
 
-const fmtInput = (v: any) => {
+const fmtInput = (v: string | number | null | undefined) => {
   const n = typeof v === "number" ? v : parseNum(v);
   return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-interface ICondicao { condicao_id: number; descricao: string; qtd_parcelas: number | null; tp_documento?: number | null; plano_conta_id?: number | null; meio_pagamento_id?: number | null; }
+interface IPagamentoLinha {
+  uid: string;
+  movimento_pagamento_id?: number;
+  condicao_id: number;
+  condicao_descricao: string;
+  n_parcelas: number;
+  vl_parcelas: number;
+  vl_pagamento: number;
+  tp_pagamento: string;
+  empresa_id: number;
+  movimento_id: number;
+  portador_id: number | null;
+}
+
+interface ICondicao {
+  condicao_id: number;
+  descricao: string;
+  tipo_prazo: string | null;
+  qtd_parcelas: number | null;
+  intervalo: number | null;
+  plano_conta_id: number | null;
+  meio_pagamento_id: number | null;
+  prazo_1?: number | null;
+  prazo_2?: number | null;
+  prazo_3?: number | null;
+  prazo_4?: number | null;
+  prazo_5?: number | null;
+  prazo_6?: number | null;
+  prazo_7?: number | null;
+  prazo_8?: number | null;
+  prazo_9?: number | null;
+  prazo_10?: number | null;
+  prazo_11?: number | null;
+  prazo_12?: number | null;
+}
 
 interface IProps {
   open: boolean;
   movimentoId: number;
+  cadastroId: number | null;
   subtotalPedido: number; // vl_movimento + vl_desconto
   tpDesconto: string;
   onClose: () => void;
-  onConfirmar: (pagtos: any[], vlDesconto: number, pcDesconto: number, enviarAoCaixa?: boolean) => Promise<void>;
+  onConfirmar: (pagtos: IPagamentoLinha[], vlDesconto: number, pcDesconto: number, enviarAoCaixa?: boolean) => Promise<void>;
 }
 
-const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPedido, tpDesconto, onClose, onConfirmar }) => {
+const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId, subtotalPedido, tpDesconto, onClose, onConfirmar }) => {
   const { XEmpresaId, XEmpresaMatrizId } = useAppContext();
   const [XCondicoes, setXCondicoes] = useState<ICondicao[]>([]);
-  const [XLinhas, setXLinhas] = useState<any[]>([]);
+  const [XLinhas, setXLinhas] = useState<IPagamentoLinha[]>([]);
   const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
   const [XSalvando, setXSalvando] = useState(false);
   const [XDeletadosDb, setXDeletadosDb] = useState<number[]>([]);
@@ -58,11 +90,16 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
   const [XQtParcela, setXQtParcela] = useState<number>(1);
   const [XEditUid, setXEditUid] = useState<string | null>(null);
 
+  // Portadores state
+  const [XPortadores, setXPortadores] = useState<{ portador_id: number; cd_portador: number; nome: string; banco_id: number | null }[]>([]);
+  const [XPortadorId, setXPortadorId] = useState<number>(0);
+
   // Calculator State
   const [XCalcDisplay, setXCalcDisplay] = useState("0");
   const [XCalcReset, setXCalcReset] = useState(false);
 
   const condicaoRef = useRef<HTMLSelectElement>(null);
+  const portadorRef = useRef<HTMLSelectElement>(null);
   const vlPagarRef = useRef<HTMLInputElement>(null);
   const adicionarBtnRef = useRef<HTMLButtonElement>(null);
   const finalizarRef = useRef<HTMLButtonElement>(null);
@@ -77,15 +114,14 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
   const vlParcela = XQtParcela > 0 ? +(vlPagarNum / XQtParcela).toFixed(2) : vlPagarNum;
 
   useEffect(() => {
-    if (!open) return;
-    setXLinhas([]);
+    if (!open || !movimentoId || !XEmpresaId) return;
     setXSelectedIdx(null);
     setXDeletadosDb([]);
     (async () => {
       try {
         let dbMov = subtotalPedido;
         // Fetch current movement for totals
-        const { data: mov } = await db.from("movimento")
+        const { data: mov } = await supabase.from("movimento")
           .select("vl_desconto, pc_desconto, vl_movimento, vl_produto")
           .eq("movimento_id", movimentoId).single();
         
@@ -100,16 +136,37 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
           setXPcDesconto(dbPcDesc);
         }
 
-        // Fetch Conditions for logged in company and headquarters
-        let condQuery = db.from("condicao_pagamento")
-          .select("condicao_id, descricao, qtd_parcelas, plano_conta_id, meio_pagamento_id, empresa_id")
-          .eq("excluido", false);
+        // 1. Fetch Portadores
+        const { data: portadorData } = await supabase.from("portador")
+          .select("portador_id, cd_portador, nome, banco_id")
+          .eq("empresa_id", XEmpresaId)
+          .eq("excluido", false)
+          .eq("ativo", "S")
+          .order("nome");
+        if (portadorData) setXPortadores(portadorData);
 
-        if (XEmpresaId === XEmpresaMatrizId) {
-          condQuery = condQuery.eq("empresa_id", XEmpresaId);
-        } else {
-          condQuery = condQuery.or(`empresa_id.eq.${XEmpresaId},empresa_id.eq.${XEmpresaMatrizId}`);
+        // 2. Fetch Client defaults
+        let defaultCondId = 0;
+        let defaultPortadorId = 0;
+        if (cadastroId) {
+          const { data: cli } = await supabase.from("cadastro")
+            .select("condicao_id, portador_id")
+            .eq("cadastro_id", cadastroId)
+            .single();
+          if (cli) {
+            defaultCondId = cli.condicao_id || 0;
+            defaultPortadorId = cli.portador_id || 0;
+          }
         }
+
+        // 3. Fetch Conditions for logged in company
+        let condQuery = supabase.from("condicao_pagamento")
+          .select(`
+            condicao_id, descricao, tipo_prazo, qtd_parcelas, intervalo, plano_conta_id, meio_pagamento_id, empresa_id,
+            prazo_1, prazo_2, prazo_3, prazo_4, prazo_5, prazo_6, prazo_7, prazo_8, prazo_9, prazo_10, prazo_11, prazo_12
+          `)
+          .eq("empresa_id", XEmpresaId)
+          .eq("excluido", false);
 
         const { data: condData, error: condErr } = await condQuery;
         if (condErr) {
@@ -133,16 +190,16 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
 
         setXCondicoes(conds);
 
-        // Fetch existing payments
-        const { data: pagtoData } = await db.from("movimento_pagamento")
+        // 4. Fetch existing payments
+        const { data: pagtoData } = await supabase.from("movimento_pagamento")
           .select("*")
           .eq("movimento_id", movimentoId)
           .eq("excluido", false)
           .order("movimento_pagamento_id");
 
         if (pagtoData && pagtoData.length > 0) {
-          const linhasMapeadas = pagtoData.map((p: any) => {
-            const cond = conds.find((c: any) => c.condicao_id === p.condicao_id);
+          const linhasMapeadas: IPagamentoLinha[] = pagtoData.map((p) => {
+            const cond = conds.find((c) => c.condicao_id === p.condicao_id);
             return {
               uid: String(p.movimento_pagamento_id || crypto.randomUUID()),
               movimento_pagamento_id: p.movimento_pagamento_id,
@@ -153,7 +210,8 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
               vl_pagamento: Number(p.vl_pagamento || 0),
               tp_pagamento: p.tp_pagamento || "DI",
               empresa_id: p.empresa_id,
-              movimento_id: p.movimento_id
+              movimento_id: p.movimento_id,
+              portador_id: p.portador_id || null
             };
           });
           setXLinhas(linhasMapeadas);
@@ -162,14 +220,31 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
           const restante = Math.max(0, dbMov - totalPagoExistente);
           resetForm(restante);
         } else {
-          resetForm(dbMov);
+          // If no existing payments, apply defaults
+          const hasCond = conds.some(c => c.condicao_id === defaultCondId);
+          if (hasCond) {
+            setXCondicaoId(defaultCondId);
+            const cObj = conds.find(c => c.condicao_id === defaultCondId);
+            if (cObj?.qtd_parcelas) setXQtParcela(cObj.qtd_parcelas);
+          } else {
+            setXCondicaoId(0);
+          }
+          setXVlPagar(dbMov);
+          setXQtParcela(1);
+          setXEditUid(null);
+
+          if (defaultPortadorId) {
+            setXPortadorId(defaultPortadorId);
+          } else {
+            setXPortadorId(0);
+          }
         }
-      } catch (err: any) {
-        toast.error("Erro ao carregar dados: " + err.message);
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        toast.error("Erro ao carregar dados: " + errMsg);
       }
     })();
-    // Removemos totalPedido das dependências para evitar re-fetch infinito ao digitar desconto
-  }, [open, movimentoId, subtotalPedido, XEmpresaId, XEmpresaMatrizId]);
+  }, [open, movimentoId, cadastroId, subtotalPedido, XEmpresaId, XEmpresaMatrizId]);
 
   // Sincroniza o valor a pagar inicial apenas quando o totalPedido (calculado) mudar significativamente
   // ou quando o formulário for resetado
@@ -178,6 +253,39 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
       setXVlPagar(totalPedido);
     }
   }, [totalPedido, open, XLinhas.length]);
+
+  // Filter portadores by selected payment method
+  const XFilteredPortadores = useMemo(() => {
+    if (!XCondicaoId) return XPortadores;
+    const cond = XCondicoes.find(c => c.condicao_id === XCondicaoId);
+    if (!cond) return XPortadores;
+
+    const mpId = cond.meio_pagamento_id || 0;
+    if ([1, 5, 14, 91].includes(mpId)) {
+      // Dinheiro / Crediário / Duplicata / Posterior -> banco_id is null or 0
+      return XPortadores.filter(p => p.banco_id === null || p.banco_id === 0);
+    } else if ([3, 4, 15, 16, 17, 20].includes(mpId)) {
+      // Banks / Cards / Boletos / Pix -> banco_id is NOT null and NOT 0
+      return XPortadores.filter(p => p.banco_id !== null && p.banco_id !== 0);
+    }
+    return XPortadores;
+  }, [XCondicaoId, XCondicoes, XPortadores]);
+
+  // Sync selected portador with filtered options
+  useEffect(() => {
+    if (XFilteredPortadores.length > 0) {
+      const exists = XFilteredPortadores.some(p => p.portador_id === XPortadorId);
+      if (!exists) {
+        setXPortadorId(XFilteredPortadores[0].portador_id);
+      }
+    } else {
+      setXPortadorId(0);
+    }
+  }, [XFilteredPortadores, XPortadorId]);
+
+  const resetForm = (vl: number) => {
+    setXCondicaoId(0); setXVlPagar(vl); setXQtParcela(1); setXEditUid(null); setXPortadorId(0);
+  };
 
   // Abre a combobox de Condição de Pagamento ao pressionar Alt + Seta para Baixo
   useEffect(() => {
@@ -202,10 +310,6 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
     return () => window.removeEventListener("keydown", handleDialogKeyDown);
   }, [open]);
 
-  const resetForm = (vl: number) => {
-    setXCondicaoId(0); setXVlPagar(vl); setXQtParcela(1); setXEditUid(null);
-  };
-
   const handleVlDesconto = (val: number) => {
     setXVlDesconto(val);
     const sub = XDbTotals.subtotal || subtotalPedido;
@@ -222,6 +326,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
 
   const confirmarLinha = () => {
     if (!XCondicaoId) { toast.error("Selecione a condição."); return; }
+    if (!XPortadorId) { toast.error("Selecione o portador."); return; }
     const vPagar = XVlPagar;
     if (vPagar <= 0) { toast.error("Informe um valor maior que zero."); return; }
     
@@ -241,6 +346,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
       vl_parcelas: vlParcela,
       vl_pagamento: vPagar,
       tp_pagamento: "DI", // Default
+      portador_id: XPortadorId,
       empresa_id: XEmpresaId,
       movimento_id: movimentoId
     };
@@ -265,8 +371,9 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
     try {
       await onConfirmar(XLinhas, vlDescNum, XPcDesconto, enviarAoCaixa);
       onClose();
-    } catch (err: any) {
-      toast.error("Erro: " + err.message);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      toast.error("Erro: " + errMsg);
     } finally {
       setXSalvando(false);
     }
@@ -275,14 +382,15 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
   const handleClose = async () => {
     if (XDeletadosDb.length > 0) {
       try {
-        const { error } = await db.from("movimento_pagamento")
+        const { error } = await supabase.from("movimento_pagamento")
           .update({ excluido: false })
           .in("movimento_pagamento_id", XDeletadosDb);
         if (error) {
           toast.error("Erro ao restaurar pagamentos cancelados: " + error.message);
         }
-      } catch (err: any) {
-        toast.error("Erro ao restaurar pagamentos cancelados: " + err.message);
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        toast.error("Erro ao restaurar pagamentos cancelados: " + errMsg);
       }
     }
     onClose();
@@ -290,6 +398,15 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
 
   const cols: IGridColumn[] = [
     { key: "condicao_descricao", label: "Condição", width: "1fr" },
+    { 
+      key: "portador_id", 
+      label: "Portador", 
+      width: "1.2fr",
+      render: r => {
+        const p = XPortadores.find(x => x.portador_id === r.portador_id);
+        return p ? `${p.cd_portador} - ${p.nome}` : "";
+      }
+    },
     { key: "n_parcelas", label: "Parc.", width: "60px", align: "right" },
     { key: "vl_parcelas", label: "Vlr Parcela", width: "100px", align: "right", render: r => fmt(r.vl_parcelas) },
     { key: "vl_pagamento", label: "Valor", width: "100px", align: "right", render: r => fmt(r.vl_pagamento) },
@@ -304,7 +421,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
           
           if (r.movimento_pagamento_id) {
             try {
-              const { error } = await db.from("movimento_pagamento")
+              const { error } = await supabase.from("movimento_pagamento")
                 .update({ excluido: true })
                 .eq("movimento_pagamento_id", r.movimento_pagamento_id);
               
@@ -315,8 +432,9 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
               
               setXDeletadosDb(prev => [...prev, r.movimento_pagamento_id]);
               toast.success("Pagamento excluído.");
-            } catch (err: any) {
-              toast.error("Erro ao excluir pagamento: " + err.message);
+            } catch (err: unknown) {
+              const errMsg = err instanceof Error ? err.message : String(err);
+              toast.error("Erro ao excluir pagamento: " + errMsg);
               return;
             }
           }
@@ -425,8 +543,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
                       if (e.key === "Enter") {
                         e.preventDefault();
                         e.stopPropagation();
-                        vlPagarRef.current?.focus();
-                        vlPagarRef.current?.select();
+                        portadorRef.current?.focus();
                       }
                     }}
                     className="w-full border border-border rounded px-2 py-1 text-sm h-9 bg-white disabled:opacity-50 disabled:bg-slate-100 disabled:cursor-not-allowed"
@@ -461,6 +578,35 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, subtotalPe
                   >
                     ✓ Adicionar
                   </button>
+                </div>
+              </div>
+
+              {/* Portador selection row */}
+              <div className="grid grid-cols-12 gap-3">
+                <div className="col-span-12">
+                  <label className="text-[10px] font-bold uppercase">Portador</label>
+                  <select
+                    ref={portadorRef}
+                    value={XPortadorId}
+                    disabled={valorRestante <= 0 || XSalvando}
+                    onChange={e => setXPortadorId(Number(e.target.value))}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        vlPagarRef.current?.focus();
+                        vlPagarRef.current?.select();
+                      }
+                    }}
+                    className="w-full border border-border rounded px-2 py-1 text-sm h-9 bg-white disabled:opacity-50 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                  >
+                    <option value={0}>-- Selecione --</option>
+                    {XFilteredPortadores.map(p => (
+                      <option key={p.portador_id} value={p.portador_id}>
+                        {p.cd_portador} - {p.nome}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>

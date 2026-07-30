@@ -17,6 +17,8 @@ interface IAberturaRow {
   vl_abertura: number | null;
   vl_fechamento: number | null;
   status: string;
+  entradas?: number;
+  saidas?: number;
 }
 
 interface IResumoMeio {
@@ -34,7 +36,7 @@ interface IFechamentoProps {
 }
 
 const FechamentoCaixaForm: React.FC<IFechamentoProps> = ({ initialAberturaId, initialDtAbertura }) => {
-  const { XEmpresaId } = useAppContext();
+  const { XEmpresaId, XTabs, closeTab } = useAppContext();
   const [XAberturas, setXAberturas] = useState<IAberturaRow[]>([]);
   const [XSel, setXSel] = useState<IAberturaRow | null>(null);
   const [XResumo, setXResumo] = useState<IResumoMeio[]>([]);
@@ -70,7 +72,77 @@ const FechamentoCaixaForm: React.FC<IFechamentoProps> = ({ initialAberturaId, in
           .in("funcionario_id", ids);
         nomes = Object.fromEntries(((funcs || []) as any[]).map((f) => [f.funcionario_id, f.nome]));
       }
-      setXAberturas(rows.map((r) => ({ ...r, funcionario_nome: nomes[r.funcionario_id] || "" })));
+
+      // Calcula entradas e saídas de caixa a partir das movimentações
+      const abIds = rows.map((r) => r.caixa_abertura_id);
+      let movSums: Record<number, { entradas: number; saidas: number }> = {};
+      if (abIds.length > 0) {
+        const { data: cms, error: cmErr } = await db
+          .from("caixa_movimento")
+          .select("caixa_movimento_id, caixa_abertura_id")
+          .in("caixa_abertura_id", abIds)
+          .eq("excluido", false);
+          
+        if (!cmErr && cms && cms.length > 0) {
+          const cmToAbMap: Record<number, number> = {};
+          const cmIds = cms.map((c: any) => {
+            cmToAbMap[c.caixa_movimento_id] = c.caixa_abertura_id;
+            return c.caixa_movimento_id;
+          });
+          
+          const { data: items, error: itErr } = await db
+            .from("caixa_movimento_item")
+            .select("caixa_movimento_id, meio_pagamento_id, vl_recebido")
+            .in("caixa_movimento_id", cmIds)
+            .eq("excluido", false);
+            
+          if (!itErr && items) {
+            const mpIds = Array.from(new Set(items.map((i: any) => i.meio_pagamento_id).filter(Boolean)));
+            let mpSomaMap: Record<number, boolean> = {};
+            if (mpIds.length > 0) {
+              const { data: mps } = await db
+                .from("meio_pagamento")
+                .select("meio_pagamento_id, soma_vl_caixa")
+                .in("meio_pagamento_id", mpIds);
+              if (mps) {
+                for (const m of mps) {
+                  mpSomaMap[m.meio_pagamento_id] = String(m.soma_vl_caixa || "").toUpperCase() === "S";
+                }
+              }
+            }
+            
+            for (const it of items) {
+              const abId = cmToAbMap[it.caixa_movimento_id];
+              if (abId) {
+                if (!movSums[abId]) {
+                  movSums[abId] = { entradas: 0, saidas: 0 };
+                }
+                const isCash = mpSomaMap[it.meio_pagamento_id] || it.meio_pagamento_id === 1;
+                if (isCash) {
+                  const val = Number(it.vl_recebido || 0);
+                  if (val > 0) {
+                    movSums[abId].entradas += val;
+                  } else {
+                    movSums[abId].saidas += Math.abs(val);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      setXAberturas(
+        rows.map((r) => {
+          const sums = movSums[r.caixa_abertura_id] || { entradas: 0, saidas: 0 };
+          return {
+            ...r,
+            funcionario_nome: nomes[r.funcionario_id] || "",
+            entradas: sums.entradas,
+            saidas: sums.saidas,
+          };
+        })
+      );
     } catch (err: any) {
       toast.error(err.message || "Erro ao carregar aberturas.");
     } finally {
@@ -92,49 +164,113 @@ const FechamentoCaixaForm: React.FC<IFechamentoProps> = ({ initialAberturaId, in
         .eq("excluido", false);
       if (e1) throw new Error(e1.message);
       const cmIds = ((cms || []) as any[]).map((c) => c.caixa_movimento_id);
-      if (cmIds.length === 0) return;
 
-      // 2) Pegar itens desses caixa_movimentos
-      const { data: itens, error: e2 } = await db
-        .from("caixa_movimento_item")
-        .select("meio_pagamento_id, vl_recebido")
-        .in("caixa_movimento_id", cmIds)
-        .eq("excluido", false);
-      if (e2) throw new Error(e2.message);
-      const lista = (itens || []) as any[];
-
-      // 3) Buscar meios de pagamento envolvidos
-      const meioIds = Array.from(new Set(lista.map((l) => l.meio_pagamento_id).filter((v) => v != null)));
-      let meiosMap: Record<number, { descricao: string; soma_vl_caixa: string | null }> = {};
-      if (meioIds.length > 0) {
-        const { data: meios } = await db
-          .from("meio_pagamento")
-          .select("meio_pagamento_id, descricao, soma_vl_caixa")
-          .in("meio_pagamento_id", meioIds);
-        meiosMap = Object.fromEntries(
-          ((meios || []) as any[]).map((m) => [
-            m.meio_pagamento_id,
-            { descricao: m.descricao, soma_vl_caixa: m.soma_vl_caixa },
-          ])
-        );
+      // 2) Pegar itens desses caixa_movimentos (vendas no caixa + baixas de títulos em dinheiro)
+      let lista: any[] = [];
+      if (cmIds.length > 0) {
+        const { data: itens, error: e2 } = await db
+          .from("caixa_movimento_item")
+          .select("meio_pagamento_id, vl_recebido")
+          .in("caixa_movimento_id", cmIds)
+          .eq("excluido", false);
+        if (e2) throw new Error(e2.message);
+        lista = (itens || []) as any[];
       }
 
-      // 4) Agrupar
+      // 3) Pegar baixas de títulos do financeiro (mesma data, mesmo funcionário)
+      const { data: fbs, error: eFb } = await db
+        .from("financeiro_baixa")
+        .select("financeiro_id, vl_pago, dt_pagamento")
+        .eq("empresa_id", ab.empresa_id)
+        .eq("funcionario_id", ab.funcionario_id);
+      
+      if (eFb) throw new Error(eFb.message);
+
+      const fbsFiltered = (fbs || []).filter((fb: any) => {
+        if (!fb.dt_pagamento) return false;
+        const pDate = fb.dt_pagamento.substring(0, 10);
+        return pDate === ab.dt_abertura;
+      });
+
+      // 4) Pegar o meio de pagamento de cada baixa de título
+      const finIds = Array.from(new Set(fbsFiltered.map((fb: any) => fb.financeiro_id)));
+      let finMeios: Record<number, number> = {}; // financeiro_id -> meio_pagamento_id
+      if (finIds.length > 0) {
+        const { data: fins } = await db
+          .from("financeiro")
+          .select("financeiro_id, tp_documento_id")
+          .in("financeiro_id", finIds);
+        if (fins) {
+          for (const f of fins) {
+            const mId = f.tp_documento_id ? Number(f.tp_documento_id) : null;
+            if (mId != null && !isNaN(mId)) {
+              finMeios[f.financeiro_id] = mId;
+            }
+          }
+        }
+      }
+
+      // 5) Agrupar itens de caixa_movimento_item e financeiro_baixa (excluindo dinheiro no financeiro_baixa para não duplicar)
       const agrup: Record<string, IResumoMeio> = {};
+
+      // Adicionar itens do caixa
       for (const it of lista) {
         const id = it.meio_pagamento_id ?? null;
         const k = String(id ?? "null");
-        const m = id != null ? meiosMap[id] : null;
         if (!agrup[k]) {
           agrup[k] = {
             meio_pagamento_id: id,
-            descricao: m?.descricao || "(sem meio)",
-            soma_vl_caixa: m?.soma_vl_caixa ?? null,
+            descricao: "",
+            soma_vl_caixa: null,
             vl_total: 0,
           };
         }
         agrup[k].vl_total += Number(it.vl_recebido || 0);
       }
+
+      // Adicionar itens das baixas de títulos (excluindo dinheiro = 1)
+      for (const fb of fbsFiltered) {
+        const mId = finMeios[fb.financeiro_id];
+        if (mId != null && mId !== 1) { // 1 = DINHEIRO
+          const k = String(mId);
+          if (!agrup[k]) {
+            agrup[k] = {
+              meio_pagamento_id: mId,
+              descricao: "",
+              soma_vl_caixa: null,
+              vl_total: 0,
+            };
+          }
+          agrup[k].vl_total += Number(fb.vl_pago || 0);
+        }
+      }
+
+      // 6) Buscar todos os meios de pagamento para preencher descrições e soma_vl_caixa
+      const todosMeioIds = Array.from(new Set(Object.keys(agrup).map(Number).filter(n => !isNaN(n))));
+      let meiosMap: Record<number, { descricao: string; soma_vl_caixa: string | null }> = {};
+      if (todosMeioIds.length > 0) {
+        const { data: meios } = await db
+          .from("meio_pagamento")
+          .select("meio_pagamento_id, descricao, soma_vl_caixa")
+          .in("meio_pagamento_id", todosMeioIds);
+        if (meios) {
+          meiosMap = Object.fromEntries(
+            ((meios || []) as any[]).map((m) => [
+              m.meio_pagamento_id,
+              { descricao: m.descricao, soma_vl_caixa: m.soma_vl_caixa },
+            ])
+          );
+        }
+      }
+
+      // Preencher descrições e soma_vl_caixa para os itens agrupados
+      for (const k of Object.keys(agrup)) {
+        const id = agrup[k].meio_pagamento_id;
+        const m = id != null ? meiosMap[id] : null;
+        agrup[k].descricao = m?.descricao || (k === "null" ? "(sem meio)" : `Meio #${k}`);
+        agrup[k].soma_vl_caixa = m?.soma_vl_caixa ?? null;
+      }
+
       setXResumo(Object.values(agrup).sort((a, b) => a.descricao.localeCompare(b.descricao)));
     } catch (err: any) {
       toast.error(err.message || "Erro ao carregar resumo.");
@@ -166,7 +302,7 @@ const FechamentoCaixaForm: React.FC<IFechamentoProps> = ({ initialAberturaId, in
     .reduce((a, r) => a + r.vl_total, 0);
   const totalGeral = XResumo.reduce((a, r) => a + r.vl_total, 0);
   const vlAbertura = Number(XSel?.vl_abertura || 0);
-  const vlFechamentoCalc = vlAbertura + totalSomaCaixa;
+  const vlFechamentoCalc = vlAbertura + Number(XSel?.entradas || 0) - Number(XSel?.saidas || 0);
   const vlFechamentoAtual = Number(XSel?.vl_fechamento || 0);
 
   // ===== Confirma fechamento =====
@@ -185,6 +321,12 @@ const FechamentoCaixaForm: React.FC<IFechamentoProps> = ({ initialAberturaId, in
         .eq("caixa_abertura_id", XSel.caixa_abertura_id);
       if (error) throw new Error(error.message);
       toast.success("Caixa fechado com sucesso.");
+      
+      const pdvTab = XTabs.find((t) => t.component === "pdv-caixa");
+      if (pdvTab) {
+        closeTab(pdvTab.id);
+      }
+
       await carregar();
     } catch (err: any) {
       toast.error(err.message || "Erro ao fechar caixa.");
@@ -239,7 +381,7 @@ const FechamentoCaixaForm: React.FC<IFechamentoProps> = ({ initialAberturaId, in
 
       <div className="grid grid-cols-12 gap-4">
         {/* Lista de aberturas */}
-        <div className="col-span-7 border border-border rounded overflow-hidden">
+        <div className="col-span-12 lg:col-span-7 border border-border rounded overflow-hidden">
           <div className="bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-wider">
             Aberturas ({XAberturas.length})
           </div>
@@ -251,6 +393,8 @@ const FechamentoCaixaForm: React.FC<IFechamentoProps> = ({ initialAberturaId, in
                   <th className="text-left px-2 py-1.5">Data</th>
                   <th className="text-left px-2 py-1.5">Funcionário</th>
                   <th className="text-right px-2 py-1.5">Abertura</th>
+                  <th className="text-right px-2 py-1.5">Entradas</th>
+                  <th className="text-right px-2 py-1.5">Saídas</th>
                   <th className="text-right px-2 py-1.5">Fechamento</th>
                   <th className="text-center px-2 py-1.5">Status</th>
                 </tr>
@@ -258,6 +402,7 @@ const FechamentoCaixaForm: React.FC<IFechamentoProps> = ({ initialAberturaId, in
               <tbody>
                 {XAberturas.map((ab) => {
                   const isSel = XSel?.caixa_abertura_id === ab.caixa_abertura_id;
+                  const calculatedFechamento = Number(ab.vl_abertura || 0) + Number(ab.entradas || 0) - Number(ab.saidas || 0);
                   return (
                     <tr
                       key={ab.caixa_abertura_id}
@@ -274,7 +419,9 @@ const FechamentoCaixaForm: React.FC<IFechamentoProps> = ({ initialAberturaId, in
                       </td>
                       <td className="px-2 py-1.5">{ab.funcionario_nome}</td>
                       <td className="px-2 py-1.5 text-right">{fmt(Number(ab.vl_abertura || 0))}</td>
-                      <td className="px-2 py-1.5 text-right">{fmt(Number(ab.vl_fechamento || 0))}</td>
+                      <td className="px-2 py-1.5 text-right text-emerald-600 dark:text-emerald-400">+{fmt(Number(ab.entradas || 0))}</td>
+                      <td className="px-2 py-1.5 text-right text-rose-600 dark:text-rose-400">-{fmt(Number(ab.saidas || 0))}</td>
+                      <td className="px-2 py-1.5 text-right font-medium">{fmt(calculatedFechamento)}</td>
                       <td className="px-2 py-1.5 text-center">
                         <span
                           className={`text-[11px] px-2 py-0.5 rounded ${
@@ -291,7 +438,7 @@ const FechamentoCaixaForm: React.FC<IFechamentoProps> = ({ initialAberturaId, in
                 })}
                 {XAberturas.length === 0 && !XLoading && (
                   <tr>
-                    <td colSpan={6} className="text-center text-muted-foreground py-6">
+                    <td colSpan={8} className="text-center text-muted-foreground py-6">
                       Nenhuma abertura encontrada no período.
                     </td>
                   </tr>
@@ -302,7 +449,7 @@ const FechamentoCaixaForm: React.FC<IFechamentoProps> = ({ initialAberturaId, in
         </div>
 
         {/* Resumo */}
-        <div className="col-span-5 space-y-3">
+        <div className="col-span-12 lg:col-span-5 space-y-3">
           <div className="border border-border rounded">
             <div className="bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-wider">
               Resumo por Meio de Pagamento
@@ -344,9 +491,13 @@ const FechamentoCaixaForm: React.FC<IFechamentoProps> = ({ initialAberturaId, in
                 <span className="text-muted-foreground">Valor de Abertura</span>
                 <span className="font-medium">{fmt(vlAbertura)}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Total Recebido (somam)</span>
-                <span className="font-medium">{fmt(totalSomaCaixa)}</span>
+              <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
+                <span className="text-muted-foreground">Entradas (+)</span>
+                <span className="font-medium">+{fmt(XSel?.entradas || 0)}</span>
+              </div>
+              <div className="flex justify-between text-sm text-rose-600 dark:text-rose-400">
+                <span className="text-muted-foreground">Saídas (-)</span>
+                <span className="font-medium">-{fmt(XSel?.saidas || 0)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Total Geral Movimentos</span>

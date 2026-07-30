@@ -25,7 +25,7 @@ const TABS_IMPOSTO = [
   { key: "IPI",  label: "IPI" },
   { key: "PIS",  label: "PIS" },
   { key: "COFINS", label: "COFINS" },
-  { key: "CBSIBS", label: "CBS/IBS" },
+  { key: "CBSIBS", label: "IBS/CBS" },
 ];
 
 // ── Helpers de renderização segura ───────────────────────────────────────────
@@ -67,6 +67,16 @@ const COLS_IPI: IGridColumn[] = [
   { key: "uf_destino",  label: "UF Dest.",  width: "80px",  align: "center", render: r => s(r.uf_destino) },
   { key: "ncm_filtro",  label: "NCM",       width: "110px", align: "center", render: r => s(r.ncm_filtro) },
   { key: "grupo_nome",  label: "Gr. Trib.", width: "130px", render: r => s(r.fiscal_grupo_produto?.nome) },
+];
+
+const COLS_CBSIBS: IGridColumn[] = [
+  { key: "cst_csosn",    label: "CST/CSOSN", width: "100px", align: "center", render: r => s(r.cst_csosn) },
+  { key: "ibs_aliquota", label: "IBS %",     width: "90px",  align: "right", render: r => toNum(r.ibs_aliquota) },
+  { key: "cbs_aliquota", label: "CBS %",     width: "90px",  align: "right", render: r => toNum(r.cbs_aliquota) },
+  { key: "is_aliquota",  label: "IS %",      width: "90px",  align: "right", render: r => toNum(r.is_aliquota) },
+  { key: "uf_destino",   label: "UF Dest",   width: "80px",  align: "center", render: r => s(r.uf_destino) },
+  { key: "ncm_filtro",   label: "NCM",       width: "110px", align: "center", render: r => s(r.ncm_filtro) },
+  { key: "grupo_nome",   label: "Grupo Tributário", width: "160px", render: r => s(r.fiscal_grupo_produto?.nome) },
 ];
 
 
@@ -434,7 +444,7 @@ function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoLis
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 p-3 border border-border rounded-md bg-secondary/20 items-end">
+            <div className={`grid grid-cols-2 md:grid-cols-4 ${tipo === "CBSIBS" ? "lg:grid-cols-8" : "lg:grid-cols-6"} gap-3 p-3 border border-border rounded-md bg-secondary/20 items-end`}>
               {tipo === "ICMS" ? (
                 <Field label="CST/CSOSN *">
                   <NatSel
@@ -551,7 +561,7 @@ function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoLis
                 <Field label="IS %"><DecimalInput value={editing.is_aliquota} onChange={v => set("is_aliquota", v)} /></Field>
               </>}
 
-              <div className="col-span-2 lg:col-span-1 flex gap-2 pt-1">
+              <div className={`col-span-2 ${tipo === "CBSIBS" ? "lg:col-span-2" : "lg:col-span-1"} flex gap-2 pt-1`}>
                 <button onClick={handleSave} className="flex-1 bg-primary text-primary-foreground px-3 py-1.5 rounded text-xs font-bold hover:opacity-90 shadow-sm transition-all active:scale-95 h-[34px]">
                   Confirmar
                 </button>
@@ -568,7 +578,7 @@ function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoLis
         <div className="p-3 text-xs italic text-muted-foreground animate-pulse">Carregando dados...</div>
       ) : (
         <DataGrid
-          columns={isCfop ? COLS_CFOP : tipo === "IPI" ? COLS_IPI : COLS_ITEM}
+          columns={isCfop ? COLS_CFOP : tipo === "IPI" ? COLS_IPI : tipo === "CBSIBS" ? COLS_CBSIBS : COLS_ITEM}
           data={rows}
           maxHeight="320px"
           selectedIdx={selIdx}

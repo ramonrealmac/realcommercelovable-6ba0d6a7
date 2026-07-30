@@ -1542,7 +1542,7 @@ BEGIN
       v_qt, v_vl_unit, v_vl_desc, v_vl_liq,
       v_rateio_frete, v_rateio_seguro, v_rateio_outro,
       v_qt, v_vl_unit,
-      COALESCE(v_prod.tb_a_origem::smallint, 0),
+      COALESCE(NULLIF(v_prod.tb_a_origem, '')::smallint, 0),
       COALESCE(v_csosn,''), COALESCE(v_cst_icms,''),
       v_bc_icms, COALESCE((SELECT aliquota FROM public.fiscal_regra_item WHERE fiscal_regra_id=v_regra_id AND UPPER(tipo_imposto)='ICMS' AND (fiscal_grupo_produto_id=v_prod.grupo_icms_id OR fiscal_grupo_produto_id IS NULL) LIMIT 1),0),
       v_vl_icms,

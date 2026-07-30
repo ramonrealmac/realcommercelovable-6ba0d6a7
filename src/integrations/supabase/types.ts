@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -11,31 +11,6 @@ export type Database = {
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
-  }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
   }
   public: {
     Tables: {
@@ -1884,7 +1859,6 @@ export type Database = {
       }
       condicao_pagamento: {
         Row: {
-          cd_condicao: number | null
           cd_condicao_pagamento: number | null
           condicao_id: number
           descricao: string
@@ -1911,7 +1885,6 @@ export type Database = {
           tipo_prazo: string | null
         }
         Insert: {
-          cd_condicao?: number | null
           cd_condicao_pagamento?: number | null
           condicao_id?: number
           descricao: string
@@ -1938,7 +1911,6 @@ export type Database = {
           tipo_prazo?: string | null
         }
         Update: {
-          cd_condicao?: number | null
           cd_condicao_pagamento?: number | null
           condicao_id?: number
           descricao?: string
@@ -2014,7 +1986,6 @@ export type Database = {
           local_pagamento1: string | null
           local_pagamento2: string | null
           nome_conta: string | null
-          portador_id: number | null
           prx_nosso_numero: number | null
           prx_seq_remessa: number | null
           saldo: number | null
@@ -2059,7 +2030,6 @@ export type Database = {
           local_pagamento1?: string | null
           local_pagamento2?: string | null
           nome_conta?: string | null
-          portador_id?: number | null
           prx_nosso_numero?: number | null
           prx_seq_remessa?: number | null
           saldo?: number | null
@@ -2104,7 +2074,6 @@ export type Database = {
           local_pagamento1?: string | null
           local_pagamento2?: string | null
           nome_conta?: string | null
-          portador_id?: number | null
           prx_nosso_numero?: number | null
           prx_seq_remessa?: number | null
           saldo?: number | null
@@ -2778,7 +2747,22 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "empresa_usuario_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresa"
+            referencedColumns: ["empresa_id"]
+          },
+          {
+            foreignKeyName: "empresa_usuario_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       entrega: {
         Row: {
@@ -4190,6 +4174,7 @@ export type Database = {
           empresa_id: number
           excluido: boolean
           fin_nfe: number
+          ind_pres: string | null
           modelo: string
           motivo_cancelamento: string | null
           movimento_id: number | null
@@ -4246,6 +4231,7 @@ export type Database = {
           empresa_id: number
           excluido?: boolean
           fin_nfe?: number
+          ind_pres?: string | null
           modelo?: string
           motivo_cancelamento?: string | null
           movimento_id?: number | null
@@ -4302,6 +4288,7 @@ export type Database = {
           empresa_id?: number
           excluido?: boolean
           fin_nfe?: number
+          ind_pres?: string | null
           modelo?: string
           motivo_cancelamento?: string | null
           movimento_id?: number | null
@@ -5301,6 +5288,87 @@ export type Database = {
         }
         Relationships: []
       }
+      ibscbs: {
+        Row: {
+          ibscbs_cst: string
+          ibscbs_descricao: string
+          ibscbs_id: number
+        }
+        Insert: {
+          ibscbs_cst: string
+          ibscbs_descricao: string
+          ibscbs_id?: never
+        }
+        Update: {
+          ibscbs_cst?: string
+          ibscbs_descricao?: string
+          ibscbs_id?: never
+        }
+        Relationships: []
+      }
+      icms: {
+        Row: {
+          icms_cst_csosn: string
+          icms_descricao: string | null
+          icms_id: number
+          icms_tipo: string | null
+        }
+        Insert: {
+          icms_cst_csosn: string
+          icms_descricao?: string | null
+          icms_id?: never
+          icms_tipo?: string | null
+        }
+        Update: {
+          icms_cst_csosn?: string
+          icms_descricao?: string | null
+          icms_id?: never
+          icms_tipo?: string | null
+        }
+        Relationships: []
+      }
+      ipi: {
+        Row: {
+          ipi_cst: string
+          ipi_descricao: string | null
+          ipi_id: number
+        }
+        Insert: {
+          ipi_cst: string
+          ipi_descricao?: string | null
+          ipi_id?: never
+        }
+        Update: {
+          ipi_cst?: string
+          ipi_descricao?: string | null
+          ipi_id?: never
+        }
+        Relationships: []
+      }
+      ipi_enquadramento: {
+        Row: {
+          ipi_enquadramento_ativo: boolean
+          ipi_enquadramento_codigo: string
+          ipi_enquadramento_descricao: string
+          ipi_enquadramento_grupo: string
+          ipi_enquadramento_id: number
+        }
+        Insert: {
+          ipi_enquadramento_ativo?: boolean
+          ipi_enquadramento_codigo: string
+          ipi_enquadramento_descricao: string
+          ipi_enquadramento_grupo: string
+          ipi_enquadramento_id?: never
+        }
+        Update: {
+          ipi_enquadramento_ativo?: boolean
+          ipi_enquadramento_codigo?: string
+          ipi_enquadramento_descricao?: string
+          ipi_enquadramento_grupo?: string
+          ipi_enquadramento_id?: never
+        }
+        Relationships: []
+      }
       linha_produto: {
         Row: {
           cd_linha: number | null
@@ -5933,6 +6001,7 @@ export type Database = {
           numero_autorizacao: string | null
           obs_pagamento: string
           operadora_id: number | null
+          portador_id: number | null
           tipo_recebimento: string | null
           tp_pagamento: string
           vl_pagamento: number | null
@@ -5954,6 +6023,7 @@ export type Database = {
           numero_autorizacao?: string | null
           obs_pagamento?: string
           operadora_id?: number | null
+          portador_id?: number | null
           tipo_recebimento?: string | null
           tp_pagamento: string
           vl_pagamento?: number | null
@@ -5975,6 +6045,7 @@ export type Database = {
           numero_autorizacao?: string | null
           obs_pagamento?: string
           operadora_id?: number | null
+          portador_id?: number | null
           tipo_recebimento?: string | null
           tp_pagamento?: string
           vl_pagamento?: number | null
@@ -6429,13 +6500,45 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "perfil_usuario_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresa"
+            referencedColumns: ["empresa_id"]
+          },
+          {
             foreignKeyName: "perfil_usuario_perfil_id_fkey"
             columns: ["perfil_id"]
             isOneToOne: false
             referencedRelation: "perfil"
             referencedColumns: ["perfil_id"]
           },
+          {
+            foreignKeyName: "perfil_usuario_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      piscofins: {
+        Row: {
+          piscofins_cst: string
+          piscofins_descricao: string | null
+          piscofins_id: number
+        }
+        Insert: {
+          piscofins_cst: string
+          piscofins_descricao?: string | null
+          piscofins_id?: never
+        }
+        Update: {
+          piscofins_cst?: string
+          piscofins_descricao?: string | null
+          piscofins_id?: never
+        }
+        Relationships: []
       }
       plano: {
         Row: {
@@ -6522,8 +6625,8 @@ export type Database = {
       }
       portador: {
         Row: {
+          ativo: string | null
           banco_id: number | null
-          caminho_remessa: string
           cd_portador: number | null
           conta_id: string | null
           dt_alteracao: string | null
@@ -6534,8 +6637,8 @@ export type Database = {
           portador_id: number
         }
         Insert: {
+          ativo?: string | null
           banco_id?: number | null
-          caminho_remessa?: string
           cd_portador?: number | null
           conta_id?: string | null
           dt_alteracao?: string | null
@@ -6546,8 +6649,8 @@ export type Database = {
           portador_id?: number
         }
         Update: {
+          ativo?: string | null
           banco_id?: number | null
-          caminho_remessa?: string
           cd_portador?: number | null
           conta_id?: string | null
           dt_alteracao?: string | null
@@ -6867,6 +6970,7 @@ export type Database = {
           excluido: boolean | null
           fator_mult: number
           produto_id: number
+          tp_movimento: string | null
           unidade_id: string
         }
         Insert: {
@@ -6877,6 +6981,7 @@ export type Database = {
           excluido?: boolean | null
           fator_mult?: number
           produto_id: number
+          tp_movimento?: string | null
           unidade_id?: string
         }
         Update: {
@@ -6887,6 +6992,7 @@ export type Database = {
           excluido?: boolean | null
           fator_mult?: number
           produto_id?: number
+          tp_movimento?: string | null
           unidade_id?: string
         }
         Relationships: []
@@ -7538,6 +7644,86 @@ export type Database = {
         }
         Relationships: []
       }
+      tabela_preco: {
+        Row: {
+          cd_tabela: number
+          descricao: string
+          dt_alteracao: string | null
+          dt_cadastro: string | null
+          dt_final: string | null
+          dt_inicial: string | null
+          empresa_id: number
+          excluido: boolean | null
+          tabela_id: number
+        }
+        Insert: {
+          cd_tabela: number
+          descricao: string
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          dt_final?: string | null
+          dt_inicial?: string | null
+          empresa_id: number
+          excluido?: boolean | null
+          tabela_id?: number
+        }
+        Update: {
+          cd_tabela?: number
+          descricao?: string
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          dt_final?: string | null
+          dt_inicial?: string | null
+          empresa_id?: number
+          excluido?: boolean | null
+          tabela_id?: number
+        }
+        Relationships: []
+      }
+      tabela_preco_item: {
+        Row: {
+          cd_produto: string | null
+          dt_alteracao: string | null
+          dt_cadastro: string | null
+          excluido: boolean | null
+          nm_produto: string
+          preco: number
+          produto_id: number
+          tabela_id: number
+          tabela_item_id: number
+        }
+        Insert: {
+          cd_produto?: string | null
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          excluido?: boolean | null
+          nm_produto: string
+          preco?: number
+          produto_id: number
+          tabela_id: number
+          tabela_item_id?: number
+        }
+        Update: {
+          cd_produto?: string | null
+          dt_alteracao?: string | null
+          dt_cadastro?: string | null
+          excluido?: boolean | null
+          nm_produto?: string
+          preco?: number
+          produto_id?: number
+          tabela_id?: number
+          tabela_item_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tabela_preco_item_tabela_id_fkey"
+            columns: ["tabela_id"]
+            isOneToOne: false
+            referencedRelation: "tabela_preco"
+            referencedColumns: ["tabela_id"]
+          },
+        ]
+      }
       tp_operacao: {
         Row: {
           altera_estoque: string | null
@@ -7853,6 +8039,7 @@ export type Database = {
           movimento_id: number | null
           nr_movimento: number | null
           origem: string | null
+          tp_origem: string | null
           vendedor_id: number | null
           vendedor_nome: string | null
           vl_movimento: number | null
@@ -7877,6 +8064,10 @@ export type Database = {
       }
     }
     Functions: {
+      cd_produto_text: {
+        Args: { p: Database["public"]["Tables"]["produto"]["Row"] }
+        Returns: string
+      }
       finalizar_venda_caixa: {
         Args: {
           p_cadastro_id?: number
@@ -8058,6 +8249,10 @@ export type Database = {
         }
         Returns: Json
       }
+      fu_pdv_estornar_venda: {
+        Args: { _movimento_id: number; _usuario_id?: string }
+        Returns: Json
+      }
       fu_pdv_registrar_recebimento_venda: {
         Args: {
           _caixa_abertura_id: number
@@ -8101,6 +8296,7 @@ export type Database = {
         Args: { _empresa_id: number; _user_id: string }
         Returns: boolean
       }
+      get_email_by_login: { Args: { p_login: string }; Returns: string }
       get_or_create_nsu_seq: {
         Args: { p_empresa_id: number; p_tipo_campo: string }
         Returns: number
@@ -8244,9 +8440,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

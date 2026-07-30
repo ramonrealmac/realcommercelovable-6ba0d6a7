@@ -13,6 +13,7 @@ import DescontoDialog from "./DescontoDialog";
 import FuncoesDialog from "./FuncoesDialog";
 import CancelamentoDialog from "./CancelamentoDialog";
 import FaturarPedidoDialog from "./FaturarPedidoDialog";
+import EstornoDialog from "./EstornoDialog";
 import EstoqueBloqueioDialog, { IEstoqueBloqueioItem } from "./EstoqueBloqueioDialog";
 import FechamentoCaixaForm from "./FechamentoCaixaForm";
 import AberturaCaixaForm from "./AberturaCaixaForm";
@@ -104,6 +105,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   // Permissões do caixa
   const XPodeInfVend = caixa.caixa_inf_vend === "S";
   const XPodeCancVenda = caixa.caixa_cnc_venda === "S";
+  const XPodeEstornarVenda = caixa.caixa_edit_venda === "S" || caixa.caixa_cnc_venda === "S";
 
   // Configurações por funcionário
   const [XFontePed, setXFontePed] = useState<number>(caixa.tamanho_fonte_pedidos || 12);
@@ -114,6 +116,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   const [XOpenFuncoes, setXOpenFuncoes] = useState(false);
   const [XOpenEmissaoPedidos, setXOpenEmissaoPedidos] = useState(false);
   const [XOpenCanc, setXOpenCanc] = useState(false);
+  const [XOpenEstorno, setXOpenEstorno] = useState(false);
   const [XOpenFech, setXOpenFech] = useState(false);
   const [XOpenAbert, setXOpenAbert] = useState(false);
   const [XOpenSupr, setXOpenSupr] = useState(false);
@@ -156,8 +159,10 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
 
   // Carrega pedidos fechados
   const carregarPedidos = useCallback(async () => {
+    if (!XEmpresaId) return;
     const { data, error } = await db.from("vw_pedidos_caixa_union")
-      .select("movimento_id, nr_movimento, cadastro_id, cliente_nome, vendedor_id, vendedor_nome, vl_movimento, dt_emissao, is_external, origem, tp_origem")
+      .select("movimento_id, nr_movimento, cadastro_id, cliente_nome, vendedor_id, vendedor_nome, vl_movimento, dt_emissao, is_external, origem, tp_origem, empresa_id")
+      .eq("empresa_id", XEmpresaId)
       .order("dt_emissao", { ascending: false })
       .limit(200);
     if (error) { toast.error(error.message); return; }
@@ -175,7 +180,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       origem: m.origem || "LOCAL",
       tp_origem: m.tp_origem || null
     })));
-  }, []);
+  }, [XEmpresaId]);
 
   // Subtotal e lógica de recebimento necessária para finalizarVenda
   const subtotal = XCart.reduce((a, c) => a + c.qt_item * c.vl_unitario, 0);
@@ -1115,6 +1120,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       <FuncoesDialog
         open={XOpenFuncoes}
         podeCancelar={XPodeCancVenda}
+        podeEstornar={XPodeEstornarVenda}
         onClose={() => setXOpenFuncoes(false)}
         onCancelamento={() => setXOpenCanc(true)}
         onFechamento={() => setXOpenFech(true)}
@@ -1122,6 +1128,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         onSuprimento={() => setXOpenSupr(true)}
         onSangria={() => setXOpenSang(true)}
         onEmissaoPedidos={() => setXOpenEmissaoPedidos(true)}
+        onEstorno={() => setXOpenEstorno(true)}
       />
 
       <FaturarPedidoDialog
@@ -1192,6 +1199,13 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         caixaNome={caixa.nome}
         onClose={() => setXOpenCanc(false)}
         onCancelado={carregarPedidos}
+      />
+
+      <EstornoDialog
+        open={XOpenEstorno}
+        caixaNome={caixa.nome}
+        onClose={() => setXOpenEstorno(false)}
+        onEstornado={carregarPedidos}
       />
 
       <ConfigurarDialog

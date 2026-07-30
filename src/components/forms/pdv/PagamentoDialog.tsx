@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -101,12 +101,9 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
 
   const [XMeiosPagamento, setXMeiosPagamento] = useState<IMeioPagamento[]>([]);
 
-  // Determina se a condição selecionada exige dados de cartão
-  const camposCartaoEditaveis = useMemo(() => {
-    const c = XCondicoes.find(x => x.condicao_id === XCondicaoId);
+  const requerCartao = useCallback((condicaoId: number) => {
+    const c = XCondicoes.find(x => x.condicao_id === condicaoId);
     if (!c) return false;
-    
-    console.log("PagamentoDialog: Verificando se condicao", XCondicaoId, "é cartão. meio_pagamento_id:", c.meio_pagamento_id);
 
     // Check by ID (3=Crédito, 4=Débito are defaults, but let's be more flexible)
     if ([3, 4, 10, 11].includes(c.meio_pagamento_id || 0)) return true;
@@ -123,7 +120,12 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
     if (cDesc.includes("cartão") || cDesc.includes("cartao") || cDesc.includes("débito") || cDesc.includes("debito")) return true;
     
     return false;
-  }, [XCondicoes, XCondicaoId, XMeiosPagamento]);
+  }, [XCondicoes, XMeiosPagamento]);
+
+  // Determina se a condição selecionada exige dados de cartão
+  const camposCartaoEditaveis = useMemo(() => {
+    return requerCartao(XCondicaoId);
+  }, [XCondicaoId, requerCartao]);
 
   useEffect(() => {
     if (!open) return;
@@ -140,35 +142,39 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
           console.warn("PagamentoDialog: Erro ao carregar meio_pagamento:", mpRes.error);
         }
 
-        // Fetch Condições (sem filtros restritivos no início)
-        let condRes = await db.from("condicao_pagamento").select("condicao_id, descricao, qtd_parcelas, plano_conta_id, meio_pagamento_id");
+        // Fetch Condições filtradas pela empresa logada
+        let condRes = await db.from("condicao_pagamento")
+          .select("condicao_id, descricao, qtd_parcelas, plano_conta_id, meio_pagamento_id")
+          .eq("empresa_id", XEmpresaId)
+          .eq("excluido", false);
         if (condRes.error || !condRes.data || condRes.data.length === 0) {
-           condRes = await db.from("condicao").select("condicao_id, descricao, qtd_parcelas:qt_parcelas, tp_documento, plano_conta_id, meio_pagamento_id");
+           condRes = await db.from("condicao")
+             .select("condicao_id, descricao, qtd_parcelas:qt_parcelas, tp_documento, plano_conta_id, meio_pagamento_id")
+             .eq("empresa_id", XEmpresaId);
         }
         
         const condList = (condRes.data || []).map((r: any) => ({ ...r, tp_documento: r.tp_documento || null }));
         console.log("PagamentoDialog: Condições carregadas:", condList.length);
         setXCondicoes(condList);
 
-        // Fetch Bandeiras - Sem filtro de exclusão para teste
-        let bandRes = await db.from("bandeira").select("bandeira_id, descricao").eq("empresa_id", XEmpresaId).order("descricao");
-        if (bandRes.error || !bandRes.data || bandRes.data.length === 0) {
-          console.warn("PagamentoDialog: Nenhuma bandeira com empresa_id", XEmpresaId, "tentando geral...");
-          bandRes = await db.from("bandeira").select("bandeira_id, descricao").order("descricao");
-        }
+        // Fetch Bandeiras filtradas pela empresa logada
+        const bandRes = await db.from("bandeira")
+          .select("bandeira_id, descricao")
+          .eq("empresa_id", XEmpresaId)
+          .eq("excluido", false)
+          .order("descricao");
         console.log("PagamentoDialog: Bandeiras carregadas:", bandRes.data?.length || 0);
         const bandList = bandRes.data || [];
-        if (bandRes.data) setXBandeiras(bandList);
+        setXBandeiras(bandList);
 
-        // Fetch Operadoras - Sem filtro de exclusão para teste
-        let operRes = await db.from("operadora").select("operadora_id, razao").eq("empresa_id", XEmpresaId).order("razao");
-        if (operRes.error || !operRes.data || operRes.data.length === 0) {
-          console.warn("PagamentoDialog: Nenhuma operadora com empresa_id", XEmpresaId, "tentando geral...");
-          operRes = await db.from("operadora").select("operadora_id, razao").order("razao");
-        }
+        // Fetch Operadoras filtradas pela empresa logada
+        const operRes = await db.from("operadora")
+          .select("operadora_id, razao")
+          .eq("empresa_id", XEmpresaId)
+          .order("razao");
         console.log("PagamentoDialog: Operadoras carregadas:", operRes.data?.length || 0);
         const operList = operRes.data || [];
-        if (operRes.data) setXOperadoras(operList);
+        setXOperadoras(operList);
 
         // Pre-populate XLinhas if pre-loaded payments exist
         if (pagtosPreCarregados && pagtosPreCarregados.length > 0) {
@@ -324,6 +330,16 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
       console.warn("[PagamentoDialog] Valor insuficiente:", totalPago, "<", totalPedido);
       toast.error("Valor pago é menor que o total do pedido."); 
       return; 
+    }
+
+    // Validação de dados de cartão
+    for (const linha of XLinhas) {
+      if (requerCartao(linha.condicao_id)) {
+        if (!linha.bandeira_id || !linha.operadora_id || !linha.numero_autoriza?.trim()) {
+          toast.error(`O pagamento de R$ ${fmt(linha.vl_recebido)} na condição "${linha.condicao_descricao}" requer os dados do cartão (Bandeira, Operadora e Autorização). Selecione a linha correspondente, clique em Alterar para preencher e confirme.`);
+          return;
+        }
+      }
     }
     
     // Removido confirm temporariamente para debugar se ele está bloqueando

@@ -58,9 +58,30 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
   const [XDepEstoque, setXDepEstoque] = useState<Record<number, number>>({});
   const [XValidaEstoque, setXValidaEstoque] = useState(false);
   const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
+  const [XQtDecimais, setXQtDecimais] = useState(2);
+  const [XValDecimais, setXValDecimais] = useState(2);
   const codigoRef = useRef<HTMLInputElement>(null);
   const lupaRef = useRef<HTMLButtonElement>(null);
   const precoUnitRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!XEmpresaId) return;
+    (async () => {
+      try {
+        const { data } = await db
+          .from("empresa")
+          .select("qt_venda_qt_decimais, vl_venda_qt_decimais")
+          .eq("empresa_id", XEmpresaId)
+          .maybeSingle();
+        if (data) {
+          setXQtDecimais(data.qt_venda_qt_decimais ?? 2);
+          setXValDecimais(data.vl_venda_qt_decimais ?? 2);
+        }
+      } catch (e) {
+        console.error("Erro ao carregar casas decimais do cadastro da empresa:", e);
+      }
+    })();
+  }, [XEmpresaId]);
 
   const XGroupEmpresaIds = useMemo(() => {
     return XEmpresas
@@ -307,7 +328,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
   const cols: IGridColumn[] = [
     { key: "cd_produto", label: "Código", width: "90px", align: "right", render: r => r.cd_produto || (r.produto_id ?? "") },
     { key: "nm_produto", label: "Produto", width: "2fr" },
-    { key: "qt_movimento", label: "Qtd.", width: "90px", align: "right", render: r => fmt(r.qt_movimento, 4) },
+    { key: "qt_movimento", label: "Qtd.", width: "90px", align: "right", render: r => fmt(r.qt_movimento, XQtDecimais) },
     { key: "vl_und_produto", label: "Vlr. Unit", width: "100px", align: "right", render: r => fmt(r.vl_und_produto) },
     { key: "vl_produto", label: "Subtotal", width: "110px", align: "right", render: r => fmt(r.vl_produto) },
     { key: "pc_desconto", label: "Desc.(%)", width: "80px", align: "right", render: r => fmt(r.pc_desconto) },
@@ -425,9 +446,9 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
               <CurrencyInput
                 disabled={ro}
                 value={Number(XEdit.qt_movimento || 0)}
-                decimals={4}
+                decimals={XQtDecimais}
                 onChange={val => setF("qt_movimento", val)}
-                onBlur={e => handleBlur("qt_movimento", e.target.value, 4)}
+                onBlur={e => handleBlur("qt_movimento", e.target.value, XQtDecimais)}
                 className={`w-full border border-border rounded px-2 py-1 text-sm text-right ${NO_SPIN}`}
               />
             </div>
@@ -471,7 +492,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
             </div>
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Estoq. Disp.</label>
-              <input readOnly tabIndex={-1} value={XEditEstoque ? fmt(XEditEstoque.disp, 4) : ""}
+              <input readOnly tabIndex={-1} value={XEdit?.deposito_id ? fmt(XDepEstoque[XEdit.deposito_id] || 0, XQtDecimais) : (XEditEstoque ? fmt(XEditEstoque.disp, XQtDecimais) : "")}
                 className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
             </div>
             <div className="col-span-4">
@@ -485,7 +506,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
                   .map(d => (
                     <option key={d.deposito_id} value={d.deposito_id}>
                       {d.deposito_id} - {d.nome}
-                      {XEdit.produto_id ? ` (${fmt(XDepEstoque[d.deposito_id] || 0, 4)})` : ""}
+                      {XEdit.produto_id ? ` (${fmt(XDepEstoque[d.deposito_id] || 0, XQtDecimais)})` : ""}
                     </option>
                   ))}
               </select>

@@ -8,6 +8,8 @@ export interface AppTab {
 }
 
 export interface IEmpresaOption {
+  [x: string]: number;
+  pesquisa_prod_min_letras: number;
   empresa_id: number;
   razao_social: string;
   nome_fantasia: string;
@@ -49,15 +51,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const saved = localStorage.getItem("XAppTabs");
       if (saved) return JSON.parse(saved);
-    } catch {}
+    } catch { }
     return [];
   });
-  
+
   const [XActiveTabId, setXActiveTabId] = useState<string | null>(() => {
     try {
       const saved = localStorage.getItem("XActiveTabId");
       if (saved) return saved;
-    } catch {}
+    } catch { }
     return null;
   });
 
@@ -82,7 +84,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const toggleChatBot = useCallback(() => {
     setXChatBotVisible(p => {
       const nv = !p;
-      try { localStorage.setItem("XChatBotVisible", nv ? "1" : "0"); } catch {}
+      try { localStorage.setItem("XChatBotVisible", nv ? "1" : "0"); } catch { }
       return nv;
     });
   }, []);

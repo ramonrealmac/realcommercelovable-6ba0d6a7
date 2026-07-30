@@ -61,15 +61,18 @@ function validarEmitente(empresa: any): IFiscalValidacaoErro[] {
 // ─────────────────────────────────────────────────────────────────────────────
 // DESTINATÁRIO (Parceiro/Cadastro)
 // ─────────────────────────────────────────────────────────────────────────────
-function validarDestinatario(parceiro: any, tipo: "NFE" | "NFCE"): IFiscalValidacaoErro[] {
+function validarDestinatario(parceiro: any, tipo: "NFE" | "NFCE", indPres?: string): IFiscalValidacaoErro[] {
   const e: IFiscalValidacaoErro[] = [];
   const pre = "Destinatário";
 
-  // NFC-e permite consumidor final sem identificação
-  if (tipo === "NFCE") return e;
+  // NFC-e permite consumidor final sem identificação, exceto se for entrega em domicílio (indPres = 4)
+  if (tipo === "NFCE" && indPres !== "4") return e;
 
   if (!parceiro) {
-    e.push({ campo: `${pre}`, mensagem: "Destinatário (cliente) não informado para NF-e." });
+    const msg = tipo === "NFCE"
+      ? "Destinatário (cliente) não informado para entrega em domicílio."
+      : "Destinatário (cliente) não informado para NF-e.";
+    e.push({ campo: `${pre}`, mensagem: msg });
     return e;
   }
 
@@ -174,16 +177,25 @@ export function validarDadosFiscais(params: {
 }): IFiscalValidacaoResult {
   const { empresa, parceiro, movimento, itens, fConfig, fConfigItem, tipo } = params;
 
+  // Movimento em si
+  if (!movimento) {
+    return { valido: false, erros: [{ campo: "Movimento", mensagem: "Dados do movimento não localizados." }] };
+  }
+
+  // Determinar indPres para NFC-e
+  const isEntrega = movimento.ind_pres === '4' || 
+    (Number(movimento.vl_frete || 0) > 0 && (ok(movimento.logradouro_entrega) || ok(movimento.cep_entrega)));
+  const indPres = isEntrega ? '4' : '1';
+
   const erros: IFiscalValidacaoErro[] = [
     ...validarEmitente(empresa),
-    ...validarDestinatario(parceiro, tipo),
+    ...validarDestinatario(parceiro, tipo, indPres),
     ...validarItens(itens),
     ...validarConfigFiscal(fConfig, fConfigItem),
   ];
 
-  // Movimento em si
-  if (!movimento) {
-    erros.unshift({ campo: "Movimento", mensagem: "Dados do movimento não localizados." });
+  if (tipo === "NFCE" && indPres === "1" && Number(movimento.vl_frete || 0) > 0) {
+    erros.push({ campo: "NFC-e Presencial", mensagem: "Venda presencial nao pode informar frete" });
   }
 
   return { valido: erros.length === 0, erros };

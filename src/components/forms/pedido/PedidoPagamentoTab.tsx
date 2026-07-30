@@ -7,9 +7,41 @@ import GridActionToolbar, { gridActions } from "@/components/grid/GridActionTool
 import type { IMovimento, IMovimentoPagamento } from "./types";
 import PedidoPagamentoDialog from "./PedidoPagamentoDialog";
 
-const db = supabase as any;
+interface IPagamentoLinha {
+  uid: string;
+  movimento_pagamento_id?: number;
+  condicao_id: number;
+  condicao_descricao: string;
+  n_parcelas: number;
+  vl_parcelas: number;
+  vl_pagamento: number;
+  tp_pagamento: string;
+  empresa_id: number;
+  movimento_id: number;
+  portador_id: number | null;
+}
 
-interface ICondicao { condicao_id: number; descricao: string; qtd_parcelas: number | null; }
+interface ICondicao {
+  condicao_id: number;
+  descricao: string;
+  tipo_prazo?: string | null;
+  qtd_parcelas: number | null;
+  intervalo?: number | null;
+  plano_conta_id?: number | null;
+  meio_pagamento_id?: number | null;
+  prazo_1?: number | null;
+  prazo_2?: number | null;
+  prazo_3?: number | null;
+  prazo_4?: number | null;
+  prazo_5?: number | null;
+  prazo_6?: number | null;
+  prazo_7?: number | null;
+  prazo_8?: number | null;
+  prazo_9?: number | null;
+  prazo_10?: number | null;
+  prazo_11?: number | null;
+  prazo_12?: number | null;
+}
 
 interface IProps {
   pedido: IMovimento | null;
@@ -25,12 +57,12 @@ interface IProps {
 const fmt = (v: number) => (v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const NO_SPIN = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
-const fmtInput = (v: any) => {
+const fmtInput = (v: string | number | null | undefined) => {
   if (v === 0 || v === "0" || v === "" || v === undefined || v === null) return "";
   return String(v).replace(".", ",");
 };
 
-const parseNum = (v: any) => {
+const parseNum = (v: string | number | null | undefined) => {
   if (!v) return 0;
   if (typeof v === "number") return v;
   const n = parseFloat(String(v).replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
@@ -41,6 +73,8 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
   const { XEmpresaId, XEmpresaMatrizId } = useAppContext();
   const [XPagtos, setXPagtos] = useState<IMovimentoPagamento[]>([]);
   const [XCondicoes, setXCondicoes] = useState<ICondicao[]>([]);
+  const [XPortadores, setXPortadores] = useState<{ portador_id: number; cd_portador: number; nome: string }[]>([]);
+  const [XMeiosPagamento, setXMeiosPagamento] = useState<{ meio_pagamento_id: number; codigo: string; descricao: string }[]>([]);
   const [XEdit, setXEdit] = useState<Partial<IMovimentoPagamento> | null>(null);
   const [XEditingId, setXEditingId] = useState<number | null>(null);
   const [XSelected, setXSelected] = useState<IMovimentoPagamento | null>(null);
@@ -50,7 +84,7 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
   const load = useCallback(async () => {
     if (!pedido?.movimento_id) { setXPagtos([]); return; }
 
-    const { data, error } = await db.from("movimento_pagamento")
+    const { data, error } = await supabase.from("movimento_pagamento")
       .select("*").eq("movimento_id", pedido.movimento_id).eq("excluido", false)
       .order("movimento_pagamento_id");
     if (error) { toast.error(error.message); return; }
@@ -68,17 +102,31 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
     }
   }, [pedido?.movimento_id]);
 
+  // Load portadores and medios de pagamento
   useEffect(() => {
+    if (!XEmpresaId) return;
     (async () => {
-      let query = db.from("condicao_pagamento")
-        .select("condicao_id, descricao, qtd_parcelas, empresa_id")
+      const { data: portadorData } = await supabase.from("portador")
+        .select("portador_id, cd_portador, nome")
+        .eq("empresa_id", XEmpresaId)
         .eq("excluido", false);
+      if (portadorData) setXPortadores(portadorData);
 
-      if (XEmpresaId === XEmpresaMatrizId) {
-        query = query.eq("empresa_id", XEmpresaId);
-      } else {
-        query = query.or(`empresa_id.eq.${XEmpresaId},empresa_id.eq.${XEmpresaMatrizId}`);
-      }
+      const { data: mpData } = await supabase.from("meio_pagamento").select("meio_pagamento_id, codigo, descricao");
+      if (mpData) setXMeiosPagamento(mpData);
+    })();
+  }, [XEmpresaId]);
+
+  useEffect(() => {
+    if (!XEmpresaId) return;
+    (async () => {
+      let query = supabase.from("condicao_pagamento")
+        .select(`
+          condicao_id, descricao, tipo_prazo, qtd_parcelas, intervalo, plano_conta_id, meio_pagamento_id, empresa_id,
+          prazo_1, prazo_2, prazo_3, prazo_4, prazo_5, prazo_6, prazo_7, prazo_8, prazo_9, prazo_10, prazo_11, prazo_12
+        `)
+        .eq("empresa_id", XEmpresaId)
+        .eq("excluido", false);
 
       const { data, error } = await query;
       if (error) {
@@ -110,18 +158,20 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
   const subtotal = totalPedido + vlDesconto;
   const totalPago = XPagtos.reduce((a, p) => a + Number(p.vl_pagamento || 0), 0);
 
-  const handleConfirmarPagamento = async (linhas: any[], vlDesc: number, pcDesc: number, enviarAoCaixa?: boolean) => {
+
+
+  const handleConfirmarPagamento = async (linhas: IPagamentoLinha[], vlDesc: number, pcDesc: number, enviarAoCaixa?: boolean) => {
     if (!pedido?.movimento_id) return;
 
     // Atualiza o desconto no cabeçalho
-    const { error: errMov } = await db.from("movimento")
+    const { error: errMov } = await supabase.from("movimento")
       .update({ vl_desconto: vlDesc, pc_desconto: pcDesc })
       .eq("movimento_id", pedido.movimento_id);
     
     if (errMov) { toast.error("Erro ao atualizar desconto: " + errMov.message); return; }
 
     // Marca os pagamentos anteriores como excluídos
-    const { error: errDel } = await db.from("movimento_pagamento")
+    const { error: errDel } = await supabase.from("movimento_pagamento")
       .update({ excluido: true })
       .eq("movimento_id", pedido.movimento_id);
     
@@ -135,24 +185,34 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
       vl_pagamento: l.vl_pagamento,
       n_parcelas: l.n_parcelas,
       vl_parcelas: l.vl_parcelas,
-      tp_pagamento: l.tp_pagamento || "DI"
+      tp_pagamento: l.tp_pagamento || "DI",
+      portador_id: l.portador_id || null
     }));
 
-    const { error: errPagtos } = await db.from("movimento_pagamento").insert(payload);
+    const { error: errPagtos } = await supabase.from("movimento_pagamento").insert(payload);
     if (errPagtos) { toast.error("Erro ao gravar pagamentos: " + errPagtos.message); return; }
 
-    toast.success("Pagamentos e desconto processados.");
+    toast.success("Pagamentos processados.");
     
     if (enviarAoCaixa && onMudarStatus) {
       await onMudarStatus("F");
     } else {
       await load();
-      if (onMudarStatus) onMudarStatus("REFRESH"); // Trigger header refresh
+      if (onMudarStatus) onMudarStatus("REFRESH");
     }
   };
 
   const cols: IGridColumn[] = [
     { key: "condicao_id", label: "Condição", width: "2fr", render: r => XCondicoes.find(c => c.condicao_id === r.condicao_id)?.descricao || r.condicao_id },
+    { 
+      key: "portador_id", 
+      label: "Portador", 
+      width: "1.5fr", 
+      render: r => {
+        const p = XPortadores.find(x => x.portador_id === r.portador_id);
+        return p ? `${p.cd_portador} - ${p.nome}` : (r.portador_id || "");
+      }
+    },
     { key: "vl_pagamento", label: "Valor", width: "120px", align: "right", render: r => fmt(r.vl_pagamento) },
     { key: "n_parcelas", label: "Parcelas", width: "100px", align: "right" },
     { key: "vl_parcelas", label: "Valor Parcela", width: "120px", align: "right", render: r => fmt(r.vl_parcelas) },
@@ -192,6 +252,7 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
         <PedidoPagamentoDialog
           open={XShowPagamento}
           movimentoId={pedido.movimento_id}
+          cadastroId={pedido.cadastro_id}
           subtotalPedido={subtotal}
           tpDesconto={pedido.tp_desconto || "N"}
           onClose={() => setXShowPagamento(false)}

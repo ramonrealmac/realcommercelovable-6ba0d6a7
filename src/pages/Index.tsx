@@ -16,14 +16,19 @@ const LinhaProdutoForm = lazy(() => import("@/components/forms/produtos/LinhaPro
 const GrupoProdutosForm = lazy(() => import("@/components/forms/produtos/GrupoProdutosForm"));
 const SubgrupoProdutosForm = lazy(() => import("@/components/forms/produtos/SubgrupoProdutosForm"));
 const UnidadeForm = lazy(() => import("@/components/forms/produtos/UnidadeForm"));
+const TabelaPrecoForm = lazy(() => import("@/components/forms/produtos/TabelaPrecoForm"));
 const EstoqueForm = lazy(() => import("@/components/forms/estoques/EstoqueForm"));
 const DepositoForm = lazy(() => import("@/components/forms/estoques/DepositoForm"));
 const EstadoForm = lazy(() => import("@/components/forms/enderecos/EstadoForm"));
 const CidadeForm = lazy(() => import("@/components/forms/enderecos/CidadeForm"));
 const RotaForm = lazy(() => import("@/components/forms/enderecos/RotaForm"));
 const BancoForm = lazy(() => import("@/components/forms/financeiro/BancoForm"));
+const ContaForm = lazy(() => import("@/components/forms/financeiro/ContaForm"));
 const CondicaoPagamentoForm = lazy(() => import("@/components/forms/financeiro/CondicaoPagamentoForm"));
 const PlanoContaForm = lazy(() => import("@/components/forms/financeiro/PlanoContaForm"));
+const PortadorForm = lazy(() => import("@/components/forms/financeiro/PortadorForm"));
+const OperadoraForm = lazy(() => import("@/components/forms/financeiro/OperadoraForm"));
+const BandeiraForm = lazy(() => import("@/components/forms/financeiro/BandeiraForm"));
 const TpOperacaoForm = lazy(() => import("@/components/forms/fiscal/TpOperacaoForm"));
 const CfopForm = lazy(() => import("@/components/forms/fiscal/CfopForm"));
 const FiscalGrupoProdutoForm = lazy(() => import("@/components/forms/fiscal/FiscalGrupoProdutoForm"));
@@ -37,6 +42,7 @@ const ListaNfeEmitidaForm = lazy(() => import("@/components/forms/nfe/ListaNfeEm
 const NfeEmitidaForm = lazy(() => import("@/components/forms/nfe/NfeEmitidaForm"));
 const ConsultaTitulosReceberForm = lazy(() => import("@/components/forms/financeiro/ConsultaTitulosReceberForm"));
 const BaixaPorClienteForm = lazy(() => import("@/components/forms/financeiro/BaixaPorClienteForm"));
+const GerarContasReceberForm = lazy(() => import("@/components/forms/financeiro/GerarContasReceberForm"));
 const LiberacaoPedidosForm = lazy(() => import("@/components/forms/financeiro/LiberacaoPedidosForm"));
 const MontagemRotaForm = lazy(() => import("@/components/forms/entrega/MontagemRotaForm"));
 const RotasMontadasForm = lazy(() => import("@/components/forms/entrega/RotasMontadasForm"));
@@ -79,6 +85,7 @@ const TabLoadingFallback = () => (
 );
 
 // Componente estável: evita desmontagem ao re-renderizar AppContent
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TabContent = memo(({ component, params }: { component: string; params?: any }) => {
   const renderContent = () => {
     switch (component) {
@@ -91,13 +98,18 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "grupo-produtos": return <GrupoProdutosForm />;
       case "subgrupo-produtos": return <SubgrupoProdutosForm />;
       case "unidades": return <UnidadeForm />;
+      case "tabelas-preco": return <TabelaPrecoForm />;
       case "estoque": return <EstoqueForm />;
       case "depositos": return <DepositoForm />;
       case "estados": return <EstadoForm />;
       case "cidades": return <CidadeForm />;
       case "rotas": return <RotaForm />;
       case "bancos": return <BancoForm />;
+      case "contas": return <ContaForm />;
+      case "portadores": return <PortadorForm />;
       case "cond-pagamento": return <CondicaoPagamentoForm />;
+      case "operadoras-cartoes": return <OperadoraForm />;
+      case "bandeiras-cartoes": return <BandeiraForm />;
       case "plano-contas": return <PlanoContaForm />;
       case "tipo-operacoes": return <TpOperacaoForm />;
       case "cfop": return <CfopForm />;
@@ -113,6 +125,7 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "nfe-emitidas": return <ListaNfeEmitidaForm initialFilterId={params?.nfe_cabecalho_id} />;
       case "nfe-form": return <NfeEmitidaForm initialId={params?.nfe_cabecalho_id} />;
       case "consulta-titulos-receber": return <ConsultaTitulosReceberForm />;
+      case "gerar-contas-receber": return <GerarContasReceberForm />;
       case "baixa-por-cliente": return <BaixaPorClienteForm />;
       case "liberacao-pedidos": return <LiberacaoPedidosForm />;
       case "montagem-rota": return <MontagemRotaForm />;

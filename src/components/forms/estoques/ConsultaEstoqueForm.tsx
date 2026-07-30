@@ -90,15 +90,15 @@ const ConsultaEstoqueForm: React.FC = () => {
     { key: "nr_doc", label: "Nr. Doc", width: "100px" },
     { 
       key: "produto", 
-      label: "Cód. Prod.", 
-      width: "100px",
-      render: (r: any) => r.produto?.cd_produto || r.produto_id,
-      getValue: (r: any) => r.produto?.cd_produto || r.produto_id
+      label: "Produto", 
+      width: "350px",
+      render: (r: any) => r.produto ? `${r.produto.cd_produto} - ${r.produto.nome}` : String(r.produto_id),
+      getValue: (r: any) => r.produto ? `${r.produto.cd_produto} - ${r.produto.nome}` : String(r.produto_id)
     },
     { 
       key: "deposito", 
       label: "Local / Depósito", 
-      width: "180px",
+      width: "250px",
       render: (r: any) => r.deposito?.nome || String(r.deposito_id),
       getValue: (r: any) => r.deposito?.nome || ""
     },
@@ -195,14 +195,14 @@ const ConsultaEstoqueForm: React.FC = () => {
             <div className="flex items-center gap-1">
               <div 
                 onClick={() => setXOpenProduto(true)}
-                className="bg-card border border-border rounded-md px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-primary/20 w-64 cursor-pointer flex justify-between items-center"
+                className="bg-card border border-border rounded-md px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-primary/20 w-[520px] cursor-pointer flex justify-between items-center overflow-hidden"
               >
-                <span className={XSelectedProdutoId ? "text-foreground" : "text-muted-foreground"}>
+                <span className={`truncate flex-1 text-left mr-2 ${XSelectedProdutoId ? "text-foreground" : "text-muted-foreground"}`}>
                   {XSelectedProdutoId ? `${XSelectedProdutoCd || XSelectedProdutoId} - ${XSelectedProdutoNome}` : "Todos os Produtos"}
                 </span>
                 {XSelectedProdutoId && (
                   <X 
-                    className="w-3 h-3 hover:text-rose-500" 
+                    className="w-3 h-3 hover:text-rose-500 shrink-0" 
                     onClick={(e) => {
                       e.stopPropagation();
                       setXSelectedProdutoId("");
@@ -214,7 +214,7 @@ const ConsultaEstoqueForm: React.FC = () => {
               </div>
               <button 
                 onClick={() => setXOpenProduto(true)}
-                className="p-1.5 border border-border rounded-md hover:bg-accent"
+                className="p-1.5 border border-border rounded-md hover:bg-accent shrink-0"
               >
                 <Search className="w-4 h-4 text-muted-foreground" />
               </button>
@@ -228,7 +228,7 @@ const ConsultaEstoqueForm: React.FC = () => {
             <select 
               value={XSelectedDepositoId} 
               onChange={e => setXSelectedDepositoId(e.target.value ? Number(e.target.value) : "")}
-              className="bg-card border border-border rounded-md px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-primary/20 w-48"
+              className="bg-card border border-border rounded-md px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-primary/20 w-[280px]"
             >
               <option value="">Todos os Locais</option>
               {XDepositos.map(d => (
