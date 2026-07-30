@@ -15,11 +15,15 @@ export function rbSubstituirVariaveis(
       const escapedKey = XNome.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const filterRegex = new RegExp(
         `((?:AND\\s+|OR\\s+|WHERE\\s+)?)` +
-        `([\\w\\.\\(\\)\\"\\'\\\`\\-\\,]+?)` +
-        `\\s*` +
-        `(=|>=|<=|<|>|!=|<>|\\b(?:NOT\\s+)?LIKE\\b|\\b(?:NOT\\s+)?ILIKE\\b|\\b(?:NOT\\s+)?IN\\b)` +
-        `\\s*` +
-        `\\(?\\s*\\{{1,2}\\s*` + escapedKey + `\\s*\\}{1,2}\\s*\\)?`,
+        `(?:` +
+          `\\(\\s*([\\w\\.\\(\\)\\"\\'\\\`\\-\\,]+?)\\s*` +
+          `(=|>=|<=|<|>|!=|<>|\\b(?:NOT\\s+)?LIKE\\b|\\b(?:NOT\\s+)?ILIKE\\b|\\b(?:NOT\\s+)?IN\\b)\\s*` +
+          `\\{{1,2}\\s*` + escapedKey + `\\s*\\}{1,2}(?:::[a-zA-Z0-9_]+)?\\s*\\)` +
+        `|` +
+          `([\\w\\.\\(\\)\\"\\'\\\`\\-\\,]+?)\\s*` +
+          `(=|>=|<=|<|>|!=|<>|\\b(?:NOT\\s+)?LIKE\\b|\\b(?:NOT\\s+)?ILIKE\\b|\\b(?:NOT\\s+)?IN\\b)\\s*` +
+          `\\{{1,2}\\s*` + escapedKey + `\\s*\\}{1,2}(?:::[a-zA-Z0-9_]+)?` +
+        `)`,
         'gi'
       );
       XResult = XResult.replace(filterRegex, (match, prefix) => {
