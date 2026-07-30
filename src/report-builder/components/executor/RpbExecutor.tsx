@@ -382,6 +382,23 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
     }
   };
 
+  const currentLayout = layout || relatorio.layout_json;
+  const pageSize = currentLayout?.pageSize?.toLowerCase() || 'a4';
+  const orientation = currentLayout?.orientation || 'portrait';
+  let iframeWidth = '210mm';
+  let iframeMinHeight = '297mm';
+
+  if (pageSize === 'a3') {
+    iframeWidth = orientation === 'landscape' ? '420mm' : '297mm';
+    iframeMinHeight = orientation === 'landscape' ? '297mm' : '420mm';
+  } else if (pageSize === 'letter') {
+    iframeWidth = orientation === 'landscape' ? '279.4mm' : '215.9mm';
+    iframeMinHeight = orientation === 'landscape' ? '215.9mm' : '279.4mm';
+  } else {
+    iframeWidth = orientation === 'landscape' ? '297mm' : '210mm';
+    iframeMinHeight = orientation === 'landscape' ? '210mm' : '297mm';
+  }
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Diálogo de Busca Dinâmica */}
@@ -508,8 +525,8 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
                 srcDoc={previewHtml}
                 title="Preview do Relatorio"
                 style={{
-                  width: '210mm',
-                  minHeight: '297mm',
+                  width: iframeWidth,
+                  minHeight: iframeMinHeight,
                   border: '1px solid #e2e8f0',
                   boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
                   background: '#ffffff',
