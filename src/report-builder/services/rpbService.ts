@@ -75,6 +75,27 @@ export async function rpbExecuteQuery(
 ): Promise<{ data: any[]; error: string | null }> {
   // Substitui parâmetros no SQL
   let finalSql = sql;
+
+  // Neutraliza filtros vazios (desconsidera a cláusula substituindo por 1=1)
+  for (const [key, value] of Object.entries(params)) {
+    const isEmpty = value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
+    if (isEmpty) {
+      const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const filterRegex = new RegExp(
+        `((?:AND\\s+|OR\\s+|WHERE\\s+)?)` +
+        `([\\w\\.\\(\\)\\"\\'\\\`\\s\\-]+?)` +
+        `\\s*` +
+        `(=|>=|<=|<|>|!=|<>|\\b(?:NOT\\s+)?LIKE\\b|\\b(?:NOT\\s+)?ILIKE\\b|\\b(?:NOT\\s+)?IN\\b)` +
+        `\\s*` +
+        `\\(?\\s*\\{{1,2}\\s*` + escapedKey + `\\s*\\}{1,2}\\s*\\)?`,
+        'gi'
+      );
+      finalSql = finalSql.replace(filterRegex, (match, prefix) => {
+        return prefix ? `${prefix}1=1 ` : '1=1 ';
+      });
+    }
+  }
+
   for (const [key, value] of Object.entries(params)) {
     let escaped: string;
     if (Array.isArray(value)) {

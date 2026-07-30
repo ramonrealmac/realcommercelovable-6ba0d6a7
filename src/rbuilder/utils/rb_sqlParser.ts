@@ -7,6 +7,27 @@ export function rbSubstituirVariaveis(
   XVariaveis: Record<string, string | number | boolean | null>
 ): string {
   let XResult = XQuerySql;
+
+  // Neutraliza filtros vazios (desconsidera a cláusula substituindo por 1=1)
+  for (const [XNome, XValor] of Object.entries(XVariaveis)) {
+    const XIsEmpty = XValor === null || XValor === undefined || XValor === "" || (Array.isArray(XValor) && XValor.length === 0);
+    if (XIsEmpty) {
+      const escapedKey = XNome.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const filterRegex = new RegExp(
+        `((?:AND\\s+|OR\\s+|WHERE\\s+)?)` +
+        `([\\w\\.\\(\\)\\"\\'\\\`\\s\\-]+?)` +
+        `\\s*` +
+        `(=|>=|<=|<|>|!=|<>|\\b(?:NOT\\s+)?LIKE\\b|\\b(?:NOT\\s+)?ILIKE\\b|\\b(?:NOT\\s+)?IN\\b)` +
+        `\\s*` +
+        `\\(?\\s*\\{{1,2}\\s*` + escapedKey + `\\s*\\}{1,2}\\s*\\)?`,
+        'gi'
+      );
+      XResult = XResult.replace(filterRegex, (match, prefix) => {
+        return prefix ? `${prefix}1=1 ` : '1=1 ';
+      });
+    }
+  }
+
   for (const [XNome, XValor] of Object.entries(XVariaveis)) {
     const XPlaceholder = `{{${XNome}}}`;
     let XValorFormatado: string;
