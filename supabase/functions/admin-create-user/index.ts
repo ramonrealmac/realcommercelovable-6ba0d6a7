@@ -286,6 +286,35 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Ação: ATUALIZAR SENHA (Edição de senha pelo admin)
+    if (payload.action === "update-password") {
+      if (!payload.user_id || !payload.password) {
+        return new Response(JSON.stringify({ error: "ID do usuário e senha são obrigatórios" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (payload.password.length < 6) {
+        return new Response(JSON.stringify({ error: "Senha deve ter ao menos 6 caracteres" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { error: updateErr } = await admin.auth.admin.updateUserById(
+        payload.user_id,
+        { password: payload.password }
+      );
+
+      if (updateErr) {
+        return new Response(JSON.stringify({ error: updateErr.message }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Ação 3: CADASTRAR NOVO USUÁRIO (Inserção pelo admin)
     if (!payload.email || !payload.password) {
       return new Response(JSON.stringify({ error: "E-mail e senha são obrigatórios" }), {
