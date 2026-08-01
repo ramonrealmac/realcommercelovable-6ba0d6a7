@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { KeyRound, Upload } from "lucide-react";
+import { KeyRound, Upload, Eye, EyeOff, Lock, X, Loader2 } from "lucide-react";
 import { useAppContext } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import { usePerfis } from "@/hooks/useAccessControl";
@@ -59,6 +59,49 @@ const UsuarioForm: React.FC = () => {
   const [XSenha, setXSenha] = useState("");
   const [XUploading, setXUploading] = useState(false);
   const XFileInputRef = useRef<HTMLInputElement>(null);
+
+  /* ── Change Password Modal States ── */
+  const [XShowAlterarSenhaModal, setXShowAlterarSenhaModal] = useState(false);
+  const [XNovaSenha, setXNovaSenha] = useState("");
+  const [XConfirmarNovaSenha, setXConfirmarNovaSenha] = useState("");
+  const [XShowNovaSenha, setXShowNovaSenha] = useState(false);
+  const [XShowConfirmarNovaSenha, setXShowConfirmarNovaSenha] = useState(false);
+  const [XAlterandoSenha, setXAlterandoSenha] = useState(false);
+
+  const handleAlterarSenha = useCallback(async (userId: string) => {
+    if (!XNovaSenha || XNovaSenha.length < 6) {
+      toast.error("Informe a nova senha com no mínimo 6 caracteres.");
+      return;
+    }
+    if (XNovaSenha !== XConfirmarNovaSenha) {
+      toast.error("A confirmação da senha não confere.");
+      return;
+    }
+
+    setXAlterandoSenha(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-create-user", {
+        body: {
+          action: "update-password",
+          user_id: userId,
+          password: XNovaSenha,
+        },
+      });
+
+      if (error || (data as any)?.error) {
+        throw new Error(error?.message || (data as any)?.error || "Falha ao alterar senha.");
+      }
+
+      toast.success("Senha alterada com sucesso.");
+      setXShowAlterarSenhaModal(false);
+      setXNovaSenha("");
+      setXConfirmarNovaSenha("");
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao alterar a senha.");
+    } finally {
+      setXAlterandoSenha(false);
+    }
+  }, [XNovaSenha, XConfirmarNovaSenha]);
 
   /* ── Vinculos sub-grid ── */
   const [XVinculos, setXVinculos] = useState<IVinculoRow[]>([]);
@@ -396,31 +439,144 @@ const UsuarioForm: React.FC = () => {
   );
 
   return (
-    <StandardCrudForm<IUserRow>
-      config={{
-        XTableName: "profiles",
-        XPrimaryKey: "id",
-        XTitle: "Gestão de Usuários",
-        XDefaultRecord: { id: "", email: "", nm_usuario: "", ds_login: "", ds_foto: "", fl_autorizado: true },
-        XSoftDelete: false,
-      }}
-      XGridCols={XLocalizarColumns}
-      XCtrl={ctrl}
-      renderCadastro={renderCadastro}
-      XToolbarExtras={({ currentRecord, isEditing }) => (
-        !isEditing && currentRecord && (
-          <button
-            type="button"
-            onClick={() => handleResetPassword(currentRecord.email)}
-            title="Resetar Senha"
-            className="p-1.5 rounded transition-colors text-foreground hover:bg-accent flex items-center gap-1 text-xs"
-          >
-            <KeyRound size={16} />
-            <span>Resetar Senha</span>
-          </button>
-        )
+    <>
+      <StandardCrudForm<IUserRow>
+        config={{
+          XTableName: "profiles",
+          XPrimaryKey: "id",
+          XTitle: "Gestão de Usuários",
+          XDefaultRecord: { id: "", email: "", nm_usuario: "", ds_login: "", ds_foto: "", fl_autorizado: true },
+          XSoftDelete: false,
+        }}
+        XGridCols={XLocalizarColumns}
+        XCtrl={ctrl}
+        renderCadastro={renderCadastro}
+        XToolbarExtras={({ currentRecord, isEditing }) => (
+          !isEditing && currentRecord && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => handleResetPassword(currentRecord.email)}
+                title="Resetar Senha por E-mail"
+                className="p-1.5 rounded transition-colors text-foreground hover:bg-accent flex items-center gap-1 text-xs"
+              >
+                <KeyRound size={16} />
+                <span>Resetar Senha (E-mail)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setXShowAlterarSenhaModal(true)}
+                title="Alterar Senha Manualmente"
+                className="p-1.5 rounded transition-colors text-foreground hover:bg-accent flex items-center gap-1 text-xs"
+              >
+                <KeyRound size={16} className="text-amber-500" />
+                <span>Alterar Senha</span>
+              </button>
+            </div>
+          )
+        )}
+      />
+
+      {XShowAlterarSenhaModal && ctrl.XCurrentRecord && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-secondary/10">
+              <div>
+                <h3 className="font-bold text-sm">Alterar Senha</h3>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Defina uma nova senha para {ctrl.XCurrentRecord.nm_usuario || ctrl.XCurrentRecord.email}</p>
+              </div>
+              <button 
+                onClick={() => {
+                  setXShowAlterarSenhaModal(false);
+                  setXNovaSenha("");
+                  setXConfirmarNovaSenha("");
+                }} 
+                className="p-1 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-slate-500 uppercase">Nova Senha</label>
+                <div className="relative">
+                  <input
+                    type={XShowNovaSenha ? "text" : "password"}
+                    value={XNovaSenha}
+                    onChange={e => setXNovaSenha(e.target.value)}
+                    className="w-full border border-border rounded-md pl-3 pr-10 py-2 text-sm bg-card focus:ring-2 focus:ring-ring outline-none"
+                    placeholder="Mínimo 6 caracteres"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setXShowNovaSenha(!XShowNovaSenha)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {XShowNovaSenha ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-slate-500 uppercase">Confirmar Nova Senha</label>
+                <div className="relative">
+                  <input
+                    type={XShowConfirmarNovaSenha ? "text" : "password"}
+                    value={XConfirmarNovaSenha}
+                    onChange={e => setXConfirmarNovaSenha(e.target.value)}
+                    className="w-full border border-border rounded-md pl-3 pr-10 py-2 text-sm bg-card focus:ring-2 focus:ring-ring outline-none"
+                    placeholder="Repita a senha digitada acima"
+                    onKeyDown={e => {
+                      if (e.key === "Enter" && !XAlterandoSenha) {
+                        handleAlterarSenha(ctrl.XCurrentRecord!.id);
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setXShowConfirmarNovaSenha(!XShowConfirmarNovaSenha)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {XShowConfirmarNovaSenha ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 px-5 py-3 border-t border-border bg-muted/20">
+              <button
+                type="button"
+                onClick={() => {
+                  setXShowAlterarSenhaModal(false);
+                  setXNovaSenha("");
+                  setXConfirmarNovaSenha("");
+                }}
+                className="px-4 py-2 text-xs font-semibold rounded-md border border-border bg-card hover:bg-accent text-foreground transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={XAlterandoSenha}
+                onClick={() => handleAlterarSenha(ctrl.XCurrentRecord!.id)}
+                className="px-4 py-2 text-xs font-semibold rounded-md bg-primary hover:bg-primary/90 text-primary-foreground transition-all flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {XAlterandoSenha ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Salvando...</span>
+                  </>
+                ) : (
+                  <span>Salvar Senha</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
-    />
+    </>
   );
 };
 

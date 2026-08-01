@@ -21,6 +21,7 @@ export type RpbBandName    =
 // ── Estilo de texto ──────────────────────────────────────────
 export interface RpbStyle {
   fontSize:    number;       // pt
+  fontFamily?: string;
   bold:        boolean;
   italic:      boolean;
   underline:   boolean;
@@ -131,6 +132,9 @@ export interface RpbSubreportComp extends RpbBaseComp {
   showTitleBar:  boolean;            // exibe barra de título antes da tabela
   titleText:     string;             // ex: "Formas de Pagamento"
   emptyMessage:  string;             // mensagem quando não há linhas
+  tipoLayout?:   'tabela' | 'custom';
+  rowHeight?:    number;             // em mm para layout customizado
+  customComponents?: RpbComponent[]; // elementos do layout customizado
 }
 
 export type RpbComponent =

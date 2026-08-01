@@ -655,6 +655,17 @@ const RpbProperties: React.FC<Props> = ({ component, queryColumns, onChange, onD
                     onChange={e => updStyle({ color: e.target.value })} />
                 </div>
               </div>
+              <div>
+                <span className="text-[9px] text-muted-foreground">Tipo de Fonte</span>
+                <Select value={s.fontFamily || ''} onChange={e => updStyle({ fontFamily: e.target.value || undefined })}>
+                  <option value="">Padrão (Sistema)</option>
+                  <option value="'Arial', sans-serif">Arial</option>
+                  <option value="'Times New Roman', serif">Times New Roman</option>
+                  <option value="'Courier New', monospace">Courier New</option>
+                  <option value="'Georgia', serif">Georgia</option>
+                  <option value="'Verdana', sans-serif">Verdana</option>
+                </Select>
+              </div>
               <div className="flex gap-2 flex-wrap">
                 {[['bold','N'],['italic','I'],['underline','_']].map(([k, l]) => (
                   <button key={k}

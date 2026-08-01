@@ -125,8 +125,11 @@ function textStyle(s: typeof DEFAULT_STYLE): string {
     : s.border === 'all' ? `border: 1px solid ${s.borderColor};`
     : `border-${s.border}: 1px solid ${s.borderColor};`;
 
+  const fontFam = (s as any).fontFamily ? `font-family: ${(s as any).fontFamily};` : '';
+
   return [
     `font-size: ${s.fontSize}pt;`,
+    fontFam,
     s.bold      ? 'font-weight: bold;'   : '',
     s.italic    ? 'font-style: italic;'  : '',
     s.underline ? 'text-decoration: underline;' : '',
@@ -165,7 +168,8 @@ function renderComponent(
         : `border-${s.border}:1px solid ${s.borderColor};`;
       const bgStyle = s.bgColor !== 'transparent' ? `background-color:${s.bgColor};` : '';
       const justify = s.align === 'center' ? 'center' : s.align === 'right' ? 'flex-end' : 'flex-start';
-      return `<div style="${pos} display:flex; align-items:center; justify-content:${justify}; ${bgStyle} ${border} padding:${s.padding}px; font-size:${s.fontSize}pt; ${
+      const fontFam = s.fontFamily ? `font-family:${s.fontFamily};` : '';
+      return `<div style="${pos} display:flex; align-items:center; justify-content:${justify}; ${bgStyle} ${border} ${fontFam} padding:${s.padding}px; font-size:${s.fontSize}pt; ${
         s.bold ? 'font-weight:bold;' : ''}${ s.italic ? 'font-style:italic;' : ''}${
         s.underline ? 'text-decoration:underline;' : ''} color:${s.color}; white-space:nowrap;">${txt}</div>`;
     }
@@ -203,8 +207,9 @@ function renderComponent(
       const s = c.style || DEFAULT_STYLE;
       const justify = s.align === 'center' ? 'center' : s.align === 'right' ? 'flex-end' : 'flex-start';
       const bgStyle = s.bgColor !== 'transparent' ? `background-color:${s.bgColor};` : '';
+      const fontFam = s.fontFamily ? `font-family:${s.fontFamily};` : '';
       const formattedVal = formatValue(val, c.format, { decimals: (c as any).decimals, dateFormat: (c as any).dateFormat as RpbDateFormat });
-      return `<div style="${pos} display:flex; align-items:center; justify-content:${justify}; gap:4px; ${bgStyle} font-size:${s.fontSize}pt; ${
+      return `<div style="${pos} display:flex; align-items:center; justify-content:${justify}; gap:4px; ${bgStyle} ${fontFam} font-size:${s.fontSize}pt; ${
         s.bold ? 'font-weight:bold;' : ''} color:${s.color};">
         <span style="color:#555;">${c.labelText}</span>
         <span style="font-weight:bold;">${formattedVal}</span>
@@ -290,15 +295,29 @@ function renderComponent(
       const fontSize = rs.fontSize || 9;
 
       const titleHtml = c.showTitleBar
-        ? `<div style="font-size:${hs.fontSize || 9}pt;font-weight:bold;padding:3px 4px;
+          ? `<div style="font-size:${hs.fontSize || 9}pt;font-weight:bold;padding:3px 4px;
              background-color:${hs.bgColor !== 'transparent' ? hs.bgColor : '#f1f5f9'};
              border:1px solid ${hs.borderColor || '#ddd'};margin-bottom:1px;">${c.titleText || ''}</div>`
-        : '';
+          : '';
 
       if (!subRows.length) {
         return `${titleHtml}<div style="font-size:${fontSize}pt;color:#888;padding:2px 4px;font-style:italic;">${c.emptyMessage || 'Nenhum registro'}</div>`;
       }
 
+      // Renderização Customizada (Livre)
+      if (c.tipoLayout === 'custom') {
+        const customComps = c.customComponents || [];
+        const customHtml = subRows.map((subRow, i) => {
+          const bg = i % 2 === 1 && c.altRowBg && c.altRowBg !== 'transparent'
+            ? `background-color:${c.altRowBg};` : '';
+          return `<div style="position:relative;width:100%;height:${c.rowHeight || 15}mm;${bg}overflow:hidden;page-break-inside:avoid;">
+            ${customComps.map(comp => renderComponent(comp, subRows, subRow, extraVars, undefined, undefined)).join('')}
+          </div>`;
+        }).join('');
+        return `${titleHtml}<div style="width:100%;display:flex;flex-direction:column;">${customHtml}</div>`;
+      }
+
+      // Renderização Tabela (padrão)
       const colgroup = cols.map(col => `<col style="width:${col.w}mm" />`).join('');
       const thead = c.showHeader && cols.length ? `
         <thead><tr>${cols.map(col => {

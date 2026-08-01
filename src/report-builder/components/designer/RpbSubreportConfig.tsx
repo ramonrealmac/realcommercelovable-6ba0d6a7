@@ -69,7 +69,7 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
     { key: 'geral',   label: 'Geral',    icon: <Settings2 size={13} />   },
     { key: 'sql',     label: 'SQL',      icon: <LayoutList size={13} />  },
     { key: 'links',   label: 'Vínculos', icon: <Link2 size={13} />       },
-    { key: 'colunas', label: 'Colunas',  icon: <Table2 size={13} />      },
+    { key: 'colunas', label: draft.tipoLayout === 'custom' ? 'Layout Custom.' : 'Colunas',  icon: <Table2 size={13} />      },
   ];
 
   return (
@@ -107,9 +107,11 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
               {t.key === 'links' && draft.links.length > 0 &&
                 <span className="ml-1 bg-primary/10 text-primary rounded-full px-1.5 py-0 text-[10px] font-bold">{draft.links.length}</span>
               }
-              {t.key === 'colunas' && draft.columns.length > 0 &&
-                <span className="ml-1 bg-emerald-100 text-emerald-700 rounded-full px-1.5 py-0 text-[10px] font-bold">{draft.columns.length}</span>
-              }
+              {t.key === 'colunas' && (
+                draft.tipoLayout === 'custom'
+                  ? (draft.customComponents?.length || 0) > 0 && <span className="ml-1 bg-emerald-100 text-emerald-700 rounded-full px-1.5 py-0 text-[10px] font-bold">{draft.customComponents?.length}</span>
+                  : draft.columns.length > 0 && <span className="ml-1 bg-emerald-100 text-emerald-700 rounded-full px-1.5 py-0 text-[10px] font-bold">{draft.columns.length}</span>
+              )}
             </button>
           ))}
         </div>
@@ -139,10 +141,37 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
                   <input type="checkbox" checked={draft.showTitleBar} onChange={e => patch({ showTitleBar: e.target.checked })} />
                   Exibir barra de título
                 </label>
-                <label className="flex items-center gap-2 text-xs cursor-pointer">
-                  <input type="checkbox" checked={draft.showHeader} onChange={e => patch({ showHeader: e.target.checked })} />
-                  Exibir cabeçalho das colunas
-                </label>
+                {draft.tipoLayout !== 'custom' && (
+                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+                    <input type="checkbox" checked={draft.showHeader} onChange={e => patch({ showHeader: e.target.checked })} />
+                    Exibir cabeçalho das colunas
+                  </label>
+                )}
+              </div>
+              <div className="border-t border-border pt-3 grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground block mb-1">Tipo de Layout</label>
+                  <select
+                    className={input}
+                    value={draft.tipoLayout || 'tabela'}
+                    onChange={e => patch({ tipoLayout: e.target.value as any })}
+                  >
+                    <option value="tabela">Tabela (Grade de Colunas)</option>
+                    <option value="custom">Customizado (Elementos Livres)</option>
+                  </select>
+                </div>
+                {draft.tipoLayout === 'custom' && (
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground block mb-1">Altura da Linha/Registro (mm)</label>
+                    <input
+                      type="number"
+                      className={input}
+                      value={draft.rowHeight ?? 15}
+                      onChange={e => patch({ rowHeight: parseFloat(e.target.value) || 15 })}
+                      placeholder="15"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Resumo de status */}
@@ -163,7 +192,9 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {draft.columns.length > 0 ? (
+                  {draft.tipoLayout === 'custom' ? (
+                    <span className="text-emerald-600 font-medium">✓ Layout customizado com {draft.customComponents?.length || 0} elemento(s)</span>
+                  ) : draft.columns.length > 0 ? (
                     <span className="text-emerald-600 font-medium">✓ {draft.columns.length} coluna(s) configurada(s)</span>
                   ) : (
                     <span className="text-amber-600 font-medium">⚠ Sem colunas — detecte na aba SQL</span>
@@ -289,7 +320,7 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
           )}
 
           {/* ── Aba Colunas ───────────────────────────────────── */}
-          {activeTab === 'colunas' && (
+          {activeTab === 'colunas' && draft.tipoLayout !== 'custom' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
@@ -350,6 +381,262 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === 'colunas' && draft.tipoLayout === 'custom' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold">Layout Customizado (Elementos Livres)</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Adicione e posicione caixas de texto, linhas, imagens e retângulos por registro.</p>
+                </div>
+                <div className="flex gap-1">
+                  {(['text', 'line', 'box', 'image'] as const).map(type => (
+                    <button
+                      key={type}
+                      onClick={() => {
+                        const newComp = {
+                          id: 'sub_' + Math.random().toString(36).substring(2, 9),
+                          type,
+                          x: 0, y: 0, w: type === 'line' ? 50 : 40, h: type === 'line' ? 2 : 5,
+                          ...(type === 'text' && { content: 'Texto', style: { ...DEFAULT_STYLE } }),
+                          ...(type === 'line' && { orientation: 'horizontal', color: '#1a1a1a', thickness: 1 }),
+                          ...(type === 'box' && { borderColor: '#cccccc', borderThickness: 1, bgColor: 'transparent', borderRadius: 0 }),
+                          ...(type === 'image' && { src: '', fit: 'contain' })
+                        } as any;
+                        patch({ customComponents: [...(draft.customComponents || []), newComp] });
+                      }}
+                      className="px-2.5 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
+                    >
+                      + {type === 'text' ? 'Texto' : type === 'line' ? 'Linha' : type === 'box' ? 'Retângulo' : 'Imagem'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {(!draft.customComponents || draft.customComponents.length === 0) && (
+                <div className="text-center py-10 border-2 border-dashed border-border rounded-lg text-muted-foreground">
+                  <LayoutList className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">Nenhum elemento no layout</p>
+                  <p className="text-xs mt-1">Adicione elementos acima para começar a desenhar o sub-relatório.</p>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {(draft.customComponents || []).map((comp, i) => {
+                  const s = (comp as any).style || DEFAULT_STYLE;
+                  return (
+                    <div key={comp.id} className="p-3 border border-border rounded-lg bg-secondary/15 space-y-2">
+                      <div className="flex items-center justify-between border-b border-border pb-1.5">
+                        <span className="text-xs font-bold text-primary capitalize">
+                          {comp.type === 'text' ? 'Caixa de Texto' : comp.type === 'line' ? 'Linha' : comp.type === 'box' ? 'Retângulo' : 'Imagem'}
+                        </span>
+                        <button
+                          onClick={() => patch({ customComponents: draft.customComponents?.filter((_, idx) => idx !== i) })}
+                          className="text-[10px] text-destructive hover:bg-destructive/10 px-1.5 py-0.5 rounded"
+                        >
+                          Remover
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-2 text-xs">
+                        <div>
+                          <label className="text-[10px] text-muted-foreground block">Posição X (mm)</label>
+                          <input type="number" className={input} value={comp.x} onChange={e => {
+                            const val = parseFloat(e.target.value) || 0;
+                            patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, x: val } : c) });
+                          }} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-muted-foreground block">Posição Y (mm)</label>
+                          <input type="number" className={input} value={comp.y} onChange={e => {
+                            const val = parseFloat(e.target.value) || 0;
+                            patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, y: val } : c) });
+                          }} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-muted-foreground block">Largura W (mm)</label>
+                          <input type="number" className={input} value={comp.w} onChange={e => {
+                            const val = parseFloat(e.target.value) || 0;
+                            patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, w: val } : c) });
+                          }} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-muted-foreground block">Altura H (mm)</label>
+                          <input type="number" className={input} value={comp.h} onChange={e => {
+                            const val = parseFloat(e.target.value) || 0;
+                            patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, h: val } : c) });
+                          }} />
+                        </div>
+                      </div>
+
+                      {/* Especificidades de cada tipo */}
+                      {comp.type === 'text' && (
+                        <div className="space-y-2 pt-1.5 border-t border-border/50">
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="col-span-2">
+                              <label className="text-[10px] text-muted-foreground block">Conteúdo (ex: {'{campo_filho}'})</label>
+                              <input className={input} value={(comp as any).content || ''} onChange={e => {
+                                const val = e.target.value;
+                                patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, content: val } : c) });
+                              }} />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-muted-foreground block">Fonte</label>
+                              <select className={input} value={s.fontFamily || ''} onChange={e => {
+                                const val = e.target.value || undefined;
+                                patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, style: { ...s, fontFamily: val } } : c) });
+                              }}>
+                                <option value="">Padrão (Sistema)</option>
+                                <option value="'Arial', sans-serif">Arial</option>
+                                <option value="'Times New Roman', serif">Times New Roman</option>
+                                <option value="'Courier New', monospace">Courier New</option>
+                                <option value="'Georgia', serif">Georgia</option>
+                                <option value="'Verdana', sans-serif">Verdana</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-5 gap-2 text-xs items-end">
+                            <div>
+                              <label className="text-[10px] text-muted-foreground block">Tamanho (pt)</label>
+                              <input type="number" className={input} value={s.fontSize || 9} onChange={e => {
+                                const val = parseInt(e.target.value) || 9;
+                                patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, style: { ...s, fontSize: val } } : c) });
+                              }} />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-muted-foreground block">Cor</label>
+                              <input type="color" className="w-full h-6 border rounded" value={s.color || '#1a1a1a'} onChange={e => {
+                                const val = e.target.value;
+                                patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, style: { ...s, color: val } } : c) });
+                              }} />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-muted-foreground block">Alinhamento</label>
+                              <select className={input} value={s.align} onChange={e => {
+                                const val = e.target.value as any;
+                                patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, style: { ...s, align: val } } : c) });
+                              }}>
+                                <option value="left">Esquerda</option>
+                                <option value="center">Centro</option>
+                                <option value="right">Direita</option>
+                              </select>
+                            </div>
+                            <div className="flex gap-1 justify-center">
+                              <button
+                                onClick={() => {
+                                  patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, style: { ...s, bold: !s.bold } } : c) });
+                                }}
+                                className={`px-2 py-0.5 rounded border ${s.bold ? 'bg-primary text-primary-foreground' : 'bg-card'}`}
+                              >N</button>
+                              <button
+                                onClick={() => {
+                                  patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, style: { ...s, italic: !s.italic } } : c) });
+                                }}
+                                className={`px-2 py-0.5 rounded border ${s.italic ? 'bg-primary text-primary-foreground' : 'bg-card'}`}
+                              >I</button>
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-muted-foreground block">Fundo</label>
+                              <input type="color" className="w-full h-6 border rounded" value={s.bgColor === 'transparent' ? '#ffffff' : s.bgColor} onChange={e => {
+                                const val = e.target.value;
+                                patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, style: { ...s, bgColor: val } } : c) });
+                              }} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {comp.type === 'line' && (
+                        <div className="grid grid-cols-3 gap-2 pt-1.5 border-t border-border/50 text-xs">
+                          <div>
+                            <label className="text-[10px] text-muted-foreground block">Orientação</label>
+                            <select className={input} value={(comp as any).orientation} onChange={e => {
+                              const val = e.target.value as any;
+                              patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, orientation: val } : c) });
+                            }}>
+                              <option value="horizontal">Horizontal</option>
+                              <option value="vertical">Vertical</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-muted-foreground block">Espessura (px)</label>
+                            <input type="number" className={input} value={(comp as any).thickness} onChange={e => {
+                              const val = parseInt(e.target.value) || 1;
+                              patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, thickness: val } : c) });
+                            }} />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-muted-foreground block">Cor</label>
+                            <input type="color" className="w-full h-6 border rounded" value={(comp as any).color || '#1a1a1a'} onChange={e => {
+                              const val = e.target.value;
+                              patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, color: val } : c) });
+                            }} />
+                          </div>
+                        </div>
+                      )}
+
+                      {comp.type === 'box' && (
+                        <div className="grid grid-cols-4 gap-2 pt-1.5 border-t border-border/50 text-xs">
+                          <div>
+                            <label className="text-[10px] text-muted-foreground block">Cor da Borda</label>
+                            <input type="color" className="w-full h-6 border rounded" value={(comp as any).borderColor || '#cccccc'} onChange={e => {
+                              const val = e.target.value;
+                              patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, borderColor: val } : c) });
+                            }} />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-muted-foreground block">Espessura Borda (px)</label>
+                            <input type="number" className={input} value={(comp as any).borderThickness} onChange={e => {
+                              const val = parseInt(e.target.value) || 1;
+                              patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, borderThickness: val } : c) });
+                            }} />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-muted-foreground block">Cor de Fundo</label>
+                            <input type="color" className="w-full h-6 border rounded" value={(comp as any).bgColor === 'transparent' ? '#ffffff' : (comp as any).bgColor} onChange={e => {
+                              const val = e.target.value;
+                              patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, bgColor: val } : c) });
+                            }} />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-muted-foreground block">Arredondamento (px)</label>
+                            <input type="number" className={input} value={(comp as any).borderRadius} onChange={e => {
+                              const val = parseInt(e.target.value) || 0;
+                              patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, borderRadius: val } : c) });
+                            }} />
+                          </div>
+                        </div>
+                      )}
+
+                      {comp.type === 'image' && (
+                        <div className="grid grid-cols-2 gap-2 pt-1.5 border-t border-border/50 text-xs">
+                          <div>
+                            <label className="text-[10px] text-muted-foreground block">URL ou Caminho</label>
+                            <input className={input} value={(comp as any).src || ''} onChange={e => {
+                              const val = e.target.value;
+                              patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, src: val } : c) });
+                            }} />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-muted-foreground block">Ajuste da Imagem</label>
+                            <select className={input} value={(comp as any).fit} onChange={e => {
+                              const val = e.target.value as any;
+                              patch({ customComponents: draft.customComponents?.map((c, idx) => idx === i ? { ...c, fit: val } : c) });
+                            }}>
+                              <option value="contain">Conter</option>
+                              <option value="cover">Cobrir</option>
+                              <option value="fill">Esticar</option>
+                            </select>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
