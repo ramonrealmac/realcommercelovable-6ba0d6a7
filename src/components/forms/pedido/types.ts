@@ -23,6 +23,7 @@ export interface IMovimento {
   vl_despesa: number;
   vl_seguro: number;
   vl_outro: number;
+  tabela_preco_id: number | null;
   rota_id: number | null;
   cidade_id: number | null;
   cep_entrega: string | null;

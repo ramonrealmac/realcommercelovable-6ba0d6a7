@@ -252,8 +252,8 @@ const EstoqueForm: React.FC = () => {
     },
     {
       key: "deposito_nome", label: "Depósito", width: "160px",
-      render: (r: IEstoque) => `${r.deposito_id} - ${XDepositoMap[r.deposito_id] || ""}`,
-      getValue: (r: IEstoque) => `${r.deposito_id} - ${XDepositoMap[r.deposito_id] || ""}`,
+      render: (r: IEstoque) => XDepositoMap[r.deposito_id] || "",
+      getValue: (r: IEstoque) => XDepositoMap[r.deposito_id] || "",
     },
     {
       key: "endereco", label: "Endereço", width: "120px",
@@ -292,18 +292,19 @@ const EstoqueForm: React.FC = () => {
     },
   ], [XProdutoCdMap, XProdutoDescMap, XDepositoMap, XEmpresaMap, XDepositoEnderecoMap, fmtQty]);
 
-  // Keep custom filter for estoque since it uses getValue/render
-  const XFiltered = XEstoques.filter(e => {
-    for (const col of XColumns) {
-      const fv = XFilterValues[col.key] || "";
-      if (!fv) continue;
-      let val = "";
-      if (col.getValue) val = String(col.getValue(e));
-      else if (col.render) val = String(col.render(e));
-      else val = String((e as any)[col.key] ?? "");
+  // Determine if there is any active filter value
+  const hasActiveFilters = useMemo(() => {
+    return Object.values(XFilterValues).some(v => v !== undefined && v !== null && v.trim().length > 0);
+  }, [XFilterValues]);
 
-      const normalizedVal = val.toLowerCase().trim();
-      const normalizedFv = fv.toLowerCase().trim();
+  // Keep custom filter for estoque since it uses getValue/render
+  const XFiltered = useMemo(() => {
+    if (!hasActiveFilters) return [];
+
+    // Check if any active alphabetical filter has less than 3 characters
+    for (const col of XColumns) {
+      const fv = (XFilterValues[col.key] || "").trim();
+      if (!fv) continue;
 
       const k = col.key.toLowerCase();
       const l = typeof col.label === "string" ? col.label.toLowerCase() : "";
@@ -320,14 +321,58 @@ const EstoqueForm: React.FC = () => {
         l.includes("código") ||
         l.includes("cód.");
 
-      if (isNumericCode) {
-        if (normalizedVal !== normalizedFv) return false;
-      } else {
-        if (!normalizedVal.includes(normalizedFv)) return false;
+      const isNumericValue = [
+        "estoque_fisico",
+        "estoque_reservado",
+        "estoque_disponivel",
+        "estoque_minimo",
+        "estoque_padrao",
+        "estoque_inventario"
+      ].includes(col.key);
+
+      const isAlphabetical = !isNumericCode && !isNumericValue;
+
+      if (isAlphabetical && fv.length < 3) {
+        return [];
       }
     }
-    return true;
-  });
+
+    return XEstoques.filter(e => {
+      for (const col of XColumns) {
+        const fv = XFilterValues[col.key] || "";
+        if (!fv) continue;
+        let val = "";
+        if (col.getValue) val = String(col.getValue(e));
+        else if (col.render) val = String(col.render(e));
+        else val = String((e as any)[col.key] ?? "");
+
+        const normalizedVal = val.toLowerCase().trim();
+        const normalizedFv = fv.toLowerCase().trim();
+
+        const k = col.key.toLowerCase();
+        const l = typeof col.label === "string" ? col.label.toLowerCase() : "";
+        const isNumericCode =
+          k === "codigo" ||
+          k === "cd_codigo" ||
+          k === "cd_produto" ||
+          k === "cd_cadastro" ||
+          k === "produto_id" ||
+          k === "cadastro_id" ||
+          k === "deposito_id" ||
+          k.startsWith("cd_") ||
+          (k.endsWith("_id") && k !== "unidade_id") ||
+          l.includes("código") ||
+          l.includes("cód.");
+
+        if (isNumericCode) {
+          if (normalizedVal !== normalizedFv) return false;
+        } else {
+          if (!normalizedVal.startsWith(normalizedFv)) return false;
+        }
+      }
+      return true;
+    });
+  }, [XEstoques, XFilterValues, XColumns, hasActiveFilters]);
 
   const handleIncluir = () => {
     setXEditMode("insert");
@@ -600,6 +645,17 @@ const EstoqueForm: React.FC = () => {
           onFilterChange={(key, value) => setXFilterValues(prev => ({ ...prev, [key]: value }))}
           maxHeight="calc(100vh - 200px)"
           exportTitle="Estoque"
+          toolbarRight={
+            <button
+              onClick={() => {
+                setXFilterValues({});
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-transparent text-slate-600 dark:text-slate-400 hover:bg-accent hover:text-rose-600 hover:border-rose-200 transition-all"
+              title="Limpar Filtros"
+            >
+              <X size={14} className="text-rose-500" /> Limpar Filtros
+            </button>
+          }
         />
       </div>
 

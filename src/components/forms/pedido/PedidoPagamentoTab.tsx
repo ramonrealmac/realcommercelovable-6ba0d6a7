@@ -154,8 +154,8 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
   }, [XEmpresaId, XEmpresaMatrizId]);
 
   const vlDesconto = Number(pedido?.vl_desconto || 0);
-  const totalPedido = Number(totalPedidoProp ?? pedido?.vl_movimento ?? 0);
-  const subtotal = totalPedido + vlDesconto;
+  const subtotal = Number(totalPedidoProp ?? pedido?.vl_produto ?? ((pedido?.vl_movimento ?? 0) + vlDesconto));
+  const totalPedido = Math.max(0, subtotal - vlDesconto);
   const totalPago = XPagtos.reduce((a, p) => a + Number(p.vl_pagamento || 0), 0);
 
 
@@ -163,9 +163,14 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
   const handleConfirmarPagamento = async (linhas: IPagamentoLinha[], vlDesc: number, pcDesc: number, enviarAoCaixa?: boolean) => {
     if (!pedido?.movimento_id) return;
 
-    // Atualiza o desconto no cabeçalho
+    // Atualiza o desconto e o valor total no cabeçalho do pedido
+    const newVlMovimento = Math.max(0, subtotal - vlDesc);
     const { error: errMov } = await supabase.from("movimento")
-      .update({ vl_desconto: vlDesc, pc_desconto: pcDesc })
+      .update({ 
+        vl_desconto: vlDesc, 
+        pc_desconto: pcDesc,
+        vl_movimento: newVlMovimento
+      })
       .eq("movimento_id", pedido.movimento_id);
     
     if (errMov) { toast.error("Erro ao atualizar desconto: " + errMov.message); return; }

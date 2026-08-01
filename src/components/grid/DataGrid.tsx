@@ -36,6 +36,7 @@ interface DataGridProps {
   headerClassName?: string;
   onSortChange?: (sorts: ISortItem[]) => void;
   sorts?: ISortItem[];
+  minWidth?: string;
 }
 
 // --- Sorting logic ---
@@ -235,6 +236,7 @@ const DataGrid: React.FC<DataGridProps> = ({
   headerClassName,
   onSortChange,
   sorts,
+  minWidth = "500px",
 }) => {
   const [XInternalSorts, setXInternalSorts] = useState<ISortItem[]>([]);
   const XSorts = sorts !== undefined ? sorts : XInternalSorts;
@@ -432,7 +434,7 @@ const DataGrid: React.FC<DataGridProps> = ({
           handleKeyDown(e);
         }}
       >
-        <div className="min-w-[500px] overflow-y-auto" style={{ maxHeight }}>
+        <div className="overflow-y-auto" style={{ maxHeight, minWidth }}>
         {/* Filters */}
         {showFilters && filterValues && onFilterChange && (
           <div className="bg-card border-b border-border sticky top-0 z-20" style={{ display: "grid", gridTemplateColumns: gridTemplate }}>
@@ -456,14 +458,14 @@ const DataGrid: React.FC<DataGridProps> = ({
 
         {/* Header */}
         <div
-          className={`${headerClassName || "bg-grid-header text-grid-header-foreground text-xs font-semibold"} sticky ${showFilters && filterValues ? 'top-[26px]' : 'top-0'} z-10`}
+          className={`${headerClassName || "bg-grid-header text-grid-header-foreground text-[11px] font-semibold"} sticky ${showFilters && filterValues ? 'top-[26px]' : 'top-0'} z-10`}
           style={{ display: "grid", gridTemplateColumns: gridTemplate }}
         >
           {XVisibleCols.map(c => (
             <div
               key={c.key}
               ref={(el) => { headerRefs.current[c.key] = el; }}
-              className={`relative px-2 py-1.5 border-r last:border-r-0 cursor-pointer select-none flex items-center min-w-0 truncate ${headerClassName ? 'border-current/10' : 'border-primary-foreground/20'}`}
+              className={`relative px-2 py-1.5 border-r last:border-r-0 cursor-pointer select-none flex items-center min-w-0 truncate text-[11px] ${headerClassName ? 'border-current/10' : 'border-primary-foreground/20'}`}
               style={{ justifyContent: c.align === "right" ? "flex-end" : c.align === "center" ? "center" : "flex-start" }}
               onClick={() => handleSort(c.key)}
             >
@@ -490,7 +492,7 @@ const DataGrid: React.FC<DataGridProps> = ({
             <div
               key={i}
               id={`grid-row-${i}`}
-              className={`text-xs cursor-pointer transition-colors ${
+              className={`text-[11px] cursor-pointer transition-colors ${
                 selectedIdx === i
                   ? "bg-grid-selected text-grid-selected-foreground"
                   : i % 2 === 0
@@ -504,7 +506,7 @@ const DataGrid: React.FC<DataGridProps> = ({
               {XVisibleCols.map(c => (
                 <div
                   key={c.key}
-                  className="px-2 py-1.5 border-r border-border last:border-r-0 min-w-0 overflow-hidden"
+                  className="px-2 py-1.5 border-r border-border last:border-r-0 min-w-0 overflow-hidden whitespace-nowrap truncate"
                   style={{ textAlign: c.align || "left" }}
                 >
                   {(() => {

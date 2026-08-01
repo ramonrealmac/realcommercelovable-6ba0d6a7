@@ -93,7 +93,11 @@ const XBarraGridCols: IGridColumn[] = [
   { key: "cod_barra", label: "Código de Barras", width: "1fr" },
 ];
 
-const ProdutoForm: React.FC = () => {
+interface IProdutoFormProps {
+  initialProductId?: number;
+}
+
+const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
   const { XEmpresaId, XEmpresaMatrizId, XEmpresas = [], closeTab, XTabs, XActiveTabId } = useAppContext();
 
   const XCurrentEmpresa = useMemo(() => {
@@ -318,13 +322,35 @@ const ProdutoForm: React.FC = () => {
         setXInnerTab("cadastro");
         setXSubTab("cadastro");
       }, 0);
+    } else if (initialProductId) {
+      // Abre com o produto selecionado
+      const loadSingleProduct = async () => {
+        try {
+          setXLoading(true);
+          await loadLookups();
+          const { data: XRows, error } = await db.from("produto")
+            .select("*")
+            .eq("produto_id", initialProductId)
+            .eq("excluido", false);
+          if (error) throw error;
+          setXData(XRows || []);
+          setXCurrentIdx(0);
+          setXFormMode("view");
+        } catch (e) {
+          console.error("Erro ao carregar produto inicial:", e);
+          toast.error("Erro ao carregar o produto selecionado.");
+        } finally {
+          setXLoading(false);
+        }
+      };
+      loadSingleProduct();
     } else {
       loadData();
       loadLookups();
       setXCurrentIdx(0);
       setXFormMode("view");
     }
-  }, [XEmpresaId, loadLookups, loadData]);
+  }, [XEmpresaId, loadLookups, loadData, initialProductId]);
 
   const isFirstRender = useRef(true);
 

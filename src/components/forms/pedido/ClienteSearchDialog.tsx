@@ -39,6 +39,7 @@ export interface IClienteRow {
   endereco_cidade_id?: number | null;
   endereco_bairro?: string | null;
   endereco_logradouro?: string | null;
+  tabela_preco_id?: number | null;
 }
 
 interface IProps {
@@ -112,7 +113,7 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
   const buscar = useCallback(async (termo: string) => {
     setXLoading(true);
     let q = supabase.from("cadastro")
-      .select("cadastro_id, cd_cadastro, cnpj, razao_social, nome_fantasia, fone_geral, email, endereco_cidade_id, endereco_bairro, endereco_logradouro")
+      .select("cadastro_id, cd_cadastro, cnpj, razao_social, nome_fantasia, fone_geral, email, endereco_cidade_id, endereco_bairro, endereco_logradouro, tabela_preco_id")
       .eq("excluido", false)
       .eq("empresa_id", empresaId);
 

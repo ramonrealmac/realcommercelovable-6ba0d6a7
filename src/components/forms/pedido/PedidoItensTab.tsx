@@ -20,6 +20,7 @@ interface IProps {
   podeEditar: boolean;
   onTotalsChanged?: (total: number, itens: IMovimentoItem[]) => void;
   autoNovoTrigger?: number;
+  tabelaPrecoId?: number | null;
 }
 
 const fmt = (v: number, dec = 2) =>
@@ -45,7 +46,7 @@ const parseNum = (v: any) => {
   return isNaN(n) ? 0 : n;
 };
 
-const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged, autoNovoTrigger }) => {
+const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged, autoNovoTrigger, tabelaPrecoId }) => {
   const { XEmpresaId, XEmpresaMatrizId, XEmpresas } = useAppContext();
   const { handleKeyDown } = useEnterTraversal();
   const [XItens, setXItens] = useState<IMovimentoItem[]>([]);
@@ -204,14 +205,41 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
     setF(key, n);
   };
 
-  const aplicarProduto = useCallback((p: IProdutoRow, deposito_id?: number) => {
+  const obterPrecoTabela = async (produtoId: number, tabelaId: number): Promise<number | null> => {
+    try {
+      const { data, error } = await db.from("tabela_preco_item")
+        .select("preco")
+        .eq("tabela_id", tabelaId)
+        .eq("produto_id", produtoId)
+        .eq("excluido", false)
+        .maybeSingle();
+      if (error) throw error;
+      return data ? Number(data.preco) : null;
+    } catch (e) {
+      console.warn("Falha ao obter preço da tabela:", e);
+      return null;
+    }
+  };
+
+  const aplicarProduto = useCallback(async (p: IProdutoRow, deposito_id?: number) => {
+    let preco = Number(p.st_promo && p.preco_promocional > 0 ? p.preco_promocional : p.preco_venda) || 0;
+
+    if (tabelaPrecoId) {
+      const precoTabela = await obterPrecoTabela(p.produto_id, tabelaPrecoId);
+      if (precoTabela !== null) {
+        preco = precoTabela;
+      } else {
+        toast.info("Preço não cadastrado na tabela selecionada. Usando preço padrão.");
+      }
+    }
+
     setXEdit(prev => recalc({
       ...(prev || {}),
       produto_id: p.produto_id,
       cd_produto: String(p.cd_produto ?? p.produto_id),
       nm_produto: p.nome,
       unidade_id: p.unidade_id,
-      vl_und_produto: Number(p.st_promo && p.preco_promocional > 0 ? p.preco_promocional : p.preco_venda) || 0,
+      vl_und_produto: preco,
       ...(deposito_id ? { deposito_id } : {}),
     }));
     setXEditEstoque({ disp: p.estoque_disponivel, res: p.estoque_reservado });
@@ -219,7 +247,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
     carregarEstoquePorDeposito(p.produto_id);
     // foco no preço unitário
     setTimeout(() => { precoUnitRef.current?.focus(); precoUnitRef.current?.select(); }, 80);
-  }, [carregarEstoquePorDeposito]);
+  }, [carregarEstoquePorDeposito, tabelaPrecoId]);
 
   const onCodigoBlur = async () => {
     const t = XCodigo.trim();
@@ -234,7 +262,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
     }
     const p = await buscarProdutoPorCodigo(t, XEmpresaId, XGroupEmpresaIds);
     if (!p) { toast.error("Produto não encontrado."); return; }
-    aplicarProduto(p);
+    await aplicarProduto(p);
   };
 
   const limparProduto = () => {

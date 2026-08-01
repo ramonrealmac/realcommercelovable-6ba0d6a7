@@ -142,7 +142,7 @@ const emptyItem = (): XFormItem => ({
   vl_seguro: 0,
   vl_outro: 0,
   vl_total: 0,
-  mod_bc: 0,
+  mod_bc: 3,
   vl_bc: 0,
   pc_red_bc: 0,
   vl_icms: 0,
@@ -220,9 +220,19 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
 
   const [XSearchOpen, setXSearchOpen] = useState(false);
   const [XSearchItemNr, setXSearchItemNr] = useState<number | null>(null);
+  const [XSearchFormOpen, setXSearchFormOpen] = useState(false);
+  const productInputRef = useRef<HTMLInputElement>(null);
 
   const [XChavesRef, setXChavesRef] = useState<any[]>([]);
   const [XCabecalho, setXCabecalho] = useState<any>(null);
+
+  useEffect(() => {
+    if (XMode === "insert" || XMode === "edit") {
+      setTimeout(() => {
+        productInputRef.current?.focus();
+      }, 150);
+    }
+  }, [XMode]);
 
   const loadCabecalho = useCallback(async () => {
     if (!nfeCabecalhoId) {
@@ -772,8 +782,81 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
   const handleBlur = (key: string) => {
     const current = XF[key];
     if (current === undefined || current === null || current === "") return;
-    set(key, fmtInput(current, key));
+    const formatted = fmtInput(current, key);
+    
+    setXF(prev => {
+      const next = { ...prev, [key]: formatted };
+      
+      // Auto calculations for total
+      if (key === "qt_entrada" || key === "vl_unit" || key === "vl_desconto") {
+        const total = recalcTotal(next);
+        next.vl_total = fmtInput(total, "vl_total");
+      }
+      
+      // Auto tax calculations
+      if (key === "vl_bc" || key === "pc_icms") {
+        const bc = parseNum(next.vl_bc);
+        const pc = parseNum(next.pc_icms);
+        next.vl_icms = fmtInput(bc * (pc / 100), "vl_icms");
+      }
+      if (key === "vl_bc_pis" || key === "pc_pis") {
+        const bc = parseNum(next.vl_bc_pis);
+        const pc = parseNum(next.pc_pis);
+        next.vl_pis = fmtInput(bc * (pc / 100), "vl_pis");
+      }
+      if (key === "vl_bc_cofins" || key === "pc_cofins") {
+        const bc = parseNum(next.vl_bc_cofins);
+        const pc = parseNum(next.pc_cofins);
+        next.vl_cofins = fmtInput(bc * (pc / 100), "vl_cofins");
+      }
+      if (key === "vl_bc_ipi" || key === "pc_ipi") {
+        const bc = parseNum(next.vl_bc_ipi);
+        const pc = parseNum(next.pc_ipi);
+        next.vl_ipi = fmtInput(bc * (pc / 100), "vl_ipi");
+      }
+      // IBS / CBS (same base vl_bc)
+      if (key === "vl_bc" || key === "pc_ibs") {
+        const bc = parseNum(next.vl_bc);
+        const pc = parseNum(next.pc_ibs);
+        next.vl_ibs = fmtInput(bc * (pc / 100), "vl_ibs");
+      }
+      if (key === "vl_bc" || key === "pc_cbs") {
+        const bc = parseNum(next.vl_bc);
+        const pc = parseNum(next.pc_cbs);
+        next.vl_cbs = fmtInput(bc * (pc / 100), "vl_cbs");
+      }
+      
+      return next;
+    });
   };
+
+  const handleSelectFormProduto = (p: any) => {
+    setXF(prev => {
+      const next = { ...prev };
+      next.produto_id = p.produto_id;
+      next.nm_produto = p.nome?.toUpperCase() || "";
+      next.gtin = p.gtin || "";
+      next.ncm = p.ncm || "";
+      next.cest = p.cest || "";
+      next.unidade = p.unidade || "UN";
+      next.origem = p.origem !== undefined && p.origem !== null ? p.origem : 0;
+      if (p.vl_venda) {
+        next.vl_unit = fmtInput(p.vl_venda, "vl_unit");
+        next.vl_total = fmtInput(recalcTotal({ ...next, vl_unit: p.vl_venda }), "vl_total");
+      }
+      return next;
+    });
+    setXSearchFormOpen(false);
+  };
+
+  const filteredCfops = useMemo(() => {
+    const isEntrada = XCabecalho?.tp_nf === 0;
+    if (isEntrada) {
+      return XCfops.filter(c => c.cd_cfop.startsWith("1") || c.cd_cfop.startsWith("2") || c.cd_cfop.startsWith("3"));
+    } else {
+      return XCfops.filter(c => c.cd_cfop.startsWith("5") || c.cd_cfop.startsWith("6") || c.cd_cfop.startsWith("7"));
+    }
+  }, [XCfops, XCabecalho?.tp_nf]);
 
   const handleNovo = () => {
     setXMode("insert");
@@ -1089,35 +1172,113 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
           {renderSection("Identificação", (
             <>
               {renderNum({ k: "nr_item", label: "Item", span: 1 })}
+              <div className="col-span-4">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Produto <span className="text-destructive">*</span></label>
+                <input
+                  ref={productInputRef}
+                  type="text"
+                  readOnly
+                  placeholder="Pressione Enter para pesquisar..."
+                  value={XF.produto_id ? (XProdutos.find(p => p.produto_id === XF.produto_id)?.nome || `#${XF.produto_id}`) : ""}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setXSearchFormOpen(true);
+                    }
+                  }}
+                  onClick={() => setXSearchFormOpen(true)}
+                  className={`${inputCls} bg-secondary/50 cursor-pointer focus:ring-2 focus:ring-ring focus:outline-none`}
+                />
+              </div>
+              <div className="col-span-4">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Descrição NF</label>
+                <input value={XF.nm_produto || ""} onChange={e => set("nm_produto", e.target.value.toUpperCase())} className={inputCls} />
+              </div>
+              {renderTxt({ k: "unidade", label: "Un.", span: 1 })}
               {renderTxt({ k: "cd_prod_fornec", label: "Cód. Forn.", span: 2 })}
               {renderTxt({ k: "gtin", label: "GTIN", span: 2, digits: true, max: 14 })}
               {renderTxt({ k: "ncm", label: "NCM", span: 2, digits: true, max: 8 })}
               {renderTxt({ k: "cest", label: "CEST", span: 1, digits: true, max: 7 })}
-              {renderTxt({ k: "cfop", label: "CFOP", span: 1, digits: true, max: 4 })}
-              {renderTxt({ k: "unidade", label: "Un.", span: 1 })}
-              {renderTxt({ k: "c_enq", label: "cEnq", span: 2, digits: true, max: 3 })}
+            </>
+          ))}
+
+          {renderSection("Regras Fiscais & Operação", (
+            <>
               <div className="col-span-3">
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Descrição NF</label>
-                <input value={XF.nm_produto || ""} onChange={e => set("nm_produto", e.target.value.toUpperCase())} className={inputCls} />
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Origem</label>
+                <select 
+                  value={XF.origem ?? 0} 
+                  onChange={e => set("origem", parseInt(e.target.value, 10))} 
+                  className={inputCls}
+                >
+                  <option value={0}>0 - Nacional, exceto indicada em 3 a 5, 8</option>
+                  <option value={1}>1 - Estrangeira - Importação direta</option>
+                  <option value={2}>2 - Estrangeira - Adquirida no mercado interno</option>
+                  <option value={3}>3 - Nacional, Conteúdo de Importação &gt; 40% e &lt;= 70%</option>
+                  <option value={4}>4 - Nacional, PPB (Processo Produtivo Básico)</option>
+                  <option value={5}>5 - Nacional, Conteúdo de Importação &lt;= 40%</option>
+                  <option value={6}>6 - Estrangeira - Importação direta, sem similar (CAMEX)</option>
+                  <option value={7}>7 - Estrangeira - Adquirida mercado interno, sem similar (CAMEX)</option>
+                  <option value={8}>8 - Nacional, Conteúdo de Importação &gt; 70%</option>
+                </select>
               </div>
-              <div className="col-span-3">
-                <label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1"><Link size={12}/> Produto Vinculado</label>
-                <select value={XF.produto_id ?? ""} onChange={e => set("produto_id", e.target.value ? parseInt(e.target.value) : undefined)} className={inputCls}>
+
+              <div className="col-span-4">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">CST / CSOSN <span className="text-destructive">*</span></label>
+                <select 
+                  value={XF.csosn || XF.cst_icms || ""} 
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (!val) {
+                      setXF(prev => ({ ...prev, csosn: "", cst_icms: "" }));
+                    } else if (val.length === 3) {
+                      setXF(prev => ({ ...prev, csosn: val, cst_icms: "" }));
+                    } else {
+                      setXF(prev => ({ ...prev, cst_icms: val, csosn: "" }));
+                    }
+                  }} 
+                  className={inputCls}
+                >
                   <option value="">— Selecione —</option>
-                  {XProdutos.map(p => (
-                    <option key={p.produto_id} value={p.produto_id}>
-                      {p.cd_produto ? `${p.cd_produto} — ` : ""}{p.nome}
-                    </option>
-                  ))}
+                  <optgroup label="CST (Regime Normal)">
+                    <option value="00">00 - Tributada integralmente</option>
+                    <option value="10">10 - Tributada e com cobrança por ST</option>
+                    <option value="20">20 - Com redução de base de cálculo</option>
+                    <option value="30">30 - Isenta ou não tributada e com cobrança por ST</option>
+                    <option value="40">40 - Isenta</option>
+                    <option value="41">41 - Não tributada</option>
+                    <option value="50">50 - Suspensão</option>
+                    <option value="51">51 - Diferimento</option>
+                    <option value="60">60 - ICMS cobrado anteriormente por ST</option>
+                    <option value="70">70 - Com redução de BC e cobrança por ST</option>
+                    <option value="90">90 - Outras</option>
+                  </optgroup>
+                  <optgroup label="CSOSN (Simples Nacional)">
+                    <option value="101">101 - Tributada c/ permissão de crédito</option>
+                    <option value="102">102 - Tributada sem permissão de crédito</option>
+                    <option value="103">103 - Isenção do ICMS para faixa de receita</option>
+                    <option value="201">201 - Tributada c/ permissão de crédito e ST</option>
+                    <option value="202">202 - Tributada sem permissão de crédito e ST</option>
+                    <option value="203">203 - Isenção do ICMS c/ ST</option>
+                    <option value="300">300 - Imune</option>
+                    <option value="400">400 - Não tributada pelo Simples Nacional</option>
+                    <option value="500">500 - ICMS cobrado anteriormente por ST</option>
+                    <option value="900">900 - Outros</option>
+                  </optgroup>
                 </select>
               </div>
 
               <div className="col-span-3">
-                <label className="block text-xs font-medium text-muted-foreground mb-1">CFOP de Entrada</label>
-                <select value={XF.cfop_entrada ?? ""} onChange={e => set("cfop_entrada", e.target.value || undefined)} className={inputCls}>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">CFOP <span className="text-destructive">*</span></label>
+                <select
+                  value={XF.cfop ?? ""}
+                  onChange={e => set("cfop", e.target.value || "")}
+                  className={inputCls}
+                >
                   <option value="">— Selecione —</option>
-                  {XCfops.map(c => (
-                    <option key={c.cd_cfop} value={c.cd_cfop}>
+                  {filteredCfops.map(c => (
+                    <option key={c.cd_cfop} value={c.cd_cfop} title={c.descricao}>
                       {c.cd_cfop} — {c.descricao}
                     </option>
                   ))}
@@ -1128,22 +1289,28 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
 
           {renderSection("Valores Unitários", (
             <>
-              {renderNum({ k: "qt_entrada", label: "Qtd. Entrada", span: 2 })}
+              {renderNum({ k: "qt_entrada", label: "Qtd.", span: 2 })}
               {renderNum({ k: "vl_unit", label: "Valor Unit.", span: 2 })}
               {renderNum({ k: "vl_desconto", label: "Desconto", span: 2 })}
-              {renderNum({ k: "vl_frete", label: "Frete", span: 2 })}
-              {renderNum({ k: "vl_seguro", label: "Seguro", span: 2 })}
-              {renderNum({ k: "vl_outro", label: "Outras Desp.", span: 2 })}
               {renderNum({ k: "vl_total", label: "Total", span: 2 })}
             </>
           ))}
 
           {renderSection("ICMS", (
             <>
-              {renderNum({ k: "origem", label: "Origem", span: 1 })}
-              {renderTxt({ k: "cst_icms", label: "CST", span: 1, digits: true, max: 3 })}
-              {renderTxt({ k: "csosn", label: "CSOSN", span: 1, digits: true, max: 4 })}
-              {renderNum({ k: "mod_bc", label: "Mod. BC", span: 1 })}
+              <div className="col-span-3">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Mod. BC ICMS</label>
+                <select 
+                  value={XF.mod_bc ?? 3} 
+                  onChange={e => set("mod_bc", parseInt(e.target.value, 10))} 
+                  className={inputCls}
+                >
+                  <option value={0}>0 - Margem Valor Agregado (%)</option>
+                  <option value={1}>1 - Pauta (Valor)</option>
+                  <option value={2}>2 - Preço Tabelado Máx. (valor)</option>
+                  <option value={3}>3 - Valor da operação</option>
+                </select>
+              </div>
               {renderNum({ k: "vl_bc", label: "BC ICMS", span: 2 })}
               {renderNum({ k: "pc_red_bc", label: "Red. BC %", span: 2 })}
               {renderNum({ k: "pc_icms", label: "ICMS %", span: 2 })}
@@ -1167,7 +1334,17 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
 
           {renderSection("IPI", (
             <>
-              {renderTxt({ k: "cst_ipi", label: "CST IPI", span: 2, digits: true, max: 2 })}
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">CST IPI</label>
+                <select value={XF.cst_ipi ?? ""} onChange={e => set("cst_ipi", e.target.value)} className={inputCls}>
+                  <option value="">—</option>
+                  <option value="00">00 - Entrada com recuperação de crédito</option>
+                  <option value="49">49 - Outras entradas</option>
+                  <option value="50">50 - Saída tributada</option>
+                  <option value="99">99 - Outras saídas</option>
+                </select>
+              </div>
+              {renderTxt({ k: "c_enq", label: "cEnq (Enquadramento)", span: 2, digits: true, max: 3 })}
               {renderNum({ k: "vl_bc_ipi", label: "BC IPI", span: 2 })}
               {renderNum({ k: "pc_ipi", label: "IPI %", span: 2 })}
               {renderNum({ k: "vl_ipi", label: "Vlr. IPI", span: 2 })}
@@ -1176,11 +1353,45 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
 
           {renderSection("PIS / COFINS", (
             <>
-              {renderTxt({ k: "cst_pis", label: "CST PIS", span: 2, digits: true, max: 2 })}
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">CST PIS</label>
+                <select value={XF.cst_pis ?? ""} onChange={e => set("cst_pis", e.target.value)} className={inputCls}>
+                  <option value="">—</option>
+                  <option value="01">01 - Tributada Básica</option>
+                  <option value="02">02 - Tributada Diferenciada</option>
+                  <option value="03">03 - Unidade de Medida</option>
+                  <option value="04">04 - Monofásica - Alíquota Zero</option>
+                  <option value="05">05 - Substituição Tributária</option>
+                  <option value="06">06 - Alíquota Zero</option>
+                  <option value="07">07 - Isenta</option>
+                  <option value="08">08 - Sem Incidência</option>
+                  <option value="09">09 - Suspensão</option>
+                  <option value="49">49 - Outras Operações Saída</option>
+                  <option value="50">50 - Direito a Crédito (Entrada)</option>
+                  <option value="99">99 - Outras Operações</option>
+                </select>
+              </div>
               {renderNum({ k: "vl_bc_pis", label: "BC PIS", span: 2 })}
               {renderNum({ k: "pc_pis", label: "PIS %", span: 2 })}
               {renderNum({ k: "vl_pis", label: "Vlr. PIS", span: 2 })}
-              {renderTxt({ k: "cst_cofins", label: "CST COFINS", span: 2, digits: true, max: 2 })}
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">CST COFINS</label>
+                <select value={XF.cst_cofins ?? ""} onChange={e => set("cst_cofins", e.target.value)} className={inputCls}>
+                  <option value="">—</option>
+                  <option value="01">01 - Tributada Básica</option>
+                  <option value="02">02 - Tributada Diferenciada</option>
+                  <option value="03">03 - Unidade de Medida</option>
+                  <option value="04">04 - Monofásica - Alíquota Zero</option>
+                  <option value="05">05 - Substituição Tributária</option>
+                  <option value="06">06 - Alíquota Zero</option>
+                  <option value="07">07 - Operação Isenta</option>
+                  <option value="08">08 - Sem Incidência</option>
+                  <option value="09">09 - Suspensão</option>
+                  <option value="49">49 - Outras Operações Saída</option>
+                  <option value="50">50 - Direito a Crédito (Entrada)</option>
+                  <option value="99">99 - Outras Operações</option>
+                </select>
+              </div>
               {renderNum({ k: "vl_bc_cofins", label: "BC COFINS", span: 2 })}
               {renderNum({ k: "pc_cofins", label: "COFINS %", span: 2 })}
               {renderNum({ k: "vl_cofins", label: "Vlr. COFINS", span: 2 })}
@@ -1189,10 +1400,32 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
 
           {renderSection("IBS / CBS (Reforma)", (
             <>
-              {renderTxt({ k: "cst_ibs", label: "CST IBS", span: 2, digits: true, max: 3 })}
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">CST IBS</label>
+                <select value={XF.cst_ibs ?? ""} onChange={e => set("cst_ibs", e.target.value)} className={inputCls}>
+                  <option value="">—</option>
+                  <option value="01">01 - Tributada Integralmente</option>
+                  <option value="02">02 - Redução de Alíquota / BC</option>
+                  <option value="03">03 - Alíquota Zero</option>
+                  <option value="04">04 - Isenta / Não Incidência</option>
+                  <option value="05">05 - Suspensão</option>
+                  <option value="09">09 - Outras Operações</option>
+                </select>
+              </div>
               {renderNum({ k: "pc_ibs", label: "IBS %", span: 2 })}
               {renderNum({ k: "vl_ibs", label: "Vlr. IBS", span: 2 })}
-              {renderTxt({ k: "cst_cbs", label: "CST CBS", span: 2, digits: true, max: 3 })}
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">CST CBS</label>
+                <select value={XF.cst_cbs ?? ""} onChange={e => set("cst_cbs", e.target.value)} className={inputCls}>
+                  <option value="">—</option>
+                  <option value="01">01 - Tributada Integralmente</option>
+                  <option value="02">02 - Redução de Alíquota / BC</option>
+                  <option value="03">03 - Alíquota Zero</option>
+                  <option value="04">04 - Isenta / Não Incidência</option>
+                  <option value="05">05 - Suspensão</option>
+                  <option value="09">09 - Outras Operações</option>
+                </select>
+              </div>
               {renderNum({ k: "pc_cbs", label: "CBS %", span: 2 })}
               {renderNum({ k: "vl_cbs", label: "Vlr. CBS", span: 2 })}
             </>
@@ -1260,6 +1493,12 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
           setXSearchItemIdx(null);
         }}
         onSelect={handleSelectProduto}
+      />
+
+      <ProdutoSearchDialog
+        open={XSearchFormOpen}
+        onClose={() => setXSearchFormOpen(false)}
+        onSelect={handleSelectFormProduto}
       />
     </div>
   );

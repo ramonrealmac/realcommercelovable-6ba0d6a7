@@ -92,10 +92,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const openTab = useCallback((tab: Omit<AppTab, "id">) => {
     setXTabs(prev => {
-      const XExisting = prev.find(t => t.component === tab.component);
-      if (XExisting) {
-        setXActiveTabId(XExisting.id);
-        return prev; // sem mudança
+      const XExistingIdx = prev.findIndex(t => t.component === tab.component);
+      if (XExistingIdx !== -1) {
+        const updated = [...prev];
+        updated[XExistingIdx] = {
+          ...updated[XExistingIdx],
+          params: tab.params,
+          title: tab.title
+        };
+        setXActiveTabId(updated[XExistingIdx].id);
+        return updated;
       }
       const XNewId = `tab-${Date.now()}`;
       const XNewTab: AppTab = { ...tab, id: XNewId };

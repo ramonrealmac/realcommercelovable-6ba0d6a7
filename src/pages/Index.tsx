@@ -40,6 +40,7 @@ const DevolucaoNfeEntradaForm = lazy(() => import("@/components/forms/nfe/Devolu
 const DevolucaoNfeSaidaForm = lazy(() => import("@/components/forms/nfe/DevolucaoNfeSaidaForm"));
 const ListaNfeEmitidaForm = lazy(() => import("@/components/forms/nfe/ListaNfeEmitidaForm"));
 const NfeEmitidaForm = lazy(() => import("@/components/forms/nfe/NfeEmitidaForm"));
+const OutrasNotasForm = lazy(() => import("@/components/forms/nfe/OutrasNotasForm"));
 const ConsultaTitulosReceberForm = lazy(() => import("@/components/forms/financeiro/ConsultaTitulosReceberForm"));
 const BaixaPorClienteForm = lazy(() => import("@/components/forms/financeiro/BaixaPorClienteForm"));
 const GerarContasReceberForm = lazy(() => import("@/components/forms/financeiro/GerarContasReceberForm"));
@@ -96,7 +97,7 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "fornecedores-transportadores": return <FornecedorTransportadorForm />;
       case "funcionarios": return <FuncionarioForm />;
       case "grupo-cadastros": return <CadastroGrupoForm />;
-      case "produtos": return <ProdutoForm />;
+      case "produtos": return <ProdutoForm initialProductId={params?.produto_id} />;
       case "linhas-produtos": return <LinhaProdutoForm />;
       case "grupo-produtos": return <GrupoProdutosForm />;
       case "subgrupo-produtos": return <SubgrupoProdutosForm />;
@@ -127,6 +128,7 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "devolucao-nfe-saida-fiscal": return <DevolucaoNfeSaidaForm initialNfeId={params?.nfe_cabecalho_id} />;
       case "nfe-emitidas": return <ListaNfeEmitidaForm initialFilterId={params?.nfe_cabecalho_id} />;
       case "nfe-form": return <NfeEmitidaForm initialId={params?.nfe_cabecalho_id} />;
+      case "outras-notas": return <OutrasNotasForm initialId={params?.nfe_cabecalho_id} />;
       case "consulta-titulos-receber": return <ConsultaTitulosReceberForm />;
       case "gerar-contas-receber": return <GerarContasReceberForm />;
       case "baixa-por-cliente": return <BaixaPorClienteForm />;

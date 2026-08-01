@@ -783,25 +783,25 @@ const ConsultaTitulosReceberForm: React.FC = () => {
   };
 
   return (
-    <div className="p-3 h-full overflow-auto" onKeyDown={handleKeyDown}>
-      <div className="mb-2">
-        <h2 className="text-base font-semibold">Gerenciador de Recebimentos</h2>
+    <div className="p-3 min-h-screen lg:h-full lg:flex lg:flex-col lg:overflow-hidden bg-background" onKeyDown={handleKeyDown}>
+      <div className="mb-2 shrink-0">
+        <h2 className="text-xs font-bold uppercase tracking-wider text-foreground">Gerenciador de Recebimentos</h2>
       </div>
 
       {/* Filtros */}
-      <div className="border border-border rounded-md p-3 mb-3 bg-card">
-        <div className="flex items-center gap-2 mb-2 text-xs font-medium text-muted-foreground">
+      <div className="border border-border rounded-md p-3 mb-3 bg-card shrink-0">
+        <div className="flex items-center gap-2 mb-2 text-[9px] uppercase font-bold tracking-wider text-muted-foreground">
           <FilterIcon size={12} /> Filtros
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-          <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Cliente</label>
-            <div className="flex gap-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-12 gap-3 items-end">
+          <div className="col-span-1 sm:col-span-2 md:col-span-2 lg:col-span-2 xl:col-span-2 2xl:col-span-2">
+            <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-0.5">Cliente</label>
+            <div className="flex gap-1 h-7">
               <input
                 readOnly
                 value={XClienteNome}
                 placeholder="Enter para pesquisar..."
-                className="flex-1 border border-border rounded px-2 py-1 text-sm bg-card cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                className="flex-1 border border-border rounded px-1.5 py-0.5 text-[11px] bg-card cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary h-full"
                 onClick={() => setXSearchOpen(true)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
@@ -813,7 +813,7 @@ const ConsultaTitulosReceberForm: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setXSearchOpen(true)}
-                className="px-2 py-1 border border-border rounded bg-card hover:bg-accent flex items-center justify-center"
+                className="px-2 py-0.5 border border-border rounded bg-card hover:bg-accent flex items-center justify-center h-full"
                 title="Pesquisar cliente"
               >
                 <Search className="w-4 h-4" />
@@ -825,34 +825,34 @@ const ConsultaTitulosReceberForm: React.FC = () => {
                     setXClienteId("");
                     setXClienteNome("");
                   }}
-                  className="px-2 py-1 border border-border rounded bg-card hover:bg-accent text-xs"
+                  className="px-2 py-0.5 border border-border rounded bg-card hover:bg-accent text-xs h-full"
                   title="Limpar"
                 >×</button>
               )}
             </div>
           </div>
-          <div className="md:col-span-1 min-w-[100px]">
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Nº Título</label>
+          <div className="col-span-1 2xl:col-span-1">
+            <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-0.5">Nº Título</label>
             <input
               type="text"
               value={XNrTitulo}
               onChange={(e) => setXNrTitulo(e.target.value)}
               placeholder="Pesquisar..."
-              className="w-full border border-border rounded px-2 py-1.5 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+              className="w-full border border-border rounded px-1.5 py-0.5 text-[11px] bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary h-7"
             />
           </div>
-          <div className="md:col-span-1 min-w-[100px]">
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Nº Pedido</label>
+          <div className="col-span-1 2xl:col-span-1">
+            <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-0.5">Nº Pedido</label>
             <input
               type="text"
               value={XNrMovimento}
               onChange={(e) => setXNrMovimento(e.target.value)}
               placeholder="Pesquisar..."
-              className="w-full border border-border rounded px-2 py-1.5 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+              className="w-full border border-border rounded px-1.5 py-0.5 text-[11px] bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary h-7"
             />
           </div>
-          <div className="md:col-span-1 min-w-[110px]">
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Tipo de Data</label>
+          <div className="col-span-1 2xl:col-span-1">
+            <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-0.5">Tipo de Data</label>
             <select
               value={XTpData}
               onChange={(e) => {
@@ -863,7 +863,7 @@ const ConsultaTitulosReceberForm: React.FC = () => {
                   setXDtFinal("");
                 }
               }}
-              className="w-full border border-border rounded px-2 py-1.5 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+              className="w-full border border-border rounded px-1.5 py-0.5 text-[11px] bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary h-7"
             >
               <option value=""></option>
               <option value="E">Emissão</option>
@@ -871,50 +871,50 @@ const ConsultaTitulosReceberForm: React.FC = () => {
               <option value="B">Baixa</option>
             </select>
           </div>
-          <div className="md:col-span-1 min-w-[120px]">
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Dt. Inicial</label>
+          <div className="col-span-1 2xl:col-span-1">
+            <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-0.5">Dt. Inicial</label>
             <input
               type="date"
               disabled={XTpData === ""}
               value={XDtInicial}
               max="9999-12-31"
               onChange={(e) => setXDtInicial(e.target.value)}
-              className={`w-full border rounded px-2 py-1.5 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary disabled:opacity-50 disabled:bg-secondary/50 ${
+              className={`w-full border rounded px-1.5 py-0.5 text-[11px] bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary disabled:opacity-50 disabled:bg-secondary/50 h-7 ${
                 isDateRangeInvalid ? "border-destructive focus:ring-destructive" : "border-border"
               }`}
             />
           </div>
-          <div className="md:col-span-1 min-w-[120px]">
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Dt. Final</label>
+          <div className="col-span-1 2xl:col-span-1">
+            <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-0.5">Dt. Final</label>
             <input
               type="date"
               disabled={XTpData === ""}
               value={XDtFinal}
               max="9999-12-31"
               onChange={(e) => setXDtFinal(e.target.value)}
-              className={`w-full border rounded px-2 py-1.5 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary disabled:opacity-50 disabled:bg-secondary/50 ${
+              className={`w-full border rounded px-1.5 py-0.5 text-[11px] bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary disabled:opacity-50 disabled:bg-secondary/50 h-7 ${
                 isDateRangeInvalid ? "border-destructive focus:ring-destructive" : "border-border"
               }`}
             />
           </div>
-          <div className="md:col-span-1 min-w-[110px]">
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Situação</label>
+          <div className="col-span-1 2xl:col-span-1">
+            <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-0.5">Situação</label>
             <select
               value={XSituacao}
               onChange={(e) => setXSituacao(e.target.value)}
-              className="w-full border border-border rounded px-2 py-1.5 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+              className="w-full border border-border rounded px-1.5 py-0.5 text-[11px] bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary h-7"
             >
               <option value=""></option>
               <option value="TODAS">Todas</option>
               {SITUACOES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
-          <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Plano de Contas</label>
+          <div className="col-span-1 sm:col-span-2 md:col-span-2 lg:col-span-2 xl:col-span-2 2xl:col-span-2">
+            <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-0.5">Plano de Contas</label>
             <select
               value={XPlanoId}
               onChange={(e) => setXPlanoId(e.target.value)}
-              className="w-full border border-border rounded px-2 py-1.5 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+              className="w-full border border-border rounded px-1.5 py-0.5 text-[11px] bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary h-7"
             >
               <option value=""></option>
               <option value="TODOS">Todos</option>
@@ -923,42 +923,45 @@ const ConsultaTitulosReceberForm: React.FC = () => {
               ))}
             </select>
           </div>
-          <div className="md:col-span-2 flex justify-end gap-2">
+          <div className="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-4 xl:col-span-6 2xl:col-span-2 flex justify-end gap-2">
             <button
               onClick={loadGrid}
               disabled={XLoading}
-              className="px-3 py-1.5 text-xs rounded bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1 h-9"
+              className="px-2.5 py-0.5 text-[11px] rounded bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1 h-7"
             >
               <RefreshCw size={12} className={XLoading ? "animate-spin" : ""} /> Aplicar
             </button>
             <button
               onClick={clearFilters}
-              className="px-3 py-1.5 text-xs border border-border rounded hover:bg-accent h-9"
+              className="px-2.5 py-0.5 text-[11px] border border-border rounded hover:bg-accent h-7"
             >Limpar</button>
           </div>
         </div>
       </div>
 
-      <DataGrid
-        columns={XCols}
-        data={XRows}
-        selectedIdx={XSelectedIdx}
-        onRowClick={(_r, i) => setXSelectedIdx(i)}
-        onRowDoubleClick={(r) => openTitulo(r as IRow)}
-        exportTitle="Gerenciador de Recebimentos"
-        maxHeight="calc(100vh - 320px)"
-        toolbarLeft={
-          <>
-            <button
-              onClick={loadGrid}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-accent"
-              title="Atualizar"
-            >
-              <RefreshCw size={14} className={XLoading ? "animate-spin" : ""} /> Atualizar
-            </button>
-          </>
-        }
-      />
+      <div className="flex-1 min-h-[380px] lg:min-h-0">
+        <DataGrid
+          columns={XCols}
+          data={XRows}
+          selectedIdx={XSelectedIdx}
+          onRowClick={(_r, i) => setXSelectedIdx(i)}
+          onRowDoubleClick={(r) => openTitulo(r as IRow)}
+          exportTitle="Gerenciador de Recebimentos"
+          minWidth="1250px"
+          maxHeight="100%"
+          toolbarLeft={
+            <>
+              <button
+                onClick={loadGrid}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-accent"
+                title="Atualizar"
+              >
+                <RefreshCw size={14} className={XLoading ? "animate-spin" : ""} /> Atualizar
+              </button>
+            </>
+          }
+        />
+      </div>
 
       <ClienteSearchDialog
         open={XSearchOpen}

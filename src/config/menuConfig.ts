@@ -254,9 +254,9 @@ export const MENU_CONFIG: MenuItem[] = [
         children: [
           { id: "nfe-emitidas", title: "Gerenciador Fiscal", icon: FileText },
           { id: "nfe-form", title: "Notas Emitidas", icon: FilePen },
+          { id: "outras-notas", title: "Outras Notas", icon: FilePen },
           { id: "cce", title: "Carta de Correção", icon: FilePen },
           { id: "nfe-inutilizacao", title: "Inutilização de Numeração", icon: FileX },
-          { id: "devolucao-nfe-entrada", title: "Devolução de NF-e de Entrada", icon: ArrowUpFromLine },
           { id: "devolucao-nfe-saida-fiscal", title: "Devolução de NF-e de Saída", icon: ArrowDownToLine },
         ]
       },

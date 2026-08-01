@@ -121,9 +121,11 @@ const TopBar = () => {
         open={XSearchOpen} 
         onClose={() => setXSearchOpen(false)} 
         onSelect={(p) => {
-          openTab({ title: "Produtos", component: "ProdutoForm" });
-          // Note: ideally we'd pass p.produto_id to ProdutoForm to auto-select it.
-          // For now, opening the form is the standard behavior for global actions.
+          openTab({ 
+            title: "Produtos", 
+            component: "produtos", 
+            params: { produto_id: p.produto_id } 
+          });
         }}
       />
 
