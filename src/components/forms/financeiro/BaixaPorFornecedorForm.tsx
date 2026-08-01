@@ -62,16 +62,16 @@ const toIsoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).pa
 // IDs de Meios de Pagamento considerados à vista
 const MEIOS_A_VISTA_IDS = [1, 2, 4, 16, 17, 18, 20];
 
-const BaixaPorClienteForm: React.FC = () => {
+const BaixaPorFornecedorForm: React.FC = () => {
   const { XEmpresaId } = useAppContext();
   
   // Opções carregadas do banco
   const [XPortadores, setXPortadores] = useState<IPortadorOpt[]>([]);
   const [XMeiosPagamento, setXMeiosPagamento] = useState<IMeioPagOpt[]>([]);
   
-  // Seleção de cliente
+  // Seleção de fornecedor
   const [XCadastroId, setXCadastroId] = useState<string>("");
-  const [XClienteNome, setXClienteNome] = useState<string>("");
+  const [XFornecedorNome, setXFornecedorNome] = useState<string>("");
   const [XSearchOpen, setXSearchOpen] = useState(false);
   
   // Títulos e Seleções
@@ -122,7 +122,7 @@ const BaixaPorClienteForm: React.FC = () => {
     })();
   }, [XEmpresaId]);
 
-  // Carregar títulos em aberto do cliente selecionado
+  // Carregar títulos em aberto do fornecedor selecionado
   const fetchOpenTitles = useCallback(async (cadastroId: number) => {
     if (!cadastroId) return;
     setXFetchingTitles(true);
@@ -130,7 +130,7 @@ const BaixaPorClienteForm: React.FC = () => {
       const { data, error } = await supabase
         .from("financeiro_view")
         .select("empresa_id, financeiro_id, documento, cadastro_id, vl_a_pagar, vl_pago, vl_titulo, dt_emissao, dt_vencto, situacao, plano_id, tp_conta")
-        .eq("tp_conta", "R")
+        .eq("tp_conta", "P")
         .eq("cadastro_id", cadastroId)
         .gt("vl_a_pagar", 0)
         .not("situacao", "eq", "CANCELADO")
@@ -150,7 +150,7 @@ const BaixaPorClienteForm: React.FC = () => {
     }
   }, []);
 
-  // Recarrega os títulos quando mudar o cliente
+  // Recarrega os títulos quando mudar o fornecedor
   useEffect(() => {
     if (XCadastroId) {
       fetchOpenTitles(Number(XCadastroId));
@@ -163,7 +163,7 @@ const BaixaPorClienteForm: React.FC = () => {
   // Limpa tudo
   const limpar = () => {
     setXCadastroId("");
-    setXClienteNome("");
+    setXFornecedorNome("");
     setXOpenTitles([]);
     setXSelectedIds([]);
     setXLinhasPagamento([]);
@@ -313,7 +313,7 @@ const BaixaPorClienteForm: React.FC = () => {
   // Executa o processamento de baixa transacional/sequencial
   const handleConfirmarBaixa = async () => {
     if (!XCadastroId) {
-      toast.error("Selecione um Cliente");
+      toast.error("Selecione um Fornecedor");
       return;
     }
     if (selectedCount === 0) {
@@ -430,7 +430,7 @@ const BaixaPorClienteForm: React.FC = () => {
               tipo_pag_rec_id: bInfo.meio_pagamento_id,
               observacao: bInfo.observacao,
               plano_id: tBal.title.plano_id,
-              tp_conta: "R",
+              tp_conta: "P",
               cadastro_id: Number(XCadastroId),
             });
 
@@ -482,10 +482,10 @@ const BaixaPorClienteForm: React.FC = () => {
     <div className="p-4 h-full flex flex-col overflow-hidden bg-background">
       <div className="mb-4">
         <h2 className="text-xl font-bold flex items-center gap-2 text-primary">
-          <HandCoins className="w-6 h-6 text-emerald-500" /> Baixa por Cliente
+          <HandCoins className="w-6 h-6 text-emerald-500" /> Baixa por Fornecedor
         </h2>
         <p className="text-xs text-muted-foreground">
-          Selecione o cliente para listar seus títulos em aberto, monte a lista de pagamentos e confirme a baixa.
+          Selecione o fornecedor para listar seus títulos em aberto, monte a lista de pagamentos e confirme a baixa.
         </p>
       </div>
 
@@ -495,14 +495,14 @@ const BaixaPorClienteForm: React.FC = () => {
           <div className="space-y-4">
             <h3 className="text-sm font-semibold border-b border-border pb-2 text-card-foreground">Dados do Recebimento</h3>
             
-            {/* Cliente */}
+            {/* Fornecedor */}
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Cliente</label>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Fornecedor</label>
               <div className="flex gap-1">
                 <input
                   readOnly
-                  value={XClienteNome}
-                  placeholder="Pesquisar cliente..."
+                  value={XFornecedorNome}
+                  placeholder="Pesquisar fornecedor..."
                   className="flex-1 border border-border rounded px-3 py-2 text-sm bg-background cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
                   onClick={() => setXSearchOpen(true)}
                   onKeyDown={(e) => {
@@ -516,7 +516,7 @@ const BaixaPorClienteForm: React.FC = () => {
                   type="button"
                   onClick={() => setXSearchOpen(true)}
                   className="px-3 py-2 border border-border rounded bg-secondary hover:bg-secondary/80 flex items-center justify-center transition-colors"
-                  title="Pesquisar cliente"
+                  title="Pesquisar fornecedor"
                 >
                   <Search size={16} />
                 </button>
@@ -525,13 +525,13 @@ const BaixaPorClienteForm: React.FC = () => {
                     type="button"
                     onClick={() => {
                       setXCadastroId("");
-                      setXClienteNome("");
+                      setXFornecedorNome("");
                       setXOpenTitles([]);
                       setXSelectedIds([]);
                       setXLinhasPagamento([]);
                     }}
                     className="px-2.5 py-2 border border-border rounded bg-secondary hover:bg-destructive hover:text-destructive-foreground text-sm font-bold transition-colors"
-                    title="Limpar cliente"
+                    title="Limpar fornecedor"
                   >
                     ×
                   </button>
@@ -725,8 +725,8 @@ const BaixaPorClienteForm: React.FC = () => {
             {!XCadastroId ? (
               <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8">
                 <Info className="w-8 h-8 mb-2 text-muted-foreground/60" />
-                <p className="text-sm font-medium">Nenhum cliente selecionado</p>
-                <p className="text-xs text-center">Selecione o cliente na barra lateral para carregar os títulos.</p>
+                <p className="text-sm font-medium">Nenhum fornecedor selecionado</p>
+                <p className="text-xs text-center">Selecione o fornecedor na barra lateral para carregar os títulos.</p>
               </div>
             ) : XFetchingTitles ? (
               <div className="h-full flex items-center justify-center text-muted-foreground">
@@ -737,7 +737,7 @@ const BaixaPorClienteForm: React.FC = () => {
               <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8">
                 <CheckCircle className="w-8 h-8 mb-2 text-emerald-500" />
                 <p className="text-sm font-medium">Nenhum título em aberto!</p>
-                <p className="text-xs text-center">Este parceiro não possui títulos a receber em aberto no momento.</p>
+                <p className="text-xs text-center">Este parceiro não possui títulos a pagar em aberto no momento.</p>
               </div>
             ) : (
               <table className="w-full text-sm border-collapse text-left">
@@ -839,21 +839,22 @@ const BaixaPorClienteForm: React.FC = () => {
         </div>
       </div>
 
-      {/* Pop-up de pesquisa de cliente */}
+      {/* Pop-up de pesquisa de fornecedor */}
       {XSearchOpen && (
         <ClienteSearchDialog
           open={XSearchOpen}
           onClose={() => setXSearchOpen(false)}
           onSelect={(cli: IClienteRow) => {
             setXCadastroId(String(cli.cadastro_id));
-            setXClienteNome(cli.razao_social || cli.nome_fantasia || "");
+            setXFornecedorNome(cli.razao_social || cli.nome_fantasia || "");
             setXSearchOpen(false);
           }}
           empresaId={XEmpresaId}
+          tipo="fornecedor"
         />
       )}
     </div>
   );
 };
 
-export default BaixaPorClienteForm;
+export default BaixaPorFornecedorForm;

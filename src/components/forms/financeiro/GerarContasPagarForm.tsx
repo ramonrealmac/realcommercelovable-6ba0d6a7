@@ -219,11 +219,11 @@ const MeioPagamentoSelect: React.FC<{
   );
 };
 
-const GerarContasReceberForm: React.FC = () => {
+const GerarContasPagarForm: React.FC = () => {
   const { XEmpresaId, XEmpresas } = useAppContext();
 
   const [XEmpresasOpt, setXEmpresasOpt] = useState<IOpt[]>([]);
-  const [XClientes, setXClientes] = useState<IOpt[]>([]);
+  const [XFornecedores, setXFornecedores] = useState<IOpt[]>([]);
   const [XTipoDocs, setXTipoDocs] = useState<IOpt[]>([]);
   const [XPortadores, setXPortadores] = useState<IOpt[]>([]);
   const [XPlanos, setXPlanos] = useState<IOpt[]>([]);
@@ -245,10 +245,10 @@ const GerarContasReceberForm: React.FC = () => {
         supabase.from("cadastro").select("cadastro_id, nome_fantasia, razao_social").eq("empresa_id", XEmpresaId).eq("excluido", false).order("nome_fantasia"),
         supabase.from("meio_pagamento").select("codigo, descricao").order("descricao"),
         supabase.from("portador").select("portador_id, nome, banco_id").eq("empresa_id", XEmpresaId).eq("excluido", false).order("nome"),
-        supabase.from("plano_conta").select("plano_conta_id, nome").eq("tp_conta", "A").eq("tp_natureza", "R").eq("empresa_id", XEmpresaId).eq("excluido", false).order("nome"),
+        supabase.from("plano_conta").select("plano_conta_id, nome").eq("tp_conta", "A").eq("tp_natureza", "D").eq("empresa_id", XEmpresaId).eq("excluido", false).order("nome"),
       ]);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setXClientes((cli ?? []).map((c: any) => ({ id: String(c.cadastro_id), label: `${c.cadastro_id} - ${c.nome_fantasia || c.razao_social || ""}` })));
+      setXFornecedores((cli ?? []).map((c: any) => ({ id: String(c.cadastro_id), label: `${c.cadastro_id} - ${c.nome_fantasia || c.razao_social || ""}` })));
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setXTipoDocs((mp ?? []).map((m: any) => ({ id: String(m.codigo), label: m.descricao })));
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -262,7 +262,7 @@ const GerarContasReceberForm: React.FC = () => {
     empresa_id: XEmpresaId || 0,
     documento: "",
     movimento_id: 0,
-    tp_conta: "R",
+    tp_conta: "P",
     dt_emissao: new Date().toISOString().substring(0, 10),
     dt_vencto: new Date().toISOString().substring(0, 10),
     cadastro_id: 0,
@@ -294,7 +294,7 @@ const GerarContasReceberForm: React.FC = () => {
       config={{
         XTableName: "financeiro",
         XPrimaryKey: "financeiro_id",
-        XTitle: "Gerenciador de Títulos Manuais",
+        XTitle: "Gerenciador de Títulos Manuais (Pagar)",
         XEmpresaId: XEmpresaId,
         XDefaultRecord,
         XSoftDelete: false,
@@ -303,11 +303,11 @@ const GerarContasReceberForm: React.FC = () => {
           if (rec.status === "B" || rec.status === "C") return false;
           return getStatusLabel(rec) !== "PAGTO PARCIAL";
         },
-        XApplyFilter: (q) => q.eq("tp_conta", "R").eq("ativo", "S"),
+        XApplyFilter: (q) => q.eq("tp_conta", "P").eq("ativo", "S"),
         XOnBeforeSave: (rec) => {
           if (!rec.empresa_id) throw new Error("A Empresa é obrigatória.");
           if (!rec.documento?.trim()) throw new Error("O Documento é obrigatório.");
-          if (!rec.cadastro_id) throw new Error("O Cliente é obrigatório.");
+          if (!rec.cadastro_id) throw new Error("O Fornecedor é obrigatório.");
           if (!rec.parcela || rec.parcela <= 0) throw new Error("O Número da Parcela é obrigatório.");
           if (!rec.dt_emissao) throw new Error("A Data de Emissão é obrigatória.");
           if (!rec.dt_vencto) throw new Error("A Data de Vencimento é obrigatória.");
@@ -317,7 +317,7 @@ const GerarContasReceberForm: React.FC = () => {
             ...rec,
             documento: rec.documento.trim(),
             planoconta_id: rec.plano_id || 0,
-            tp_conta: "R",
+            tp_conta: "P",
             ativo: "S",
             status: rec.status || "A",
             movimento_id: rec.movimento_id ? Number(rec.movimento_id) : 0,
@@ -371,7 +371,7 @@ const GerarContasReceberForm: React.FC = () => {
           }
         };
 
-        const handleClienteKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        const handleFornecedorKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
           if (!isEditable) return;
           if (e.key === "Enter") {
             e.preventDefault();
@@ -379,7 +379,7 @@ const GerarContasReceberForm: React.FC = () => {
             setXSearchTarget(() => (c: any) => {
               const newId = String(c.cadastro_id);
               const label = `${c.cadastro_id} - ${c.nome_fantasia || c.razao_social || ""}`;
-              setXClientes(prev => {
+              setXFornecedores(prev => {
                 if (!prev.some(cli => cli.id === newId)) {
                   return [...prev, { id: newId, label }];
                 }
@@ -466,7 +466,7 @@ const GerarContasReceberForm: React.FC = () => {
                 />
               </div>
               <div className="md:col-span-4">
-                <label className={lbl}>Cliente <span className="text-destructive">*</span></label>
+                <label className={lbl}>Fornecedor <span className="text-destructive">*</span></label>
                 {isEditable ? (
                   <div className="flex gap-1">
                     <input 
@@ -476,7 +476,7 @@ const GerarContasReceberForm: React.FC = () => {
                         setXSearchTarget(() => (c: any) => {
                           const newId = String(c.cadastro_id);
                           const label = `${c.cadastro_id} - ${c.nome_fantasia || c.razao_social || ""}`;
-                          setXClientes(prev => {
+                          setXFornecedores(prev => {
                             if (!prev.some(cli => cli.id === newId)) {
                               return [...prev, { id: newId, label }];
                             }
@@ -489,9 +489,9 @@ const GerarContasReceberForm: React.FC = () => {
                         });
                         setXSearchOpen(true);
                       }}
-                      onKeyDown={handleClienteKeyDown}
+                      onKeyDown={handleFornecedorKeyDown}
                       className="flex-1 border border-border rounded px-2 py-1 text-sm bg-card cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-                      value={record.cadastro_id ? (XClientes.find(o => String(o.id) === String(record.cadastro_id))?.label ?? String(record.cadastro_id)) : ""}
+                      value={record.cadastro_id ? (XFornecedores.find(o => String(o.id) === String(record.cadastro_id))?.label ?? String(record.cadastro_id)) : ""}
                       placeholder="Enter para pesquisar..."
                     />
                     <button
@@ -500,7 +500,7 @@ const GerarContasReceberForm: React.FC = () => {
                         setXSearchTarget(() => (c: any) => {
                           const newId = String(c.cadastro_id);
                           const label = `${c.cadastro_id} - ${c.nome_fantasia || c.razao_social || ""}`;
-                          setXClientes(prev => {
+                          setXFornecedores(prev => {
                             if (!prev.some(cli => cli.id === newId)) {
                               return [...prev, { id: newId, label }];
                             }
@@ -514,7 +514,7 @@ const GerarContasReceberForm: React.FC = () => {
                         setXSearchOpen(true);
                       }}
                       className="px-2 py-1 border border-border rounded bg-card hover:bg-accent flex items-center justify-center"
-                      title="Pesquisar cliente"
+                      title="Pesquisar fornecedor"
                     >
                       <Search className="w-4 h-4" />
                     </button>
@@ -531,7 +531,7 @@ const GerarContasReceberForm: React.FC = () => {
                   <input 
                     type="text" 
                     className={readonlyLeftCls} 
-                    value={XClientes.find(o => String(o.id) === String(record.cadastro_id))?.label ?? ""} 
+                    value={XFornecedores.find(o => String(o.id) === String(record.cadastro_id))?.label ?? ""} 
                     readOnly 
                   />
                 )}
@@ -717,9 +717,10 @@ const GerarContasReceberForm: React.FC = () => {
         if (XSearchTarget) XSearchTarget(c);
         setXSearchOpen(false);
       }}
+      tipo="fornecedor"
     />
     </>
   );
 };
 
-export default GerarContasReceberForm;
+export default GerarContasPagarForm;

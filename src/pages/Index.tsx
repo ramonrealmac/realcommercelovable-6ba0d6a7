@@ -43,6 +43,9 @@ const NfeEmitidaForm = lazy(() => import("@/components/forms/nfe/NfeEmitidaForm"
 const ConsultaTitulosReceberForm = lazy(() => import("@/components/forms/financeiro/ConsultaTitulosReceberForm"));
 const BaixaPorClienteForm = lazy(() => import("@/components/forms/financeiro/BaixaPorClienteForm"));
 const GerarContasReceberForm = lazy(() => import("@/components/forms/financeiro/GerarContasReceberForm"));
+const ConsultaTitulosPagarForm = lazy(() => import("@/components/forms/financeiro/ConsultaTitulosPagarForm"));
+const GerarContasPagarForm = lazy(() => import("@/components/forms/financeiro/GerarContasPagarForm"));
+const BaixaPorFornecedorForm = lazy(() => import("@/components/forms/financeiro/BaixaPorFornecedorForm"));
 const LiberacaoPedidosForm = lazy(() => import("@/components/forms/financeiro/LiberacaoPedidosForm"));
 const MontagemRotaForm = lazy(() => import("@/components/forms/entrega/MontagemRotaForm"));
 const RotasMontadasForm = lazy(() => import("@/components/forms/entrega/RotasMontadasForm"));
@@ -127,6 +130,9 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "consulta-titulos-receber": return <ConsultaTitulosReceberForm />;
       case "gerar-contas-receber": return <GerarContasReceberForm />;
       case "baixa-por-cliente": return <BaixaPorClienteForm />;
+      case "consulta-titulos-pagar": return <ConsultaTitulosPagarForm />;
+      case "gerar-contas-pagar": return <GerarContasPagarForm />;
+      case "baixa-por-fornecedor": return <BaixaPorFornecedorForm />;
       case "liberacao-pedidos": return <LiberacaoPedidosForm />;
       case "montagem-rota": return <MontagemRotaForm />;
       case "rotas-montadas": return <RotasMontadasForm />;

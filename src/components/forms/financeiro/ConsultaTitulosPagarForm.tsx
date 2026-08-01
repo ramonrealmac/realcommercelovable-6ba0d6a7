@@ -16,7 +16,7 @@ interface IRow {
   financeiro_id: number | null;
   empresa: string;
   titulo: string | null;
-  cliente: string;
+  fornecedor: string;
   plano_conta: string;
   meio_pagamento: string;
   vl_a_pagar: number | null;
@@ -46,7 +46,7 @@ interface IFinanceiroView {
   tp_documento_id?: string | null;
 }
 
-interface IClienteOpt { cadastro_id: number; nome: string; }
+interface IFornecedorOpt { cadastro_id: number; nome: string; }
 interface IPlanoOpt { plano_id: number; nome: string; }
 
 const fmtMoney = (v: number | null | undefined) =>
@@ -72,7 +72,7 @@ const parseMoneyToFloat = (val: string): number => {
   return parseFloat(clean) || 0;
 };
 
-const ConsultaTitulosReceberForm: React.FC = () => {
+const ConsultaTitulosPagarForm: React.FC = () => {
   const { openTab, XEmpresaId, XEmpresaMatrizId, XEmpresas } = useAppContext();
   const { handleKeyDown } = useEnterTraversal();
 
@@ -106,8 +106,8 @@ const ConsultaTitulosReceberForm: React.FC = () => {
   const [XBaixaFuncionarioId, setXBaixaFuncionarioId] = useState<number>(0);
   const [XBaixaCaixaAberturaId, setXBaixaCaixaAberturaId] = useState<number>(0);
 
-  const [XClienteId, setXClienteId] = useState<string>("");
-  const [XClienteNome, setXClienteNome] = useState<string>("");
+  const [XFornecedorId, setXFornecedorId] = useState<string>("");
+  const [XFornecedorNome, setXFornecedorNome] = useState<string>("");
   const [XNrMovimento, setXNrMovimento] = useState<string>("");
   const [XNrTitulo, setXNrTitulo] = useState<string>("");
   const [XSearchOpen, setXSearchOpen] = useState(false);
@@ -133,7 +133,7 @@ const ConsultaTitulosReceberForm: React.FC = () => {
           .from("plano_conta")
           .select("plano_conta_id, nome")
           .eq("tp_conta", "A")
-          .eq("tp_natureza", "R")
+          .eq("tp_natureza", "D")
           .eq("empresa_id", XEmpresaId)
           .eq("excluido", false)
           .order("nome"),
@@ -214,7 +214,7 @@ const ConsultaTitulosReceberForm: React.FC = () => {
       let q = supabase
         .from("financeiro_view")
         .select("empresa_id, financeiro_id, documento, cadastro_id, vl_a_pagar, vl_pago, vl_titulo, dt_emissao, dt_vencto, dias_atraso, situacao, plano_id, tp_conta, tp_documento_id")
-        .eq("tp_conta", "R")
+        .eq("tp_conta", "P")
         .order("dt_emissao", { ascending: false })
         .limit(1000);
 
@@ -249,7 +249,7 @@ const ConsultaTitulosReceberForm: React.FC = () => {
         }
       }
 
-      if (XClienteId) q = q.eq("cadastro_id", Number(XClienteId));
+      if (XFornecedorId) q = q.eq("cadastro_id", Number(XFornecedorId));
       if (XNrTitulo.trim()) {
         q = q.ilike("documento", `%${XNrTitulo.trim()}%`);
       }
@@ -321,7 +321,7 @@ const ConsultaTitulosReceberForm: React.FC = () => {
         financeiro_id: r.financeiro_id,
         empresa: empMap.get(r.empresa_id || 0) ?? "",
         titulo: r.documento,
-        cliente: `${r.cadastro_id ?? ""} - ${cadMap.get(r.cadastro_id || 0) ?? ""}`,
+        fornecedor: `${r.cadastro_id ?? ""} - ${cadMap.get(r.cadastro_id || 0) ?? ""}`,
         plano_conta: r.plano_id ? planoMap.get(r.plano_id || 0) ?? "" : "",
         meio_pagamento: r.tp_documento_id ? mpMap.get(r.tp_documento_id) ?? r.tp_documento_id : "-",
         vl_a_pagar: r.vl_a_pagar,
@@ -340,7 +340,7 @@ const ConsultaTitulosReceberForm: React.FC = () => {
     } finally {
       setXLoading(false);
     }
-  }, [XClienteId, XNrMovimento, XTpData, XDtInicial, XDtFinal, XSituacao, XPlanoId, XEmpresaId, XEmpresaMatrizId, XEmpresas]);
+  }, [XFornecedorId, XNrMovimento, XTpData, XDtInicial, XDtFinal, XSituacao, XPlanoId, XEmpresaId, XEmpresaMatrizId, XEmpresas]);
 
   // Atualiza a grade automaticamente quando algo mudar no financeiro ou ao reativar a aba (apenas após a primeira carga manual)
   useEffect(() => {
@@ -503,8 +503,8 @@ const ConsultaTitulosReceberForm: React.FC = () => {
             vl_desconto: parseMoneyToFloat(XBaixaVlDescontoStr),
             vl_juros: parseMoneyToFloat(XBaixaVlJurosStr),
             dt_pagamento: XBaixaDtPagamento,
-            cadastro_id: parseInt(XActionRow.cliente.split(" - ")[0], 10) || 0,
-            tp_conta: "R",
+            cadastro_id: parseInt(XActionRow.fornecedor.split(" - ")[0], 10) || 0,
+            tp_conta: "P",
             funcionario_id: XBaixaFuncionarioId
           });
         
@@ -674,8 +674,8 @@ const ConsultaTitulosReceberForm: React.FC = () => {
   const openTitulo = useCallback((row: IRow) => {
     if (!row.financeiro_id) return;
     openTab({
-      title: `Conta a Receber ${row.titulo ?? ""}`,
-      component: "conta-receber-detalhe",
+      title: `Conta a Pagar ${row.titulo ?? ""}`,
+      component: "conta-pagar-detalhe",
       params: { empresa_id: row.empresa_id, financeiro_id: row.financeiro_id },
     });
   }, [openTab]);
@@ -694,8 +694,8 @@ const ConsultaTitulosReceberForm: React.FC = () => {
       render: (r: IRow) => <span className={rowColor(r.situacao)}>{r.empresa}</span> },
     { key: "titulo", label: "Título", width: "120px",
       render: (r: IRow) => <span className={rowColor(r.situacao)}>{r.titulo}</span> },
-    { key: "cliente", label: "Cliente", width: "2fr",
-      render: (r: IRow) => <span className={rowColor(r.situacao)}>{r.cliente}</span> },
+    { key: "fornecedor", label: "Fornecedor", width: "2fr",
+      render: (r: IRow) => <span className={rowColor(r.situacao)}>{r.fornecedor}</span> },
     { key: "meio_pagamento", label: "Meio Pagamento", width: "150px",
       render: (r: IRow) => <span className={rowColor(r.situacao)}>{r.meio_pagamento}</span> },
     { key: "plano_conta", label: "Plano de Contas", width: "1.5fr",
@@ -778,14 +778,14 @@ const ConsultaTitulosReceberForm: React.FC = () => {
   }, [XDtInicial, XDtFinal]);
 
   const clearFilters = () => {
-    setXClienteId(""); setXClienteNome(""); setXNrMovimento(""); setXNrTitulo(""); setXTpData(""); setXDtInicial(""); setXDtFinal(""); setXSituacao(""); setXPlanoId("");
+    setXFornecedorId(""); setXFornecedorNome(""); setXNrMovimento(""); setXNrTitulo(""); setXTpData(""); setXDtInicial(""); setXDtFinal(""); setXSituacao(""); setXPlanoId("");
     setXRows([]); setXHasLoaded(false);
   };
 
   return (
     <div className="p-3 h-full overflow-auto" onKeyDown={handleKeyDown}>
       <div className="mb-2">
-        <h2 className="text-base font-semibold">Gerenciador de Recebimentos</h2>
+        <h2 className="text-base font-semibold">Gerenciador de Pagamentos</h2>
       </div>
 
       {/* Filtros */}
@@ -795,11 +795,11 @@ const ConsultaTitulosReceberForm: React.FC = () => {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
           <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Cliente</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Fornecedor</label>
             <div className="flex gap-1">
               <input
                 readOnly
-                value={XClienteNome}
+                value={XFornecedorNome}
                 placeholder="Enter para pesquisar..."
                 className="flex-1 border border-border rounded px-2 py-1 text-sm bg-card cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
                 onClick={() => setXSearchOpen(true)}
@@ -814,16 +814,16 @@ const ConsultaTitulosReceberForm: React.FC = () => {
                 type="button"
                 onClick={() => setXSearchOpen(true)}
                 className="px-2 py-1 border border-border rounded bg-card hover:bg-accent flex items-center justify-center"
-                title="Pesquisar cliente"
+                title="Pesquisar fornecedor"
               >
                 <Search className="w-4 h-4" />
               </button>
-              {XClienteId && (
+              {XFornecedorId && (
                 <button
                   type="button"
                   onClick={() => {
-                    setXClienteId("");
-                    setXClienteNome("");
+                    setXFornecedorId("");
+                    setXFornecedorNome("");
                   }}
                   className="px-2 py-1 border border-border rounded bg-card hover:bg-accent text-xs"
                   title="Limpar"
@@ -945,7 +945,7 @@ const ConsultaTitulosReceberForm: React.FC = () => {
         selectedIdx={XSelectedIdx}
         onRowClick={(_r, i) => setXSelectedIdx(i)}
         onRowDoubleClick={(r) => openTitulo(r as IRow)}
-        exportTitle="Gerenciador de Recebimentos"
+        exportTitle="Gerenciador de Pagamentos"
         maxHeight="calc(100vh - 320px)"
         toolbarLeft={
           <>
@@ -963,11 +963,12 @@ const ConsultaTitulosReceberForm: React.FC = () => {
       <ClienteSearchDialog
         open={XSearchOpen}
         onClose={() => setXSearchOpen(false)}
-        onSelect={(cliente) => {
-          setXClienteId(cliente.cadastro_id.toString());
-          setXClienteNome(cliente.razao_social || cliente.nome_fantasia || cliente.cadastro_id.toString());
+        onSelect={(fornecedor) => {
+          setXFornecedorId(fornecedor.cadastro_id.toString());
+          setXFornecedorNome(fornecedor.razao_social || fornecedor.nome_fantasia || fornecedor.cadastro_id.toString());
         }}
         empresaId={Number(XEmpresaId)}
+        tipo="fornecedor"
       />
 
       {XShowAlert && (
@@ -1025,8 +1026,8 @@ const ConsultaTitulosReceberForm: React.FC = () => {
               {/* Dados do Título (Disabled/Read-only) */}
               <div className="bg-muted/20 border border-border/60 rounded-lg p-3 grid grid-cols-2 gap-3 text-xs">
                 <div className="col-span-2">
-                  <span className="block text-muted-foreground font-medium mb-0.5">Cliente</span>
-                  <span className="font-semibold">{XActionRow.cliente}</span>
+                  <span className="block text-muted-foreground font-medium mb-0.5">Fornecedor</span>
+                  <span className="font-semibold">{XActionRow.fornecedor}</span>
                 </div>
                 <div>
                   <span className="block text-muted-foreground font-medium mb-0.5">Título / Doc</span>
@@ -1319,4 +1320,4 @@ const ConsultaTitulosReceberForm: React.FC = () => {
   );
 };
 
-export default ConsultaTitulosReceberForm;
+export default ConsultaTitulosPagarForm;
