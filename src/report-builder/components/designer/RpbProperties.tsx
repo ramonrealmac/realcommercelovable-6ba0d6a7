@@ -10,12 +10,15 @@ import type {
 } from '../../types';
 import { DEFAULT_STYLE } from '../../types';
 import RpbSubreportConfig from './RpbSubreportConfig';
+import { ChevronUp, ChevronDown, ChevronsUp, ChevronsDown } from 'lucide-react';
 
 interface Props {
   component:    RpbComponent | null;
   queryColumns: string[];
   onChange:     (updated: RpbComponent) => void;
   onDelete:     () => void;
+  onChangeLayer?: (id: string, direction: 'back' | 'backward' | 'forward' | 'front') => void;
+  layerInfo?: { index: number; total: number };
 }
 
 const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -41,7 +44,10 @@ const SYSTEM_VARS = [
   { v: '{total_registros}',  d: 'Total de registros' },
 ];
 
-const RpbProperties: React.FC<Props> = ({ component, queryColumns, onChange, onDelete }) => {
+const RpbProperties: React.FC<Props> = ({
+  component, queryColumns, onChange, onDelete,
+  onChangeLayer, layerInfo
+}) => {
   const [showVars, setShowVars]             = useState(false);
   const [expandedColIdx, setExpandedColIdx] = useState<number | null>(null);
   const [showSubConfig, setShowSubConfig]   = useState(false);
@@ -94,6 +100,52 @@ const RpbProperties: React.FC<Props> = ({ component, queryColumns, onChange, onD
             ))}
           </div>
         </div>
+
+        {/* Camadas/Sobreposição */}
+        {layerInfo && onChangeLayer && (
+          <div>
+            <Label>Sobreposição (Camadas)</Label>
+            <div className="flex items-center justify-between border border-border rounded p-2 bg-secondary/15">
+              <span className="text-[10px] bg-secondary border border-border text-muted-foreground px-1.5 py-0.5 rounded font-mono font-semibold">
+                Camada #{layerInfo.index + 1} de {layerInfo.total}
+              </span>
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={() => onChangeLayer(component.id, 'back')}
+                  disabled={layerInfo.index === 0}
+                  title="Enviar para trás (Z-Index menor)"
+                  className="p-1.5 rounded hover:bg-accent text-muted-foreground disabled:opacity-30 border border-border/50"
+                >
+                  <ChevronsDown size={14} />
+                </button>
+                <button
+                  onClick={() => onChangeLayer(component.id, 'backward')}
+                  disabled={layerInfo.index === 0}
+                  title="Recuar uma camada"
+                  className="p-1.5 rounded hover:bg-accent text-muted-foreground disabled:opacity-30 border border-border/50"
+                >
+                  <ChevronDown size={14} />
+                </button>
+                <button
+                  onClick={() => onChangeLayer(component.id, 'forward')}
+                  disabled={layerInfo.index === layerInfo.total - 1}
+                  title="Avançar uma camada"
+                  className="p-1.5 rounded hover:bg-accent text-muted-foreground disabled:opacity-30 border border-border/50"
+                >
+                  <ChevronUp size={14} />
+                </button>
+                <button
+                  onClick={() => onChangeLayer(component.id, 'front')}
+                  disabled={layerInfo.index === layerInfo.total - 1}
+                  title="Trazer para frente (Z-Index maior)"
+                  className="p-1.5 rounded hover:bg-accent text-muted-foreground disabled:opacity-30 border border-border/50"
+                >
+                  <ChevronsUp size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Text component ──────────────────────────────────── */}
         {component.type === 'text' && (
