@@ -504,15 +504,13 @@ export function generateReportHtml(
     ...extraVars,
   };
 
+  const headerHeight = layout.bands.pageHeader.visible ? (layout.bands.pageHeader.height || 0) : 0;
+  const footerHeight = layout.bands.pageFooter.visible ? (layout.bands.pageFooter.height || 0) : 0;
+
   const pageStyle = `
     @page {
       size: ${layout.pageSize} ${layout.orientation};
       margin: 0;
-    }
-    @media print {
-      body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
-      .rpb-margin-wrap { padding: ${top}mm ${right}mm ${bottom}mm ${left}mm !important; }
-      tr { page-break-inside: avoid; }
     }
     * { box-sizing: border-box; }
     html, body {
@@ -524,24 +522,119 @@ export function generateReportHtml(
       color: #1a1a1a;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
+      height: 100%;
     }
+    
+    /* ── Estilos de Tela (Default) ── */
     .rpb-margin-wrap {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
       padding: ${top}mm ${right}mm ${bottom}mm ${left}mm;
+      box-sizing: border-box;
+      background: #ffffff;
+    }
+    .rpb-print-layout {
+      width: 100%;
+      border-collapse: collapse;
+      border: none;
+      margin: 0;
+      padding: 0;
+    }
+    .rpb-main-content {
+      flex: 1 0 auto;
+    }
+    .rpb-page-header-space, .rpb-page-footer-space {
+      display: none;
+    }
+    .rpb-page-header, .rpb-page-footer {
+      width: 100%;
+      flex-shrink: 0;
     }
     table { border-collapse: collapse; }
     td, th { word-break: break-word; }
+
+    /* ── Estilos de Impressão ── */
+    @media print {
+      body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+      .rpb-margin-wrap { 
+        display: block !important; 
+        min-height: auto !important; 
+        padding: ${top}mm ${right}mm ${bottom}mm ${left}mm !important; 
+      }
+      .rpb-page-header {
+        position: fixed;
+        top: ${top}mm;
+        left: ${left}mm;
+        right: ${right}mm;
+        height: ${headerHeight}mm;
+        z-index: 1000;
+      }
+      .rpb-page-footer {
+        position: fixed;
+        bottom: ${bottom}mm;
+        left: ${left}mm;
+        right: ${right}mm;
+        height: ${footerHeight}mm;
+        z-index: 1000;
+      }
+      .rpb-page-header-space {
+        display: block !important;
+        height: ${headerHeight}mm;
+      }
+      .rpb-page-footer-space {
+        display: block !important;
+        height: ${footerHeight}mm;
+      }
+      tr { page-break-inside: avoid; }
+    }
   `;
 
   const firstRow = data[0] || {};
   const lastRow  = data[data.length - 1] || {};
 
-  const body = [
-    renderBand(layout.bands.pageHeader,   data, firstRow, sysVars, false, subDataMap),
-    renderBand(layout.bands.reportHeader, data, firstRow, sysVars, false, subDataMap),
-    renderGroupSection(layout, data, data, sysVars, group1, group2, subDataMap),
-    renderBand(layout.bands.reportFooter, data, lastRow, sysVars, true, subDataMap),
-    renderBand(layout.bands.pageFooter,   data, lastRow, sysVars, false, subDataMap),
-  ].join('');
+  const renderedPageHeader   = renderBand(layout.bands.pageHeader,   data, firstRow, sysVars, false, subDataMap);
+  const renderedReportHeader = renderBand(layout.bands.reportHeader, data, firstRow, sysVars, false, subDataMap);
+  const renderedGroupSection = renderGroupSection(layout, data, data, sysVars, group1, group2, subDataMap);
+  const renderedReportFooter = renderBand(layout.bands.reportFooter, data, lastRow, sysVars, true, subDataMap);
+  const renderedPageFooter   = renderBand(layout.bands.pageFooter,   data, lastRow, sysVars, false, subDataMap);
+
+  const body = `
+    <!-- Cabeçalho de Página -->
+    <div class="rpb-page-header">${renderedPageHeader}</div>
+
+    <!-- Tabela Principal para Layout e Impressão -->
+    <table class="rpb-print-layout">
+      <thead>
+        <tr>
+          <td style="border: none; padding: 0;">
+            <div class="rpb-page-header-space"></div>
+          </td>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="border: none; padding: 0;">
+            <div class="rpb-main-content">
+              ${renderedReportHeader}
+              ${renderedGroupSection}
+              ${renderedReportFooter}
+            </div>
+          </td>
+        </tr>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td style="border: none; padding: 0;">
+            <div class="rpb-page-footer-space"></div>
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <!-- Rodapé de Página -->
+    <div class="rpb-page-footer">${renderedPageFooter}</div>
+  `;
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
