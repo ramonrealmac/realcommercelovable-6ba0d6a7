@@ -674,9 +674,9 @@ const ConsultaTitulosReceberForm: React.FC = () => {
   const openTitulo = useCallback((row: IRow) => {
     if (!row.financeiro_id) return;
     openTab({
-      title: `Conta a Receber ${row.titulo ?? ""}`,
-      component: "conta-receber-detalhe",
-      params: { empresa_id: row.empresa_id, financeiro_id: row.financeiro_id },
+      title: "Títulos Emitidos",
+      component: "gerar-contas-receber",
+      params: { financeiro_id: row.financeiro_id },
     });
   }, [openTab]);
 

@@ -161,10 +161,11 @@ function StandardCrudForm<T extends Record<string, any>>({
       const idx = ctrl.XData.findIndex(r => r[config.XPrimaryKey] === XInitialId);
       if (idx >= 0) {
         ctrl.setXCurrentIdx(idx);
+        ctrl.setXFormMode("view");
         setXInnerTab("cadastro");
       }
     }
-  }, [XInitialId, ctrl.XData, config.XPrimaryKey]);
+  }, [XInitialId, ctrl.XData, config.XPrimaryKey, ctrl]);
 
   const handleSelectFromSearch = (row: any) => {
     if (config.XConfirmDiscardOnSelect && ctrl.XIsEditing) {

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppContext } from "@/contexts/AppContext";
 import StandardCrudForm from "@/components/shared/StandardCrudForm";
+import { useCrudController } from "@/hooks/useCrudController";
 import type { IGridColumn } from "@/components/grid/DataGrid";
 import ClienteSearchDialog from "@/components/forms/pedido/ClienteSearchDialog";
 import { Search } from "lucide-react";
@@ -72,57 +73,7 @@ const formatDateBR = (isoDateStr: string | null | undefined) => {
   return `${day}/${month}/${year}`;
 };
 
-const XGridCols: IGridColumn[] = [
-  { key: "documento", label: "Documento", width: "120px" },
-  { key: "parcela", label: "Parcela", width: "80px", align: "right" },
-  { key: "dt_emissao", label: "Dt. Emissão", width: "100px", align: "center", render: (r) => formatDateBR(r.dt_emissao), getValue: (r) => formatDateBR(r.dt_emissao) },
-  { key: "dt_vencto", label: "Dt. Vencimento", width: "110px", align: "center", render: (r) => formatDateBR(r.dt_vencto), getValue: (r) => formatDateBR(r.dt_vencto) },
-  {
-    key: "dt_baixa",
-    label: "Dt. Baixa",
-    width: "110px",
-    align: "center",
-    render: (r) => {
-      if (!r.financeiro_baixa || r.financeiro_baixa.length === 0) return "";
-      const sorted = [...r.financeiro_baixa].sort((a, b) => 
-        new Date(b.dt_pagamento || 0).getTime() - new Date(a.dt_pagamento || 0).getTime()
-      );
-      return formatDateBR(sorted[0]?.dt_pagamento);
-    },
-    getValue: (r) => {
-      if (!r.financeiro_baixa || r.financeiro_baixa.length === 0) return "";
-      const sorted = [...r.financeiro_baixa].sort((a, b) => 
-        new Date(b.dt_pagamento || 0).getTime() - new Date(a.dt_pagamento || 0).getTime()
-      );
-      return formatDateBR(sorted[0]?.dt_pagamento) || "";
-    }
-  },
-  { key: "vl_titulo", label: "Vlr. Título", width: "110px", align: "right", render: (r) => fmtMoney(r.vl_titulo) },
-  { key: "vl_pago", label: "Vlr. Pago", width: "110px", align: "right", render: (r) => fmtMoney(r.vl_pago) },
-  {
-    key: "status",
-    label: "Status",
-    width: "120px",
-    align: "center",
-    render: (r) => {
-      const label = getStatusLabel(r);
-      let colorClass = "text-zinc-950 dark:text-zinc-50";
-      if (label === "PAGTO PARCIAL") {
-        colorClass = "text-[#0033ff] dark:text-[#4d88ff] font-bold";
-      } else if (label === "BAIXADO") {
-        colorClass = "text-emerald-600 dark:text-emerald-400 font-bold";
-      } else if (label === "CANCELADO") {
-        colorClass = "text-zinc-400 dark:text-zinc-500 line-through";
-      } else if (label === "VENCIDO") {
-        colorClass = "text-red-600 dark:text-red-400 font-bold";
-      } else if (label === "ABERTO") {
-        colorClass = "text-amber-600 dark:text-amber-400 font-bold";
-      }
-      return <span className={colorClass}>{label}</span>;
-    },
-    getValue: (r) => getStatusLabel(r)
-  }
-];
+
 
 const DataBaixaField: React.FC<{ financeiroId?: number; labelClass: string; inputClass: string }> = ({ financeiroId, labelClass, inputClass }) => {
   const [XDate, setXDate] = useState<string>("");
@@ -378,7 +329,7 @@ const FinanceiroBaixasGrid: React.FC<FinanceiroBaixasGridProps> = ({ financeiroI
   );
 };
 
-const GerarContasReceberForm: React.FC = () => {
+const GerarContasReceberForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
   const { XEmpresaId, XEmpresas } = useAppContext();
 
   const [XEmpresasOpt, setXEmpresasOpt] = useState<IOpt[]>([]);
@@ -388,6 +339,101 @@ const GerarContasReceberForm: React.FC = () => {
   const [XPlanos, setXPlanos] = useState<IOpt[]>([]);
   const [XSearchOpen, setXSearchOpen] = useState(false);
   const [XSearchTarget, setXSearchTarget] = useState<((c: any) => void) | null>(null);
+
+  const XGridCols = useMemo<IGridColumn[]>(() => [
+    { key: "documento", label: "Documento", width: "120px" },
+    { key: "parcela", label: "Parcela", width: "80px", align: "right" },
+    { key: "dt_emissao", label: "Dt. Emissão", width: "100px", align: "center", render: (r) => formatDateBR(r.dt_emissao), getValue: (r) => formatDateBR(r.dt_emissao) },
+    { key: "dt_vencto", label: "Dt. Vencimento", width: "110px", align: "center", render: (r) => formatDateBR(r.dt_vencto), getValue: (r) => formatDateBR(r.dt_vencto) },
+    {
+      key: "dt_baixa",
+      label: "Dt. Baixa",
+      width: "110px",
+      align: "center",
+      render: (r) => {
+        if (!r.financeiro_baixa || r.financeiro_baixa.length === 0) return "";
+        const sorted = [...r.financeiro_baixa].sort((a, b) => 
+          new Date(b.dt_pagamento || 0).getTime() - new Date(a.dt_pagamento || 0).getTime()
+        );
+        return formatDateBR(sorted[0]?.dt_pagamento);
+      },
+      getValue: (r) => {
+        if (!r.financeiro_baixa || r.financeiro_baixa.length === 0) return "";
+        const sorted = [...r.financeiro_baixa].sort((a, b) => 
+          new Date(b.dt_pagamento || 0).getTime() - new Date(a.dt_pagamento || 0).getTime()
+        );
+        return formatDateBR(sorted[0]?.dt_pagamento) || "";
+      }
+    },
+    {
+      key: "movimento_id",
+      label: "Pedido",
+      width: "90px",
+      align: "center",
+      render: (r) => r.movimento?.nr_movimento || "",
+      getValue: (r) => r.movimento?.nr_movimento || ""
+    },
+    {
+      key: "cadastro_id",
+      label: "Cliente",
+      width: "180px",
+      render: (r) => XClientes.find(c => String(c.id) === String(r.cadastro_id))?.label ?? String(r.cadastro_id || ""),
+      getValue: (r) => XClientes.find(c => String(c.id) === String(r.cadastro_id))?.label ?? String(r.cadastro_id || "")
+    },
+    {
+      key: "portador_id",
+      label: "Portador",
+      width: "120px",
+      render: (r) => XPortadores.find(p => String(p.id) === String(r.portador_id))?.label ?? String(r.portador_id || ""),
+      getValue: (r) => XPortadores.find(p => String(p.id) === String(r.portador_id))?.label ?? String(r.portador_id || "")
+    },
+    {
+      key: "plano_id",
+      label: "Plano de Contas",
+      width: "150px",
+      render: (r) => XPlanos.find(p => String(p.id) === String(r.plano_id))?.label ?? String(r.plano_id || ""),
+      getValue: (r) => XPlanos.find(p => String(p.id) === String(r.plano_id))?.label ?? String(r.plano_id || "")
+    },
+    { key: "vl_titulo", label: "Vlr. Título", width: "110px", align: "right", render: (r) => fmtMoney(r.vl_titulo) },
+    { key: "vl_pago", label: "Vlr. Pago", width: "110px", align: "right", render: (r) => fmtMoney(r.vl_pago) },
+    {
+      key: "pct_juros",
+      label: "Juros",
+      width: "90px",
+      align: "right",
+      render: (r) => fmtMoney(r.pct_juros)
+    },
+    {
+      key: "pct_multa",
+      label: "Multa",
+      width: "90px",
+      align: "right",
+      render: (r) => fmtMoney(r.pct_multa)
+    },
+    {
+      key: "status",
+      label: "Status",
+      width: "120px",
+      align: "center",
+      render: (r) => {
+        const label = getStatusLabel(r);
+        let colorClass = "text-zinc-950 dark:text-zinc-50";
+        if (label === "PAGTO PARCIAL") {
+          colorClass = "text-[#0033ff] dark:text-[#4d88ff] font-bold";
+        } else if (label === "BAIXADO") {
+          colorClass = "text-emerald-600 dark:text-emerald-400 font-bold";
+        } else if (label === "CANCELADO") {
+          colorClass = "text-zinc-400 dark:text-zinc-500 line-through";
+        } else if (label === "VENCIDO") {
+          colorClass = "text-red-600 dark:text-red-400 font-bold";
+        } else if (label === "ABERTO") {
+          colorClass = "text-amber-600 dark:text-amber-400 font-bold";
+        }
+        return <span className={colorClass}>{label}</span>;
+      },
+      getValue: (r) => getStatusLabel(r)
+    }
+  ], [XClientes, XPortadores, XPlanos]);
 
   useEffect(() => {
     if (!XEmpresaId) return;
@@ -417,7 +463,7 @@ const GerarContasReceberForm: React.FC = () => {
     })();
   }, [XEmpresas, XEmpresaId]);
 
-  const XDefaultRecord: Partial<IFinanceiro> = {
+  const XDefaultRecord = useMemo<Partial<IFinanceiro>>(() => ({
     empresa_id: XEmpresaId || 0,
     documento: "",
     movimento_id: 0,
@@ -440,7 +486,95 @@ const GerarContasReceberForm: React.FC = () => {
     pct_juros: 0,
     pct_multa: 0,
     parcela: 1
-  };
+  }), [XEmpresaId]);
+
+  const crudConfig = useMemo(() => ({
+    XTableName: "financeiro",
+    XPrimaryKey: "financeiro_id",
+    XTitle: "Gerenciador de Títulos Manuais",
+    XEmpresaId: XEmpresaId,
+    XDefaultRecord,
+    XSoftDelete: false,
+    XCanEdit: (rec: IFinanceiro) => {
+      if (!rec) return true;
+      if (rec.status === "B" || rec.status === "C") return false;
+      return getStatusLabel(rec) !== "PAGTO PARCIAL";
+    },
+    XApplyFilter: (q) => q.eq("tp_conta", "R").eq("ativo", "S"),
+    XOnBeforeSave: (rec: IFinanceiro) => {
+      if (!rec.empresa_id) throw new Error("A Empresa é obrigatória.");
+      if (!rec.documento?.trim()) throw new Error("O Documento é obrigatório.");
+      if (!rec.cadastro_id) throw new Error("O Cliente é obrigatório.");
+      if (!rec.parcela || rec.parcela <= 0) throw new Error("O Número da Parcela é obrigatório.");
+      if (!rec.dt_emissao) throw new Error("A Data de Emissão é obrigatória.");
+      if (!rec.dt_vencto) throw new Error("A Data de Vencimento é obrigatória.");
+      if ((rec.vl_titulo ?? 0) <= 0) throw new Error("O Valor do Título deve ser maior que zero.");
+
+      return {
+        ...rec,
+        documento: rec.documento.trim(),
+        planoconta_id: rec.plano_id || 0,
+        tp_conta: "R",
+        ativo: "S",
+        status: rec.status || "A",
+        movimento_id: rec.movimento_id ? Number(rec.movimento_id) : 0,
+        parcela: rec.parcela ? Number(rec.parcela) : 1
+      };
+    }
+  }), [XEmpresaId, XDefaultRecord]);
+
+  const ctrl = useCrudController<IFinanceiro>(crudConfig);
+
+  // Enriquecer os dados com baixas e número do movimento em segundo plano
+  useEffect(() => {
+    if (!ctrl.XData || ctrl.XData.length === 0) return;
+
+    // Se todos já estiverem enriquecidos, pula para evitar loop infinito
+    const alreadyEnriched = ctrl.XData.every(r => "financeiro_baixa" in r && "movimento" in r);
+    if (alreadyEnriched) return;
+
+    let active = true;
+
+    const enrich = async () => {
+      try {
+        const financeiroIds = ctrl.XData.map(r => r.financeiro_id).filter(Boolean);
+        const movimentoIds = ctrl.XData.map(r => r.movimento_id).filter(Boolean);
+
+        const [bxRes, movRes] = await Promise.all([
+          financeiroIds.length > 0
+            ? supabase.from("financeiro_baixa").select("financeiro_id, dt_pagamento, vl_pago").in("financeiro_id", financeiroIds)
+            : Promise.resolve({ data: null }),
+          movimentoIds.length > 0
+            ? supabase.from("movimento").select("movimento_id, nr_movimento").in("movimento_id", movimentoIds)
+            : Promise.resolve({ data: null })
+        ]);
+
+        if (active) {
+          const bxs = bxRes.data || [];
+          const movs = movRes.data || [];
+
+          const enriched = ctrl.XData.map(row => {
+            const rowBaixas = bxs.filter((b) => b.financeiro_id === row.financeiro_id);
+            const rowMov = movs.find((m) => m.movimento_id === row.movimento_id);
+            return {
+              ...row,
+              financeiro_baixa: rowBaixas,
+              movimento: rowMov
+            };
+          });
+          ctrl.setXData(enriched);
+        }
+      } catch (err) {
+        console.error("Erro ao enriquecer dados do financeiro:", err);
+      }
+    };
+
+    enrich();
+
+    return () => {
+      active = false;
+    };
+  }, [ctrl.XData, ctrl.setXData, ctrl]);
 
   const inputCls = "w-full border border-border rounded px-3 py-1.5 text-sm bg-card focus:ring-2 focus:ring-ring outline-none";
   const readonlyLeftCls = "w-full border border-border rounded px-3 py-1.5 text-sm bg-secondary/50 text-left focus:outline-none";
@@ -450,6 +584,8 @@ const GerarContasReceberForm: React.FC = () => {
   return (
     <>
       <StandardCrudForm<IFinanceiro>
+      XCtrl={ctrl}
+      XInitialId={initialId}
       config={{
         XTableName: "financeiro",
         XPrimaryKey: "financeiro_id",
@@ -457,7 +593,6 @@ const GerarContasReceberForm: React.FC = () => {
         XEmpresaId: XEmpresaId,
         XDefaultRecord,
         XSoftDelete: false,
-        XSelectCols: "*, financeiro_baixa(dt_pagamento, vl_pago)",
         XCanEdit: (rec) => {
           if (!rec) return true;
           if (rec.status === "B" || rec.status === "C") return false;

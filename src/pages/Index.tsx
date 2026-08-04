@@ -130,7 +130,7 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "nfe-form": return <NfeEmitidaForm initialId={params?.nfe_cabecalho_id} />;
       case "outras-notas": return <OutrasNotasForm initialId={params?.nfe_cabecalho_id} />;
       case "consulta-titulos-receber": return <ConsultaTitulosReceberForm />;
-      case "gerar-contas-receber": return <GerarContasReceberForm />;
+      case "gerar-contas-receber": return <GerarContasReceberForm initialId={params?.financeiro_id} />;
       case "baixa-por-cliente": return <BaixaPorClienteForm />;
       case "consulta-titulos-pagar": return <ConsultaTitulosPagarForm />;
       case "gerar-contas-pagar": return <GerarContasPagarForm />;
