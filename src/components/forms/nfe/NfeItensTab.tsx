@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
@@ -852,9 +852,15 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
   const filteredCfops = useMemo(() => {
     const isEntrada = XCabecalho?.tp_nf === 0;
     if (isEntrada) {
-      return XCfops.filter(c => c.cd_cfop.startsWith("1") || c.cd_cfop.startsWith("2") || c.cd_cfop.startsWith("3"));
+      return XCfops.filter(c => {
+        const cd = String(c.cd_cfop || "");
+        return cd.startsWith("1") || cd.startsWith("2") || cd.startsWith("3");
+      });
     } else {
-      return XCfops.filter(c => c.cd_cfop.startsWith("5") || c.cd_cfop.startsWith("6") || c.cd_cfop.startsWith("7"));
+      return XCfops.filter(c => {
+        const cd = String(c.cd_cfop || "");
+        return cd.startsWith("5") || cd.startsWith("6") || cd.startsWith("7");
+      });
     }
   }, [XCfops, XCabecalho?.tp_nf]);
 
@@ -1044,7 +1050,7 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
             allowedPrefix = "1";
           }
           
-          const filteredCfops = XCfops.filter(c => c.cd_cfop.startsWith(allowedPrefix));
+          const filteredCfops = XCfops.filter(c => String(c.cd_cfop || "").startsWith(allowedPrefix));
           const selectedCfop = filteredCfops.find(c => c.cd_cfop === r.cfop_entrada);
           
           return (
@@ -1490,7 +1496,7 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
         open={XSearchOpen}
         onClose={() => {
           setXSearchOpen(false);
-          setXSearchItemIdx(null);
+          setXSearchItemNr(null);
         }}
         onSelect={handleSelectProduto}
       />

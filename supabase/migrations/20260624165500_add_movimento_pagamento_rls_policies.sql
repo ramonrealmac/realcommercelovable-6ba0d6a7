@@ -2,6 +2,7 @@
 -- Adiciona políticas de UPDATE e DELETE na tabela movimento_pagamento para usuários autenticados
 
 -- 1. Cria a política de UPDATE para usuários autenticados
+DROP POLICY IF EXISTS "Auth can update mov_pgto" ON public.movimento_pagamento;
 CREATE POLICY "Auth can update mov_pgto" ON public.movimento_pagamento 
 FOR UPDATE 
 TO authenticated 
@@ -9,6 +10,7 @@ USING (true)
 WITH CHECK (true);
 
 -- 2. Cria a política de DELETE para usuários autenticados
+DROP POLICY IF EXISTS "Auth can delete mov_pgto" ON public.movimento_pagamento;
 CREATE POLICY "Auth can delete mov_pgto" ON public.movimento_pagamento 
 FOR DELETE 
 TO authenticated 

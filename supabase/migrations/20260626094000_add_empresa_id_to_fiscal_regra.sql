@@ -17,7 +17,8 @@ BEGIN
   END IF;
 END $$;
 
--- 2. Registro da Versão
+DELETE FROM public.sistema_versoes WHERE versao = '1.18.4';
+
 INSERT INTO public.sistema_versoes (versao, titulo, detalhes, autor, fase, tecnologias, created_at)
 VALUES (
   '1.18.4',
@@ -27,11 +28,4 @@ VALUES (
   'Produção',
   ARRAY['React', 'TypeScript', 'PostgreSQL', 'Supabase'],
   now()
-)
-ON CONFLICT (versao) DO UPDATE 
-SET titulo = EXCLUDED.titulo,
-    detalhes = EXCLUDED.detalhes,
-    autor = EXCLUDED.autor,
-    fase = EXCLUDED.fase,
-    tecnologias = EXCLUDED.tecnologias,
-    created_at = EXCLUDED.created_at;
+);
