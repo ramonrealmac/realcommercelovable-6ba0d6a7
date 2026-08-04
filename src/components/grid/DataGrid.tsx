@@ -215,6 +215,54 @@ function downloadFile(content: string, filename: string, mimeType: string) {
   URL.revokeObjectURL(url);
 }
 
+interface GridFilterInputProps {
+  placeholder: string;
+  initialValue: string;
+  onChange: (value: string) => void;
+  shouldDefer: boolean;
+}
+
+const GridFilterInput: React.FC<GridFilterInputProps> = ({
+  placeholder,
+  initialValue,
+  onChange,
+  shouldDefer,
+}) => {
+  const [value, setValue] = useState(initialValue);
+
+  useEffect(() => {
+    setValue(initialValue);
+  }, [initialValue]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      onChange(value);
+    }
+  };
+
+  const handleBlur = () => {
+    onChange(value);
+  };
+
+  return (
+    <input
+      type="text"
+      placeholder={placeholder}
+      value={value}
+      onChange={(e) => {
+        setValue(e.target.value);
+        if (!shouldDefer) {
+          onChange(e.target.value);
+        }
+      }}
+      onKeyDown={handleKeyDown}
+      onBlur={handleBlur}
+      className="px-2 py-1 text-xs border-r border-border outline-none last:border-r-0 bg-card min-w-0"
+    />
+  );
+};
+
 // --- DataGrid Component ---
 const DataGrid: React.FC<DataGridProps> = ({
   columns,
@@ -438,21 +486,25 @@ const DataGrid: React.FC<DataGridProps> = ({
         {/* Filters */}
         {showFilters && filterValues && onFilterChange && (
           <div className="bg-card border-b border-border sticky top-0 z-20" style={{ display: "grid", gridTemplateColumns: gridTemplate }}>
-            {XVisibleCols.map(c => (
-              <input
-                key={c.key}
-                type="text"
-                placeholder={typeof c.label === "string" ? c.label : ""}
-                value={filterValues[c.key] || ""}
-                onChange={e => onFilterChange(c.key, e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                  }
-                }}
-                className="px-2 py-1 text-xs border-r border-border outline-none last:border-r-0 bg-card min-w-0"
-              />
-            ))}
+            {XVisibleCols.map(c => {
+              const isDateOrStatus = 
+                c.key === "status" || 
+                c.key === "situacao" || 
+                c.key === "dt_baixa" || 
+                c.key.startsWith("dt_") || 
+                c.key.includes("date") || 
+                c.key.includes("data");
+
+              return (
+                <GridFilterInput
+                  key={c.key}
+                  placeholder={typeof c.label === "string" ? c.label : ""}
+                  initialValue={filterValues[c.key] || ""}
+                  onChange={val => onFilterChange(c.key, val)}
+                  shouldDefer={isDateOrStatus}
+                />
+              );
+            })}
           </div>
         )}
 

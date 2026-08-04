@@ -205,7 +205,9 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
   }), { vl_produto: 0, vl_desconto: 0, vl_frete: 0, vl_despesa: 0, vl_seguro: 0, vl_outro: 0, vl_movimento: 0 });
 
   const finalDesconto = record.tp_desconto === 'P' ? Number(record.vl_desconto || 0) : T.vl_desconto;
-  const finalTotal = record.tp_desconto === 'P' ? Math.max(0, T.vl_movimento - finalDesconto) : T.vl_movimento;
+  const finalTotal = record.tp_desconto === 'P' 
+    ? Math.max(0, T.vl_produto + T.vl_frete + T.vl_despesa + T.vl_seguro + T.vl_outro - finalDesconto) 
+    : T.vl_movimento;
 
   const visualCols = [
     { key: "cd_produto", label: "Código", width: "90px", align: "right" as const, render: (r: any) => r.cd_produto || (r.produto_id ?? "") },
@@ -665,12 +667,30 @@ const PedidoForm: React.FC = () => {
 
   // Status change helpers (Orçamento / Caixa buttons)
   // Usa refresh do CRUD em vez de window.location.reload() para preservar estado
-  const mudarStatus = useCallback(async (movimento_id: number, novo: string, confirmMsg?: string) => {
+  const mudarStatus = useCallback(async (movimento_id: number, novo: string, confirmMsg?: string, manterDescontos = false) => {
     if (!movimento_id) { toast.error("Salve o pedido primeiro."); return; }
     if (confirmMsg && !confirm(confirmMsg)) return;
 
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData.user?.id;
+
+    // Se st_pedido for mudar para "O" (Orçamento) e quisermos manter os descontos, 
+    // salvamos o estado original do desconto do cabeçalho e dos itens antes da RPC rodar
+    let originalMov = null;
+    let originalItens = null;
+    if (novo === "O" && manterDescontos) {
+      const { data: mov } = await supabase.from("movimento")
+        .select("tp_desconto, vl_desconto, pc_desconto, vl_movimento, vl_produto")
+        .eq("movimento_id", movimento_id)
+        .single();
+      originalMov = mov;
+
+      const { data: itens } = await supabase.from("movimento_item")
+        .select("movimento_item_id, vl_desconto, pc_desconto, vl_movimento")
+        .eq("movimento_id", movimento_id)
+        .eq("excluido", false);
+      originalItens = itens;
+    }
 
     const { data, error } = await db.rpc("fu_mudar_status_pedido_pdv", {
       _movimento_id: movimento_id,
@@ -686,6 +706,38 @@ const PedidoForm: React.FC = () => {
     if (data?.error) {
       toast.error(data.error);
       return;
+    }
+
+    // Se mantivemos os descontos, restauramos no banco logo após a RPC terminar
+    if (novo === "O" && manterDescontos && originalMov) {
+      const { error: errMov } = await supabase.from("movimento")
+        .update({
+          tp_desconto: originalMov.tp_desconto,
+          vl_desconto: originalMov.vl_desconto,
+          pc_desconto: originalMov.pc_desconto,
+          vl_movimento: originalMov.vl_movimento
+        })
+        .eq("movimento_id", movimento_id);
+
+      if (errMov) {
+        console.error("Erro ao restaurar desconto do movimento:", errMov.message);
+      }
+
+      if (originalItens && originalItens.length > 0) {
+        for (const item of originalItens) {
+          const { error: errItem } = await supabase.from("movimento_item")
+            .update({
+              vl_desconto: item.vl_desconto,
+              pc_desconto: item.pc_desconto,
+              vl_movimento: item.vl_movimento
+            })
+            .eq("movimento_item_id", item.movimento_item_id);
+          
+          if (errItem) {
+            console.error(`Erro ao restaurar desconto do item ${item.movimento_item_id}:`, errItem.message);
+          }
+        }
+      }
     }
 
     toast.success(`Status alterado para ${ST_PEDIDO_LABELS[novo] || novo}.`);
@@ -892,7 +944,7 @@ const PedidoForm: React.FC = () => {
                 <ToolbarBtn
                   icon={<Unlock size={18} />}
                   label="Retirar do Caixa"
-                  onClick={() => mudarStatus(currentRecord.movimento_id, "O", "Confirma a retirada do pedido do Caixa? O estoque reservado será liberado e descontos serão zerados.")}
+                  onClick={() => mudarStatus(currentRecord.movimento_id, "O", "Confirma a retirada do pedido do Caixa? O estoque reservado será liberado.", true)}
                   color="destructive"
                 />
               )}
@@ -910,7 +962,7 @@ const PedidoForm: React.FC = () => {
                 <ToolbarBtn
                   icon={<Package size={18} />}
                   label="Remover Reserva"
-                  onClick={() => mudarStatus(currentRecord.movimento_id, "O", "Confirma a retirada da reserva? O estoque reservado será liberado.")}
+                  onClick={() => mudarStatus(currentRecord.movimento_id, "O", "Confirma a retirada da reserva? O estoque reservado será liberado.", true)}
                   color="warning"
                 />
               )}
@@ -1166,11 +1218,11 @@ const PedidoForm: React.FC = () => {
                   refreshToken={XPagamentoRefreshToken}
                   openDialog={XOpenPagtoDialog}
                   setOpenDialog={setXOpenPagtoDialog}
-                  onMudarStatus={(novo) => {
+                  onMudarStatus={async (novo) => {
                     if (novo === "REFRESH") {
-                      if (XCrudRefreshRef.current) XCrudRefreshRef.current();
+                      if (XCrudRefreshRef.current) await XCrudRefreshRef.current();
                     } else {
-                      mudarStatus(ped.movimento_id, novo);
+                      await mudarStatus(ped.movimento_id, novo);
                     }
                   }}
                   onRetornar={() => setInnerTab("cadastro")}

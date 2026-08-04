@@ -30,11 +30,11 @@ const buildGridCols = (
     render: r => depositos.find(d => d.id === r.deposito_id)?.label || (r.deposito_id ? `#${r.deposito_id}` : "--") 
   },
   { 
-    key: "status", 
+    key: "st_pedido", 
     label: "Status", 
     width: "120px", 
     align: "center", 
-    render: r => r.status === "F" ? "Finalizado" : "Aberto" 
+    render: r => r.st_pedido === "F" ? "Finalizado" : "Aberto" 
   },
   { key: "observacao", label: "Observação Geral", width: "3fr" },
 ];
@@ -42,7 +42,7 @@ const buildGridCols = (
 const XDefaultRecord: Partial<IMovimento> = {
   tp_movimento: "AE",
   tp_origem: "AJS",
-  status: "A", // 'A' Aberto, 'F' Fechado
+  st_pedido: "A", // 'A' Aberto, 'F' Fechado
   faturado: "N",
   tp_desconto: "N",
   pc_desconto: 0,
@@ -141,7 +141,7 @@ export default function AjusteEstoqueForm() {
         XCurrentRecordRef.current = currentRecord;
         if (!currentRecord?.movimento_id || isEditing) return null;
         
-        const isAberto = currentRecord.status === "A";
+        const isAberto = currentRecord.st_pedido === "A";
         
         return (
           <>
@@ -170,7 +170,7 @@ export default function AjusteEstoqueForm() {
           if (!rec.dt_emissao) throw new Error("Informe a Data do Ajuste.");
           if (!rec.deposito_id) throw new Error("Selecione o Depósito Padrão.");
           
-          if (mode === "edit" && rec.status && rec.status === "F") {
+          if (mode === "edit" && rec.st_pedido && rec.st_pedido === "F") {
             throw new Error("Este ajuste de estoque já foi finalizado e está em modo somente leitura.");
           }
 
@@ -214,7 +214,7 @@ export default function AjusteEstoqueForm() {
             return (
               <AjusteEstoqueItensTab
                 pedido={ped?.movimento_id ? ped : null}
-                podeEditar={ped?.status === "A"}
+                podeEditar={ped?.st_pedido === "A"}
                 autoNovoTrigger={XAutoNovoItem}
               />
             );
@@ -222,7 +222,7 @@ export default function AjusteEstoqueForm() {
         },
       ]}
       renderCadastro={({ record, setField, mode, isEditing }) => {
-        const isAberto = (record.status || "A") === "A";
+        const isAberto = (record.st_pedido || "A") === "A";
         const ro = !isEditing || (mode === "edit" && !isAberto);
 
         return (
@@ -276,9 +276,9 @@ export default function AjusteEstoqueForm() {
                   <input 
                     readOnly 
                     tabIndex={-1}
-                    value={record.status === "F" ? "Finalizado / Somente Leitura" : "Aberto / Em Edição"} 
+                    value={record.st_pedido === "F" ? "Finalizado / Somente Leitura" : "Aberto / Em Edição"} 
                     className={`w-full border rounded-lg px-3 py-1.5 text-sm mt-1 outline-none font-bold text-center border-border/80 ${
-                      record.status === "F" ? "bg-emerald-500/10 text-emerald-600" : "bg-cyan-500/10 text-cyan-600"
+                      record.st_pedido === "F" ? "bg-emerald-500/10 text-emerald-600" : "bg-cyan-500/10 text-cyan-600"
                     }`} 
                   />
                 </div>

@@ -50,7 +50,7 @@ interface IProps {
   refreshToken?: number;
   openDialog?: boolean;
   setOpenDialog?: (v: boolean) => void;
-  onMudarStatus?: (novo: string) => void;
+  onMudarStatus?: (novo: string) => Promise<void> | void;
   onRetornar?: () => void;
 }
 
@@ -120,7 +120,7 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
   useEffect(() => {
     if (!XEmpresaId) return;
     (async () => {
-      let query = supabase.from("condicao_pagamento")
+      const query = supabase.from("condicao_pagamento")
         .select(`
           condicao_id, descricao, tipo_prazo, qtd_parcelas, intervalo, plano_conta_id, meio_pagamento_id, empresa_id,
           prazo_1, prazo_2, prazo_3, prazo_4, prazo_5, prazo_6, prazo_7, prazo_8, prazo_9, prazo_10, prazo_11, prazo_12
@@ -154,7 +154,7 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
   }, [XEmpresaId, XEmpresaMatrizId]);
 
   const vlDesconto = Number(pedido?.vl_desconto || 0);
-  const subtotal = Number(totalPedidoProp ?? pedido?.vl_produto ?? ((pedido?.vl_movimento ?? 0) + vlDesconto));
+  const subtotal = Number(pedido?.vl_produto || 0);
   const totalPedido = Math.max(0, subtotal - vlDesconto);
   const totalPago = XPagtos.reduce((a, p) => a + Number(p.vl_pagamento || 0), 0);
 
@@ -162,6 +162,84 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
 
   const handleConfirmarPagamento = async (linhas: IPagamentoLinha[], vlDesc: number, pcDesc: number, enviarAoCaixa?: boolean) => {
     if (!pedido?.movimento_id) return;
+
+    if (linhas.length === 0) {
+      // CASO: Excluindo todos os pagamentos
+      
+      // 1. Guardamos as informações de desconto originais do movimento e dos itens
+      const { data: originalMov } = await supabase.from("movimento")
+        .select("tp_desconto, vl_produto")
+        .eq("movimento_id", pedido.movimento_id)
+        .single();
+        
+      const { data: originalItens } = await supabase.from("movimento_item")
+        .select("movimento_item_id, vl_desconto, pc_desconto, vl_movimento")
+        .eq("movimento_id", pedido.movimento_id)
+        .eq("excluido", false);
+
+      // 2. Limpa todos os pagamentos no banco de dados para este pedido
+      const { error: errDel } = await supabase.from("movimento_pagamento")
+        .update({ excluido: true })
+        .eq("movimento_id", pedido.movimento_id);
+      
+      if (errDel) { toast.error("Erro ao limpar pagamentos: " + errDel.message); return; }
+
+      // 3. Se o status atual for "F" (Caixa), retorna para "O" (Orçamento) usando o RPC
+      if (pedido.st_pedido === "F") {
+        if (onMudarStatus) {
+          await onMudarStatus("O");
+        }
+
+        // Como o RPC "fu_mudar_status_pedido_pdv" reseta tp_desconto para 'N' e zera os itens,
+        // nós restauramos os valores originais em seguida.
+        const tpDescontoOriginal = originalMov?.tp_desconto || "N";
+        const vlProdutoOriginal = originalMov ? Number(originalMov.vl_produto || 0) : subtotal;
+
+        // Restauramos o tp_desconto no movimento (com vl_desconto = 0, pc_desconto = 0 e vl_movimento = vlProdutoOriginal)
+        await supabase.from("movimento")
+          .update({
+            tp_desconto: tpDescontoOriginal,
+            vl_desconto: 0,
+            pc_desconto: 0,
+            vl_movimento: vlProdutoOriginal
+          })
+          .eq("movimento_id", pedido.movimento_id);
+
+        // Restauramos os descontos originais de cada item
+        if (originalItens && originalItens.length > 0) {
+          for (const item of originalItens) {
+            await supabase.from("movimento_item")
+              .update({
+                vl_desconto: item.vl_desconto,
+                pc_desconto: item.pc_desconto,
+                vl_movimento: item.vl_movimento
+              })
+              .eq("movimento_item_id", item.movimento_item_id);
+          }
+        }
+      } else {
+        // Se já for "O" (Orçamento), apenas zera os descontos e atualiza o total no movimento,
+        // PRESERVANDO o tp_desconto original
+        const tpDescontoOriginal = originalMov?.tp_desconto || "N";
+        const vlProdutoOriginal = originalMov ? Number(originalMov.vl_produto || 0) : subtotal;
+
+        const { error: errMov } = await supabase.from("movimento")
+          .update({ 
+            vl_desconto: 0, 
+            pc_desconto: 0,
+            tp_desconto: tpDescontoOriginal,
+            vl_movimento: vlProdutoOriginal
+          })
+          .eq("movimento_id", pedido.movimento_id);
+        
+        if (errMov) { toast.error("Erro ao atualizar pedido: " + errMov.message); return; }
+      }
+
+      toast.success("Pagamentos excluídos e pedido ajustado.");
+      await load();
+      if (onMudarStatus) onMudarStatus("REFRESH");
+      return;
+    }
 
     // Atualiza o desconto e o valor total no cabeçalho do pedido
     const newVlMovimento = Math.max(0, subtotal - vlDesc);

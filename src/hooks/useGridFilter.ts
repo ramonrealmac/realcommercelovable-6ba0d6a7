@@ -28,6 +28,23 @@ const isNumericCodeColumn = (key: string, col?: IFilterColumn) => {
   );
 };
 
+const isExactMatchColumn = (key: string, col?: IFilterColumn) => {
+  const k = key.toLowerCase();
+  const labelStr = typeof col?.label === "string" ? col.label.toLowerCase() : "";
+  return (
+    isNumericCodeColumn(key, col) ||
+    k === "status" ||
+    k === "situacao" ||
+    k === "dt_baixa" ||
+    k.startsWith("dt_") ||
+    k.includes("date") ||
+    k.includes("data") ||
+    labelStr.includes("data") ||
+    labelStr.includes("status") ||
+    labelStr.includes("situação")
+  );
+};
+
 export function useGridFilter<T extends Record<string, any>>(
   data: T[],
   filters: Record<string, string>,
@@ -43,7 +60,7 @@ export function useGridFilter<T extends Record<string, any>>(
         const val = col?.getValue ? col.getValue(row) : row[key];
         const normalizedVal = normalize(val);
 
-        if (isNumericCodeColumn(key, col)) {
+        if (isExactMatchColumn(key, col)) {
           if (normalizedVal !== filterValue) return false;
         } else {
           if (!normalizedVal.includes(filterValue)) return false;

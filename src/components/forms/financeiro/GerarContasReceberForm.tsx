@@ -75,10 +75,53 @@ const formatDateBR = (isoDateStr: string | null | undefined) => {
 const XGridCols: IGridColumn[] = [
   { key: "documento", label: "Documento", width: "120px" },
   { key: "parcela", label: "Parcela", width: "80px", align: "right" },
-  { key: "dt_emissao", label: "Dt. Emissão", width: "100px", align: "center", render: (r) => formatDateBR(r.dt_emissao) },
-  { key: "dt_vencto", label: "Dt. Vencimento", width: "110px", align: "center", render: (r) => formatDateBR(r.dt_vencto) },
+  { key: "dt_emissao", label: "Dt. Emissão", width: "100px", align: "center", render: (r) => formatDateBR(r.dt_emissao), getValue: (r) => formatDateBR(r.dt_emissao) },
+  { key: "dt_vencto", label: "Dt. Vencimento", width: "110px", align: "center", render: (r) => formatDateBR(r.dt_vencto), getValue: (r) => formatDateBR(r.dt_vencto) },
+  {
+    key: "dt_baixa",
+    label: "Dt. Baixa",
+    width: "110px",
+    align: "center",
+    render: (r) => {
+      if (!r.financeiro_baixa || r.financeiro_baixa.length === 0) return "";
+      const sorted = [...r.financeiro_baixa].sort((a, b) => 
+        new Date(b.dt_pagamento || 0).getTime() - new Date(a.dt_pagamento || 0).getTime()
+      );
+      return formatDateBR(sorted[0]?.dt_pagamento);
+    },
+    getValue: (r) => {
+      if (!r.financeiro_baixa || r.financeiro_baixa.length === 0) return "";
+      const sorted = [...r.financeiro_baixa].sort((a, b) => 
+        new Date(b.dt_pagamento || 0).getTime() - new Date(a.dt_pagamento || 0).getTime()
+      );
+      return formatDateBR(sorted[0]?.dt_pagamento) || "";
+    }
+  },
   { key: "vl_titulo", label: "Vlr. Título", width: "110px", align: "right", render: (r) => fmtMoney(r.vl_titulo) },
-  { key: "status", label: "Status", width: "120px", align: "center", render: (r) => getStatusLabel(r) }
+  { key: "vl_pago", label: "Vlr. Pago", width: "110px", align: "right", render: (r) => fmtMoney(r.vl_pago) },
+  {
+    key: "status",
+    label: "Status",
+    width: "120px",
+    align: "center",
+    render: (r) => {
+      const label = getStatusLabel(r);
+      let colorClass = "text-zinc-950 dark:text-zinc-50";
+      if (label === "PAGTO PARCIAL") {
+        colorClass = "text-[#0033ff] dark:text-[#4d88ff] font-bold";
+      } else if (label === "BAIXADO") {
+        colorClass = "text-emerald-600 dark:text-emerald-400 font-bold";
+      } else if (label === "CANCELADO") {
+        colorClass = "text-zinc-400 dark:text-zinc-500 line-through";
+      } else if (label === "VENCIDO") {
+        colorClass = "text-red-600 dark:text-red-400 font-bold";
+      } else if (label === "ABERTO") {
+        colorClass = "text-amber-600 dark:text-amber-400 font-bold";
+      }
+      return <span className={colorClass}>{label}</span>;
+    },
+    getValue: (r) => getStatusLabel(r)
+  }
 ];
 
 const DataBaixaField: React.FC<{ financeiroId?: number; labelClass: string; inputClass: string }> = ({ financeiroId, labelClass, inputClass }) => {
@@ -219,6 +262,122 @@ const MeioPagamentoSelect: React.FC<{
   );
 };
 
+interface FinanceiroBaixasGridProps {
+  financeiroId: number;
+  empresaId: number;
+}
+
+interface IBaixa {
+  financeiro_baixa_id: number;
+  documento: string | null;
+  dt_pagamento: string | null;
+  vl_pago: number | null;
+  recibo: string | null;
+  conta_id: string | null;
+  tipo_pag_rec_id: number | null;
+  observacao: string | null;
+}
+
+const FinanceiroBaixasGrid: React.FC<FinanceiroBaixasGridProps> = ({ financeiroId, empresaId }) => {
+  const [baixas, setBaixas] = useState<IBaixa[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [contas, setContas] = useState<{ id: string; nome: string }[]>([]);
+  const [meios, setMeios] = useState<{ id: number; nome: string }[]>([]);
+
+  useEffect(() => {
+    let active = true;
+
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const [ctRes, mpRes, bxRes] = await Promise.all([
+          supabase.from("conta").select("conta_id, nome_conta").eq("empresa_id", empresaId),
+          supabase.from("meio_pagamento").select("meio_pagamento_id, descricao"),
+          supabase.from("financeiro_baixa")
+            .select("financeiro_baixa_id, documento, dt_pagamento, vl_pago, recibo, conta_id, tipo_pag_rec_id, observacao")
+            .eq("financeiro_id", financeiroId)
+            .order("financeiro_baixa_id")
+        ]);
+
+        if (active) {
+          if (ctRes.data) {
+            setContas(ctRes.data.map(c => ({ id: c.conta_id, nome: c.nome_conta ?? "" })));
+          }
+          if (mpRes.data) {
+            setMeios(mpRes.data.map(m => ({ id: m.meio_pagamento_id, nome: m.descricao ?? "" })));
+          }
+          if (bxRes.data) {
+            setBaixas(bxRes.data as IBaixa[]);
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao buscar baixas/pagamentos:", err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    if (financeiroId && empresaId) {
+      fetchData();
+    }
+    return () => {
+      active = false;
+    };
+  }, [financeiroId, empresaId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground py-4 justify-center">
+        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+        Carregando detalhes dos pagamentos...
+      </div>
+    );
+  }
+
+  if (baixas.length === 0) {
+    return null;
+  }
+
+  const getContaNome = (id: string | null) => contas.find(c => c.id === id)?.nome ?? id ?? "";
+  const getMeioNome = (id: number | null) => meios.find(m => m.id === id)?.nome ?? "";
+
+  return (
+    <div className="mt-6 border border-border rounded-lg overflow-hidden bg-card">
+      <div className="px-4 py-3 border-b border-border bg-muted/20">
+        <h3 className="text-sm font-semibold text-foreground">Detalhamento dos Pagamentos</h3>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs text-left">
+          <thead className="bg-muted/40 text-muted-foreground border-b border-border">
+            <tr>
+              <th className="px-4 py-2.5 font-medium">Documento</th>
+              <th className="px-4 py-2.5 font-medium">Dt. Pagamento</th>
+              <th className="px-4 py-2.5 text-right font-medium">Vlr. Pago</th>
+              <th className="px-4 py-2.5 font-medium">Recibo</th>
+              <th className="px-4 py-2.5 font-medium">Conta</th>
+              <th className="px-4 py-2.5 font-medium">Tipo Pagto</th>
+              <th className="px-4 py-2.5 font-medium">Observação</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {baixas.map(b => (
+              <tr key={b.financeiro_baixa_id} className="hover:bg-muted/10 transition-colors">
+                <td className="px-4 py-2.5 font-medium">{b.documento}</td>
+                <td className="px-4 py-2.5">{formatDateBR(b.dt_pagamento)}</td>
+                <td className="px-4 py-2.5 text-right font-semibold text-foreground">{fmtMoney(b.vl_pago)}</td>
+                <td className="px-4 py-2.5">{b.recibo || "-"}</td>
+                <td className="px-4 py-2.5">{getContaNome(b.conta_id) || "-"}</td>
+                <td className="px-4 py-2.5">{getMeioNome(b.tipo_pag_rec_id) || "-"}</td>
+                <td className="px-4 py-2.5 text-muted-foreground">{b.observacao || "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 const GerarContasReceberForm: React.FC = () => {
   const { XEmpresaId, XEmpresas } = useAppContext();
 
@@ -298,6 +457,7 @@ const GerarContasReceberForm: React.FC = () => {
         XEmpresaId: XEmpresaId,
         XDefaultRecord,
         XSoftDelete: false,
+        XSelectCols: "*, financeiro_baixa(dt_pagamento, vl_pago)",
         XCanEdit: (rec) => {
           if (!rec) return true;
           if (rec.status === "B" || rec.status === "C") return false;
@@ -705,6 +865,12 @@ const GerarContasReceberForm: React.FC = () => {
                 })()}
               </div>
             </div>
+            {getStatusLabel(record) === "PAGTO PARCIAL" && record.financeiro_id ? (
+              <FinanceiroBaixasGrid
+                financeiroId={record.financeiro_id}
+                empresaId={record.empresa_id || XEmpresaId || 0}
+              />
+            ) : null}
           </div>
         );
       }}

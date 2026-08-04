@@ -129,7 +129,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
           const dbVlDesc = Number(mov.vl_desconto || 0);
           const dbPcDesc = Number(mov.pc_desconto || 0);
           dbMov = Number(mov.vl_movimento || 0);
-          const dbSub = dbMov + dbVlDesc;
+          const dbSub = Number(mov.vl_produto || 0);
           
           setXDbTotals({ subtotal: dbSub, desconto: dbVlDesc, total: dbMov });
           setXVlDesconto(dbVlDesc);
@@ -160,7 +160,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
         }
 
         // 3. Fetch Conditions for logged in company
-        let condQuery = supabase.from("condicao_pagamento")
+        const condQuery = supabase.from("condicao_pagamento")
           .select(`
             condicao_id, descricao, tipo_prazo, qtd_parcelas, intervalo, plano_conta_id, meio_pagamento_id, empresa_id,
             prazo_1, prazo_2, prazo_3, prazo_4, prazo_5, prazo_6, prazo_7, prazo_8, prazo_9, prazo_10, prazo_11, prazo_12
@@ -364,11 +364,18 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
   };
 
   const finalizar = async (enviarAoCaixa: boolean = false) => {
-    if (XLinhas.length === 0) { toast.error("Inclua ao menos um pagamento."); return; }
-    if (totalPago + 0.01 < totalPedido) { toast.error("Valor pago é menor que o total do pedido."); return; }
+    if (XLinhas.length === 0) {
+      // Se não há linhas de pagamento, permitimos a finalização (exclusão de todos os pagamentos)
+      // e limpamos XDeletadosDb para evitar que onClose os restaure
+      setXDeletadosDb([]);
+    } else if (totalPago + 0.01 < totalPedido) {
+      toast.error("Valor pago é menor que o total do pedido.");
+      return;
+    }
     
     setXSalvando(true);
     try {
+      setXDeletadosDb([]);
       await onConfirmar(XLinhas, vlDescNum, XPcDesconto, enviarAoCaixa);
       onClose();
     } catch (err: unknown) {
@@ -620,11 +627,11 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
                 <button 
                   ref={finalizarRef} 
                   onClick={() => finalizar(true)} 
-                  disabled={XSalvando || valorRestante > 0.01} 
+                  disabled={XSalvando || (XLinhas.length > 0 && valorRestante > 0.01)} 
                   className="text-xs px-6 py-2 rounded bg-muted/50 border border-border text-emerald-600 font-bold h-10 disabled:opacity-50 hover:bg-accent flex items-center gap-2 transition-all active:scale-95 whitespace-nowrap"
                 >
-                  <Lock size={16} className="fill-emerald-600" />
-                  {XSalvando ? "Gravando..." : "Finalizar e Enviar p/ Cx."}
+                  {XLinhas.length > 0 && <Lock size={16} className="fill-emerald-600" />}
+                  {XSalvando ? "Gravando..." : (XLinhas.length === 0 ? "Finalizar Exclusão" : "Finalizar e Enviar p/ Cx.")}
                 </button>
               </div>
             </div>

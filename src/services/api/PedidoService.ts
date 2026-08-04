@@ -12,7 +12,7 @@ export const pedidoSchema = z.object({
   cadastro_id: z.number().positive("O cliente é obrigatório.").nullable().optional(),
   dt_movimento: z.string().min(10, "A data do movimento é inválida."),
   tp_movimento: z.string().min(1, "O tipo de movimento é obrigatório."),
-  status: z.enum(['O', 'F', 'R', 'C']).optional(),
+  st_pedido: z.enum(['O', 'F', 'R', 'C']).nullable().optional(),
   vl_total_mov: z.number().min(0, "O valor total não pode ser negativo.").optional(),
 });
 
