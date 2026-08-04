@@ -1,6 +1,8 @@
 -- Migration: 20260625164100_add_version_faturamento_pedidos.sql
 -- Registra a versão 1.18.3 com a funcionalidade de Faturar Pedido (Cupom e NF-e) no Caixa
 
+DELETE FROM public.sistema_versoes WHERE versao = '1.18.3';
+
 INSERT INTO public.sistema_versoes (versao, titulo, detalhes, autor, fase, tecnologias)
 VALUES (
   '1.18.3',
@@ -9,10 +11,4 @@ VALUES (
   'Antigravity',
   'Produção',
   ARRAY['React', 'TypeScript', 'PostgreSQL', 'Supabase']
-)
-ON CONFLICT (versao) DO UPDATE 
-SET titulo = EXCLUDED.titulo,
-    detalhes = EXCLUDED.detalhes,
-    autor = EXCLUDED.autor,
-    fase = EXCLUDED.fase,
-    tecnologias = EXCLUDED.tecnologias;
+);

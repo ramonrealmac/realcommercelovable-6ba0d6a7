@@ -497,9 +497,23 @@ const NotaFiscalEntradaForm: React.FC<NotaFiscalEntradaFormProps> = ({ initialMo
       
       return itens.map(item => {
         const pId = map[item.cd_prod_fornec] || null;
+        
+        // Auto-determine cfop_entrada
+        const origCfop = String(item.cfop || "").trim();
+        const firstChar = origCfop.charAt(0);
+        let cfopEntrada = origCfop;
+        if (firstChar === "5") {
+          cfopEntrada = "1" + origCfop.substring(1);
+        } else if (firstChar === "6") {
+          cfopEntrada = "2" + origCfop.substring(1);
+        } else if (firstChar === "7") {
+          cfopEntrada = "3" + origCfop.substring(1);
+        }
+
         return {
           ...item,
           produto_id: pId,
+          cfop_entrada: cfopEntrada,
           _produto_nome: pId ? (nameMap[pId] || `#${pId}`) : null,
           _produto_codigo: pId ? (codeMap[pId] || "") : null
         };

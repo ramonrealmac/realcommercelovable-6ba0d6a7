@@ -9,6 +9,7 @@ import { rpbExecuteQuery } from '../../services/rpbService';
 import {
   X, Plus, Trash2, RefreshCw, Loader2, LayoutList,
   Link2, Table2, Settings2,
+  ChevronUp, ChevronDown, ChevronsUp, ChevronsDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -27,6 +28,28 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
   const [detecting, setDetecting] = useState(false);
 
   const patch = (p: Partial<RpbSubreportComp>) => setDraft(prev => ({ ...prev, ...p }));
+
+  const moveComponent = useCallback((index: number, direction: 'back' | 'backward' | 'forward' | 'front') => {
+    if (!draft.customComponents) return;
+    const comps = [...draft.customComponents];
+    const compToMove = comps[index];
+    
+    comps.splice(index, 1);
+    
+    let newIndex = index;
+    if (direction === 'back') {
+      newIndex = 0;
+    } else if (direction === 'backward') {
+      newIndex = Math.max(0, index - 1);
+    } else if (direction === 'forward') {
+      newIndex = Math.min(comps.length, index + 1);
+    } else if (direction === 'front') {
+      newIndex = comps.length;
+    }
+    
+    comps.splice(newIndex, 0, compToMove);
+    patch({ customComponents: comps });
+  }, [draft.customComponents]);
 
   // ── Detectar colunas do SQL filho ────────────────────────────
   const handleDetectCols = useCallback(async () => {
@@ -429,15 +452,55 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
                   return (
                     <div key={comp.id} className="p-3 border border-border rounded-lg bg-secondary/15 space-y-2">
                       <div className="flex items-center justify-between border-b border-border pb-1.5">
-                        <span className="text-xs font-bold text-primary capitalize">
-                          {comp.type === 'text' ? 'Caixa de Texto' : comp.type === 'line' ? 'Linha' : comp.type === 'box' ? 'Retângulo' : 'Imagem'}
-                        </span>
-                        <button
-                          onClick={() => patch({ customComponents: draft.customComponents?.filter((_, idx) => idx !== i) })}
-                          className="text-[10px] text-destructive hover:bg-destructive/10 px-1.5 py-0.5 rounded"
-                        >
-                          Remover
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] bg-secondary border border-border text-muted-foreground px-1.5 py-0.5 rounded font-mono font-semibold">
+                            Camada #{i + 1}
+                          </span>
+                          <span className="text-xs font-bold text-primary capitalize">
+                            {comp.type === 'text' ? 'Caixa de Texto' : comp.type === 'line' ? 'Linha' : comp.type === 'box' ? 'Retângulo' : 'Imagem'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            onClick={() => moveComponent(i, 'back')}
+                            disabled={i === 0}
+                            title="Enviar para trás (Z-Index menor)"
+                            className="p-1 rounded hover:bg-accent text-muted-foreground disabled:opacity-30"
+                          >
+                            <ChevronsDown size={13} />
+                          </button>
+                          <button
+                            onClick={() => moveComponent(i, 'backward')}
+                            disabled={i === 0}
+                            title="Recuar uma camada"
+                            className="p-1 rounded hover:bg-accent text-muted-foreground disabled:opacity-30"
+                          >
+                            <ChevronDown size={13} />
+                          </button>
+                          <button
+                            onClick={() => moveComponent(i, 'forward')}
+                            disabled={i === (draft.customComponents?.length || 0) - 1}
+                            title="Avançar uma camada"
+                            className="p-1 rounded hover:bg-accent text-muted-foreground disabled:opacity-30"
+                          >
+                            <ChevronUp size={13} />
+                          </button>
+                          <button
+                            onClick={() => moveComponent(i, 'front')}
+                            disabled={i === (draft.customComponents?.length || 0) - 1}
+                            title="Trazer para frente (Z-Index maior)"
+                            className="p-1 rounded hover:bg-accent text-muted-foreground disabled:opacity-30"
+                          >
+                            <ChevronsUp size={13} />
+                          </button>
+                          <div className="w-px h-3 bg-border mx-1" />
+                          <button
+                            onClick={() => patch({ customComponents: draft.customComponents?.filter((_, idx) => idx !== i) })}
+                            className="text-[10px] text-destructive hover:bg-destructive/10 px-1.5 py-0.5 rounded font-medium"
+                          >
+                            Remover
+                          </button>
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-4 gap-2 text-xs">

@@ -130,6 +130,19 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
       })()
     : null;
 
+  const selectedCompInfo = selectedComp
+    ? (() => {
+        for (const bandName of Object.keys(layout.bands) as (keyof typeof layout.bands)[]) {
+          const comps = layout.bands[bandName].components;
+          const idx = comps.findIndex(c => c.id === selectedComp.id);
+          if (idx !== -1) {
+            return { index: idx, total: comps.length };
+          }
+        }
+        return null;
+      })()
+    : null;
+
   // ── Multi-seleção cross-band ─────────────────────────────
   // Ao clicar num componente, ativa automaticamente sua banda
   const handleSelectComponent = (id: string, bandName: RpbBandName, multi: boolean) => {
@@ -353,6 +366,39 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
     });
     setSelectedIds([]);
   }, [selectedIds]);
+
+  const handleChangeComponentLayer = useCallback((id: string, direction: 'back' | 'backward' | 'forward' | 'front') => {
+    setLayout(prev => {
+      const newBands = { ...prev.bands };
+      let changed = false;
+      for (const bandName of Object.keys(newBands) as RpbBandName[]) {
+        const band = newBands[bandName];
+        const index = band.components.findIndex(c => c.id === id);
+        if (index !== -1) {
+          changed = true;
+          const comps = [...band.components];
+          const compToMove = comps[index];
+          comps.splice(index, 1);
+          
+          let newIndex = index;
+          if (direction === 'back') {
+            newIndex = 0;
+          } else if (direction === 'backward') {
+            newIndex = Math.max(0, index - 1);
+          } else if (direction === 'forward') {
+            newIndex = Math.min(comps.length, index + 1);
+          } else if (direction === 'front') {
+            newIndex = comps.length;
+          }
+          
+          comps.splice(newIndex, 0, compToMove);
+          newBands[bandName] = { ...band, components: comps };
+          break;
+        }
+      }
+      return changed ? { ...prev, bands: newBands } : prev;
+    });
+  }, []);
 
   // ── Salvar ────────────────────────────────────────────────
   const handleSave = async () => {
@@ -1082,6 +1128,8 @@ AND p.excluido = false`}</pre>
             queryColumns={queryColumns}
             onChange={handleUpdateComponent}
             onDelete={handleDeleteComponent}
+            onChangeLayer={handleChangeComponentLayer}
+            layerInfo={selectedCompInfo || undefined}
           />
         </div>
       )}
