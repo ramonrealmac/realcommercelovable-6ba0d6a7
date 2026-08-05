@@ -6119,6 +6119,73 @@ export type Database = {
         }
         Relationships: []
       }
+      operadora_taxa: {
+        Row: {
+          operadora_taxa_id: string
+          empresa_id: number
+          operadora_id: number
+          bandeira_id: number | null
+          tipo_canal: string
+          faturamento_minimo: number
+          faturamento_maximo: number
+          qtd_parcelas: number
+          taxa_total: number
+          excluido: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          operadora_taxa_id?: string
+          empresa_id: number
+          operadora_id: number
+          bandeira_id?: number | null
+          tipo_canal?: string
+          faturamento_minimo?: number
+          faturamento_maximo?: number
+          qtd_parcelas: number
+          taxa_total: number
+          excluido?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          operadora_taxa_id?: string
+          empresa_id?: number
+          operadora_id?: number
+          bandeira_id?: number | null
+          tipo_canal?: string
+          faturamento_minimo?: number
+          faturamento_maximo?: number
+          qtd_parcelas?: number
+          taxa_total?: number
+          excluido?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operadora_taxa_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresa"
+            referencedColumns: ["empresa_id"]
+          },
+          {
+            foreignKeyName: "operadora_taxa_operadora_id_fkey"
+            columns: ["operadora_id"]
+            isOneToOne: false
+            referencedRelation: "operadora"
+            referencedColumns: ["operadora_id"]
+          },
+          {
+            foreignKeyName: "operadora_taxa_bandeira_id_fkey"
+            columns: ["bandeira_id"]
+            isOneToOne: false
+            referencedRelation: "bandeira"
+            referencedColumns: ["bandeira_id"]
+          }
+        ]
+      }
       parametro: {
         Row: {
           excluido: boolean | null

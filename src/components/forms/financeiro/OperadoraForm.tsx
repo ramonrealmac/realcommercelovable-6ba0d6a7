@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import { useAppContext } from "@/contexts/AppContext";
 import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import type { IGridColumn } from "@/components/grid/DataGrid";
+import TaxaOperadoraSubForm from "./TaxaOperadoraSubForm";
 
 interface IOperadora {
   operadora_id: number;
@@ -26,6 +27,8 @@ const OperadoraForm: React.FC = () => {
   const XEmp = XEmpresas.find(e => e.empresa_id === XEmpresaId);
   const XEmpLabel = XEmp ? `${XEmp.empresa_id} - ${XEmp.identificacao}` : String(XEmpresaId);
 
+  const [XInnerTab, setXInnerTab] = useState<"cadastro" | "taxas">("cadastro");
+
   return (
     <StandardCrudForm<IOperadora>
       config={{
@@ -49,62 +52,103 @@ const OperadoraForm: React.FC = () => {
       }}
       XGridCols={XGridCols}
       XExportTitle="Operadoras de Cartões"
-      renderCadastro={({ record, setField, mode, isEditing }) => (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:flex md:flex-wrap md:gap-4 gap-5">
-            <div className="w-full md:w-32">
-              <label className="block text-xs font-medium text-muted-foreground mb-1">ID</label>
-              <input
-                type="text"
-                value={mode === "insert" ? "(Novo)" : record.operadora_id ?? ""}
-                readOnly
-                className="w-full border border-border rounded px-3 py-1.5 text-sm bg-secondary text-right"
-              />
-            </div>
-            <div className="w-full md:w-64">
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Empresa</label>
-              <input
-                type="text"
-                value={XEmpLabel}
-                readOnly
-                className="w-full border border-border rounded px-3 py-1.5 text-sm bg-secondary"
-              />
-            </div>
-          </div>
+      renderCadastro={({ record, setField, mode, isEditing }) => {
+        const hasId = !!record.operadora_id;
+        const currentTab = hasId ? XInnerTab : "cadastro";
 
-          <div className="grid grid-cols-1 md:flex md:flex-wrap md:gap-4 gap-5">
-            <div className="flex-1 min-w-[250px]">
-              <label className="block text-xs font-medium text-muted-foreground mb-1">
-                Razão Social <span className="text-destructive">*</span>
-              </label>
-              <input
-                type="text"
-                value={record.razao ?? ""}
-                onChange={e => setField("razao", e.target.value.toUpperCase())}
-                readOnly={!isEditing}
-                autoFocus={isEditing}
-                maxLength={100}
-                className={`w-full border border-border rounded px-3 py-1.5 text-sm ${
-                  isEditing ? "bg-card focus:ring-2 focus:ring-ring outline-none" : "bg-secondary"
-                }`}
+        return (
+          <div className="space-y-6">
+            {hasId && (
+              <div className="flex border-b border-border gap-2">
+                <button
+                  type="button"
+                  onClick={() => setXInnerTab("cadastro")}
+                  className={`px-4 py-2 text-xs font-semibold uppercase tracking-wider border-b-2 transition-colors ${
+                    currentTab === "cadastro"
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Cadastro
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setXInnerTab("taxas")}
+                  className={`px-4 py-2 text-xs font-semibold uppercase tracking-wider border-b-2 transition-colors ${
+                    currentTab === "taxas"
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Taxas
+                </button>
+              </div>
+            )}
+
+            {currentTab === "cadastro" ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:flex md:flex-wrap md:gap-4 gap-5">
+                  <div className="w-full md:w-32">
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">ID</label>
+                    <input
+                      type="text"
+                      value={mode === "insert" ? "(Novo)" : record.operadora_id ?? ""}
+                      readOnly
+                      className="w-full border border-border rounded px-3 py-1.5 text-sm bg-secondary text-right"
+                    />
+                  </div>
+                  <div className="w-full md:w-64">
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">Empresa</label>
+                    <input
+                      type="text"
+                      value={XEmpLabel}
+                      readOnly
+                      className="w-full border border-border rounded px-3 py-1.5 text-sm bg-secondary"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:flex md:flex-wrap md:gap-4 gap-5">
+                  <div className="flex-1 min-w-[250px]">
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      Razão Social <span className="text-destructive">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={record.razao ?? ""}
+                      onChange={e => setField("razao", e.target.value.toUpperCase())}
+                      readOnly={!isEditing}
+                      autoFocus={isEditing}
+                      maxLength={100}
+                      className={`w-full border border-border rounded px-3 py-1.5 text-sm ${
+                        isEditing ? "bg-card focus:ring-2 focus:ring-ring outline-none" : "bg-secondary"
+                      }`}
+                    />
+                  </div>
+                  <div className="w-full md:w-56">
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">CNPJ</label>
+                    <input
+                      type="text"
+                      value={record.cnpj ?? ""}
+                      onChange={e => setField("cnpj", e.target.value)}
+                      readOnly={!isEditing}
+                      maxLength={20}
+                      className={`w-full border border-border rounded px-3 py-1.5 text-sm ${
+                        isEditing ? "bg-card focus:ring-2 focus:ring-ring outline-none" : "bg-secondary"
+                      }`}
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <TaxaOperadoraSubForm
+                operadoraId={record.operadora_id}
+                empresaId={XEmpresaId || record.empresa_id}
               />
-            </div>
-            <div className="w-full md:w-56">
-              <label className="block text-xs font-medium text-muted-foreground mb-1">CNPJ</label>
-              <input
-                type="text"
-                value={record.cnpj ?? ""}
-                onChange={e => setField("cnpj", e.target.value)}
-                readOnly={!isEditing}
-                maxLength={20}
-                className={`w-full border border-border rounded px-3 py-1.5 text-sm ${
-                  isEditing ? "bg-card focus:ring-2 focus:ring-ring outline-none" : "bg-secondary"
-                }`}
-              />
-            </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      }}
     />
   );
 };
