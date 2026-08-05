@@ -2452,6 +2452,7 @@ export type Database = {
           bloquear_pedido: string
           centro_custo_caixa: number
           cnpj: string
+          conta_antecipa_id: number | null
           conta_gerencial_caixa: number | null
           cor_botao: string | null
           cor_botao_negativo: string | null
@@ -2529,6 +2530,7 @@ export type Database = {
           bloquear_pedido?: string
           centro_custo_caixa?: number
           cnpj?: string
+          conta_antecipa_id?: number | null
           conta_gerencial_caixa?: number | null
           cor_botao?: string | null
           cor_botao_negativo?: string | null
@@ -2606,6 +2608,7 @@ export type Database = {
           bloquear_pedido?: string
           centro_custo_caixa?: number
           cnpj?: string
+          conta_antecipa_id?: number | null
           conta_gerencial_caixa?: number | null
           cor_botao?: string | null
           cor_botao_negativo?: string | null

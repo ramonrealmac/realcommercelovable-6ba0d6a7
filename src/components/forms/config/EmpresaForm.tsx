@@ -134,6 +134,7 @@ const emptyEmpresa = () => ({
   abacatepay_webhook_url: "",
   centro_custo_caixa: 0,
   conta_gerencial_caixa: null as number | null,
+  conta_antecipa_id: null as number | null,
   deposito_estoque_caixa: 0,
   empresa_deposito_caixa: null as number | null,
   tp_operacao_caixa: 0,
@@ -173,6 +174,9 @@ const EmpresaForm: React.FC = () => {
   // Horários
   const [XHorarios, setXHorarios] = useState<Horario[]>([]);
 
+  // Planos de contas lookup
+  const [XPlanosContas, setXPlanosContas] = useState<{ plano_conta_id: number; conta: string; nome: string }[]>([]);
+
   /* ── Load ── */
   const loadData = useCallback(async () => {
     const { data } = await db.from("empresa").select("*").eq("excluido", false).order("empresa_id");
@@ -192,6 +196,18 @@ const EmpresaForm: React.FC = () => {
     const { data: h } = await db.from("empresa_hs_lojavirtual").select("*").eq("empresa_id", empresaId).order("dia_semana");
     if (h) setXHorarios(h);
     else setXHorarios([]);
+  }, []);
+
+  const loadPlanosContas = useCallback(async (empresaId: number) => {
+    if (!empresaId) return;
+    const { data } = await db
+      .from("plano_conta")
+      .select("plano_conta_id, conta, nome")
+      .eq("empresa_id", empresaId)
+      .eq("excluido", false)
+      .order("conta");
+    if (data) setXPlanosContas(data);
+    else setXPlanosContas([]);
   }, []);
 
   const handleGerarHorarios = async () => {
@@ -221,12 +237,13 @@ const EmpresaForm: React.FC = () => {
 
   const XCurrent = XData[XCurrentIdx] || null;
 
-  // Load horarios when current record changes
+  // Load horarios and plano_conta when current record changes
   useEffect(() => {
     if (XCurrent) {
       loadHorarios(XCurrent.empresa_id);
+      loadPlanosContas(XCurrent.empresa_id);
     }
-  }, [XCurrent?.empresa_id, loadHorarios]);
+  }, [XCurrent, loadHorarios, loadPlanosContas]);
 
   useEffect(() => {
     if (XCurrent && XFormMode === "edit") {
@@ -693,7 +710,7 @@ const EmpresaForm: React.FC = () => {
           <div className="space-y-6">
             <div>
               <h3 className="text-sm font-semibold text-foreground mb-4 border-b pb-2">Configurações de Caixa / PDV</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {field("centro_custo_caixa", "ID Centro de Custo", { type: "number" })}
                 {field("conta_gerencial_caixa", "ID Conta Gerencial", { type: "number" })}
                 <div>
@@ -707,6 +724,22 @@ const EmpresaForm: React.FC = () => {
                     <option value="0">(Selecione)</option>
                     {XDepositos.map(d => (
                       <option key={d.deposito_id} value={d.deposito_id}>{d.nome}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Conta Antecipação Cartão</label>
+                  <select
+                    value={XDisplayVal("conta_antecipa_id") || ""}
+                    disabled={!XIsEditing}
+                    onChange={e => updateEdit("conta_antecipa_id", e.target.value ? Number(e.target.value) : null)}
+                    className={`w-full border border-border rounded px-3 py-1.5 text-sm ${!XIsEditing ? "bg-secondary" : "bg-card"}`}
+                  >
+                    <option value="">(Nenhuma)</option>
+                    {XPlanosContas.map(p => (
+                      <option key={p.plano_conta_id} value={p.plano_conta_id}>
+                        {p.conta} - {p.nome}
+                      </option>
                     ))}
                   </select>
                 </div>
