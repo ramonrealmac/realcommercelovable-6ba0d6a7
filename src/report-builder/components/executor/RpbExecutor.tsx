@@ -65,6 +65,7 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
   const [data, setData]               = useState<any[]>([]);
   const [extraVarsRef, setExtraVarsRef] = useState<Record<string, any>>({});
   const [layout, setLayoutRef]        = useState<any>(null);
+  const [subDataMapState, setSubDataMapState] = useState<SubReportDataMap | undefined>(undefined);
   const [html, setHtml]               = useState<string>('');
   const [executed, setExecuted]       = useState(false);
   const [showDestino, setShowDestino] = useState(false);
@@ -115,107 +116,116 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
     if (!validate()) return;
     setLoading(true);
     setShowPreviewInline(false);
-    const conexao = conexoes.find(c => c.rpb_conexao_id === relatorio.rpb_conexao_id) || null;
-    const params = buildParams();
-    const { data: rows, error } = await rpbExecuteQuery(relatorio.query_sql, params, conexao);
-    if (error) { setLoading(false); toast.error('Erro na query: ' + error); return; }
+    try {
+      const conexao = conexoes.find(c => c.rpb_conexao_id === relatorio.rpb_conexao_id) || null;
+      const params = buildParams();
+      const { data: rows, error } = await rpbExecuteQuery(relatorio.query_sql, params, conexao);
+      if (error) { setLoading(false); toast.error('Erro na query: ' + error); return; }
 
-    setData(rows);
-    const currentLayout = relatorio.layout_json || emptyLayout();
+      setData(rows);
+      const currentLayout = relatorio.layout_json || emptyLayout();
 
-    const filtroVars: Record<string, any> = {};
-    filtros.forEach(f => {
-      const v = params[f.nome] ?? params[`${f.nome}_ini`] ?? '';
-      filtroVars[f.nome] = v !== undefined && v !== '' ? v : '';
-      filtroVars[`filtro_${f.nome}`] = filtroVars[f.nome];
-    });
-    const evars = {
-      relatorio_nome:      relatorio.nome,
-      relatorio_descricao: relatorio.descricao || '',
-      total_registros:     rows.length,
-      empresa_logo:        empresaLogo || '',
-      ...filtroVars,
-    };
-    setExtraVarsRef(evars);
-    setLayoutRef(currentLayout);
+      const filtroVars: Record<string, any> = {};
+      filtros.forEach(f => {
+        const v = params[f.nome] ?? params[`${f.nome}_ini`] ?? '';
+        filtroVars[f.nome] = v !== undefined && v !== '' ? v : '';
+        filtroVars[`filtro_${f.nome}`] = filtroVars[f.nome];
+      });
+      const evars = {
+        relatorio_nome:      relatorio.nome,
+        relatorio_descricao: relatorio.descricao || '',
+        total_registros:     rows.length,
+        empresa_logo:        empresaLogo || '',
+        ...filtroVars,
+      };
+      setExtraVarsRef(evars);
+      setLayoutRef(currentLayout);
 
-    // ── Pré-carrega dados dos sub-relatórios ───────────────────────────
-    const subDataMap: SubReportDataMap = {};
-    // Coleta todos os componentes subreport de todas as bandas
-    const allBandComps = Object.values(currentLayout.bands).flatMap(b => b.components);
-    const subComps = allBandComps.filter((c: any) => c.type === 'subreport') as any[];
+      // ── Pré-carrega dados dos sub-relatórios ───────────────────────────
+      const subDataMap: SubReportDataMap = {};
+      // Coleta todos os componentes subreport de todas as bandas
+      const allBandComps = Object.values(currentLayout.bands || {}).flatMap((b: any) => b.components || []);
+      const subComps = allBandComps.filter((c: any) => c.type === 'subreport') as any[];
 
-    for (const subComp of subComps) {
-      if (!subComp.query_sql?.trim()) continue;
-      subDataMap[subComp.id] = {};
-      for (const row of rows) {
-        // Monta chave de cache para esta linha
-        const rowKey = JSON.stringify(subComp.links.map((l: any) => row[l.parentField]));
-        if (subDataMap[subComp.id][rowKey]) continue; // já carregado
+      for (const subComp of subComps) {
+        if (!subComp.query_sql?.trim()) continue;
+        subDataMap[subComp.id] = {};
+        for (const row of rows) {
+          // Monta chave de cache para esta linha
+          const rowKey = JSON.stringify(subComp.links.map((l: any) => row[l.parentField]));
+          if (subDataMap[subComp.id][rowKey]) continue; // já carregado
 
-        // Monta parâmetros do SQL filho a partir dos vínculos
-        const subParams: Record<string, any> = { ...params };
-        for (const link of subComp.links as any[]) {
-          if (link.childParam && link.parentField) {
-            subParams[link.childParam] = row[link.parentField] ?? null;
+          // Monta parâmetros do SQL filho a partir dos vínculos
+          const subParams: Record<string, any> = { ...params };
+          for (const link of subComp.links as any[]) {
+            if (link.childParam && link.parentField) {
+              subParams[link.childParam] = row[link.parentField] ?? null;
+            }
           }
-        }
-        const { data: subRows } = await rpbExecuteQuery(subComp.query_sql, subParams, conexao);
-        subDataMap[subComp.id][rowKey] = subRows || [];
-      }
-    }
-
-    const generatedHtml = generateReportHtml(currentLayout, rows, evars, subDataMap);
-    setHtml(generatedHtml);
-    setLoading(false);
-    setExecuted(true);
-    toast.success(`${rows.length} registro(s) carregado(s).`);
-    setShowDestino(true);
-  }, [relatorio, conexoes, valores, filtros]);
-
-  // Abre popup com o relatorio, ocultando o conteudo na tela
-  // para evitar que apareca por tras do dialogo de impressao
-  const openPrintWindow = (htmlContent: string, autoPrint: boolean) => {
-    // Injeta CSS que oculta o corpo no modo tela
-    // Injeta CSS e Scripts de forma robusta
-    const styles = `
-      @media screen {
-        body > * { visibility: hidden !important; }
-        #rpb-aguarde { 
-          visibility: visible !important; 
-          position: fixed; inset: 0; 
-          display: flex !important; flex-direction: column; align-items: center; justify-content: center; 
-          background: #ffffff; font-family: 'Inter', Arial, sans-serif; z-index: 99999; 
+          const { data: subRows } = await rpbExecuteQuery(subComp.query_sql, subParams, conexao);
+          subDataMap[subComp.id][rowKey] = subRows || [];
         }
       }
-      @media print {
-        #rpb-aguarde { display: none !important; }
-        body > * { visibility: visible !important; }
-      }
-    `;
-    
-    let printReadyHtml = htmlContent;
-    if (printReadyHtml.includes('</head>')) {
-      printReadyHtml = printReadyHtml.replace('</head>', `<style>${styles}</style></head>`);
-    } else if (printReadyHtml.includes('</style>')) {
-      printReadyHtml = printReadyHtml.replace('</style>', `</style><style>${styles}</style>`);
+
+      setSubDataMapState(subDataMap);
+      const generatedHtml = generateReportHtml(currentLayout, rows, evars, subDataMap);
+      setHtml(generatedHtml);
+      setLoading(false);
+      setExecuted(true);
+      toast.success(`${rows.length} registro(s) carregado(s).`);
+      setShowDestino(true);
+    } catch (err: any) {
+      console.error(err);
+      setLoading(false);
+      toast.error('Erro ao gerar relatório: ' + (err.message || err));
     }
+  }, [relatorio, conexoes, valores, filtros, empresaLogo]);
 
-    const waitHtml = `<div id="rpb-aguarde">
-      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
-      <div style="font-size:16px;color:#1e40af;margin:12px 0 4px;font-weight:bold">Preparando impressão...</div>
-      <div style="font-size:13px;color:#666">O diálogo de impressão será aberto em instantes.</div>
-    </div>`;
+  // Abre impressão usando iframe oculto na janela principal
+  // (garante que position:fixed e @media print funcionem corretamente no Chromium/Electron)
+  const openPrintWindow = (htmlContent: string, _autoPrint: boolean) => {
+    // Remove qualquer iframe de impressão anterior
+    const oldFrame = document.getElementById('rpb-print-frame');
+    if (oldFrame) oldFrame.remove();
 
-    printReadyHtml = printReadyHtml.replace('<body>', `<body>${waitHtml}`);
+    // O iframe precisa ter dimensões reais (A4) para o Chromium renderizar @page e position:fixed corretamente.
+    // Posicionamos fora da área visível mas com tamanho real.
+    const iframe = document.createElement('iframe');
+    iframe.id = 'rpb-print-frame';
+    iframe.style.cssText = [
+      'position:fixed',
+      'left:-2000px',
+      'top:0',
+      'width:210mm',
+      'height:297mm',
+      'border:none',
+      'visibility:hidden',
+      'pointer-events:none',
+      'z-index:-1',
+    ].join(';');
+    document.body.appendChild(iframe);
 
-    const win = window.open('', '_blank', 'width=900,height=700');
-    if (!win) { toast.error('Popup bloqueado. Habilite popups para imprimir.'); return; }
-    win.document.write(printReadyHtml);
-    win.document.close();
-    win.focus();
-    if (autoPrint) setTimeout(() => win.print(), 700);
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    iframe.src = url;
+
+    iframe.onload = () => {
+      URL.revokeObjectURL(url);
+      // Aguarda 1s para garantir que fontes e imagens foram carregadas antes de imprimir
+      setTimeout(() => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch {
+          const win = window.open(url, '_blank');
+          if (win) setTimeout(() => win.print(), 800);
+        }
+        setTimeout(() => iframe.remove(), 5000);
+      }, 1000);
+    };
   };
+
+
 
   // ── Gera PDF e abre automaticamente numa nova aba ─────────
   const openPdfWindow = async (htmlContent: string) => {
@@ -255,7 +265,7 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
       // (html2pdf aplica as margens via sua própria opção 'margin')
       const pdfHtml = htmlContent.replace(
         /\.rpb-margin-wrap\s*\{[^}]*\}/g,
-        '.rpb-margin-wrap { padding: 0 !important; }'
+        '.rpb-margin-wrap { padding: 0 !important; display: block !important; min-height: auto !important; }'
       );
       iframeDoc.open();
       iframeDoc.write(pdfHtml);
@@ -270,6 +280,7 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
           jsPDF: { unit: 'mm', format: pageSize, orientation },
+          pagebreak: { mode: ['css', 'legacy'] }
         })
         .from(iframeDoc.body)
         .outputPdf('blob');
@@ -300,7 +311,11 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
   // ── Acoes por destino ────────────────────────────────────
   const handleDestino = (dest: Destino) => {
     setShowDestino(false);
-    if (dest === 'impressora') openPrintWindow(html, true);
+    if (dest === 'impressora') {
+      const currentLayout = layout || relatorio.layout_json || emptyLayout();
+      const printHtml = generateReportHtml(currentLayout, data, extraVarsRef, subDataMapState, true);
+      openPrintWindow(printHtml, true);
+    }
     if (dest === 'preview') {
       setPreviewHtml(html);
       setShowPreviewInline(true);

@@ -369,7 +369,8 @@ function renderBand(
     : band.components;
 
   // Usa height fixo (não min-height) para que position:absolute funcione corretamente
-  return `<div style="position:relative;width:100%;height:${band.height}mm;${bg}overflow:hidden;page-break-inside:avoid;">
+  // rpb-band-row: classe usada pelo CSS de impressão para remover overflow:hidden
+  return `<div class="rpb-band-row" style="position:relative;width:100%;height:${band.height}mm;${bg}overflow:hidden;page-break-inside:avoid;break-inside:avoid;">
     ${comps.map(c => renderComponent(c, data, row, extraVars, undefined, subDataMap)).join('')}
   </div>`;
 }
@@ -405,9 +406,10 @@ function renderDetailBand(
       const bgStyle = (rowColor && rowColor !== 'transparent') ? `background-color:${rowColor} !important;` : '';
 
       // Componentes posicionados (text etc.) ficam num div com height fixo
+      // rpb-detail-row: classe usada pelo CSS de impressão para remover overflow:hidden e evitar corte
       const nonSubComps = otherComps.filter(c => c.type !== 'subreport');
       const positionedHtml = nonSubComps.length > 0
-        ? `<div style="position:relative;width:100%;height:${band.height}mm;${bgStyle}overflow:hidden;">
+        ? `<div class="rpb-detail-row" style="position:relative;width:100%;height:${band.height}mm;${bgStyle}overflow:hidden;page-break-inside:avoid;break-inside:avoid;">
              ${nonSubComps.map(c => renderComponent(c, data, row, extraVars, altBgColor, subDataMap)).join('')}
            </div>`
         : '';
@@ -486,7 +488,8 @@ export function generateReportHtml(
   layout: RpbLayout,
   data: any[],
   extraVars: Record<string, any> = {},
-  subDataMap?: SubReportDataMap
+  subDataMap?: SubReportDataMap,
+  isPrint: boolean = false
 ): string {
   const group1 = layout.groups.find(g => g.level === 1);
   const group2 = layout.groups.find(g => g.level === 2);
@@ -504,44 +507,142 @@ export function generateReportHtml(
     ...extraVars,
   };
 
-  const pageStyle = `
-    @page {
-      size: ${layout.pageSize} ${layout.orientation};
-      margin: 0;
-    }
-    @media print {
-      body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
-      .rpb-margin-wrap { padding: ${top}mm ${right}mm ${bottom}mm ${left}mm !important; }
+  const headerHeight = layout.bands.pageHeader.visible ? (layout.bands.pageHeader.height || 0) : 0;
+  const footerHeight = layout.bands.pageFooter.visible ? (layout.bands.pageFooter.height || 0) : 0;
+
+  let pageStyle = '';
+  if (isPrint) {
+    pageStyle = `
+      @page {
+        size: ${layout.pageSize} ${layout.orientation};
+        margin-top: ${top + headerHeight}mm;
+        margin-bottom: ${bottom + footerHeight}mm;
+        margin-left: ${left}mm;
+        margin-right: ${right}mm;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        background: #ffffff;
+        margin: 0 !important;
+        padding: 0 !important;
+        font-family: 'Inter', Arial, sans-serif;
+        font-size: 9pt;
+        color: #1a1a1a;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .rpb-margin-wrap { 
+        display: block !important; 
+        padding: 0 !important; 
+      }
+      /* Cabeçalho fixo: posicionado na margem superior reservada pelo @page */
+      .rpb-page-header {
+        position: fixed;
+        top: -${headerHeight}mm;
+        left: 0;
+        right: 0;
+        height: ${headerHeight}mm;
+        overflow: hidden;
+        z-index: 1000;
+      }
+      /* Rodapé fixo: posicionado na margem inferior reservada pelo @page */
+      .rpb-page-footer {
+        position: fixed;
+        bottom: -${footerHeight}mm;
+        left: 0;
+        right: 0;
+        height: ${footerHeight}mm;
+        overflow: hidden;
+        z-index: 1000;
+      }
+      /* Remove clipping das linhas de detalhe para evitar corte na quebra de página */
+      .rpb-band-row,
+      .rpb-detail-row {
+        overflow: visible !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+      /* Tabelas de dados fluem com quebra automática por linha */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        page-break-inside: auto;
+      }
+      tr {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+    `;
+
+  } else {
+    pageStyle = `
+      @page {
+        size: ${layout.pageSize} ${layout.orientation};
+        margin: 0;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        background: #ffffff;
+        margin: 0;
+        padding: 0;
+        font-family: 'Inter', Arial, sans-serif;
+        font-size: 9pt;
+        color: #1a1a1a;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        height: 100%;
+      }
+      .rpb-margin-wrap {
+        display: flex;
+        flex-direction: column;
+        min-height: 100%;
+        padding: ${top}mm ${right}mm ${bottom}mm ${left}mm;
+        box-sizing: border-box;
+        background: #ffffff;
+      }
+      .rpb-screen-layout {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+      }
+      .rpb-main-content {
+        flex: 1 0 auto;
+      }
+      .rpb-page-header, .rpb-page-footer {
+        width: 100%;
+        flex-shrink: 0;
+      }
+      table { border-collapse: collapse; }
+      td, th { word-break: break-word; }
       tr { page-break-inside: avoid; }
-    }
-    * { box-sizing: border-box; }
-    html, body {
-      background: #ffffff;
-      margin: 0;
-      padding: 0;
-      font-family: 'Inter', Arial, sans-serif;
-      font-size: 9pt;
-      color: #1a1a1a;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-    .rpb-margin-wrap {
-      padding: ${top}mm ${right}mm ${bottom}mm ${left}mm;
-    }
-    table { border-collapse: collapse; }
-    td, th { word-break: break-word; }
-  `;
+    `;
+  }
 
   const firstRow = data[0] || {};
   const lastRow  = data[data.length - 1] || {};
 
-  const body = [
-    renderBand(layout.bands.pageHeader,   data, firstRow, sysVars, false, subDataMap),
-    renderBand(layout.bands.reportHeader, data, firstRow, sysVars, false, subDataMap),
-    renderGroupSection(layout, data, data, sysVars, group1, group2, subDataMap),
-    renderBand(layout.bands.reportFooter, data, lastRow, sysVars, true, subDataMap),
-    renderBand(layout.bands.pageFooter,   data, lastRow, sysVars, false, subDataMap),
-  ].join('');
+  const renderedPageHeader   = renderBand(layout.bands.pageHeader,   data, firstRow, sysVars, false, subDataMap);
+  const renderedReportHeader = renderBand(layout.bands.reportHeader, data, firstRow, sysVars, false, subDataMap);
+  const renderedGroupSection = renderGroupSection(layout, data, data, sysVars, group1, group2, subDataMap);
+  const renderedReportFooter = renderBand(layout.bands.reportFooter, data, lastRow, sysVars, true, subDataMap);
+  const renderedPageFooter   = renderBand(layout.bands.pageFooter,   data, lastRow, sysVars, false, subDataMap);
+
+  const body = `
+    <!-- Cabeçalho de Página -->
+    <div class="rpb-page-header">${renderedPageHeader}</div>
+
+    <!-- Layout de Tela / PDF / Impressão (Sem tabelas aninhadas de layout) -->
+    <div class="rpb-screen-layout">
+      <div class="rpb-main-content">
+        ${renderedReportHeader}
+        ${renderedGroupSection}
+        ${renderedReportFooter}
+      </div>
+    </div>
+
+    <!-- Rodapé de Página -->
+    <div class="rpb-page-footer">${renderedPageFooter}</div>
+  `;
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">

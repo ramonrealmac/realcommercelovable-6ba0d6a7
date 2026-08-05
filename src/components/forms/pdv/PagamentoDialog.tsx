@@ -246,6 +246,29 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
               meio_pagamento_id: cond?.meio_pagamento_id ?? null,
             };
           });
+
+          // Se houver exatamente UMA linha de pagamento pré-carregada, e o valor dela for diferente
+          // do total do pedido (por ex., o pedido foi editado ou o pagamento foi salvo com valor zero/desatualizado),
+          // ajustamos automaticamente o valor dela para o total do pedido para evitar redigitação desnecessária.
+          if (preenchidos.length === 1) {
+            if (preenchidos[0].vl_recebido !== totalPedido) {
+              preenchidos[0].vl_recebido = totalPedido;
+              const qtParc = preenchidos[0].qt_parcela || 1;
+              preenchidos[0].vl_parcela = qtParc > 0 ? +(totalPedido / qtParc).toFixed(2) : totalPedido;
+            }
+          } else {
+            // Se houver múltiplos pagamentos, mas a soma deles tiver uma pequena diferença centesimal/arredondamento
+            // (ex: dízima de parcelas de até 10 centavos), ajustamos a última parcela para bater exatamente com o total.
+            const somaPreenchidos = preenchidos.reduce((acc, current) => acc + current.vl_recebido, 0);
+            const diff = Math.abs(totalPedido - somaPreenchidos);
+            if (diff > 0 && diff <= 0.10) {
+              const ultimo = preenchidos[preenchidos.length - 1];
+              ultimo.vl_recebido = Number((ultimo.vl_recebido + (totalPedido - somaPreenchidos)).toFixed(2));
+              const qtParc = ultimo.qt_parcela || 1;
+              ultimo.vl_parcela = qtParc > 0 ? +(ultimo.vl_recebido / qtParc).toFixed(2) : ultimo.vl_recebido;
+            }
+          }
+
           setXLinhas(preenchidos);
         }
 
@@ -488,13 +511,13 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !XSalvando && onClose()}>
-      <DialogContent className="max-w-5xl p-0 overflow-hidden w-screen h-[100dvh] max-h-[100dvh] gap-0 grid-rows-[auto_1fr] sm:rounded-none md:w-full md:h-auto md:max-h-[90vh] md:rounded-lg md:grid-rows-none md:block">
+      <DialogContent className="max-w-5xl p-0 overflow-hidden w-screen h-[100dvh] max-h-[100dvh] md:max-h-[90vh] md:h-auto md:rounded-lg flex flex-col">
         <div className="flex items-center h-10 bg-topbar text-topbar-foreground px-4 gap-2 shrink-0">
           <CreditCard size={18} />
           <h2 className="text-sm font-semibold">Meios de Pagamento e Prazos</h2>
         </div>
 
-        <div className="md:p-3 overflow-hidden flex-1 min-h-0 bg-background">
+        <div className="md:p-3 overflow-y-auto flex-1 min-h-0 bg-background">
           <div className="h-full grid grid-cols-[repeat(2,100vw)] auto-rows-min gap-y-5 overflow-x-auto overflow-y-auto snap-x snap-mandatory scroll-smooth md:h-auto md:grid-cols-12 md:gap-x-10 md:gap-y-2 md:items-end md:overflow-visible md:auto-rows-auto">
             {/* Row 1: Condição vs Total Pedido */}
             <div className="col-span-7 max-md:col-span-1 max-md:col-start-1 max-md:snap-start max-md:px-3 max-md:pt-2">
