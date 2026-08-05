@@ -6,8 +6,9 @@ import { useAppContext } from "@/contexts/AppContext";
 import ClienteSearchDialog, { type IClienteRow } from "../pedido/ClienteSearchDialog";
 
 interface IContaOpt { conta_id: string; nome_conta: string; }
-interface IMeioPagOpt { meio_pagamento_id: number; descricao: string; }
+interface IMeioPagOpt { meio_pagamento_id: number; codigo: string; descricao: string; }
 interface IPortadorOpt { portador_id: number; nome: string; conta_id: string | null; cd_portador?: number | null; }
+interface ICondicaoPagOpt { condicao_id: number; descricao: string; meio_pagamento_id: number | null; tipo_prazo: string | null; }
 
 interface IOpenTitle {
   empresa_id: number | null;
@@ -33,6 +34,7 @@ interface IPagamentoLinha {
   observacao: string;
   vl_recebido: number;
   conta_id: string | null;
+  prazo: string;
 }
 
 const fmtMoney = (v: number | null | undefined) =>
@@ -59,8 +61,8 @@ const parseMoneyToFloat = (val: string): number => {
 
 const toIsoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-// IDs de Meios de Pagamento considerados à vista
-const MEIOS_A_VISTA_IDS = [1, 2, 4, 16, 17, 18, 20];
+// IDs de Meios de Pagamento permitidos (incluindo Cartão de Crédito - 3)
+const MEIOS_A_VISTA_IDS = [1, 2, 3, 4, 16, 17, 18, 20];
 
 const BaixaPorClienteForm: React.FC = () => {
   const { XEmpresaId } = useAppContext();
@@ -68,6 +70,7 @@ const BaixaPorClienteForm: React.FC = () => {
   // Opções carregadas do banco
   const [XPortadores, setXPortadores] = useState<IPortadorOpt[]>([]);
   const [XMeiosPagamento, setXMeiosPagamento] = useState<IMeioPagOpt[]>([]);
+  const [XCondicoes, setXCondicoes] = useState<ICondicaoPagOpt[]>([]);
   
   // Seleção de cliente
   const [XCadastroId, setXCadastroId] = useState<string>("");
@@ -83,6 +86,7 @@ const BaixaPorClienteForm: React.FC = () => {
   
   // Inputs do formulário de pagamento
   const [XMeioId, setXMeioId] = useState<string>("");
+  const [XPrazo, setXPrazo] = useState<string>("A VISTA");
   const [XPortadorId, setXPortadorId] = useState<string>("");
   const [XNrDocumento, setXNrDocumento] = useState<string>(""); // Nº Doc Transação / Recibo
   const [XValorLinha, setXValorLinha] = useState<string>("0,00");
@@ -94,31 +98,101 @@ const BaixaPorClienteForm: React.FC = () => {
 
   // Refs de inputs para controle de foco via teclado (Enter-key navigation)
   const meioRef = useRef<HTMLSelectElement>(null);
+  const prazoRef = useRef<HTMLSelectElement>(null);
   const portadorRef = useRef<HTMLSelectElement>(null);
   const docRef = useRef<HTMLInputElement>(null);
   const valorRef = useRef<HTMLInputElement>(null);
   const obsRef = useRef<HTMLInputElement>(null);
 
-  // Carregar meios de pagamento e portadores
+  // Computa se o prazo está disponível e quais opções de parcelamento exibir
+  const selectedMeio = useMemo(() => {
+    return XMeiosPagamento.find(m => m.meio_pagamento_id === Number(XMeioId));
+  }, [XMeioId, XMeiosPagamento]);
+
+  const prazoOptions = useMemo(() => {
+    if (!XMeioId) return [];
+    
+    const meioId = Number(XMeioId);
+    const meio = XMeiosPagamento.find(m => m.meio_pagamento_id === meioId);
+    const codigoMeio = meio?.codigo || "";
+    const descMeio = (meio?.descricao || "").toUpperCase();
+    
+    // Filtra condições que correspondam ao meio_pagamento_id, tipo_prazo, ou por texto na descrição
+    const matchingConds = XCondicoes.filter(c => {
+      // 1. Se a condição tiver correspondência direta por ID ou código NFe
+      if (c.meio_pagamento_id === meioId) return true;
+      if (c.tipo_prazo === codigoMeio && codigoMeio !== "") return true;
+      
+      // 2. Correspondência flexível por texto na descrição para contornar cadastros inconsistentes no banco
+      const descCond = (c.descricao || "").toUpperCase();
+      const isCardCond = descCond.includes("CRÉDITO") || descCond.includes("CREDITO") || descCond.includes("CARTÃO") || descCond.includes("CARTAO");
+      const isChequeCond = descCond.includes("CHEQUE");
+      const isPixCond = descCond.includes("PIX");
+      const isDinheiroCond = descCond.includes("DINHEIRO");
+      
+      if (isCardCond) {
+        return descMeio.includes("CRÉDITO") || descMeio.includes("CREDITO") || descMeio.includes("CARTÃO") || descMeio.includes("CARTAO");
+      }
+      if (isChequeCond) {
+        return descMeio.includes("CHEQUE");
+      }
+      if (isPixCond) {
+        return descMeio.includes("PIX");
+      }
+      if (isDinheiroCond) {
+        return descMeio.includes("DINHEIRO");
+      }
+      
+      return false;
+    });
+    
+    if (matchingConds.length > 0) {
+      return matchingConds.map(c => ({
+        value: String(c.condicao_id),
+        label: c.descricao
+      }));
+    }
+    
+    // Fallback: se não houver condição cadastrada, mostra apenas "À vista"
+    return [{ value: "A VISTA", label: "À vista" }];
+  }, [XMeioId, XCondicoes, XMeiosPagamento]);
+
+  const isPrazoAvailable = useMemo(() => {
+    return prazoOptions.length > 1;
+  }, [prazoOptions]);
+
+  const selectedPrazoDesc = useMemo(() => {
+    if (XPrazo === "A VISTA") return "À vista";
+    const cond = XCondicoes.find(c => String(c.condicao_id) === XPrazo);
+    return cond ? cond.descricao : XPrazo;
+  }, [XPrazo, XCondicoes]);
+
+  // Carregar meios de pagamento, portadores e condições de pagamento
   useEffect(() => {
     if (!XEmpresaId) return;
     (async () => {
-      const [meioRes, portRes] = await Promise.all([
-        supabase.from("meio_pagamento").select("meio_pagamento_id, descricao").order("descricao"),
+      const [meioRes, portRes, condRes] = await Promise.all([
+        supabase.from("meio_pagamento").select("meio_pagamento_id, codigo, descricao").order("descricao"),
         supabase.from("portador")
           .select("portador_id, cd_portador, nome, conta_id")
           .eq("empresa_id", XEmpresaId)
           .eq("excluido", false)
           .eq("ativo", "S")
           .order("nome"),
+        supabase.from("condicao_pagamento")
+          .select("condicao_id, descricao, meio_pagamento_id, tipo_prazo")
+          .eq("empresa_id", XEmpresaId)
+          .eq("excluido", false)
+          .order("descricao")
       ]);
 
       if (meioRes.data) {
-        // Filtrar apenas formas à vista
+        // Filtrar apenas formas permitidas
         const aVista = (meioRes.data as IMeioPagOpt[]).filter(m => MEIOS_A_VISTA_IDS.includes(m.meio_pagamento_id));
         setXMeiosPagamento(aVista);
       }
       if (portRes.data) setXPortadores(portRes.data as IPortadorOpt[]);
+      if (condRes.data) setXCondicoes(condRes.data as ICondicaoPagOpt[]);
     })();
   }, [XEmpresaId]);
 
@@ -189,30 +263,70 @@ const BaixaPorClienteForm: React.FC = () => {
   // Reseta inputs do formulário de inserção de pagamentos
   const resetFormPagamento = (vlSugerido: number) => {
     setXMeioId("");
+    setXPrazo("A VISTA");
     setXPortadorId("");
     setXNrDocumento("");
     setXObservacao("");
     setXValorLinha(maskMoney(vlSugerido));
   };
 
-  // Alteração de Meio de Pagamento auto-seleciona o Portador adequado
+  // Alteração de Meio de Pagamento auto-seleciona o Portador adequado e pré-seleciona o primeiro prazo
   const handleMeioChange = (val: string) => {
     setXMeioId(val);
     if (!val) {
+      setXPrazo("A VISTA");
       setXPortadorId("");
       return;
     }
     const meioId = Number(val);
     const meio = XMeiosPagamento.find(m => m.meio_pagamento_id === meioId);
-    if (!meio) return;
-    const desc = (meio.descricao || "").toUpperCase();
+    if (!meio) {
+      setXPrazo("A VISTA");
+      return;
+    }
+    
+    const codigoMeio = meio.codigo || "";
+    const descMeio = (meio.descricao || "").toUpperCase();
+    
+    const matchingConds = XCondicoes.filter(c => {
+      const descCond = (c.descricao || "").toUpperCase();
+      const isCardCond = descCond.includes("CRÉDITO") || descCond.includes("CREDITO") || descCond.includes("CARTÃO") || descCond.includes("CARTAO");
+      const isChequeCond = descCond.includes("CHEQUE");
+      const isPixCond = descCond.includes("PIX");
+      const isDinheiroCond = descCond.includes("DINHEIRO");
+      
+      if (isCardCond) {
+        return descMeio.includes("CRÉDITO") || descMeio.includes("CREDITO") || descMeio.includes("CARTÃO") || descMeio.includes("CARTAO");
+      }
+      if (isChequeCond) {
+        return descMeio.includes("CHEQUE");
+      }
+      if (isPixCond) {
+        return descMeio.includes("PIX");
+      }
+      if (isDinheiroCond) {
+        return descMeio.includes("DINHEIRO");
+      }
+      
+      if (c.meio_pagamento_id === meioId) return true;
+      if (c.tipo_prazo === codigoMeio && codigoMeio !== "") return true;
+      
+      return false;
+    });
+    
+    if (matchingConds.length > 0) {
+      setXPrazo(String(matchingConds[0].condicao_id));
+    } else {
+      setXPrazo("A VISTA");
+    }
 
+    const desc = (meio.descricao || "").toUpperCase();
     let autoSelectedId = "";
     if (desc.includes("DINHEIRO")) {
       // Dinheiro busca "CARTEIRA" ou "CAIXA"
       const p = XPortadores.find(p => p.nome.toUpperCase().includes("CARTEIRA") || p.nome.toUpperCase().includes("CAIXA"));
       if (p) autoSelectedId = String(p.portador_id);
-    } else if (desc.includes("PIX") || desc.includes("DEPÓSITO") || desc.includes("DEPOSITO") || desc.includes("TRANSFERÊNCIA") || desc.includes("TRANSFERENCIA") || desc.includes("BOLETO") || desc.includes("CHEQUE") || desc.includes("DÉBITO") || desc.includes("DEBITO")) {
+    } else if (desc.includes("PIX") || desc.includes("DEPÓSITO") || desc.includes("DEPOSITO") || desc.includes("TRANSFERÊNCIA") || desc.includes("TRANSFERENCIA") || desc.includes("BOLETO") || desc.includes("CHEQUE") || desc.includes("DÉBITO") || desc.includes("DEBITO") || desc.includes("CARTÃO") || desc.includes("CARTAO") || desc.includes("CRÉDITO") || desc.includes("CREDITO")) {
       // Métodos bancários buscam portadores com conta_id associada (ex: Banco do Brasil)
       const p = XPortadores.find(p => p.conta_id !== null);
       if (p) autoSelectedId = String(p.portador_id);
@@ -283,7 +397,8 @@ const BaixaPorClienteForm: React.FC = () => {
       numero_documento: XNrDocumento.substring(0, 10),
       observacao: XObservacao,
       vl_recebido: valor,
-      conta_id: port?.conta_id || null
+      conta_id: port?.conta_id || null,
+      prazo: selectedPrazoDesc
     };
 
     setXLinhasPagamento(prev => [...prev, novaLinha]);
@@ -383,6 +498,7 @@ const BaixaPorClienteForm: React.FC = () => {
 
         const amountToApply = Number(Math.min(tBal.remaining, pUse.remaining).toFixed(2));
         if (amountToApply > 0) {
+          const prazoInfo = pUse.payment.prazo && pUse.payment.prazo !== "A VISTA" ? ` [Prazo: ${pUse.payment.prazo}]` : "";
           const docInfo = pUse.payment.numero_documento ? ` | Doc: ${pUse.payment.numero_documento}` : "";
           const obsPgto = pUse.payment.observacao.trim() ? ` - Obs: ${pUse.payment.observacao.trim()}` : "";
           
@@ -391,7 +507,7 @@ const BaixaPorClienteForm: React.FC = () => {
             meio_pagamento_id: pUse.payment.meio_pagamento_id,
             portador_id: pUse.payment.portador_id,
             recibo: pUse.payment.numero_documento, // Numero doc é o mesmo do recibo
-            observacao: `Baixa automática em lote${docInfo}${obsPgto}`,
+            observacao: `Baixa automática em lote${prazoInfo}${docInfo}${obsPgto}`,
             conta_id: pUse.payment.conta_id
           });
 
@@ -414,6 +530,7 @@ const BaixaPorClienteForm: React.FC = () => {
         if (tBal.baixasToInsert.length === 0) continue;
 
         let lastPortadorId = tBal.title.plano_id; // Default de portador do título se não atualizado
+        let lastMeioCodigo = tBal.title.tp_documento_id; // Default de meio de pagamento do título se não atualizado
         
         for (const bInfo of tBal.baixasToInsert) {
           const { error: insErr } = await supabase
@@ -437,6 +554,12 @@ const BaixaPorClienteForm: React.FC = () => {
           if (insErr) throw insErr;
           nextBaixaId++;
           lastPortadorId = bInfo.portador_id;
+
+          // Recupera o código NFe do meio de pagamento
+          const meioObj = XMeiosPagamento.find(m => m.meio_pagamento_id === bInfo.meio_pagamento_id);
+          if (meioObj?.codigo) {
+            lastMeioCodigo = meioObj.codigo;
+          }
         }
 
         // Calcula soma total paga de todas as baixas do título
@@ -456,7 +579,8 @@ const BaixaPorClienteForm: React.FC = () => {
           .update({
             vl_pago: totalPago,
             status: novoStatus,
-            portador_id: lastPortadorId
+            portador_id: lastPortadorId,
+            tp_documento_id: lastMeioCodigo
           })
           .eq("empresa_id", XEmpresaId)
           .eq("financeiro_id", tBal.title.financeiro_id);
@@ -545,21 +669,40 @@ const BaixaPorClienteForm: React.FC = () => {
                 <Plus size={14} className="text-emerald-500" /> Detalhes do Pagamento
               </h4>
               
-              {/* 1 - Meio de Pagamento */}
-              <div>
-                <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Meio de Pagamento</label>
-                <select
-                  ref={meioRef}
-                  value={XMeioId}
-                  onChange={(e) => handleMeioChange(e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(e, portadorRef)}
-                  className="w-full border border-border rounded px-2.5 py-1.5 text-xs bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium"
-                >
-                  <option value="">Selecione...</option>
-                  {XMeiosPagamento.map(m => (
-                    <option key={m.meio_pagamento_id} value={m.meio_pagamento_id}>{m.descricao}</option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-2">
+                {/* Meio de Pagamento */}
+                <div>
+                  <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Meio de Pagamento</label>
+                  <select
+                    ref={meioRef}
+                    value={XMeioId}
+                    onChange={(e) => handleMeioChange(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, prazoRef)}
+                    className="w-full border border-border rounded px-2.5 py-1.5 text-xs bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium"
+                  >
+                    <option value="">Selecione...</option>
+                    {XMeiosPagamento.map(m => (
+                      <option key={m.meio_pagamento_id} value={m.meio_pagamento_id}>{m.descricao}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Prazo */}
+                <div>
+                  <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Prazo</label>
+                  <select
+                    ref={prazoRef}
+                    value={XPrazo}
+                    onChange={(e) => setXPrazo(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, portadorRef)}
+                    disabled={!isPrazoAvailable}
+                    className="w-full border border-border rounded px-2.5 py-1.5 text-xs bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium disabled:opacity-60"
+                  >
+                    {prazoOptions.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* 2 - Portador */}
@@ -656,7 +799,14 @@ const BaixaPorClienteForm: React.FC = () => {
                       {XLinhasPagamento.map(l => (
                         <tr key={l.uid} className="hover:bg-accent/40 bg-card">
                           <td className="p-2 font-medium">
-                            <div>{l.meio_pagamento_descricao}</div>
+                            <div className="flex items-center gap-1.5">
+                              <span>{l.meio_pagamento_descricao}</span>
+                              {l.prazo && l.prazo !== "A VISTA" && (
+                                <span className="text-[9px] px-1 py-0.2 bg-secondary text-secondary-foreground rounded font-bold uppercase">
+                                  {l.prazo}
+                                </span>
+                              )}
+                            </div>
                             <div className="text-[9px] text-muted-foreground font-normal">
                               Portador: {l.portador_nome}
                             </div>

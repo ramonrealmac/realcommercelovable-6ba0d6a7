@@ -32,13 +32,21 @@ interface StandardCrudFormProps<T extends Record<string, any>> {
     currentRecord: any | null;
     setInnerTab: (tab: string) => void;
     onSalvar?: () => Promise<void>;
+    data?: T[];
   }) => React.ReactNode;
   XExtraTabs?: IExtraTab[];
   XExportTitle?: string;
   XAfterInsertTab?: string;
   XRefreshRef?: React.MutableRefObject<(() => Promise<void>) | null>;
   XInitialId?: any;
-  XToolbarExtras?: (ctx: { currentRecord: any; isEditing: boolean; setRecord: (r: any) => void; refresh: () => Promise<void>; setInnerTab: (tab: string) => void }) => React.ReactNode;
+  XToolbarExtras?: (ctx: {
+    currentRecord: any;
+    isEditing: boolean;
+    setRecord: (r: any) => void;
+    refresh: () => Promise<void>;
+    setInnerTab: (tab: string) => void;
+    handleIncluir: () => void;
+  }) => React.ReactNode;
   XHiddenTabs?: string[] | ((record: any) => string[]);
   XCadastroLabel?: string;
   XCtrl?: any;
@@ -224,7 +232,8 @@ function StandardCrudForm<T extends Record<string, any>>({
               isEditing: ctrl.XIsEditing,
               setRecord: ctrl.setXEditRecord,
               refresh: ctrl.loadData,
-              setInnerTab: setXInnerTab
+              setInnerTab: setXInnerTab,
+              handleIncluir: () => { ctrl.handleIncluir(); setXInnerTab("cadastro"); }
             })}
             {(() => {
               const activeTab = XTabs.find(t => t.id === XActiveTabId);
@@ -271,7 +280,8 @@ function StandardCrudForm<T extends Record<string, any>>({
           isEditing: ctrl.XIsEditing,
           currentRecord: XEffectiveCurrentRecord,
           setInnerTab: setXInnerTab,
-          onSalvar: ctrl.handleSalvar
+          onSalvar: ctrl.handleSalvar,
+          data: ctrl.XData
         })}
 
         {XExtraTabs.map(t => XInnerTab === t.key && (

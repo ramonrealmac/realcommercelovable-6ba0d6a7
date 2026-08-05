@@ -939,7 +939,7 @@ const ConsultaTitulosReceberForm: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 min-h-[380px] lg:min-h-0">
+      <div className="flex-1 min-h-[380px] lg:min-h-0 flex flex-col">
         <DataGrid
           columns={XCols}
           data={XRows}

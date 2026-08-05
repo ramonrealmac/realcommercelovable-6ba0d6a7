@@ -4,6 +4,8 @@ import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import type { IGridColumn } from "@/components/grid/DataGrid";
 import { formatMask } from "@/lib/validators";
 import { supabase } from "@/integrations/supabase/client";
+import { FolderPlus } from "lucide-react";
+import { toast } from "sonner";
 
 interface IPlanoConta {
   plano_conta_id: number;
@@ -23,9 +25,9 @@ const XGridCols: IGridColumn[] = [
 ];
 
 const PlanoContaForm: React.FC = () => {
-  const { XEmpresaMatrizId, XEmpresas } = useAppContext();
-  const XEmpMatriz = XEmpresas.find(e => e.empresa_id === XEmpresaMatrizId);
-  const XEmpLabel = XEmpMatriz ? `${XEmpMatriz.empresa_id} - ${XEmpMatriz.identificacao}` : String(XEmpresaMatrizId);
+  const { XEmpresaId, XEmpresas } = useAppContext();
+  const XEmpMatriz = XEmpresas.find(e => e.empresa_id === XEmpresaId);
+  const XEmpLabel = XEmpMatriz ? `${XEmpMatriz.empresa_id} - ${XEmpMatriz.identificacao}` : String(XEmpresaId);
   
   const [XMascara, setXMascara] = useState("9.99.999.999");
 
@@ -35,7 +37,7 @@ const PlanoContaForm: React.FC = () => {
       const { data, error } = await supabase
         .from("empresa")
         .select("mascara_plano")
-        .eq("empresa_id", XEmpresaMatrizId)
+        .eq("empresa_id", XEmpresaId)
         .single();
       
       if (!error && data && data.mascara_plano) {
@@ -43,15 +45,16 @@ const PlanoContaForm: React.FC = () => {
       }
     };
     fetchMascara();
-  }, [XEmpresaMatrizId]);
+  }, [XEmpresaId]);
 
   return (
     <StandardCrudForm<IPlanoConta>
       config={{
         XTableName: "plano_conta",
         XPrimaryKey: "plano_conta_id",
+        XOrderBy: "conta",
         XTitle: "Plano de Contas",
-        XEmpresaId: XEmpresaMatrizId,
+        XEmpresaId: XEmpresaId,
         XDefaultRecord: { conta: "", nome: "", tp_conta: "A", tp_natureza: "R" },
         XOnBeforeSave: (rec) => {
           if (!rec.conta?.trim()) throw new Error("A Conta é obrigatória.");
@@ -61,11 +64,114 @@ const PlanoContaForm: React.FC = () => {
       }}
       XGridCols={XGridCols}
       XExportTitle="Plano de Contas"
-      renderCadastro={({ record, setField, mode, isEditing }) => {
+      XToolbarExtras={({ currentRecord, isEditing, setRecord, setInnerTab, handleIncluir }) => {
+        const handleCreateSubConta = async () => {
+          if (!currentRecord || !currentRecord.conta) {
+            toast.error("Selecione uma conta na listagem (Localizar) primeiro.");
+            return;
+          }
+
+          const parentConta = currentRecord.conta;
+          const parts = parentConta.split('.');
+          const subIndex = parts.length;
+          const maskParts = XMascara.split('.');
+
+          if (subIndex >= maskParts.length) {
+            toast.error("Não é possível criar subconta. Limite de níveis da máscara atingido.");
+            return;
+          }
+
+          const subMask = maskParts[subIndex];
+
+          try {
+            // Buscar todos os registros filhos diretos do banco de dados para evitar conflito de concorrência
+            const { data, error } = await supabase
+              .from("plano_conta")
+              .select("conta")
+              .eq("empresa_id", XEmpresaId)
+              .eq("excluido", false)
+              .like("conta", parentConta + ".%");
+
+            if (error) throw new Error(error.message);
+
+            // Filtrar para pegar apenas filhos diretos
+            const directChildren = (data || [])
+              .map(r => r.conta)
+              .filter(c => {
+                const cParts = c.split('.');
+                return cParts.length === parts.length + 1;
+              });
+
+            let maxVal = 0;
+            directChildren.forEach(c => {
+              const lastPart = c.split('.').pop();
+              if (lastPart) {
+                const val = parseInt(lastPart, 10);
+                if (!isNaN(val) && val > maxVal) {
+                  maxVal = val;
+                }
+              }
+            });
+
+            const nextVal = maxVal + 1;
+            const nextPart = String(nextVal).padStart(subMask.length, '0');
+
+            if (nextPart.length > subMask.length) {
+              toast.error(`Limite numérico excedido para este nível da máscara (${subMask}).`);
+              return;
+            }
+
+            const nextConta = parentConta + "." + nextPart;
+
+            // Inicia a inclusão
+            handleIncluir();
+
+            // Define os valores iniciais da subconta
+            setRecord({
+              conta: nextConta,
+              nome: "",
+              tp_conta: "A", // Analítica por padrão para subcontas
+              tp_natureza: currentRecord.tp_natureza // Herda a natureza da conta mãe
+            });
+
+            setInnerTab("cadastro");
+            toast.success(`Nova subconta sugerida: ${nextConta}`);
+
+          } catch (err) {
+            console.error("Erro ao gerar subconta:", err);
+            toast.error("Erro ao gerar código da subconta.");
+          }
+        };
+
+        return (
+          <button
+            type="button"
+            disabled={isEditing || !currentRecord}
+            onClick={handleCreateSubConta}
+            title="Incluir Nova Sub Conta"
+            className="flex items-center gap-1.5 text-[11px] bg-primary text-primary-foreground px-3 py-1.5 rounded border border-border hover:opacity-90 transition-opacity font-bold uppercase shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FolderPlus className="w-3.5 h-3.5" />
+            Nova Sub Conta
+          </button>
+        );
+      }}
+      renderCadastro={({ record, setField, mode, isEditing, data }) => {
         const handleContaChange = (val: string) => {
           const formatted = formatMask(val, XMascara);
           setField("conta", formatted);
         };
+
+        const getParentConta = (conta: string) => {
+          if (!conta) return "";
+          const parts = conta.split('.');
+          if (parts.length <= 1) return "";
+          return parts.slice(0, -1).join('.');
+        };
+
+        const parentConta = getParentConta(record.conta ?? "");
+        const parentRecord = data?.find(x => x.conta === parentConta);
+        const parentLabel = parentRecord ? `${parentRecord.conta} - ${parentRecord.nome}` : parentConta;
 
         return (
           <div className="space-y-4">
@@ -79,6 +185,19 @@ const PlanoContaForm: React.FC = () => {
                 <input type="text" value={XEmpLabel} readOnly className="w-full border border-border rounded px-3 py-1.5 text-sm bg-secondary" />
               </div>
             </div>
+
+            {parentConta ? (
+              <div className="w-full">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Conta Mãe (Informação)</label>
+                <input 
+                  type="text" 
+                  value={parentLabel} 
+                  readOnly 
+                  disabled
+                  className="w-full border border-border rounded px-3 py-1.5 text-sm bg-secondary opacity-80 cursor-not-allowed" 
+                />
+              </div>
+            ) : null}
             
             <div className="grid grid-cols-1 md:flex md:gap-4 gap-3">
               <div className="w-full md:w-48">

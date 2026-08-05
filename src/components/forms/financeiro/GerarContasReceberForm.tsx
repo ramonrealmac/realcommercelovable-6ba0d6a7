@@ -900,106 +900,124 @@ const GerarContasReceberForm: React.FC<{ initialId?: number }> = ({ initialId })
             </div>
 
             {/* Linha 4 (Valores de Mesmo Tamanho) */}
-            <div className="grid grid-cols-2 md:grid-cols-9 gap-4 bg-muted/10 p-3 rounded-lg border border-border/60">
-              <div>
-                <label className={lbl}>Valor Título <span className="text-destructive">*</span></label>
-                <input 
-                  type="text" 
-                  className={isEditable ? inputCls + " text-right" : readonlyRightCls} 
-                  key={`${record.financeiro_id || "new"}-${isEditable}`}
-                  defaultValue={fmtMoney(record.vl_titulo)} 
-                  readOnly={!isEditable}
-                  onChange={e => {
-                    const formatted = maskMoney(e.target.value);
-                    e.target.value = formatted;
-                    const floatVal = parseMoneyToFloat(formatted);
-                    setField("vl_titulo", floatVal);
-                  }} 
-                />
-              </div>
-              <div>
-                <DataBaixaField 
-                  financeiroId={record.financeiro_id} 
-                  labelClass={lbl} 
-                  inputClass={readonlyLeftCls} 
-                />
-              </div>
-              <div>
-                <label className={lbl}>Valor Pago</label>
-                <input 
-                  type="text" 
-                  readOnly 
-                  className={readonlyRightCls} 
-                  value={fmtMoney(record.vl_pago)} 
-                />
-              </div>
-              <div>
-                <label className={lbl}>Valor a Pagar</label>
-                <input 
-                  type="text" 
-                  readOnly 
-                  className={readonlyRightCls} 
-                  value={fmtMoney(Number(record.vl_titulo || 0) - Number(record.vl_pago || 0))} 
-                />
-              </div>
-              <div>
-                <label className={lbl}>Valor Desc.</label>
-                <input 
-                  type="text" 
-                  readOnly 
-                  className={readonlyRightCls} 
-                  value={fmtMoney(record.vl_desconto)} 
-                />
-              </div>
-              <div>
-                <label className={lbl}>Valor Despesas</label>
-                <input 
-                  type="text" 
-                  readOnly 
-                  className={readonlyRightCls} 
-                  value={fmtMoney(record.vl_despesa)} 
-                />
-              </div>
-              <div>
-                <label className={lbl}>Valor Juros</label>
-                <input 
-                  type="text" 
-                  readOnly 
-                  className={readonlyRightCls} 
-                  value={fmtMoney(record.pct_juros)} 
-                />
-              </div>
-              <div>
-                <label className={lbl}>Valor Multa</label>
-                <input 
-                  type="text" 
-                  readOnly 
-                  className={readonlyRightCls} 
-                  value={fmtMoney(record.pct_multa)} 
-                />
-              </div>
-              <div>
-                <label className={lbl}>Status</label>
-                {(() => {
-                  const label = getStatusLabel(record);
-                  let colorClass = "text-zinc-950 dark:text-zinc-50"; // default
-                  if (label === "PAGTO PARCIAL") {
-                    colorClass = "text-[#0033ff] dark:text-[#4d88ff]";
-                  } else if (label === "BAIXADO") {
-                    colorClass = "text-emerald-600 dark:text-emerald-400";
-                  } else if (label === "CANCELADO") {
-                    colorClass = "text-zinc-400 dark:text-zinc-500";
-                  } else if (label === "VENCIDO") {
-                    colorClass = "text-red-600 dark:text-red-400";
-                  }
-                  return (
-                    <div className={`h-[34px] flex items-center font-bold text-base ${colorClass}`}>
-                      {label}
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
+            {(() => {
+              const totalLiquido = Number(record.vl_titulo || 0) 
+                - Number(record.vl_desconto || 0) 
+                + Number(record.vl_despesa || 0) 
+                + Number(record.pct_juros || 0) 
+                + Number(record.pct_multa || 0);
+              return (
+                <div className="grid grid-cols-2 md:grid-cols-10 gap-4 bg-muted/10 p-3 rounded-lg border border-border/60">
+                  <div>
+                    <label className={lbl}>Valor Título <span className="text-destructive">*</span></label>
+                    <input 
+                      type="text" 
+                      className={isEditable ? inputCls + " text-right" : readonlyRightCls} 
+                      key={`${record.financeiro_id || "new"}-${isEditable}`}
+                      defaultValue={fmtMoney(record.vl_titulo)} 
+                      readOnly={!isEditable}
+                      onChange={e => {
+                        const formatted = maskMoney(e.target.value);
+                        e.target.value = formatted;
+                        const floatVal = parseMoneyToFloat(formatted);
+                        setField("vl_titulo", floatVal);
+                      }} 
+                    />
+                  </div>
+                  <div>
+                    <label className={lbl}>Valor Desc.</label>
+                    <input 
+                      type="text" 
+                      readOnly 
+                      className={readonlyRightCls} 
+                      value={fmtMoney(record.vl_desconto)} 
+                    />
+                  </div>
+                  <div>
+                    <label className={lbl}>Valor Despesas</label>
+                    <input 
+                      type="text" 
+                      readOnly 
+                      className={readonlyRightCls} 
+                      value={fmtMoney(record.vl_despesa)} 
+                    />
+                  </div>
+                  <div>
+                    <label className={lbl}>Valor Juros</label>
+                    <input 
+                      type="text" 
+                      readOnly 
+                      className={readonlyRightCls} 
+                      value={fmtMoney(record.pct_juros)} 
+                    />
+                  </div>
+                  <div>
+                    <label className={lbl}>Valor Multa</label>
+                    <input 
+                      type="text" 
+                      readOnly 
+                      className={readonlyRightCls} 
+                      value={fmtMoney(record.pct_multa)} 
+                    />
+                  </div>
+                  <div>
+                    <label className={lbl}>Total Líquido</label>
+                    <input 
+                      type="text" 
+                      readOnly 
+                      className={readonlyRightCls} 
+                      value={fmtMoney(totalLiquido)} 
+                    />
+                  </div>
+                  <div>
+                    <DataBaixaField 
+                      financeiroId={record.financeiro_id} 
+                      labelClass={lbl} 
+                      inputClass={readonlyLeftCls} 
+                    />
+                  </div>
+                  <div>
+                    <label className={lbl}>Valor Pago</label>
+                    <input 
+                      type="text" 
+                      readOnly 
+                      className={readonlyRightCls} 
+                      value={fmtMoney(record.vl_pago)} 
+                    />
+                  </div>
+                  <div>
+                    <label className={lbl}>Valor a Pagar</label>
+                    <input 
+                      type="text" 
+                      readOnly 
+                      className={readonlyRightCls} 
+                      value={fmtMoney(totalLiquido - Number(record.vl_pago || 0))} 
+                    />
+                  </div>
+                  <div>
+                    <label className={lbl}>Status</label>
+                    {(() => {
+                      const label = getStatusLabel(record);
+                      let colorClass = "text-zinc-950 dark:text-zinc-50"; // default
+                      if (label === "PAGTO PARCIAL") {
+                        colorClass = "text-[#0033ff] dark:text-[#4d88ff]";
+                      } else if (label === "BAIXADO") {
+                        colorClass = "text-emerald-600 dark:text-emerald-400";
+                      } else if (label === "CANCELADO") {
+                        colorClass = "text-zinc-400 dark:text-zinc-500";
+                      } else if (label === "VENCIDO") {
+                        colorClass = "text-red-600 dark:text-red-400";
+                      }
+                      return (
+                        <div className={`h-[34px] flex items-center font-bold text-base ${colorClass}`}>
+                          {label}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              );
+            })()}
             {getStatusLabel(record) === "PAGTO PARCIAL" && record.financeiro_id ? (
               <FinanceiroBaixasGrid
                 financeiroId={record.financeiro_id}

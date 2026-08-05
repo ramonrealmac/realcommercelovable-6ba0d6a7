@@ -288,6 +288,7 @@ const DataGrid: React.FC<DataGridProps> = ({
 }) => {
   const [XInternalSorts, setXInternalSorts] = useState<ISortItem[]>([]);
   const XSorts = sorts !== undefined ? sorts : XInternalSorts;
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const [XHiddenCols, setXHiddenCols] = useState<Set<string>>(new Set());
   const [XContextMenu, setXContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -379,6 +380,7 @@ const DataGrid: React.FC<DataGridProps> = ({
 
     if (e.key === "ArrowDown") {
       e.preventDefault();
+      e.stopPropagation();
       if (selectedIdx === null || selectedIdx === undefined) {
         nextIdx = 0;
       } else if (selectedIdx < XSortedData.length - 1) {
@@ -386,6 +388,7 @@ const DataGrid: React.FC<DataGridProps> = ({
       }
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
+      e.stopPropagation();
       if (selectedIdx === null || selectedIdx === undefined) {
         nextIdx = XSortedData.length - 1;
       } else if (selectedIdx > 0) {
@@ -393,6 +396,7 @@ const DataGrid: React.FC<DataGridProps> = ({
       }
     } else if (e.key === "Enter") {
       e.preventDefault();
+      e.stopPropagation();
       if (selectedIdx !== null && selectedIdx !== undefined && onRowDoubleClick) {
         onRowDoubleClick(XSortedData[selectedIdx], selectedIdx);
       }
@@ -426,7 +430,7 @@ const DataGrid: React.FC<DataGridProps> = ({
   };
 
   return (
-    <div className="space-y-1">
+    <div className={`space-y-1 ${maxHeight === "100%" ? "h-full flex flex-col min-h-0" : ""}`}>
       {/* Top bar: Todas as ações alinhadas à esquerda para um visual mais limpo */}
       {(toolbarLeft || toolbarRight || showExport) && (
         <div className="flex items-center justify-start gap-2 pb-1.5 flex-wrap">
@@ -474,7 +478,8 @@ const DataGrid: React.FC<DataGridProps> = ({
 
       {/* Grid */}
       <div 
-        className="border border-border rounded overflow-hidden overflow-x-auto outline-none focus-within:ring-1 focus-within:ring-ring" 
+        ref={containerRef}
+        className={`border border-border rounded overflow-hidden overflow-x-auto outline-none focus-within:ring-1 focus-within:ring-ring ${maxHeight === "100%" ? "flex-1 min-h-0 flex flex-col" : ""}`} 
         onContextMenu={handleContextMenu}
         tabIndex={0}
         onKeyDown={(e) => {
@@ -482,7 +487,7 @@ const DataGrid: React.FC<DataGridProps> = ({
           handleKeyDown(e);
         }}
       >
-        <div className="overflow-y-auto" style={{ maxHeight, minWidth }}>
+        <div className={`overflow-y-auto ${maxHeight === "100%" ? "flex-1 min-h-0" : ""}`} style={{ maxHeight, minWidth }}>
         {/* Filters */}
         {showFilters && filterValues && onFilterChange && (
           <div className="bg-card border-b border-border sticky top-0 z-20" style={{ display: "grid", gridTemplateColumns: gridTemplate }}>
@@ -552,7 +557,14 @@ const DataGrid: React.FC<DataGridProps> = ({
                   : "bg-grid-stripe hover:bg-accent"
               }`}
               style={{ display: "grid", gridTemplateColumns: gridTemplate }}
-              onClick={() => onRowClick?.(row, i)}
+              onClick={(e) => {
+                const target = e.target as HTMLElement;
+                const isInteractive = target.closest("button, input, select, textarea, [role='menuitem']");
+                if (!isInteractive && containerRef.current) {
+                  containerRef.current.focus();
+                }
+                onRowClick?.(row, i);
+              }}
               onDoubleClick={() => onRowDoubleClick?.(row, i)}
             >
               {XVisibleCols.map(c => (
