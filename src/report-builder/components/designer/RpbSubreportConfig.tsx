@@ -8,7 +8,8 @@ import { DEFAULT_STYLE } from '../../types';
 import { rpbExecuteQuery } from '../../services/rpbService';
 import {
   X, Plus, Trash2, RefreshCw, Loader2, LayoutList,
-  Link2, Table2, Settings2,
+  Link2, Table2, Settings2, PanelTop,
+  AlignLeft, AlignCenter, AlignRight, Bold, Italic,
   ChevronUp, ChevronDown, ChevronsUp, ChevronsDown,
   GripVertical, Move,
 } from 'lucide-react';
@@ -21,7 +22,7 @@ interface Props {
   onClose:       () => void;
 }
 
-type Tab = 'geral' | 'sql' | 'links' | 'colunas';
+type Tab = 'geral' | 'cabecalho' | 'sql' | 'links' | 'colunas';
 
 // ── Constantes do Canvas ──────────────────────────────────
 // Área de trabalho: largura da faixa em mm = largura A4 menos margens ≈ 190mm
@@ -186,10 +187,11 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
 
   const input = 'w-full border border-border rounded px-2 py-1 text-xs bg-card focus:ring-1 focus:ring-ring outline-none';
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: 'geral',   label: 'Geral',    icon: <Settings2 size={13} />   },
-    { key: 'sql',     label: 'SQL',      icon: <LayoutList size={13} />  },
-    { key: 'links',   label: 'Vínculos', icon: <Link2 size={13} />       },
-    { key: 'colunas', label: draft.tipoLayout === 'custom' ? 'Layout Custom.' : 'Colunas',  icon: <Table2 size={13} />      },
+    { key: 'geral',     label: 'Geral',     icon: <Settings2 size={13} />   },
+    { key: 'cabecalho', label: 'Cabeçalho', icon: <PanelTop size={13} />    },
+    { key: 'sql',       label: 'SQL',       icon: <LayoutList size={13} />  },
+    { key: 'links',     label: 'Vínculos',  icon: <Link2 size={13} />       },
+    { key: 'colunas',   label: draft.tipoLayout === 'custom' ? 'Layout Custom.' : 'Colunas',  icon: <Table2 size={13} />      },
   ];
 
   return (
@@ -340,6 +342,246 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ── Aba Cabeçalho ─────────────────────────────────── */}
+          {activeTab === 'cabecalho' && (
+            <div className="space-y-5">
+              <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-secondary/20">
+                <div>
+                  <label className="text-xs font-bold text-foreground flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={draft.showTitleBar}
+                      onChange={e => patch({ showTitleBar: e.target.checked })}
+                      className="w-4 h-4 text-primary rounded"
+                    />
+                    Exibir Seção de Cabeçalho no Sub-Relatório
+                  </label>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 ml-5.5">
+                    Habilita o bloco de título, subtítulo e estilos acima dos dados do sub-relatório
+                  </p>
+                </div>
+                {draft.showTitleBar && (
+                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                    Ativado
+                  </span>
+                )}
+              </div>
+
+              {draft.showTitleBar && (
+                <>
+                  {/* Textos do Cabeçalho */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground block mb-1">
+                        Título do Cabeçalho
+                      </label>
+                      <input
+                        className={input}
+                        value={draft.titleText || ''}
+                        onChange={e => patch({ titleText: e.target.value })}
+                        placeholder="Ex: FORMALIZAÇÃO DO PEDIDO Nº {pedido_id}"
+                      />
+                      <p className="text-[9px] text-muted-foreground mt-1">
+                        Suporta variáveis: <code className="text-primary font-mono">&#123;campo&#125;</code> (da linha pai) ou do sistema
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground block mb-1">
+                        Subtítulo / Descrição Opcional
+                      </label>
+                      <input
+                        className={input}
+                        value={draft.headerSubtitle || ''}
+                        onChange={e => patch({ headerSubtitle: e.target.value })}
+                        placeholder="Ex: Detalhamento dos produtos e serviços vinculados"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!draft.showHeaderBadge}
+                        onChange={e => patch({ showHeaderBadge: e.target.checked })}
+                        className="w-3.5 h-3.5 text-primary rounded"
+                      />
+                      Exibir Badge com Contador de Registros (ex: 3 registro(s))
+                    </label>
+                  </div>
+
+                  {/* Estilização Visual */}
+                  <div className="border-t border-border pt-4 space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Estilos Visuais do Cabeçalho
+                    </h4>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div>
+                        <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">Cor de Fundo</label>
+                        <div className="flex gap-1.5 items-center">
+                          <input
+                            type="color"
+                            value={draft.headerStyle?.bgColor === 'transparent' ? '#ffffff' : (draft.headerStyle?.bgColor || '#f1f5f9')}
+                            onChange={e => patch({ headerStyle: { ...(draft.headerStyle || DEFAULT_STYLE), bgColor: e.target.value } })}
+                            className="w-7 h-7 p-0 border border-border rounded cursor-pointer"
+                          />
+                          <input
+                            className={input}
+                            value={draft.headerStyle?.bgColor || '#f1f5f9'}
+                            onChange={e => patch({ headerStyle: { ...(draft.headerStyle || DEFAULT_STYLE), bgColor: e.target.value } })}
+                            placeholder="#f1f5f9"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">Cor do Texto</label>
+                        <div className="flex gap-1.5 items-center">
+                          <input
+                            type="color"
+                            value={draft.headerStyle?.color || '#1e293b'}
+                            onChange={e => patch({ headerStyle: { ...(draft.headerStyle || DEFAULT_STYLE), color: e.target.value } })}
+                            className="w-7 h-7 p-0 border border-border rounded cursor-pointer"
+                          />
+                          <input
+                            className={input}
+                            value={draft.headerStyle?.color || '#1e293b'}
+                            onChange={e => patch({ headerStyle: { ...(draft.headerStyle || DEFAULT_STYLE), color: e.target.value } })}
+                            placeholder="#1e293b"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">Tamanho da Fonte (pt)</label>
+                        <input
+                          type="number"
+                          className={input}
+                          value={draft.headerStyle?.fontSize || 9}
+                          onChange={e => patch({ headerStyle: { ...(draft.headerStyle || DEFAULT_STYLE), fontSize: parseInt(e.target.value) || 9 } })}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">Borda</label>
+                        <select
+                          className={input}
+                          value={draft.headerStyle?.border || 'all'}
+                          onChange={e => patch({ headerStyle: { ...(draft.headerStyle || DEFAULT_STYLE), border: e.target.value as any } })}
+                        >
+                          <option value="none">Sem Borda</option>
+                          <option value="all">Todas as Bordas</option>
+                          <option value="bottom">Apenas Borda Inferior</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 pt-1">
+                      <div>
+                        <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">Alinhamento</label>
+                        <div className="flex border border-border rounded overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => patch({ headerStyle: { ...(draft.headerStyle || DEFAULT_STYLE), align: 'left' } })}
+                            className={`flex-1 py-1 flex items-center justify-center text-xs ${draft.headerStyle?.align === 'left' || !draft.headerStyle?.align ? 'bg-primary text-primary-foreground font-bold' : 'bg-card hover:bg-accent'}`}
+                          >
+                            <AlignLeft size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => patch({ headerStyle: { ...(draft.headerStyle || DEFAULT_STYLE), align: 'center' } })}
+                            className={`flex-1 py-1 flex items-center justify-center text-xs ${draft.headerStyle?.align === 'center' ? 'bg-primary text-primary-foreground font-bold' : 'bg-card hover:bg-accent'}`}
+                          >
+                            <AlignCenter size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => patch({ headerStyle: { ...(draft.headerStyle || DEFAULT_STYLE), align: 'right' } })}
+                            className={`flex-1 py-1 flex items-center justify-center text-xs ${draft.headerStyle?.align === 'right' ? 'bg-primary text-primary-foreground font-bold' : 'bg-card hover:bg-accent'}`}
+                          >
+                            <AlignRight size={14} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 pt-4">
+                        <label className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={!!draft.headerStyle?.bold}
+                            onChange={e => patch({ headerStyle: { ...(draft.headerStyle || DEFAULT_STYLE), bold: e.target.checked } })}
+                            className="w-3.5 h-3.5 text-primary rounded"
+                          />
+                          <Bold size={13} /> Negrito
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={!!draft.headerStyle?.italic}
+                            onChange={e => patch({ headerStyle: { ...(draft.headerStyle || DEFAULT_STYLE), italic: e.target.checked } })}
+                            className="w-3.5 h-3.5 text-primary rounded"
+                          />
+                          <Italic size={13} /> Itálico
+                        </label>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">Padding Interno (px)</label>
+                        <input
+                          type="number"
+                          className={input}
+                          value={draft.headerStyle?.padding ?? 4}
+                          onChange={e => patch({ headerStyle: { ...(draft.headerStyle || DEFAULT_STYLE), padding: parseInt(e.target.value) || 0 } })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Visual Preview Card */}
+                  <div className="border-t border-border pt-4">
+                    <p className="text-[10px] font-bold uppercase text-muted-foreground mb-2">Pré-Visualização em Tempo Real</p>
+                    <div className="p-4 rounded border border-border bg-slate-100/50 flex flex-col items-center justify-center">
+                      <div
+                        style={{
+                          width: '100%',
+                          backgroundColor: draft.headerStyle?.bgColor !== 'transparent' ? draft.headerStyle?.bgColor : '#f1f5f9',
+                          color: draft.headerStyle?.color || '#1e293b',
+                          fontSize: `${draft.headerStyle?.fontSize || 9}pt`,
+                          fontWeight: draft.headerStyle?.bold ? 'bold' : 'normal',
+                          fontStyle: draft.headerStyle?.italic ? 'italic' : 'normal',
+                          textAlign: draft.headerStyle?.align || 'left',
+                          border: draft.headerStyle?.border === 'none'
+                            ? 'none'
+                            : draft.headerStyle?.border === 'bottom'
+                            ? `1px solid ${draft.headerStyle?.borderColor || '#cbd5e1'}`
+                            : `1px solid ${draft.headerStyle?.borderColor || '#cbd5e1'}`,
+                          padding: `${draft.headerStyle?.padding ?? 4}px ${(draft.headerStyle?.padding ?? 4) + 2}px`,
+                          borderRadius: '2px',
+                        }}
+                      >
+                        <div>
+                          <span>{draft.titleText || 'Título do Sub-Relatório'}</span>
+                          {draft.showHeaderBadge && (
+                            <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-black/10 ml-2 inline-block">
+                              3 registro(s)
+                            </span>
+                          )}
+                        </div>
+                        {draft.headerSubtitle && (
+                          <div className="text-[80%] opacity-80 font-normal mt-0.5">
+                            {draft.headerSubtitle}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
 

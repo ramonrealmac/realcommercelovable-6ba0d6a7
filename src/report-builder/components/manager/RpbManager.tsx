@@ -726,19 +726,49 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
                       <input value={filtroForm.opcoes_fixas || ''} onChange={e => setFF('opcoes_fixas', e.target.value)} placeholder="Ativo|Inativo|Todos" className={inp} />
                     </div>
                   )}
-                  {(filtroForm.tipo === 'lista_dinamica' || filtroForm.tipo === 'query_select') && (
-                    <>
-                      <div className="col-span-2 md:col-span-3">
-                        <label className="text-[10px] text-muted-foreground font-bold uppercase">SQL de Pesquisa (SELECT ... FROM ...)</label>
-                        <textarea value={filtroForm.query_opcoes || ''} onChange={e => setFF('query_opcoes', e.target.value)} rows={3} placeholder="SELECT id, nome FROM produtos" className={inp + ' font-mono text-[10px]'} />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-muted-foreground font-bold uppercase">Configurações (valor;label;multi)</label>
-                        <input value={filtroForm.opcoes_fixas || ''} onChange={e => setFF('opcoes_fixas', e.target.value)} placeholder="id;nome;true" className={inp} />
-                        <p className="text-[9px] text-muted-foreground mt-0.5">Ex: <strong>id;nome;true</strong> (multi) ou <strong>id;nome;false</strong> (único)</p>
-                      </div>
-                    </>
-                  )}
+                  {(filtroForm.tipo === 'lista_dinamica' || filtroForm.tipo === 'query_select') && (() => {
+                    const parts = (filtroForm.opcoes_fixas || '').split(';');
+                    const vField = parts[0] || '';
+                    const lField = parts[1] || '';
+                    const multiStr = parts[2] || '';
+                    const empresaMode = parts[3] || 'nenhum';
+
+                    const updateEmpresaMode = (newMode: string) => {
+                      const vf = vField || 'id';
+                      const lf = lField || 'nome';
+                      const ms = multiStr || 'true';
+                      setFF('opcoes_fixas', `${vf};${lf};${ms};${newMode}`);
+                    };
+
+                    return (
+                      <>
+                        <div className="col-span-2 md:col-span-3">
+                          <label className="text-[10px] text-muted-foreground font-bold uppercase">SQL de Pesquisa (SELECT ... FROM ...)</label>
+                          <textarea value={filtroForm.query_opcoes || ''} onChange={e => setFF('query_opcoes', e.target.value)} rows={3} placeholder="SELECT id, nome FROM produtos" className={inp + ' font-mono text-[10px]'} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-muted-foreground font-bold uppercase">Configurações (valor;label;multi)</label>
+                          <input value={filtroForm.opcoes_fixas || ''} onChange={e => setFF('opcoes_fixas', e.target.value)} placeholder="id;nome;true" className={inp} />
+                          <p className="text-[9px] text-muted-foreground mt-0.5">Ex: <strong>id;nome;true</strong> (multi) ou <strong>id;nome;false</strong> (único)</p>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-muted-foreground font-bold uppercase flex items-center gap-1">
+                            🔒 Filtro Automático de Empresa
+                          </label>
+                          <select
+                            value={empresaMode}
+                            onChange={e => updateEmpresaMode(e.target.value)}
+                            className={sel}
+                          >
+                            <option value="nenhum">Nenhum (SQL livre)</option>
+                            <option value="empresa">Empresa Logada / Atual (empresa_id = &#123;sys_empresa_id&#125;)</option>
+                            <option value="matriz">Matriz da Empresa Logada (empresa_id = &#123;sys_matriz_id&#125;)</option>
+                          </select>
+                          <p className="text-[9px] text-muted-foreground mt-0.5">Anexa automaticamente cláusula WHERE por empresa/matriz</p>
+                        </div>
+                      </>
+                    );
+                  })()}
                   <div>
                     <label className="text-[10px] text-muted-foreground font-bold uppercase">Valor padrão</label>
                     <input value={filtroForm.valor_padrao || ''} onChange={e => setFF('valor_padrao', e.target.value)} className={inp} />

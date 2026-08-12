@@ -132,8 +132,10 @@ export interface RpbSubreportComp extends RpbBaseComp {
   headerStyle:   RpbStyle;
   rowStyle:      RpbStyle;
   showHeader:    boolean;
-  showTitleBar:  boolean;            // exibe barra de título antes da tabela
-  titleText:     string;             // ex: "Formas de Pagamento"
+  showTitleBar:  boolean;            // exibe seção / barra de cabeçalho do sub-relatório
+  titleText:     string;             // Título principal do cabeçalho (suporta {variavel})
+  headerSubtitle?: string;           // Subtítulo / descrição do cabeçalho (suporta {variavel})
+  showHeaderBadge?: boolean;         // Exibe badge com contagem de registros (ex: "5 registros")
   emptyMessage:  string;             // mensagem quando não há linhas
   tipoLayout?:   'tabela' | 'custom';
   rowHeight?:    number;             // em mm para layout customizado

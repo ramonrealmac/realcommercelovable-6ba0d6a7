@@ -3,7 +3,7 @@
 // Filtros + execução + diálogo de destino (sem preview automático)
 // ============================================================
 import React, { useState, useCallback, useEffect } from 'react';
-import type { IRpbRelatorio, IRpbFiltro, IRpbConexao } from '../../types';
+import type { IRpbRelatorio, IRpbFiltro, IRpbConexao, RpbFiltroEmpresaMode } from '../../types';
 import { rpbListFiltros, rpbExecuteQuery, applyCompanyFilterToSql } from '../../services/rpbService';
 import { generateReportHtml } from '../renderer/rpbRenderer';
 import type { SubReportDataMap } from '../renderer/rpbRenderer';
@@ -448,7 +448,8 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
     <div className="flex flex-col h-full overflow-hidden">
       {/* Diálogo de Busca Dinâmica */}
       {searchFilter && (() => {
-        const [vField, lField, multiStr] = (searchFilter.opcoes_fixas || '').split(';');
+        const [vField, lField, multiStr, empresaModeStr] = (searchFilter.opcoes_fixas || '').split(';');
+        const empresaMode = (empresaModeStr as RpbFiltroEmpresaMode) || 'nenhum';
         return (
           <RpbSearchDialog
             open={!!searchFilter}
@@ -458,6 +459,7 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
             valueField={vField || 'id'}
             labelField={lField || 'nome'}
             multi={multiStr === 'true'}
+            filtroEmpresaMode={empresaMode}
             onSelect={(rows) => {
               const multi = multiStr === 'true';
               if (multi) {

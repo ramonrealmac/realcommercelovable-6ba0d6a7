@@ -307,11 +307,13 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
           query_sql: '',
           links: [],
           columns: [],
-          headerStyle: { ...DEFAULT_STYLE, bold: true, bgColor: '#f1f5f9', border: 'all', borderColor: '#cbd5e1' },
+          headerStyle: { ...DEFAULT_STYLE, bold: true, bgColor: '#f1f5f9', border: 'all', borderColor: '#cbd5e1', padding: 4 },
           rowStyle: { ...DEFAULT_STYLE, border: 'bottom', borderColor: '#e2e8f0' },
           showHeader: true,
           showTitleBar: true,
           titleText: 'Sub-Relatório',
+          headerSubtitle: '',
+          showHeaderBadge: true,
           emptyMessage: 'Nenhum registro',
         } as RpbSubreportComp;
         break;

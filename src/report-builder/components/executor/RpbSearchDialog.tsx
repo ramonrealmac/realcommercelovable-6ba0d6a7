@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, X, Check, Loader2 } from 'lucide-react';
-import { rpbExecuteQuery } from '../../services/rpbService';
+import { rpbExecuteQuery, applyCompanyFilterToSql } from '../../services/rpbService';
+import type { RpbFiltroEmpresaMode } from '../../types';
 import DataGrid, { IGridColumn } from '@/components/grid/DataGrid';
+import { useAppContext } from '@/contexts/AppContext';
 
 interface Props {
   open: boolean;
@@ -12,11 +14,13 @@ interface Props {
   valueField: string;
   labelField: string;
   title?: string;
+  filtroEmpresaMode?: RpbFiltroEmpresaMode;
 }
 
 const RpbSearchDialog: React.FC<Props> = ({
-  open, onClose, onSelect, sql, multi, valueField, labelField, title
+  open, onClose, onSelect, sql, multi, valueField, labelField, title, filtroEmpresaMode
 }) => {
+  const { XEmpresaId, XEmpresaMatrizId } = useAppContext();
   const [data, setData] = useState<any[]>([]);
   const [filteredData, setFilteredData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -26,13 +30,21 @@ const RpbSearchDialog: React.FC<Props> = ({
   const load = useCallback(async () => {
     if (!open || !sql) return;
     setLoading(true);
-    const { data: rows, error } = await rpbExecuteQuery(sql, {});
+
+    const sysVars = {
+      sys_empresa_id: XEmpresaId || 0,
+      sys_matriz_id: XEmpresaMatrizId || XEmpresaId || 0,
+    };
+
+    const finalSql = applyCompanyFilterToSql(sql, filtroEmpresaMode);
+
+    const { data: rows, error } = await rpbExecuteQuery(finalSql, sysVars);
     setLoading(false);
     if (!error) {
       setData(rows);
       setFilteredData(rows);
     }
-  }, [open, sql]);
+  }, [open, sql, filtroEmpresaMode, XEmpresaId, XEmpresaMatrizId]);
 
   useEffect(() => { load(); }, [load]);
 
