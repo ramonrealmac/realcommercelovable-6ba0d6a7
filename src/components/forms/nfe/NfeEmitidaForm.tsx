@@ -6,6 +6,7 @@ import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import type { IGridColumn } from "@/components/grid/DataGrid";
 import NfeItensTab from "./NfeItensTab";
 import NfePagamentoTab from "./NfePagamentoTab";
+import { NfeDocumentosReferenciadosTab } from "./NfeDocumentosReferenciadosTab";
 import type { INfeCabecalho, TNfeSt } from "./types";
 import { NFE_ST_LABELS } from "./types";
 import { Search, Send } from "lucide-react";
@@ -197,7 +198,7 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
         if (!currentRecord || isEditing) return null;
         const st = String(currentRecord.st_nf || "");
         // Permite enviar quando: Aberta (A), Rejeitada (R/3) ou em re-tentativa
-        const podeEnviar = ["A", "R", "3", "P"].includes(st) && Number(currentRecord.tp_nf) === 1;
+        const podeEnviar = ["A", "R", "3", "P"].includes(st);
         if (!podeEnviar) return null;
         return (
           <button
@@ -235,14 +236,13 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
           render: ({ record, currentRecord }) => {
             const id = (currentRecord || record)?.nfe_cabecalho_id || null;
             const st = (currentRecord || record)?.st_nf || "A";
-            const finNfe = Number((currentRecord || record)?.fin_nfe || 1);
             const podeEditar = !["E", "C", "D", "1", "2"].includes(String(st));
             return (
               <NfeItensTab 
                 nfeCabecalhoId={id} 
                 empresaId={XEmpresaId} 
                 podeEditar={podeEditar} 
-                hideVinculo={finNfe !== 4} 
+                hideVinculo={true} 
                 onRefreshCabecalho={() => XRefreshRef.current?.()}
               />
             );
@@ -255,6 +255,21 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
             const st = (currentRecord || record)?.st_nf || "A";
             const podeEditar = !["E", "C", "D", "1", "2"].includes(String(st));
             return <NfePagamentoTab nfeCabecalhoId={id} podeEditar={podeEditar} />;
+          },
+        },
+        {
+          key: "referenciadas", label: "Documentos Referenciados",
+          render: ({ record, currentRecord }) => {
+            const id = (currentRecord || record)?.nfe_cabecalho_id || null;
+            const st = (currentRecord || record)?.st_nf || "A";
+            const podeEditar = !["E", "C", "D", "1", "2"].includes(String(st));
+            return (
+              <NfeDocumentosReferenciadosTab
+                nfeCabecalhoId={id}
+                podeEditar={podeEditar}
+                empresaId={XEmpresaId}
+              />
+            );
           },
         },
         {

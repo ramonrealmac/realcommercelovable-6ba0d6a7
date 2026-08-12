@@ -97,6 +97,7 @@ const DevolucaoNfeEntradaForm: React.FC<DevolucaoNfeEntradaFormProps> = ({ initi
         .select("nfe_cabecalho_id,nr_nota,serie,dt_emissao,dt_entrada,vl_total_nf,chave_nfe,cadastro_id,st_nf,modelo,tp_nf,cadastro:cadastro_id(razao_social,cnpj)")
         .eq("empresa_id", XEmpresaId)
         .eq("tp_nf", 0)
+        .in("st_nf", ["E", "1"]) // apenas notas autorizadas
         .eq("excluido", false)
         .gte("dt_emissao", XDtIni)
         .lte("dt_emissao", XDtFim)
@@ -516,7 +517,11 @@ const DevolucaoNfeEntradaForm: React.FC<DevolucaoNfeEntradaFormProps> = ({ initi
                       <span className="font-semibold">{r.cadastro?.razao_social || `#${r.cadastro_id || "-"}`}</span>
                       <span className="text-muted-foreground"> — {formatCPFCNPJ(r.cadastro?.cnpj || "")}</span>
                     </div>
-                    <div className="col-span-1 text-center text-[10px] font-bold uppercase">{r.st_nf}</div>
+                    <div className="col-span-1 text-center">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                        {r.st_nf === "E" || r.st_nf === "1" ? "Autorizada" : (r.st_nf === "C" ? "Cancelada" : r.st_nf)}
+                      </span>
+                    </div>
                     <div className="col-span-2 text-right font-mono font-bold">
                       {Number(r.vl_total_nf || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                     </div>

@@ -1032,8 +1032,11 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
       { key: "nm_produto",    label: "Desc. NF",    width: "1fr" },
       { key: "ncm",           label: "NCM",         width: "75px" },
       { key: "cest",          label: "CEST",        width: "75px" },
-      { key: "cfop",          label: "CFOP Orig.",  width: "95px" },
-      { 
+      { key: "cfop",          label: hideVinculo ? "CFOP" : "CFOP Orig.", width: "95px" },
+    );
+
+    if (!hideVinculo) {
+      cols.push({ 
         key: "cfop_entrada",  
         label: "CFOP Ent.",    
         width: "90px", 
@@ -1073,7 +1076,10 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
             </select>
           );
         }
-      },
+      });
+    }
+
+    cols.push(
       { key: "unidade",       label: "Un.",         width: "60px",   align: "center" },
       { key: "qt_entrada",    label: "Qtd.",        width: "90px",   align: "right", render: (r) => fmt4(r.qt_entrada) },
       { key: "vl_unit",       label: "Vlr. Unit.",  width: "90px",   align: "right", render: (r) => fmt2(r.vl_unit) },

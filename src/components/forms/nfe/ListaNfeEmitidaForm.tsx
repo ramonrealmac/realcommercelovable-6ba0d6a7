@@ -48,7 +48,6 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
   const { XEmpresaId, XEmpresas, openTab } = useAppContext();
 
   const XGridCols: IGridColumn[] = [
-    { key: "movimento_id", label: "ID Mov", width: "80px", align: "center" },
     { 
       key: "empresa_id", 
       label: "Emitente", 
@@ -60,23 +59,24 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
         return nomeEmp ? `${empIdStr} - ${nomeEmp}` : empIdStr;
       }
     },
-    { key: "nr_nota", label: "Nota", width: "100px" },
-    { key: "serie", label: "Série", width: "60px", align: "center" },
+    { key: "nr_pedido", label: "Pedido", width: "70px", align: "center", render: r => r.nr_pedido || r.pedido_id || r.movimento_id || "" },
+    { key: "nr_nota", label: "Nota", width: "80px" },
+    { key: "serie", label: "Série", width: "65px", align: "center" },
     { 
       key: "tp_amb", 
       label: "Ambiente", 
-      width: "100px", 
+      width: "90px", 
       render: r => (
         <span className={String(r.tp_amb) === "1" ? "text-green-600 font-medium" : "text-orange-600 font-medium"}>
           {String(r.tp_amb) === "1" ? "Produção" : "Homologação"}
         </span>
       )
     },
-    { key: "modelo", label: "Mod.", width: "50px", align: "center" },
+    { key: "modelo", label: "Mod.", width: "45px", align: "center" },
     { 
       key: "tp_nf", 
       label: "Tipo", 
-      width: "70px", 
+      width: "60px", 
       render: r => (
         <span className={String(r.tp_nf) === "0" ? "text-blue-600 font-medium" : "text-emerald-600 font-medium"}>
           {String(r.tp_nf) === "0" ? "Entrada" : "Saída"}
@@ -86,7 +86,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
     { 
       key: "fin_nfe", 
       label: "Finalidade", 
-      width: "110px", 
+      width: "90px", 
       render: r => {
         const labels: any = { "1": "Normal", "2": "Complementar", "3": "Ajuste", "4": "Devolução" };
         const colors: any = { 
@@ -103,14 +103,14 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
         );
       }
     },
-    { key: "dt_emissao", label: "Emissão", width: "110px", render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
-    { key: "nm_destinatario", label: "Destinatário", width: "250px" },
-    { key: "cnpj_destinatario", label: "CNPJ/CPF", width: "150px", render: r => formatCPFCNPJ(r.cnpj_destinatario) },
-    { key: "vl_total_nf", label: "Valor", width: "120px", align: "right", render: r => Number(r.vl_total_nf || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) },
+    { key: "dt_emissao", label: "Emissão", width: "85px", render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
+    { key: "nm_destinatario", label: "Destinatário", width: "240px" },
+    { key: "cnpj_destinatario", label: "CNPJ/CPF", width: "130px", render: r => formatCPFCNPJ(r.cnpj_destinatario) },
+    { key: "vl_total_nf", label: "Valor", width: "100px", align: "right", render: r => Number(r.vl_total_nf || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) },
     { 
       key: "st_nf", 
       label: "Status", 
-      width: "140px", 
+      width: "105px", 
       render: r => {
         const labels: any = {
           "E": "Autorizada",
@@ -225,11 +225,38 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
 
       if (error) throw error;
       
-      const mappedData = (data || []).map((r: any) => ({
-        ...r,
-        nm_destinatario: r.cadastro?.razao_social || "NÃO INFORMADO",
-        cnpj_destinatario: r.cadastro?.cnpj || ""
-      }));
+      const movIds = Array.from(
+        new Set(
+          (data || [])
+            .map((r: any) => r.movimento_id || r.pedido_id)
+            .filter(Boolean)
+        )
+      ) as number[];
+
+      let movMap: Record<number, number> = {};
+      if (movIds.length > 0) {
+        const { data: movs } = await db
+          .from("movimento")
+          .select("movimento_id, nr_movimento")
+          .in("movimento_id", movIds);
+
+        if (movs) {
+          movs.forEach((m: any) => {
+            movMap[m.movimento_id] = m.nr_movimento;
+          });
+        }
+      }
+
+      const mappedData = (data || []).map((r: any) => {
+        const mId = r.movimento_id || r.pedido_id;
+        const nrMov = mId ? movMap[mId] : null;
+        return {
+          ...r,
+          nr_pedido: nrMov ? String(nrMov) : (mId ? String(mId) : ""),
+          nm_destinatario: r.cadastro?.razao_social || "NÃO INFORMADO",
+          cnpj_destinatario: r.cadastro?.cnpj || ""
+        };
+      });
 
       setXData(mappedData);
     } catch (e: any) {
@@ -485,7 +512,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
             {
               key: "acoes",
               label: "Ações",
-              width: "180px",
+              width: "70px",
               render: r => (
                 <div className="flex items-center gap-2">
                   <DropdownMenu>
@@ -561,7 +588,13 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
           showFilters
           filterValues={XSearchFilters}
           onFilterChange={(k, v) => setXSearchFilters(prev => ({ ...prev, [k]: v }))}
-          onRowDoubleClick={(row) => { setXLogNfeId(row.nfe_cabecalho_id); setXLogDialogOpen(true); }}
+          onRowDoubleClick={(row) => {
+            openTab({ 
+              title: `NF-e #${row.nr_nota || row.nfe_cabecalho_id}`, 
+              component: "nfe-form", 
+              params: { nfe_cabecalho_id: row.nfe_cabecalho_id } 
+            });
+          }}
           toolbarLeft={
             <>
             <div className="flex items-center gap-2 bg-secondary/30 p-1 rounded-lg border border-border mr-4">

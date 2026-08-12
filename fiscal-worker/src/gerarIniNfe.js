@@ -30,6 +30,13 @@ export function gerarIniNfe(params) {
   linhas.push('versao=4.00');
   linhas.push('');
 
+  const tpNF = (cabecalho?.tp_nf !== undefined && cabecalho?.tp_nf !== null && cabecalho?.tp_nf !== "")
+    ? String(cabecalho.tp_nf)
+    : "1";
+  const finNFe = (cabecalho?.fin_nfe !== undefined && cabecalho?.fin_nfe !== null && cabecalho?.fin_nfe !== "")
+    ? String(cabecalho.fin_nfe)
+    : "1";
+
   linhas.push('[Identificacao]');
   linhas.push(`cUF=${cUF}`);
   linhas.push(`cNF=${cNF}`);
@@ -38,12 +45,12 @@ export function gerarIniNfe(params) {
   linhas.push(`serie=${serie}`);
   linhas.push(`nNF=${nNF}`);
   linhas.push(`dhEmi=${dhEmi}`);
-  linhas.push('tpNF=1');
+  linhas.push(`tpNF=${tpNF}`);
   linhas.push('idDest=1');
   linhas.push(`tpImp=${isNFCe ? '4' : '1'}`);
   linhas.push('tpEmis=1');
   linhas.push(`tpAmb=${ambiente}`);
-  linhas.push('finNFe=1');
+  linhas.push(`finNFe=${finNFe}`);
   linhas.push('indFinal=1');
   const indPres = String(cabecalho?.ind_pres || '1');
   linhas.push(`indPres=${indPres}`);
@@ -53,6 +60,27 @@ export function gerarIniNfe(params) {
   linhas.push('procEmi=0');
   linhas.push('verProc=RealCommerce1.0');
   linhas.push('');
+
+  let chavesParaRef = cabecalho?.chaves_ref || [];
+  if (chavesParaRef.length === 0 && cabecalho?.chave_ref) {
+    chavesParaRef = [cabecalho.chave_ref];
+  }
+  if (chavesParaRef.length === 0 && Number(finNFe) === 4) {
+    const texto = String(cabecalho?.obs_nf || "") + " " + String(cabecalho?.infCpl || "");
+    const m = texto.match(/(\d{44})/g);
+    if (m) chavesParaRef = Array.from(new Set(m));
+  }
+  if (chavesParaRef.length > 0) {
+    chavesParaRef.forEach((ch, idx) => {
+      const nr = String(idx + 1).padStart(3, '0');
+      const limpa = String(ch || "").replace(/\D/g, "");
+      if (limpa.length === 44) {
+        linhas.push(`[NFRef${nr}]`);
+        linhas.push(`refNFe=${limpa}`);
+        linhas.push('');
+      }
+    });
+  }
 
   linhas.push('[Emitente]');
   linhas.push(`CRT=${mapearCRT(empresa?.regime_trib || 'S')}`);

@@ -376,12 +376,34 @@ export const fiscalEmissaoService = {
 
       const { data: nfeItens } = await db.from("fiscal_nfe_item").select("*").eq("nfe_cabecalho_id", nfeCabecalhoId);
       const { data: nfePagtos } = await db.from("fiscal_nfe_pagamento").select("*").eq("nfe_cabecalho_id", nfeCabecalhoId);
+      const { data: nfeRefs } = await db.from("fiscal_nfe_referenciada")
+        .select("chave_ref")
+        .eq("nfe_cabecalho_id", nfeCabecalhoId)
+        .order("nfe_referenciada_id");
+      const chavesRef = nfeRefs?.map((d: any) => d.chave_ref).filter(Boolean) || [];
 
       const versaoMetodo = tipo === "NFE" ? fConfig?.nfe_versao_metodo : fConfig?.nfce_versao_metodo;
       const isV2 = versaoMetodo === '2.0';
 
+      // Se a nota não possuir número de nota (nr_nota), atribui o próximo sequencial disponível
+      if (!cab.nr_nota || String(cab.nr_nota).trim() === "" || String(cab.nr_nota).trim() === "0") {
+        const proximoNr = Number(fConfigItem.sequencia || 1);
+        cab.nr_nota = String(proximoNr);
+        await db.from("fiscal_nfe_cabecalho")
+          .update({ nr_nota: String(proximoNr) })
+          .eq("nfe_cabecalho_id", nfeCabecalhoId);
+
+        await db.from("fiscal_config_item")
+          .update({ sequencia: proximoNr + 1 })
+          .eq("fiscal_config_item_id", fConfigItem.fiscal_config_item_id);
+      }
+
       const params = {
-        cabecalho: cab,
+        cabecalho: {
+          ...cab,
+          chave_ref: chavesRef[0] || "",
+          chaves_ref: chavesRef
+        },
         itens: nfeItens || [],
         pagamentos: nfePagtos || [],
         empresa: empresa,
@@ -427,9 +449,9 @@ export const fiscalEmissaoService = {
 
       if (evErr) throw new Error("Falha ao criar evento de transmissão: " + evErr.message);
 
-      // Reseta status da NF-e para pendente, para refletir nova tentativa
+      // Reseta status da NF-e para pendente e limpa chave_nfe para forçar nova chave de acesso na SEFAZ
       await db.from("fiscal_nfe_cabecalho")
-        .update({ st_nf: "A" })
+        .update({ st_nf: "A", chave_nfe: "" })
         .eq("nfe_cabecalho_id", nfeCabecalhoId);
 
       return { success: true, nfe_cabecalho_id: nfeCabecalhoId, fiscal_evento_id: evento?.id };

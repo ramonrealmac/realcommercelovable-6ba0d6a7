@@ -408,15 +408,25 @@ const processarEvento = async (evento) => {
         if (nfeCabecalhoId) {
             if (isEmissao) {
                 const isDenegada = ['110', '301', '302', '303'].includes(String(resultado.c_stat));
+
+                let chaveNfeEncontrada = resultado.chave_nfe;
+                if (!chaveNfeEncontrada) {
+                    const textoBusca = (resultado.xml_nfe || '') + (resultado.xml_retorno || '') + (resultado.retorno_completo || '') + (payload.dados || '');
+                    const mChave = textoBusca.match(/NFe(\d{44})/i) || textoBusca.match(/(\d{44})/);
+                    if (mChave) chaveNfeEncontrada = mChave[1];
+                }
+
                 const updateNfe = {
                     c_stat: resultado.c_stat ? parseInt(String(resultado.c_stat)) : null,
                     x_motivo: resultado.x_motivo || (resultado.sucesso ? 'Autorizado' : 'Rejeitado'),
-                    chave_nfe: resultado.chave_nfe,
-                    nr_protocolo: resultado.nr_protocolo,
-                    recibo_sefaz: resultado.recibo_sefaz,
                     st_nf: resultado.sucesso ? 'E' : (isDenegada ? 'D' : 'R'), // E=Emitido, D=Denegado, R=Rejeitado
                     updated_at: new Date().toISOString()
                 };
+
+                if (chaveNfeEncontrada) updateNfe.chave_nfe = chaveNfeEncontrada;
+                if (resultado.nr_protocolo) updateNfe.nr_protocolo = resultado.nr_protocolo;
+                if (resultado.recibo_sefaz) updateNfe.recibo_sefaz = resultado.recibo_sefaz;
+
                 const xmlParaSalvar = resultado.xml_nfe || resultado.xml_retorno;
                 if (xmlParaSalvar) updateNfe.xml_nf = xmlParaSalvar;
 
