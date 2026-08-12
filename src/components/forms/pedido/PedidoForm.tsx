@@ -1092,8 +1092,72 @@ const PedidoForm: React.FC = () => {
               if (!record?.movimento_id) {
                 return <div className="text-sm text-muted-foreground p-4">Salve o pedido para inserir dados de entrega.</div>;
               }
+
+              const handleCarregarDoCadastro = async () => {
+                if (!record.cadastro_id) {
+                  toast.error("Nenhum cliente selecionado no pedido.");
+                  return;
+                }
+                try {
+                  const { data, error } = await db.from("cadastro")
+                    .select("endereco_cep, endereco_logradouro, endereco_numero, endereco_bairro, endereco_compl, endereco_ptoref, endereco_cidade_id, email, rota_id")
+                    .eq("cadastro_id", record.cadastro_id)
+                    .single();
+                  if (error) throw error;
+                  if (!data) { toast.error("Cliente não encontrado."); return; }
+
+                  const cepDigits = (data.endereco_cep || "").replace(/\D/g, "");
+                  const cepFormatted = cepDigits.length > 5
+                    ? cepDigits.substring(0, 5) + "-" + cepDigits.substring(5, 8)
+                    : cepDigits;
+
+                  setField("cep_entrega" as any, cepFormatted);
+                  setField("logradouro_entrega" as any, data.endereco_logradouro || "");
+                  setField("numero_entrega" as any, data.endereco_numero || "");
+                  setField("bairro_entrega" as any, data.endereco_bairro || "");
+                  setField("endereco_compl_entrega" as any, data.endereco_compl || "");
+                  setField("pto_ref_entrega" as any, data.endereco_ptoref || "");
+                  setField("email_entrega" as any, data.email || "");
+                  if (data.rota_id) setField("rota_id" as any, data.rota_id);
+
+                  if (data.endereco_cidade_id) {
+                    setField("cidade_id" as any, data.endereco_cidade_id);
+                    // Garante que a cidade está na lista local
+                    if (!XCidades.some(c => c.id === data.endereco_cidade_id)) {
+                      const { data: cid } = await db.from("cidade")
+                        .select("cidade_id, descricao, estado_id")
+                        .eq("cidade_id", data.endereco_cidade_id)
+                        .single();
+                      if (cid) {
+                        setXCidades(prev => [...prev, { id: cid.cidade_id, label: `${cid.descricao} - ${cid.estado_id || ""}` }]
+                          .sort((a, b) => a.label.localeCompare(b.label)));
+                      }
+                    }
+                  }
+
+                  toast.success("Dados de entrega carregados do cadastro.");
+                } catch (err: any) {
+                  toast.error("Erro ao carregar dados do cadastro: " + (err.message || ""));
+                }
+              };
+
               return (
                 <div className="space-y-3" onKeyDown={handleKeyDown}>
+                  {/* Botão Carregar do Cadastro */}
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      disabled={ro}
+                      onClick={handleCarregarDoCadastro}
+                      className="flex items-center gap-1.5 px-3 py-1 text-xs rounded border border-border bg-muted hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      title="Preencher endereço de entrega com os dados cadastrais do cliente"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                      Carregar do Cadastro
+                    </button>
+                  </div>
+
+                  {/* Linha 1: Rota | CEP | Cidade */}
                   <div className="grid grid-cols-12 gap-3">
                     <div className="col-span-3">
                       <label className="text-xs text-muted-foreground">Rota</label>
@@ -1138,6 +1202,8 @@ const PedidoForm: React.FC = () => {
                       </select>
                     </div>
                   </div>
+
+                  {/* Linha 2: Logradouro | Bairro | Nº */}
                   <div className="grid grid-cols-12 gap-3">
                     <div className="col-span-7">
                       <label className="text-xs text-muted-foreground">Logradouro <span className="text-destructive">*</span></label>
@@ -1152,6 +1218,20 @@ const PedidoForm: React.FC = () => {
                       <input disabled={ro} value={record.numero_entrega ?? ""} onChange={e => setField("numero_entrega" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
                     </div>
                   </div>
+
+                  {/* Linha 3: Complemento | Ponto de Referência */}
+                  <div className="grid grid-cols-12 gap-3">
+                    <div className="col-span-5">
+                      <label className="text-xs text-muted-foreground">Complemento</label>
+                      <input disabled={ro} value={record.endereco_compl_entrega ?? ""} onChange={e => setField("endereco_compl_entrega" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
+                    </div>
+                    <div className="col-span-7">
+                      <label className="text-xs text-muted-foreground">Ponto de Referência</label>
+                      <input disabled={ro} value={record.pto_ref_entrega ?? ""} onChange={e => setField("pto_ref_entrega" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
+                    </div>
+                  </div>
+
+                  {/* E-mail */}
                   <div>
                     <label className="text-xs text-muted-foreground">E-mail</label>
                     <input
@@ -1162,23 +1242,35 @@ const PedidoForm: React.FC = () => {
                         if (e.key === "Enter") {
                           e.preventDefault();
                           e.stopPropagation();
-                          setInnerTab("adicionais");
                           setTimeout(() => {
-                            const field = document.getElementById("obs_pedido_textarea");
+                            const field = document.getElementById("obs_entrega_textarea");
                             if (field) {
                               field.focus();
                               (field as HTMLTextAreaElement).select?.();
                             }
-                          }, 150);
+                          }, 50);
                         }
                       }}
                       className="w-full border border-border rounded px-2 py-1 text-sm"
+                    />
+                  </div>
+
+                  {/* Obs. Entrega */}
+                  <div>
+                    <label className="text-xs text-muted-foreground">Obs. Entrega</label>
+                    <textarea
+                      id="obs_entrega_textarea"
+                      disabled={ro}
+                      value={record.obs_entrega ?? ""}
+                      onChange={e => setField("obs_entrega" as any, e.target.value as any)}
+                      className="w-full border border-border rounded px-2 py-2 text-sm min-h-[80px]"
                     />
                   </div>
                 </div>
               );
             },
           },
+
           {
             key: "adicionais", label: "Dados Adicionais",
             render: ({ record, setField, isEditing }) => {

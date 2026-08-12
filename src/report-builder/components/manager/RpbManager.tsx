@@ -624,15 +624,47 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
         {view === 'query' && (
           <div className="flex-1 overflow-auto p-4">
             <div className="space-y-3 h-full flex flex-col">
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-muted-foreground font-semibold">Query SQL</label>
-              <p className="text-xs text-muted-foreground">— Use &#123;&#123;variavel&#125;&#125; para filtros</p>
-              <div className="flex-1" />
-              <button onClick={handleTestQuery}
-                className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm transition-all active:scale-95">
-                <Play className="w-3.5 h-3.5" /> Testar Query
-              </button>
-            </div>
+              <div className="bg-secondary/40 border border-border rounded-lg p-3">
+                <label className="text-xs font-semibold text-muted-foreground block mb-1">
+                  🔒 Filtro Automático de Empresa
+                </label>
+                {isEditing ? (
+                  <select
+                    value={(form.layout_json as any)?.filtroEmpresaMode || 'nenhum'}
+                    onChange={e => {
+                      const currentL = form.layout_json || emptyLayout();
+                      setF('layout_json', { ...currentL, filtroEmpresaMode: e.target.value as any });
+                    }}
+                    className={sel}
+                  >
+                    <option value="nenhum">Nenhum (Sem filtro automático / Manual no SQL)</option>
+                    <option value="empresa">Empresa Logada / Atual (empresa_id = &#123;sys_empresa_id&#125;)</option>
+                    <option value="matriz">Matriz da Empresa Logada (empresa_id = &#123;sys_matriz_id&#125;)</option>
+                  </select>
+                ) : (
+                  <input
+                    readOnly
+                    value={
+                      (selected?.layout_json as any)?.filtroEmpresaMode === 'empresa'
+                        ? 'Empresa Logada / Atual ({sys_empresa_id})'
+                        : (selected?.layout_json as any)?.filtroEmpresaMode === 'matriz'
+                        ? 'Matriz da Empresa Logada ({sys_matriz_id})'
+                        : 'Nenhum (Sem filtro automático / Manual no SQL)'
+                    }
+                    className={inp + ' bg-secondary'}
+                  />
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-muted-foreground font-semibold">Query SQL</label>
+                <p className="text-xs text-muted-foreground">— Use &#123;&#123;variavel&#125;&#125; para filtros</p>
+                <div className="flex-1" />
+                <button onClick={handleTestQuery}
+                  className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm transition-all active:scale-95">
+                  <Play className="w-3.5 h-3.5" /> Testar Query
+                </button>
+              </div>
             {isEditing ? (
               <textarea value={form.query_sql || ''} onChange={e => setF('query_sql', e.target.value)}
                 rows={15} className={inp + ' font-mono text-xs resize-none flex-1'} />
@@ -694,7 +726,7 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
                       <input value={filtroForm.opcoes_fixas || ''} onChange={e => setFF('opcoes_fixas', e.target.value)} placeholder="Ativo|Inativo|Todos" className={inp} />
                     </div>
                   )}
-                  {filtroForm.tipo === 'lista_dinamica' && (
+                  {(filtroForm.tipo === 'lista_dinamica' || filtroForm.tipo === 'query_select') && (
                     <>
                       <div className="col-span-2 md:col-span-3">
                         <label className="text-[10px] text-muted-foreground font-bold uppercase">SQL de Pesquisa (SELECT ... FROM ...)</label>

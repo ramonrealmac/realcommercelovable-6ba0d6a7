@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 
+import { MENU_CONFIG, getLeafItems } from '@/config/menuConfig';
+
 interface Props {
   nmForm: string;
   currentRecord?: Record<string, any>;
@@ -34,11 +36,15 @@ const RpbFormReportsButton: React.FC<Props> = ({
     if (nmForm && XEmpresaId) {
       setLoading(true);
       (async () => {
+        const menuItem = getLeafItems(MENU_CONFIG).find(x => x.id === nmForm || x.title.toLowerCase() === nmForm.toLowerCase());
+        const formId = menuItem ? menuItem.id : nmForm;
+        const formTitle = menuItem ? menuItem.title : nmForm;
+
         const { data } = await supabase
           .from('rpb_relatorio')
           .select('*')
           .eq('empresa_id', XEmpresaId)
-          .eq('nm_form', nmForm)
+          .or(`nm_form.eq.${formId},nm_form.eq.${formTitle}`)
           .eq('excluido', false)
           .order('nome');
         

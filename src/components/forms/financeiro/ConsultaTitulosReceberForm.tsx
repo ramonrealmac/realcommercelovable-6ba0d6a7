@@ -7,6 +7,7 @@ import ClienteSearchDialog from "../pedido/ClienteSearchDialog";
 import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import RpbFormReportsButton from "@/report-builder/components/executor/RpbFormReportsButton";
 
 type SituacaoOpt = "A VENCER" | "PAGTO PARCIAL" | "VENCIDO" | "BAIXADO" | "CANCELADO";
 const SITUACOES: SituacaoOpt[] = ["A VENCER", "PAGTO PARCIAL", "VENCIDO", "BAIXADO", "CANCELADO"];
@@ -958,6 +959,10 @@ const ConsultaTitulosReceberForm: React.FC = () => {
               >
                 <RefreshCw size={14} className={XLoading ? "animate-spin" : ""} /> Atualizar
               </button>
+              <RpbFormReportsButton 
+                nmForm="consulta-titulos-receber" 
+                currentRecord={XSelectedIdx !== null && XRows[XSelectedIdx] ? (XRows[XSelectedIdx] as Record<string, any>) : undefined} 
+              />
             </>
           }
         />

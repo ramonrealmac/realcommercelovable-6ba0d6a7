@@ -3,7 +3,7 @@
 // ============================================================
 
 // ── Primitivos ───────────────────────────────────────────────
-export type RpbPageSize    = 'A4' | 'A3' | 'Letter';
+export type RpbPageSize    = 'A4' | 'A3' | 'Letter' | 'Roll50' | 'Roll80';
 export type RpbOrientation = 'portrait' | 'landscape';
 export type RpbAlign       = 'left' | 'center' | 'right';
 export type RpbFormat      = 'text' | 'number' | 'currency' | 'date' | 'datetime' | 'percent';
@@ -120,6 +120,9 @@ export interface RpbSubreportLink {
   childParam:  string;   // variável no SQL filho, sem chaves (ex: pedido_id)
 }
 
+// ── Modos de Filtro de Empresa (Multitenant) ──────────────────
+export type RpbFiltroEmpresaMode = 'herdar' | 'nenhum' | 'empresa' | 'matriz';
+
 export interface RpbSubreportComp extends RpbBaseComp {
   type:          'subreport';
   label:         string;             // rótulo interno (exibido no designer)
@@ -135,6 +138,7 @@ export interface RpbSubreportComp extends RpbBaseComp {
   tipoLayout?:   'tabela' | 'custom';
   rowHeight?:    number;             // em mm para layout customizado
   customComponents?: RpbComponent[]; // elementos do layout customizado
+  filtroEmpresaMode?: RpbFiltroEmpresaMode; // filtro automático por empresa/matriz
 }
 
 export type RpbComponent =
@@ -186,6 +190,7 @@ export interface RpbLayout {
     pageFooter:    RpbBand;
   };
   detailAltBgColor?: string;
+  filtroEmpresaMode?: RpbFiltroEmpresaMode;
 }
 
 export const BAND_LABELS: Record<RpbBandName, string> = {
@@ -272,6 +277,8 @@ export const PAGE_SIZES_MM: Record<RpbPageSize, { w: number; h: number }> = {
   A4:     { w: 210, h: 297 },
   A3:     { w: 297, h: 420 },
   Letter: { w: 216, h: 279 },
+  Roll50: { w: 50,  h: 200 },
+  Roll80: { w: 80,  h: 200 },
 };
 
 export const MM_TO_PX = 3.7795;   // 96dpi

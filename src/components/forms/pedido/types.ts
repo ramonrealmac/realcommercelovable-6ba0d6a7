@@ -30,7 +30,10 @@ export interface IMovimento {
   logradouro_entrega: string | null;
   numero_entrega: string | null;
   bairro_entrega: string | null;
+  endereco_compl_entrega: string | null;
+  pto_ref_entrega: string | null;
   email_entrega: string | null;
+  obs_entrega: string | null;
   obs_pedido: string;
   observacao_nf: string | null;
 }

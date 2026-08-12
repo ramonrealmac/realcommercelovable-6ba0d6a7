@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import { useGridFilter } from "@/hooks/useGridFilter";
+import RpbFormReportsButton from "@/report-builder/components/executor/RpbFormReportsButton";
 
 import { 
   FileText, 
@@ -585,6 +586,8 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
               <RefreshCw className={`w-3.5 h-3.5 ${XLoading ? "animate-spin" : ""}`} />
               ATUALIZAR
             </button>
+
+            <RpbFormReportsButton nmForm="nfe-emitidas" />
 
             {XSelectedIds.size > 0 && (
               <button 

@@ -305,6 +305,7 @@ const RpbCanvas: React.FC<Props> = ({
 
   const sizes: Record<string, { w: number; h: number }> = {
     A4: { w: 210, h: 297 }, A3: { w: 297, h: 420 }, Letter: { w: 216, h: 279 },
+    Roll50: { w: 50, h: 200 }, Roll80: { w: 80, h: 200 },
   };
   const ps = sizes[pageSize] || sizes['A4'];
   const pageW = orientation === 'portrait' ? ps.w - margins.left - margins.right

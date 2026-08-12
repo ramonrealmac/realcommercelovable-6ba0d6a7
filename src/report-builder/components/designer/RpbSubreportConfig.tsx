@@ -2,7 +2,7 @@
 // Report Builder Pro — Modal de Configuração do Sub-Relatório
 // SQL editor + links pai→filho + detecção/edição de colunas
 // ============================================================
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import type { RpbSubreportComp, RpbSubreportLink, RpbTableColumn } from '../../types';
 import { DEFAULT_STYLE } from '../../types';
 import { rpbExecuteQuery } from '../../services/rpbService';
@@ -10,6 +10,7 @@ import {
   X, Plus, Trash2, RefreshCw, Loader2, LayoutList,
   Link2, Table2, Settings2,
   ChevronUp, ChevronDown, ChevronsUp, ChevronsDown,
+  GripVertical, Move,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -22,31 +23,120 @@ interface Props {
 
 type Tab = 'geral' | 'sql' | 'links' | 'colunas';
 
+// ── Constantes do Canvas ──────────────────────────────────
+// Área de trabalho: largura da faixa em mm = largura A4 menos margens ≈ 190mm
+const CANVAS_W_MM = 190;
+const CANVAS_SCALE = 3.2; // px por mm
+const canvasPx = (mm: number) => Math.round(mm * CANVAS_SCALE);
+const pxToMm = (px: number) => Math.round((px / CANVAS_SCALE) * 10) / 10;
+
 const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, onClose }) => {
   const [draft, setDraft]       = useState<RpbSubreportComp>({ ...comp, links: [...comp.links], columns: [...comp.columns] });
   const [activeTab, setActiveTab] = useState<Tab>('geral');
   const [detecting, setDetecting] = useState(false);
 
+  // ── Drag & Drop — Layout Customizado ──────────────────────
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{
+    active: boolean;
+    compId: string;
+    startMouseX: number;
+    startMouseY: number;
+    startCompX: number;
+    startCompY: number;
+    mode: 'move' | 'resize-br';
+  } | null>(null);
+
+  // ── Drag & Drop — Reordenação de Colunas ──────────────────
+  const colDragRef = useRef<{ fromIndex: number } | null>(null);
+  const [colDragOver, setColDragOver] = useState<number | null>(null);
+
   const patch = (p: Partial<RpbSubreportComp>) => setDraft(prev => ({ ...prev, ...p }));
+
+  const patchComp = useCallback((id: string, changes: Record<string, any>) => {
+    setDraft(prev => ({
+      ...prev,
+      customComponents: prev.customComponents?.map(c => c.id === id ? { ...c, ...changes } : c)
+    }));
+  }, []);
+
+  // Mouse handlers para drag no canvas
+  const handleCanvasMouseMove = useCallback((e: MouseEvent) => {
+    const d = dragRef.current;
+    if (!d || !d.active) return;
+    const dx = pxToMm(e.clientX - d.startMouseX);
+    const dy = pxToMm(e.clientY - d.startMouseY);
+    if (d.mode === 'move') {
+      const newX = Math.max(0, Math.round((d.startCompX + dx) * 10) / 10);
+      const newY = Math.max(0, Math.round((d.startCompY + dy) * 10) / 10);
+      patchComp(d.compId, { x: newX, y: newY });
+    } else {
+      // resize: atualiza w e h
+      setDraft(prev => ({
+        ...prev,
+        customComponents: prev.customComponents?.map(c => {
+          if (c.id !== d.compId) return c;
+          const newW = Math.max(5, Math.round((d.startCompX + dx) * 10) / 10);
+          const newH = Math.max(2, Math.round((d.startCompY + dy) * 10) / 10);
+          return { ...c, w: newW, h: newH };
+        })
+      }));
+    }
+  }, [patchComp]);
+
+  const handleCanvasMouseUp = useCallback(() => {
+    dragRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('mousemove', handleCanvasMouseMove);
+    window.addEventListener('mouseup', handleCanvasMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleCanvasMouseMove);
+      window.removeEventListener('mouseup', handleCanvasMouseUp);
+    };
+  }, [handleCanvasMouseMove, handleCanvasMouseUp]);
+
+  // Teclado: mover elemento selecionado com setas
+  useEffect(() => {
+    if (activeTab !== 'colunas' || draft.tipoLayout !== 'custom') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!selectedId) return;
+      if (!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) return;
+      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+      e.preventDefault();
+      const step = e.shiftKey ? 0.1 : 1;
+      const delta: Record<string, [string, number]> = {
+        ArrowUp:    ['y', -step],
+        ArrowDown:  ['y',  step],
+        ArrowLeft:  ['x', -step],
+        ArrowRight: ['x',  step],
+      };
+      const [axis, val] = delta[e.key];
+      setDraft(prev => ({
+        ...prev,
+        customComponents: prev.customComponents?.map(c => {
+          if (c.id !== selectedId) return c;
+          const cur = (c as any)[axis] as number;
+          return { ...c, [axis]: Math.max(0, Math.round((cur + val) * 10) / 10) };
+        })
+      }));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedId, activeTab, draft.tipoLayout]);
 
   const moveComponent = useCallback((index: number, direction: 'back' | 'backward' | 'forward' | 'front') => {
     if (!draft.customComponents) return;
     const comps = [...draft.customComponents];
     const compToMove = comps[index];
-    
     comps.splice(index, 1);
-    
     let newIndex = index;
-    if (direction === 'back') {
-      newIndex = 0;
-    } else if (direction === 'backward') {
-      newIndex = Math.max(0, index - 1);
-    } else if (direction === 'forward') {
-      newIndex = Math.min(comps.length, index + 1);
-    } else if (direction === 'front') {
-      newIndex = comps.length;
-    }
-    
+    if (direction === 'back') newIndex = 0;
+    else if (direction === 'backward') newIndex = Math.max(0, index - 1);
+    else if (direction === 'forward') newIndex = Math.min(comps.length, index + 1);
+    else if (direction === 'front') newIndex = comps.length;
     comps.splice(newIndex, 0, compToMove);
     patch({ customComponents: comps });
   }, [draft.customComponents]);
@@ -81,6 +171,13 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
 
   // ── Colunas ────────────────────────────────────────────────
   const removeCol = (i: number) => patch({ columns: draft.columns.filter((_, idx) => idx !== i) });
+  const reorderCol = useCallback((fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx) return;
+    const cols = [...draft.columns];
+    const [moved] = cols.splice(fromIdx, 1);
+    cols.splice(toIdx, 0, moved);
+    patch({ columns: cols });
+  }, [draft.columns]);
   const updateCol = (i: number, p: Partial<RpbTableColumn>) =>
     patch({ columns: draft.columns.map((c, idx) => idx === i ? { ...c, ...p } : c) });
 
@@ -197,6 +294,25 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
                 )}
               </div>
 
+              <div className="border-t border-border pt-3">
+                <label className="text-xs font-semibold text-muted-foreground block mb-1">
+                  🔒 Filtro Automático de Empresa
+                </label>
+                <select
+                  className={input}
+                  value={draft.filtroEmpresaMode || 'herdar'}
+                  onChange={e => patch({ filtroEmpresaMode: e.target.value as any })}
+                >
+                  <option value="herdar">Herdar do Relatório Principal (Padrão)</option>
+                  <option value="nenhum">Nenhum (Sem filtro automático / Manual via SQL)</option>
+                  <option value="empresa">Empresa Logada / Atual (empresa_id = &#123;sys_empresa_id&#125;)</option>
+                  <option value="matriz">Matriz da Empresa Logada (empresa_id = &#123;sys_matriz_id&#125;)</option>
+                </select>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Por padrão, o sub-relatório herda a mesma opção de filtro de empresa configurada no relatório pai.
+                </p>
+              </div>
+
               {/* Resumo de status */}
               <div className="mt-4 rounded-lg border border-border bg-secondary/30 p-4 space-y-2 text-xs">
                 <p className="font-semibold text-muted-foreground uppercase tracking-wide text-[10px]">Status da configuração</p>
@@ -263,6 +379,17 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
                   <li>Filtre sempre por <code className="bg-blue-100 rounded px-1">excluido = false</code> se a tabela tiver exclusão lógica</li>
                   <li>Após salvar o SQL, clique em <strong>Detectar Colunas</strong> para gerar automaticamente as colunas</li>
                 </ul>
+              </div>
+
+              <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3 text-[11px] text-emerald-700 space-y-1">
+                <p className="font-semibold">🔒 Variáveis de Sistema & Herança de Filtro</p>
+                <ul className="list-disc list-inside space-y-0.5 text-emerald-600">
+                  <li><code className="bg-emerald-100 rounded px-1">{'{sys_empresa_id}'}</code> — ID da empresa logada</li>
+                  <li><code className="bg-emerald-100 rounded px-1">{'{sys_matriz_id}'}</code> — ID da empresa matriz</li>
+                </ul>
+                <p className="mt-1 text-emerald-600 font-medium">
+                  ℹ️ Por padrão, o sub-relatório <strong>herda automaticamente a seleção de empresa/matriz do relatório principal</strong>.
+                </p>
               </div>
             </div>
           )}
@@ -367,14 +494,34 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
 
               {draft.columns.length > 0 && (
                 <div className="space-y-1">
-                  <div className="grid text-[10px] font-semibold text-muted-foreground uppercase px-2 pb-1"
-                    style={{ gridTemplateColumns: '3fr 2fr 1fr 2fr 2fr 1.5fr auto' }}>
-                    <span>Campo</span><span>Rótulo</span><span>Larg(mm)</span><span>Alinhamento</span><span>Formato</span><span>Total</span><span />
+                  <div className="grid text-[10px] font-semibold text-muted-foreground uppercase pb-1"
+                    style={{ gridTemplateColumns: '20px 3fr 2fr 1fr 2fr 2fr 1.5fr auto' }}>
+                    <span /><span>Campo</span><span>Rótulo</span><span>Larg(mm)</span><span>Alinhamento</span><span>Formato</span><span>Total</span><span />
                   </div>
                   {draft.columns.map((col, i) => (
-                    <div key={i} className="grid items-center gap-1 px-2 py-1.5 rounded border border-border bg-secondary/10 hover:bg-secondary/20"
-                      style={{ gridTemplateColumns: '3fr 2fr 1fr 2fr 2fr 1.5fr auto' }}>
-                      <span className="text-xs font-mono text-primary truncate" title={col.field}>{col.field}</span>
+                    <div
+                      key={i}
+                      draggable
+                      onDragStart={() => { colDragRef.current = { fromIndex: i }; }}
+                      onDragOver={e => { e.preventDefault(); setColDragOver(i); }}
+                      onDragLeave={() => setColDragOver(null)}
+                      onDrop={() => {
+                        setColDragOver(null);
+                        if (colDragRef.current) reorderCol(colDragRef.current.fromIndex, i);
+                        colDragRef.current = null;
+                      }}
+                      onDragEnd={() => { colDragRef.current = null; setColDragOver(null); }}
+                      className={`grid items-center gap-1 py-1.5 rounded border transition-colors ${
+                        colDragOver === i
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border bg-secondary/10 hover:bg-secondary/20'
+                      }`}
+                      style={{ gridTemplateColumns: '20px 3fr 2fr 1fr 2fr 2fr 1.5fr auto' }}
+                    >
+                      <span className="flex items-center justify-center cursor-grab text-muted-foreground hover:text-foreground">
+                        <GripVertical size={12} />
+                      </span>
+                      <span className="text-xs font-mono text-primary truncate pr-1" title={col.field}>{col.field}</span>
                       <input className={input} value={col.label} onChange={e => updateCol(i, { label: e.target.value })} />
                       <input type="number" className={input} value={col.w} min={5} max={210}
                         onChange={e => updateCol(i, { w: Number(e.target.value) })} />
@@ -412,7 +559,7 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold">Layout Customizado (Elementos Livres)</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">Adicione e posicione caixas de texto, linhas, imagens e retângulos por registro.</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Arraste para posicionar • ↑↓←→ move 1mm • Shift+seta = 0.1mm</p>
                 </div>
                 <div className="flex gap-1">
                   {(['text', 'line', 'box', 'image'] as const).map(type => (
@@ -422,13 +569,15 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
                         const newComp = {
                           id: 'sub_' + Math.random().toString(36).substring(2, 9),
                           type,
-                          x: 0, y: 0, w: type === 'line' ? 50 : 40, h: type === 'line' ? 2 : 5,
-                          ...(type === 'text' && { content: 'Texto', style: { ...DEFAULT_STYLE } }),
+                          x: 2, y: (draft.customComponents?.length || 0) * 7 + 2,
+                          w: type === 'line' ? 50 : 40, h: type === 'line' ? 1 : 5,
+                          ...(type === 'text' && { content: '{campo}', style: { ...DEFAULT_STYLE } }),
                           ...(type === 'line' && { orientation: 'horizontal', color: '#1a1a1a', thickness: 1 }),
                           ...(type === 'box' && { borderColor: '#cccccc', borderThickness: 1, bgColor: 'transparent', borderRadius: 0 }),
                           ...(type === 'image' && { src: '', fit: 'contain' })
                         } as any;
                         patch({ customComponents: [...(draft.customComponents || []), newComp] });
+                        setSelectedId(newComp.id);
                       }}
                       className="px-2.5 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
                     >
@@ -442,9 +591,122 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
                 <div className="text-center py-10 border-2 border-dashed border-border rounded-lg text-muted-foreground">
                   <LayoutList className="w-8 h-8 mx-auto mb-2 opacity-30" />
                   <p className="text-sm">Nenhum elemento no layout</p>
-                  <p className="text-xs mt-1">Adicione elementos acima para começar a desenhar o sub-relatório.</p>
+                  <p className="text-xs mt-1">Adicione elementos acima para começar a desenhar.</p>
                 </div>
               )}
+
+              {/* ── Canvas Visual de Drag-and-Drop ─────────────────── */}
+              {(draft.customComponents?.length || 0) > 0 && (() => {
+                const rowH = draft.rowHeight ?? 15;
+                const canvasH = canvasPx(rowH);
+                const canvasW = canvasPx(CANVAS_W_MM);
+                return (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide flex items-center gap-1">
+                        <Move size={10} /> Canvas ({CANVAS_W_MM}mm × {rowH}mm por registro)
+                      </span>
+                      {selectedId && (
+                        <span className="text-[10px] text-primary bg-primary/10 rounded px-2 py-0.5">
+                          Selecionado: {draft.customComponents?.find(c => c.id === selectedId)?.type || ''} — use ↑↓←→ para mover
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      ref={canvasRef}
+                      className="relative border-2 border-dashed border-border rounded bg-white/50 overflow-hidden select-none"
+                      style={{ width: canvasW, height: Math.max(canvasH, 80), cursor: 'default' }}
+                      tabIndex={0}
+                      onClick={() => setSelectedId(null)}
+                    >
+                      {/* Régua horizontal em mm */}
+                      {Array.from({ length: Math.floor(CANVAS_W_MM / 10) + 1 }, (_, idx) => (
+                        <div key={idx} style={{ position: 'absolute', left: canvasPx(idx * 10), top: 0, height: 6, borderLeft: '1px solid #ccc' }}>
+                          <span style={{ position: 'absolute', left: 2, top: 0, fontSize: 7, color: '#aaa' }}>{idx * 10}</span>
+                        </div>
+                      ))}
+
+                      {(draft.customComponents || []).map((c, idx) => {
+                        const isSel = selectedId === c.id;
+                        const left = canvasPx(c.x);
+                        const top  = canvasPx(c.y);
+                        const w    = canvasPx(c.w);
+                        const h    = canvasPx(c.h);
+                        const label = c.type === 'text'
+                          ? ((c as any).content || '').substring(0, 30)
+                          : c.type === 'line' ? '─ linha' : c.type === 'box' ? '□ retângulo' : '🖼 imagem';
+
+                        return (
+                          <div
+                            key={c.id}
+                            title={`${c.type} — X:${c.x}mm Y:${c.y}mm W:${c.w}mm H:${c.h}mm`}
+                            style={{
+                              position: 'absolute',
+                              left, top, width: w, height: h,
+                              boxSizing: 'border-box',
+                              border: isSel ? '2px solid #2563eb' : '1.5px dashed #94a3b8',
+                              background: isSel ? 'rgba(37,99,235,0.07)' : 'rgba(248,250,252,0.8)',
+                              cursor: 'move',
+                              zIndex: isSel ? 20 : idx + 1,
+                              borderRadius: 2,
+                              userSelect: 'none',
+                              overflow: 'hidden',
+                            }}
+                            onClick={e => { e.stopPropagation(); setSelectedId(c.id); }}
+                            onMouseDown={e => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              setSelectedId(c.id);
+                              dragRef.current = {
+                                active: true,
+                                compId: c.id,
+                                startMouseX: e.clientX,
+                                startMouseY: e.clientY,
+                                startCompX: c.x,
+                                startCompY: c.y,
+                                mode: 'move',
+                              };
+                            }}
+                          >
+                            <span style={{ fontSize: 9, color: '#374151', padding: '1px 3px', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.2' }}>
+                              {label}
+                            </span>
+
+                            {/* Handle de redimensionamento (canto inferior direito) */}
+                            {isSel && (
+                              <div
+                                style={{
+                                  position: 'absolute', right: 0, bottom: 0,
+                                  width: 8, height: 8,
+                                  background: '#2563eb',
+                                  cursor: 'se-resize',
+                                  borderRadius: '2px 0 2px 0',
+                                }}
+                                onMouseDown={e => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  dragRef.current = {
+                                    active: true,
+                                    compId: c.id,
+                                    startMouseX: e.clientX,
+                                    startMouseY: e.clientY,
+                                    startCompX: c.w,
+                                    startCompY: c.h,
+                                    mode: 'resize-br',
+                                  };
+                                }}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      💡 Arraste os elementos para posicionar. Handle azul no canto = redimensionar. Clique fora para desselecionar.
+                    </p>
+                  </div>
+                );
+              })()}
 
               <div className="space-y-3">
                 {(draft.customComponents || []).map((comp, i) => {

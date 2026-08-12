@@ -510,11 +510,21 @@ export function generateReportHtml(
   const headerHeight = layout.bands.pageHeader.visible ? (layout.bands.pageHeader.height || 0) : 0;
   const footerHeight = layout.bands.pageFooter.visible ? (layout.bands.pageFooter.height || 0) : 0;
 
+  const getPaperCssSize = (pageSize: string, orientation: string): string => {
+    const ps = (pageSize || 'a4').toString().toLowerCase();
+    const orient = orientation === 'landscape' ? 'landscape' : 'portrait';
+    if (ps === 'roll50') return orient === 'landscape' ? '200mm 50mm' : '50mm 200mm';
+    if (ps === 'roll80') return orient === 'landscape' ? '200mm 80mm' : '80mm 200mm';
+    return `${pageSize} ${orient}`;
+  };
+
+  const cssSize = getPaperCssSize(layout.pageSize, layout.orientation);
+
   let pageStyle = '';
   if (isPrint) {
     pageStyle = `
       @page {
-        size: ${layout.pageSize} ${layout.orientation};
+        size: ${cssSize};
         margin-top: ${top + headerHeight}mm;
         margin-bottom: ${bottom + footerHeight}mm;
         margin-left: ${left}mm;
@@ -577,7 +587,7 @@ export function generateReportHtml(
   } else {
     pageStyle = `
       @page {
-        size: ${layout.pageSize} ${layout.orientation};
+        size: ${cssSize};
         margin: 0;
       }
       * { box-sizing: border-box; }
