@@ -3134,6 +3134,7 @@ export type Database = {
           cobranca_asaas: string | null
           cod_barras: string | null
           documento: string
+          dt_alteracao: string | null
           dt_emissao: string | null
           dt_vencto: string | null
           emitido_bol: string | null
@@ -3179,6 +3180,7 @@ export type Database = {
           cobranca_asaas?: string | null
           cod_barras?: string | null
           documento?: string
+          dt_alteracao?: string | null
           dt_emissao?: string | null
           dt_vencto?: string | null
           emitido_bol?: string | null
@@ -3224,6 +3226,7 @@ export type Database = {
           cobranca_asaas?: string | null
           cod_barras?: string | null
           documento?: string
+          dt_alteracao?: string | null
           dt_emissao?: string | null
           dt_vencto?: string | null
           emitido_bol?: string | null
@@ -3323,7 +3326,15 @@ export type Database = {
           vl_juros?: number | null
           vl_pago?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_financeiro_baixa_financeiro"
+            columns: ["empresa_id", "financeiro_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro"
+            referencedColumns: ["empresa_id", "financeiro_id"]
+          }
+        ]
       }
       fiscal_config: {
         Row: {

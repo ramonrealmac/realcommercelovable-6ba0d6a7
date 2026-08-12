@@ -608,8 +608,12 @@ const GerarContasReceberForm: React.FC<{ initialId?: number }> = ({ initialId })
           if (!rec.dt_vencto) throw new Error("A Data de Vencimento é obrigatória.");
           if ((rec.vl_titulo ?? 0) <= 0) throw new Error("O Valor do Título deve ser maior que zero.");
 
+          const cleanRec = { ...rec };
+          delete (cleanRec as any).financeiro_baixa;
+          delete (cleanRec as any).movimento;
+
           return {
-            ...rec,
+            ...cleanRec,
             documento: rec.documento.trim(),
             planoconta_id: rec.plano_id || 0,
             tp_conta: "R",
@@ -903,7 +907,7 @@ const GerarContasReceberForm: React.FC<{ initialId?: number }> = ({ initialId })
             {(() => {
               const totalLiquido = Number(record.vl_titulo || 0) 
                 - Number(record.vl_desconto || 0) 
-                + Number(record.vl_despesa || 0) 
+                - Number(record.vl_despesa || 0) 
                 + Number(record.pct_juros || 0) 
                 + Number(record.pct_multa || 0);
               return (
@@ -1018,7 +1022,7 @@ const GerarContasReceberForm: React.FC<{ initialId?: number }> = ({ initialId })
                 </div>
               );
             })()}
-            {getStatusLabel(record) === "PAGTO PARCIAL" && record.financeiro_id ? (
+            {record.financeiro_id ? (
               <FinanceiroBaixasGrid
                 financeiroId={record.financeiro_id}
                 empresaId={record.empresa_id || XEmpresaId || 0}

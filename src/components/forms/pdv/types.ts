@@ -66,6 +66,8 @@ export interface IPdvPagamentoLinha {
   vl_recebido: number;
   plano_conta_id?: number | null;
   meio_pagamento_id?: number | null;
+  portador_id?: number | null;
+  portador_descricao?: string;
 }
 
 export interface IMovimentoPagamento {
@@ -76,4 +78,5 @@ export interface IMovimentoPagamento {
   bandeira_id: number | null;
   operadora_id: number | null;
   n_parcelas: number | null;
+  portador_id?: number | null;
 }

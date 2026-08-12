@@ -135,6 +135,7 @@ const emptyEmpresa = () => ({
   centro_custo_caixa: 0,
   conta_gerencial_caixa: null as number | null,
   conta_antecipa_id: null as number | null,
+  conta_taxa_operadora_id: null as number | null,
   deposito_estoque_caixa: 0,
   empresa_deposito_caixa: null as number | null,
   tp_operacao_caixa: 0,
@@ -179,18 +180,53 @@ const EmpresaForm: React.FC = () => {
 
   /* ── Load ── */
   const loadData = useCallback(async () => {
-    const { data } = await db.from("empresa").select("*").eq("excluido", false).order("empresa_id");
+    if (!XEmpresaId) return;
+
+    // Busca a empresa ativa para obter o ID da matriz
+    const { data: myEmp } = await db
+      .from("empresa")
+      .select("empresa_id, empresa_matriz_id")
+      .eq("empresa_id", XEmpresaId)
+      .maybeSingle();
+
+    const matrizId = myEmp?.empresa_matriz_id || XEmpresaId;
+
+    // Filtra para trazer apenas a matriz, as empresas irmãs e as empresas filhas
+    const { data } = await db
+      .from("empresa")
+      .select("*")
+      .eq("excluido", false)
+      .or(`empresa_id.eq.${matrizId},empresa_matriz_id.eq.${matrizId},empresa_matriz_id.eq.${XEmpresaId}`)
+      .order("empresa_id");
+
     if (data) setXData(data);
-  }, []);
+  }, [XEmpresaId]);
 
   const loadLookups = useCallback(async () => {
+    if (!XEmpresaId) return;
+
+    const { data: myEmp } = await db
+      .from("empresa")
+      .select("empresa_id, empresa_matriz_id")
+      .eq("empresa_id", XEmpresaId)
+      .maybeSingle();
+
+    const matrizId = myEmp?.empresa_matriz_id || XEmpresaId;
+
     const [empRes, depRes] = await Promise.all([
-      db.from("empresa").select("empresa_id, razao_social").eq("excluido", false).order("razao_social"),
-      db.from("deposito").select("deposito_id, nome").eq("excluido", false).order("nome"),
+      db.from("empresa")
+        .select("empresa_id, razao_social")
+        .eq("excluido", false)
+        .or(`empresa_id.eq.${matrizId},empresa_matriz_id.eq.${matrizId},empresa_matriz_id.eq.${XEmpresaId}`)
+        .order("razao_social"),
+      db.from("deposito")
+        .select("deposito_id, nome")
+        .eq("excluido", false)
+        .order("nome"),
     ]);
     if (empRes.data) setXEmpresasLookup(empRes.data);
     if (depRes.data) setXDepositos(depRes.data);
-  }, []);
+  }, [XEmpresaId]);
 
   const loadHorarios = useCallback(async (empresaId: number) => {
     const { data: h } = await db.from("empresa_hs_lojavirtual").select("*").eq("empresa_id", empresaId).order("dia_semana");
@@ -200,15 +236,45 @@ const EmpresaForm: React.FC = () => {
 
   const loadPlanosContas = useCallback(async (empresaId: number) => {
     if (!empresaId) return;
-    const { data } = await db
+    let { data } = await db
       .from("plano_conta")
       .select("plano_conta_id, conta, nome")
       .eq("empresa_id", empresaId)
+      .eq("tp_conta", "A")
+      .eq("tp_natureza", "D")
       .eq("excluido", false)
       .order("conta");
+
+    // Se estiver vazio, busca da empresa ativa do usuário ou da empresa 5 (Lojão do Caroço - template)
+    if (!data || data.length === 0) {
+      const fallbackId = XEmpresaId || 5;
+      const res = await db
+        .from("plano_conta")
+        .select("plano_conta_id, conta, nome")
+        .eq("empresa_id", fallbackId)
+        .eq("tp_conta", "A")
+        .eq("tp_natureza", "D")
+        .eq("excluido", false)
+        .order("conta");
+      
+      if (res.data && res.data.length > 0) {
+        data = res.data;
+      } else if (fallbackId !== 5) {
+        const res5 = await db
+          .from("plano_conta")
+          .select("plano_conta_id, conta, nome")
+          .eq("empresa_id", 5)
+          .eq("tp_conta", "A")
+          .eq("tp_natureza", "D")
+          .eq("excluido", false)
+          .order("conta");
+        if (res5.data) data = res5.data;
+      }
+    }
+
     if (data) setXPlanosContas(data);
     else setXPlanosContas([]);
-  }, []);
+  }, [XEmpresaId]);
 
   const handleGerarHorarios = async () => {
     const empresaId = XFormMode === "insert" ? null : XCurrent?.empresa_id;
@@ -733,6 +799,22 @@ const EmpresaForm: React.FC = () => {
                     value={XDisplayVal("conta_antecipa_id") || ""}
                     disabled={!XIsEditing}
                     onChange={e => updateEdit("conta_antecipa_id", e.target.value ? Number(e.target.value) : null)}
+                    className={`w-full border border-border rounded px-3 py-1.5 text-sm ${!XIsEditing ? "bg-secondary" : "bg-card"}`}
+                  >
+                    <option value="">(Nenhuma)</option>
+                    {XPlanosContas.map(p => (
+                      <option key={p.plano_conta_id} value={p.plano_conta_id}>
+                        {p.conta} - {p.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Conta Taxas Operadora</label>
+                  <select
+                    value={XDisplayVal("conta_taxa_operadora_id") || ""}
+                    disabled={!XIsEditing}
+                    onChange={e => updateEdit("conta_taxa_operadora_id", e.target.value ? Number(e.target.value) : null)}
                     className={`w-full border border-border rounded px-3 py-1.5 text-sm ${!XIsEditing ? "bg-secondary" : "bg-card"}`}
                   >
                     <option value="">(Nenhuma)</option>

@@ -141,18 +141,43 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
         return null;
       }
     } else if (XFormMode === "insert") {
-      const { data: ins, error } = await db.from(config.XTableName).insert(payload).select().single();
+      const insertPayload = { ...payload };
+      delete insertPayload[config.XPrimaryKey];
+      Object.keys(insertPayload).forEach(key => {
+        const val = (insertPayload as any)[key];
+        if (Array.isArray(val) || (val && typeof val === 'object' && !(val instanceof Date))) {
+          delete (insertPayload as any)[key];
+        }
+      });
+
+      const { data: ins, error } = await db.from(config.XTableName).insert(insertPayload).select().single();
       if (error) { toast.error("Erro: " + error.message); return null; }
       savedRec = (ins || payload) as Partial<T>;
       toast.success("Registro incluído com sucesso.");
     } else if (XCurrentRecord) {
       const updatePayload = { ...payload };
       delete updatePayload[config.XPrimaryKey];
+      Object.keys(updatePayload).forEach(key => {
+        const val = (updatePayload as any)[key];
+        if (Array.isArray(val) || (val && typeof val === 'object' && !(val instanceof Date))) {
+          delete (updatePayload as any)[key];
+        }
+      });
 
-      const { data: upd, error } = await db.from(config.XTableName)
+      let { data: upd, error } = await db.from(config.XTableName)
         .update({ ...updatePayload, dt_alteracao: new Date().toISOString() })
         .eq(config.XPrimaryKey, XCurrentRecord[config.XPrimaryKey])
-        .select().single();
+        .select().maybeSingle();
+
+      if (error && error.message?.includes("dt_alteracao")) {
+        const fallbackRes = await db.from(config.XTableName)
+          .update(updatePayload)
+          .eq(config.XPrimaryKey, XCurrentRecord[config.XPrimaryKey])
+          .select().maybeSingle();
+        upd = fallbackRes.data;
+        error = fallbackRes.error;
+      }
+
       if (error) { toast.error("Erro: " + error.message); return null; }
       savedRec = (upd || { ...XCurrentRecord, ...payload }) as Partial<T>;
       toast.success("Registro alterado com sucesso.");
@@ -219,9 +244,17 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
         error = err;
       } else {
         // Soft delete (default)
-        const { error: err } = await db.from(config.XTableName)
+        let { error: err } = await db.from(config.XTableName)
           .update({ excluido: true, dt_alteracao: new Date().toISOString() })
           .eq(config.XPrimaryKey, pkVal);
+
+        if (err && err.message?.includes("dt_alteracao")) {
+          const fallbackRes = await db.from(config.XTableName)
+            .update({ excluido: true })
+            .eq(config.XPrimaryKey, pkVal);
+          err = fallbackRes.error;
+        }
+
         error = err;
       }
 

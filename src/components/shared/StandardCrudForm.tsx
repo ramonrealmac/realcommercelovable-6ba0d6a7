@@ -75,9 +75,9 @@ function StandardCrudForm<T extends Record<string, any>>({
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       // 1. Only proceed if this component is visible in the DOM (not hidden in a tab)
-      if (!containerRef.current || containerRef.current.offsetParent === null) {
-        return;
-      }
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
 
       // 2. Ignore if a dialog or alertdialog modal is open (e.g. search filters, search dialogs, confirmation dialogs)
       if (document.querySelector('[role="dialog"]') !== null || document.querySelector('[role="alertdialog"]') !== null) {
@@ -165,15 +165,15 @@ function StandardCrudForm<T extends Record<string, any>>({
   const XFilteredData = useGridFilter(ctrl.XData, XSearchFilters, XGridCols);
 
   useEffect(() => {
-    if (XInitialId && ctrl.XData.length > 0) {
-      const idx = ctrl.XData.findIndex(r => r[config.XPrimaryKey] === XInitialId);
+    if (XInitialId !== undefined && XInitialId !== null && ctrl.XData.length > 0) {
+      const idx = ctrl.XData.findIndex(r => String(r[config.XPrimaryKey]) === String(XInitialId));
       if (idx >= 0) {
         ctrl.setXCurrentIdx(idx);
         ctrl.setXFormMode("view");
         setXInnerTab("cadastro");
       }
     }
-  }, [XInitialId, ctrl.XData, config.XPrimaryKey, ctrl]);
+  }, [XInitialId, ctrl.XData, config.XPrimaryKey, ctrl.setXCurrentIdx, ctrl.setXFormMode]);
 
   const handleSelectFromSearch = (row: any) => {
     if (config.XConfirmDiscardOnSelect && ctrl.XIsEditing) {
@@ -182,7 +182,7 @@ function StandardCrudForm<T extends Record<string, any>>({
       );
       if (!confirmDiscard) return;
     }
-    const idx = ctrl.XData.findIndex(r => r[config.XPrimaryKey] === row[config.XPrimaryKey]);
+    const idx = ctrl.XData.findIndex(r => String(r[config.XPrimaryKey]) === String(row[config.XPrimaryKey]));
     if (idx >= 0) {
       ctrl.setXCurrentIdx(idx);
       if (config.XResetModeOnSelect) {

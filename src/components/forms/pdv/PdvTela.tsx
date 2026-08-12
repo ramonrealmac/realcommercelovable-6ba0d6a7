@@ -665,7 +665,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         return;
       }
       const { data } = await db.from("movimento_pagamento")
-        .select("movimento_pagamento_id, condicao_id, vl_pagamento, numero_autorizacao, bandeira_id, operadora_id, n_parcelas")
+        .select("movimento_pagamento_id, condicao_id, vl_pagamento, numero_autorizacao, bandeira_id, operadora_id, n_parcelas, portador_id")
         .eq("movimento_id", XPedidoSel.movimento_id)
         .eq("excluido", false);
       pagtos = (data || []) as IMovimentoPagamento[];

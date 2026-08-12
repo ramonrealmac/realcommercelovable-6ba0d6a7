@@ -5,12 +5,15 @@ import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import GridActionToolbar, { gridActions } from "@/components/grid/GridActionToolbar";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Calculator, ChevronDown, ChevronUp, DollarSign, Percent, Info, CreditCard } from "lucide-react";
+import { calcularTaxasCartaoParcelado } from "@/utils/cardFeeCalculator";
 
 interface IOperadora {
   operadora_id: number;
   empresa_id: number;
   razao: string;
   cnpj: string | null;
+  tipo_antecipacao: string | null;
 }
 
 interface ITaxa {
@@ -26,12 +29,14 @@ interface ITaxa {
 const XDefault: Partial<IOperadora> = {
   razao: "",
   cnpj: "",
+  tipo_antecipacao: "SEM ANTECIPAÇÃO",
 };
 
 const XGridCols: IGridColumn[] = [
   { key: "operadora_id", label: "ID", width: "80px", align: "right" },
   { key: "razao", label: "Razão Social", width: "1fr" },
-  { key: "cnpj", label: "CNPJ", width: "180px" },
+  { key: "cnpj", label: "CNPJ", width: "160px" },
+  { key: "tipo_antecipacao", label: "Tipo de Antecipação", width: "180px" },
 ];
 
 const fmtPercentage = (v: number) =>
@@ -239,6 +244,40 @@ const OperadoraTaxaSection: React.FC<OperadoraTaxaSectionProps> = ({ operadoraId
   const isSaved = !!operadoraId;
   const ro = !isEditing || !isSaved;
 
+  // Estados do Simulador de Taxas
+  const [XShowSimulador, setXShowSimulador] = useState(false);
+  const [XSimValorVenda, setXSimValorVenda] = useState<number>(1000);
+  const [XSimParcelaStr, setXSimParcelaStr] = useState<string>("3");
+
+  const simCalculoRes = useMemo(() => {
+    if (!XShowSimulador || !XSimValorVenda || XSimValorVenda <= 0) return null;
+
+    const digits = XSimParcelaStr.replace(/\D/g, "");
+    const numParcelas = digits ? Math.max(1, parseInt(digits, 10)) : 3;
+
+    const taxaCadastrada = XTaxas.find(t => {
+      const pStr = String(t.parcela).trim().toUpperCase();
+      const sStr = XSimParcelaStr.trim().toUpperCase();
+      return pStr === sStr || pStr.replace(/\D/g, "") === String(numParcelas);
+    });
+
+    const taxaOperadoraPercent = taxaCadastrada ? taxaCadastrada.taxa_cartao : 0;
+    const taxaAntecipacaoMensalPercent = taxaCadastrada ? taxaCadastrada.taxa_antecipacao : 0;
+
+    const calculo = calcularTaxasCartaoParcelado({
+      valorVenda: XSimValorVenda,
+      numeroParcelas: numParcelas,
+      taxaOperadoraPercent,
+      taxaAntecipacaoMensalPercent
+    });
+
+    return {
+      taxaCadastrada,
+      numParcelas,
+      calculo
+    };
+  }, [XShowSimulador, XSimValorVenda, XSimParcelaStr, XTaxas]);
+
   const toolbar = useMemo(() => (
     <GridActionToolbar
       actions={[
@@ -272,11 +311,151 @@ const OperadoraTaxaSection: React.FC<OperadoraTaxaSectionProps> = ({ operadoraId
             </span>
           )}
         </div>
+        {isSaved && (
+          <button
+            type="button"
+            onClick={() => setXShowSimulador(prev => !prev)}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded border border-primary/30 text-primary hover:bg-primary/10 transition-colors bg-card shadow-xs"
+          >
+            <Calculator className="w-4 h-4" />
+            Simular Taxas (ex: 3x) {XShowSimulador ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+        )}
       </div>
 
-      {isSaved && (
-        <div className="flex items-center justify-between p-1.5 bg-secondary/15 rounded border border-border/40">
-          {toolbar}
+      {XShowSimulador && isSaved && (
+        <div className="border border-primary/20 rounded-lg p-4 bg-primary/5 dark:bg-primary/10 space-y-4 mb-4 shadow-xs">
+          <div className="flex items-center justify-between border-b border-primary/10 pb-2">
+            <div className="flex items-center gap-2">
+              <Calculator className="w-5 h-5 text-primary" />
+              <h4 className="text-sm font-bold text-foreground">Simulador de Taxas para Venda Parcelada</h4>
+            </div>
+            <span className="text-xs text-muted-foreground bg-card px-2.5 py-1 rounded border border-border">
+              Calcula com base nas taxas cadastradas
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">Valor da Venda (R$)</label>
+              <DecimalInput
+                value={XSimValorVenda}
+                onChange={val => setXSimValorVenda(val)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">Quantidade de Parcelas</label>
+              <select
+                value={XSimParcelaStr}
+                onChange={e => setXSimParcelaStr(e.target.value)}
+                className="w-full border border-border rounded px-3 py-1.5 text-sm bg-card focus:ring-2 focus:ring-ring outline-none h-[34px]"
+              >
+                {XTaxas.length > 0 ? (
+                  XTaxas.map(t => (
+                    <option key={t.operadora_taxa_id} value={t.parcela}>
+                      {t.parcela}x (Cartão: {t.taxa_cartao}%, Antecipação: {t.taxa_antecipacao}%)
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="1">1x (À vista)</option>
+                    <option value="2">2x</option>
+                    <option value="3">3x (Exemplo CIELO)</option>
+                    <option value="6">6x</option>
+                    <option value="12">12x</option>
+                  </>
+                )}
+              </select>
+            </div>
+
+            <div className="flex items-end">
+              {!simCalculoRes?.taxaCadastrada && (
+                <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-2 rounded border border-amber-200/60 dark:border-amber-900/60 flex items-center gap-1.5">
+                  <Info className="w-4 h-4 shrink-0" />
+                  Nenhuma taxa cadastrada para {XSimParcelaStr}x. Cadastre na tabela abaixo.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {simCalculoRes?.calculo && (
+            <div className="space-y-3 pt-2">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-card p-3 rounded-lg border border-border shadow-xs">
+                  <span className="text-[11px] uppercase font-bold text-muted-foreground block">Valor da Venda</span>
+                  <span className="text-base font-extrabold text-foreground">
+                    R$ {simCalculoRes.calculo.valorVenda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                <div className="bg-card p-3 rounded-lg border border-border shadow-xs">
+                  <span className="text-[11px] uppercase font-bold text-muted-foreground block">
+                    Taxa Operadora ({simCalculoRes.calculo.taxaOperadoraPercent}%)
+                  </span>
+                  <span className="text-base font-extrabold text-destructive">
+                    - R$ {simCalculoRes.calculo.valorTaxaOperadora.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                <div className="bg-card p-3 rounded-lg border border-border shadow-xs">
+                  <span className="text-[11px] uppercase font-bold text-muted-foreground block">
+                    Taxa Antecipação ({simCalculoRes.calculo.taxaAntecipacaoEfetivaPercent.toFixed(2)}% efetiva)
+                  </span>
+                  <span className="text-base font-extrabold text-amber-600 dark:text-amber-400">
+                    - R$ {simCalculoRes.calculo.valorAntecipacaoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                <div className="bg-card p-3 rounded-lg border border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20 shadow-xs">
+                  <span className="text-[11px] uppercase font-bold text-emerald-600 dark:text-emerald-400 block">
+                    Valor Líquido a Receber
+                  </span>
+                  <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
+                    R$ {simCalculoRes.calculo.valorLiquidoReceber.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Tabela de Detalhamento por Parcela */}
+              <div className="bg-card rounded-lg border border-border overflow-hidden">
+                <div className="px-3 py-2 bg-secondary/30 text-xs font-bold text-muted-foreground border-b border-border flex items-center justify-between">
+                  <span>Detalhamento por Parcela ({simCalculoRes.calculo.numeroParcelas}x)</span>
+                  <span>Prazo de recebimento por parcela</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-secondary/15 text-muted-foreground uppercase font-semibold">
+                      <tr>
+                        <th className="px-3 py-2 text-center">Parcela</th>
+                        <th className="px-3 py-2 text-right">Valor Parcela</th>
+                        <th className="px-3 py-2 text-center">Prazo (Dias/Meses)</th>
+                        <th className="px-3 py-2 text-right">Taxa Antecipação (%)</th>
+                        <th className="px-3 py-2 text-right">Valor Antecipação</th>
+                        <th className="px-3 py-2 text-right font-bold text-emerald-600 dark:text-emerald-400">Valor Líquido Parcela</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {simCalculoRes.calculo.detalheParcelas.map((parc) => (
+                        <tr key={parc.numeroParcela} className="hover:bg-secondary/20 transition-colors">
+                          <td className="px-3 py-2 text-center font-bold">{parc.numeroParcela}/{simCalculoRes.calculo.numeroParcelas}</td>
+                          <td className="px-3 py-2 text-right">R$ {parc.valorParcela.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="px-3 py-2 text-center">{parc.prazoDias} dias ({parc.prazoMeses} mes{parc.prazoMeses > 1 ? 'es' : ''})</td>
+                          <td className="px-3 py-2 text-right">{parc.taxaAntecipacaoParcelaPercent.toFixed(2)}%</td>
+                          <td className="px-3 py-2 text-right text-amber-600 dark:text-amber-400">
+                            - R$ {parc.valorAntecipacaoParcela.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-3 py-2 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                            R$ {parc.valorLiquidoParcela.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -382,7 +561,7 @@ const OperadoraForm: React.FC = () => {
         XPrimaryKey: "operadora_id",
         XTitle: "Cadastro de Operadoras de Cartões",
         XEmpresaId,
-        XSelectCols: "operadora_id,empresa_id,razao,cnpj",
+        XSelectCols: "operadora_id,empresa_id,razao,cnpj,tipo_antecipacao",
         XSoftDelete: false,
         XDefaultRecord: XDefault,
         XOnBeforeSave: async (rec, mode) => {
@@ -392,6 +571,7 @@ const OperadoraForm: React.FC = () => {
             ...rec,
             razao: rec.razao.trim().toUpperCase(),
             cnpj: rec.cnpj?.trim() || null,
+            tipo_antecipacao: rec.tipo_antecipacao || "SEM ANTECIPAÇÃO",
             empresa_id: XEmpresaId,
           } as IOperadora;
         },
@@ -441,7 +621,7 @@ const OperadoraForm: React.FC = () => {
                   }`}
                 />
               </div>
-              <div className="w-full md:w-56">
+              <div className="w-full md:w-48">
                 <label className="block text-xs font-medium text-muted-foreground mb-1">CNPJ</label>
                 <input
                   type="text"
@@ -453,6 +633,21 @@ const OperadoraForm: React.FC = () => {
                     isEditing ? "bg-card focus:ring-2 focus:ring-ring outline-none" : "bg-secondary"
                   }`}
                 />
+              </div>
+              <div className="w-full md:w-56">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Tipo de Antecipação</label>
+                <select
+                  value={record.tipo_antecipacao ?? "SEM ANTECIPAÇÃO"}
+                  onChange={e => setField("tipo_antecipacao", e.target.value)}
+                  disabled={!isEditing}
+                  className={`w-full border border-border rounded px-3 py-1.5 text-sm ${
+                    isEditing ? "bg-card focus:ring-2 focus:ring-ring outline-none h-[34px]" : "bg-secondary h-[34px]"
+                  }`}
+                >
+                  <option value="SEM ANTECIPAÇÃO">SEM ANTECIPAÇÃO</option>
+                  <option value="AUTOMÁTICA">AUTOMÁTICA</option>
+                  <option value="AVULSA">AVULSA</option>
+                </select>
               </div>
             </div>
 

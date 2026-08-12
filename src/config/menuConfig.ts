@@ -213,6 +213,7 @@ export const MENU_CONFIG: MenuItem[] = [
           { id: "consulta-titulos-receber", title: "Gerenciador de Recebimentos", icon: FileText },
           { id: "gerar-contas-receber", title: "Títulos Emitidos", icon: Plus },
           { id: "baixa-por-cliente", title: "Baixa por Cliente", icon: DollarSign },
+          { id: "baixa-cartao", title: "Baixa Cartão", icon: CreditCard },
         ],
       },
       {

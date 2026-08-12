@@ -43,6 +43,7 @@ const formatVisor = (v: string) => {
 interface ICondicao { condicao_id: number; descricao: string; qtd_parcelas: number | null; tp_documento?: number | null; plano_conta_id?: number | null; meio_pagamento_id?: number | null; }
 interface IBandeira { bandeira_id: number; descricao: string; }
 interface IOperadora { operadora_id: number; razao: string; }
+interface IPortador { portador_id: number; cd_portador: number; nome: string; banco_id: number | null; }
 
 interface IProps {
   open: boolean;
@@ -60,6 +61,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
   const [XCondicoes, setXCondicoes] = useState<ICondicao[]>([]);
   const [XBandeiras, setXBandeiras] = useState<IBandeira[]>([]);
   const [XOperadoras, setXOperadoras] = useState<IOperadora[]>([]);
+  const [XPortadores, setXPortadores] = useState<IPortador[]>([]);
   const [XLinhas, setXLinhas] = useState<IPdvPagamentoLinha[]>([]);
   const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
   const [XSalvando, setXSalvando] = useState(false);
@@ -73,6 +75,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
   const [XVlPagar, setXVlPagar] = useState<string>("0,00");
   const [XQtParcela, setXQtParcela] = useState<number>(1);
   const [XEditUid, setXEditUid] = useState<string | null>(null);
+  const [XPortadorId, setXPortadorId] = useState<number>(0);
 
   // Calculator State
   const [XCalcDisplay, setXCalcDisplay] = useState("0");
@@ -83,6 +86,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
   const condicaoRef = useRef<HTMLSelectElement>(null);
   const bandeiraRef = useRef<HTMLSelectElement>(null);
   const operadoraRef = useRef<HTMLSelectElement>(null);
+  const portadorRef = useRef<HTMLSelectElement>(null);
   const nrAutorizRef = useRef<HTMLInputElement>(null);
   const vlPagarRef = useRef<HTMLInputElement>(null);
   const confirmarRef = useRef<HTMLButtonElement>(null);
@@ -171,6 +175,36 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
     return requerCartao(XCondicaoId);
   }, [XCondicaoId, requerCartao]);
 
+  // Filter portadores by selected payment method
+  const XFilteredPortadores = useMemo(() => {
+    if (!XCondicaoId) return XPortadores;
+    const cond = XCondicoes.find(c => c.condicao_id === XCondicaoId);
+    if (!cond) return XPortadores;
+
+    const mpId = Number(cond.meio_pagamento_id || 0);
+    // Se for Dinheiro/Crediário/Duplicata/Posterior (1, 5, 14, 91)
+    if ([1, 5, 14, 91].includes(mpId)) {
+      return XPortadores.filter(p => p.banco_id === null || p.banco_id === 0);
+    }
+    // Se for Banco/Cartão/Pix (3, 4, 15, 16, 17, 20)
+    if ([3, 4, 15, 16, 17, 20].includes(mpId)) {
+      return XPortadores.filter(p => p.banco_id !== null && p.banco_id !== 0);
+    }
+    return XPortadores;
+  }, [XCondicaoId, XCondicoes, XPortadores]);
+
+  // Sync selected portador with filtered options
+  useEffect(() => {
+    if (XFilteredPortadores.length > 0) {
+      const exists = XFilteredPortadores.some(p => p.portador_id === XPortadorId);
+      if (!exists) {
+        setXPortadorId(XFilteredPortadores[0].portador_id);
+      }
+    } else {
+      setXPortadorId(0);
+    }
+  }, [XFilteredPortadores, XPortadorId]);
+
   useEffect(() => {
     if (!open) return;
     (async () => {
@@ -220,12 +254,24 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
         const operList = operRes.data || [];
         setXOperadoras(operList);
 
+        // Fetch Portadores
+        const portRes = await db.from("portador")
+          .select("portador_id, cd_portador, nome, banco_id")
+          .eq("empresa_id", XEmpresaId)
+          .eq("excluido", false)
+          .eq("ativo", "S")
+          .order("nome");
+        console.log("PagamentoDialog: Portadores carregados:", portRes.data?.length || 0);
+        const portList = portRes.data || [];
+        setXPortadores(portList);
+
         // Pre-populate XLinhas if pre-loaded payments exist
         if (pagtosPreCarregados && pagtosPreCarregados.length > 0) {
           const preenchidos = pagtosPreCarregados.map(p => {
-            const cond = condList.find(c => c.condicao_id === p.condicao_id);
-            const band = bandList.find(b => b.bandeira_id === p.bandeira_id);
-            const oper = operList.find(o => o.operadora_id === p.operadora_id);
+            const cond = condList.find(c => Number(c.condicao_id) === Number(p.condicao_id));
+            const band = bandList.find(b => Number(b.bandeira_id) === Number(p.bandeira_id));
+            const oper = operList.find(o => Number(o.operadora_id) === Number(p.operadora_id));
+            const port = portList.find(o => Number(o.portador_id) === Number(p.portador_id));
             const vRecebido = Number(p.vl_pagamento || 0);
             const qtParc = Number(p.n_parcelas || 1);
             const vlParc = qtParc > 0 ? +(vRecebido / qtParc).toFixed(2) : vRecebido;
@@ -237,13 +283,15 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
               bandeira_id: p.bandeira_id ? Number(p.bandeira_id) : null,
               bandeira_descricao: band?.descricao || "",
               operadora_id: p.operadora_id ? Number(p.operadora_id) : null,
-              operadora_descricao: oper?.razao || "",
+              operadora_descricao: oper?.razao || (p.operadora_id ? `Operadora ${p.operadora_id}` : ""),
               numero_autoriza: p.numero_autorizacao || "",
               qt_parcela: qtParc,
               vl_parcela: vlParc,
               vl_recebido: vRecebido,
               plano_conta_id: cond?.plano_conta_id || null,
               meio_pagamento_id: cond?.meio_pagamento_id ?? null,
+              portador_id: p.portador_id ? Number(p.portador_id) : null,
+              portador_descricao: port ? (port.cd_portador ? `${port.cd_portador} - ${port.nome}` : port.nome) : (p.portador_id ? `Portador ${p.portador_id}` : ""),
             };
           });
 
@@ -293,6 +341,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
   const resetForm = (vl: number) => {
     setXCondicaoId(0); setXBandeiraId(0); setXOperadoraId(0);
     setXNrAutoriz(""); setXVlPagar(fmtInput(vl)); setXQtParcela(1); setXEditUid(null);
+    setXPortadorId(0);
   };
 
   const setCondicao = (cid: number) => {
@@ -317,9 +366,10 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
       if (!XNrAutoriz.trim()) { toast.error("Informe o número de autorização."); return; }
     }
 
-    const cond = XCondicoes.find(c => c.condicao_id === XCondicaoId);
-    const band = XBandeiras.find(b => b.bandeira_id === XBandeiraId);
-    const oper = XOperadoras.find(o => o.operadora_id === XOperadoraId);
+    const cond = XCondicoes.find(c => Number(c.condicao_id) === Number(XCondicaoId));
+    const band = XBandeiras.find(b => Number(b.bandeira_id) === Number(XBandeiraId));
+    const oper = XOperadoras.find(o => Number(o.operadora_id) === Number(XOperadoraId));
+    const port = XPortadores.find(o => Number(o.portador_id) === Number(XPortadorId));
 
     const novaSomada = totalPago - (XEditUid ? (XLinhas.find(l => l.uid === XEditUid)?.vl_recebido || 0) : 0) + vPagar;
     if (novaSomada > totalPedido + 0.0001) {
@@ -344,6 +394,8 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
       vl_recebido: vPagar,
       plano_conta_id: cond?.plano_conta_id || null,
       meio_pagamento_id: cond?.meio_pagamento_id ?? null,
+      portador_id: XPortadorId || null,
+      portador_descricao: port ? (port.cd_portador ? `${port.cd_portador} - ${port.nome}` : port.nome) : (XPortadorId ? `Portador ${XPortadorId}` : ""),
     };
 
     setXLinhas(prev => XEditUid ? prev.map(l => l.uid === XEditUid ? linha : l) : [...prev, linha]);
@@ -377,6 +429,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
     setXNrAutoriz(l.numero_autoriza || "");
     setXVlPagar(fmtInput(l.vl_recebido));
     setXQtParcela(l.qt_parcela);
+    setXPortadorId(l.portador_id || 0);
   };
 
   const excluirLinha = (l: IPdvPagamentoLinha | null) => {
@@ -427,6 +480,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
 
   const colsAll: IGridColumn[] = [
     { key: "condicao_descricao", label: "Condição", width: isMobile ? "120px" : "1fr" },
+    { key: "portador_descricao", label: "Portador", width: "160px", render: r => r.portador_descricao || "--" },
     { key: "qt_parcela", label: "Parc.", width: "60px", align: "right" },
     { key: "vl_parcela", label: "Vlr Parcela", width: "100px", align: "right", render: r => fmt(r.vl_parcela) },
     { key: "vl_recebido", label: "Valor", width: "100px", align: "right", render: r => fmt(r.vl_recebido) },
@@ -523,7 +577,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
             <div className="col-span-7 max-md:col-span-1 max-md:col-start-1 max-md:snap-start max-md:px-3 max-md:pt-2">
               <label className="text-[10px] font-bold text-muted-foreground uppercase leading-tight mb-1.5 block">Condição</label>
               <select ref={condicaoRef} value={XCondicaoId} onChange={e => setCondicao(Number(e.target.value))}
-                onKeyDown={e => handleSelectKeyDown(e, bandeiraRef, () => !camposCartaoEditaveis)}
+                onKeyDown={e => handleSelectKeyDown(e, camposCartaoEditaveis ? bandeiraRef : portadorRef)}
                 className={`w-full border border-border rounded px-2 py-1 text-sm h-9 ${brancoCls}`}>
                 <option value={0}>--</option>
                 {XCondicoes.map(c => <option key={c.condicao_id} value={c.condicao_id}>{c.descricao}</option>)}
@@ -541,20 +595,40 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
               </div>
             </div>
 
-            {/* Row 2: Bandeira vs Valor Pago */}
+            {/* Row 2: Bandeira e Portador vs Valor Pago */}
             <div className="col-span-7 max-md:col-span-1 max-md:col-start-1 max-md:snap-start max-md:px-3 max-md:pt-4">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase leading-tight mb-1.5 block">Bandeira</label>
-              <select
-                ref={bandeiraRef}
-                value={XBandeiraId}
-                onChange={e => setXBandeiraId(Number(e.target.value))}
-                onKeyDown={e => handleSelectKeyDown(e, operadoraRef)}
-                disabled={!camposCartaoEditaveis}
-                tabIndex={camposCartaoEditaveis ? 0 : -1}
-                className={`w-full border border-border rounded px-2 py-1 text-sm h-9 ${camposCartaoEditaveis ? brancoCls : cinzaCls}`}>
-                <option value={0}>--</option>
-                {XBandeiras.map(b => <option key={b.bandeira_id} value={b.bandeira_id}>{b.descricao}</option>)}
-              </select>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase leading-tight mb-1.5 block">Bandeira</label>
+                  <select
+                    ref={bandeiraRef}
+                    value={XBandeiraId}
+                    onChange={e => setXBandeiraId(Number(e.target.value))}
+                    onKeyDown={e => handleSelectKeyDown(e, portadorRef)}
+                    disabled={!camposCartaoEditaveis}
+                    tabIndex={camposCartaoEditaveis ? 0 : -1}
+                    className={`w-full border border-border rounded px-2 py-1 text-sm h-9 ${camposCartaoEditaveis ? brancoCls : cinzaCls}`}>
+                    <option value={0}>--</option>
+                    {XBandeiras.map(b => <option key={b.bandeira_id} value={b.bandeira_id}>{b.descricao}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase leading-tight mb-1.5 block">Portador</label>
+                  <select
+                    ref={portadorRef}
+                    value={XPortadorId}
+                    onChange={e => setXPortadorId(Number(e.target.value))}
+                    onKeyDown={e => handleSelectKeyDown(e, camposCartaoEditaveis ? operadoraRef : vlPagarRef)}
+                    className={`w-full border border-border rounded px-2 py-1 text-sm h-9 ${brancoCls}`}>
+                    <option value={0}>-- Selecione --</option>
+                    {XFilteredPortadores.map(p => (
+                      <option key={p.portador_id} value={p.portador_id}>
+                        {p.cd_portador} - {p.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
             <div className="col-span-5 max-md:col-span-1 max-md:col-start-2 max-md:snap-start max-md:px-3 max-md:pt-4">
               <div 
