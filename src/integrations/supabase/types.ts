@@ -6124,12 +6124,9 @@ export type Database = {
           operadora_taxa_id: string
           empresa_id: number
           operadora_id: number
-          bandeira_id: number | null
-          tipo_canal: string
-          faturamento_minimo: number
-          faturamento_maximo: number
-          qtd_parcelas: number
-          taxa_total: number
+          parcela: string
+          taxa_cartao: number
+          taxa_antecipacao: number
           excluido: boolean
           created_at: string
           updated_at: string
@@ -6138,12 +6135,9 @@ export type Database = {
           operadora_taxa_id?: string
           empresa_id: number
           operadora_id: number
-          bandeira_id?: number | null
-          tipo_canal?: string
-          faturamento_minimo?: number
-          faturamento_maximo?: number
-          qtd_parcelas: number
-          taxa_total: number
+          parcela: string
+          taxa_cartao: number
+          taxa_antecipacao: number
           excluido?: boolean
           created_at?: string
           updated_at?: string
@@ -6152,12 +6146,9 @@ export type Database = {
           operadora_taxa_id?: string
           empresa_id?: number
           operadora_id?: number
-          bandeira_id?: number | null
-          tipo_canal?: string
-          faturamento_minimo?: number
-          faturamento_maximo?: number
-          qtd_parcelas?: number
-          taxa_total?: number
+          parcela?: string
+          taxa_cartao?: number
+          taxa_antecipacao?: number
           excluido?: boolean
           created_at?: string
           updated_at?: string
@@ -6176,13 +6167,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "operadora"
             referencedColumns: ["operadora_id"]
-          },
-          {
-            foreignKeyName: "operadora_taxa_bandeira_id_fkey"
-            columns: ["bandeira_id"]
-            isOneToOne: false
-            referencedRelation: "bandeira"
-            referencedColumns: ["bandeira_id"]
           }
         ]
       }

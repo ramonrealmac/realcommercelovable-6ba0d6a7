@@ -7,10 +7,10 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function run() {
   const sql = `
-    SELECT p.email, p.nm_usuario, eu.empresa_id, p.fl_autorizado 
-    FROM public.profiles p
-    JOIN public.empresa_usuario eu ON eu.user_id = p.id
-    WHERE eu.empresa_id = 5;
+    SELECT column_name, data_type 
+    FROM information_schema.columns 
+    WHERE table_name = 'operadora_taxa' 
+    ORDER BY ordinal_position
   `;
   const { data, error } = await supabase.rpc('rpb_execute_query', { p_sql: sql });
   if (error) {
