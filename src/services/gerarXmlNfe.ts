@@ -104,15 +104,6 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
     }
   }
 
-  if (chavesParaRef.length > 0) {
-    chavesParaRef.forEach(ch => {
-      const limpa = String(ch || "").replace(/\D/g, "");
-      if (limpa.length === 44) {
-        xml += `<NFref><refNFe>${limpa}</refNFe></NFref>`;
-      }
-    });
-  }
-
   xml += `<tpNF>${tpNF}</tpNF>`;
   xml += `<idDest>${(cadastro?.endereco_uf !== empresa.endereco_uf) ? '2' : '1'}</idDest>`; 
   xml += `<cMunFG>${cMunEmit}</cMunFG>`;
@@ -129,6 +120,16 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
   }
   xml += `<procEmi>0</procEmi>`;
   xml += `<verProc>RealCommerce2.0</verProc>`;
+
+  if (chavesParaRef.length > 0) {
+    chavesParaRef.forEach(ch => {
+      const limpa = String(ch || "").replace(/\D/g, "");
+      if (limpa.length === 44) {
+        xml += `<NFref><refNFe>${limpa}</refNFe></NFref>`;
+      }
+    });
+  }
+
   xml += `</ide>`;
 
   // <emit>
@@ -349,6 +350,18 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
     xml += `</COFINS>`;
     
     xml += `</imposto>`;
+    
+    // Referenciamento de item de outros DFe (<DFeReferenciado>)
+    const chaveItemRef = String(it.chave_ref_item || chavesParaRef[0] || (cabecalho as any).chave_ref || "").replace(/\D/g, "");
+    const nrItemOrigem = Number(it.nr_item_origem || (it.nfe_item_origem && it.nfe_item_origem.nr_item) || 0);
+
+    if (chaveItemRef.length === 44 && nrItemOrigem > 0) {
+      xml += `<DFeReferenciado>`;
+      xml += `<chaveAcesso>${chaveItemRef}</chaveAcesso>`;
+      xml += `<nItem>${nrItemOrigem}</nItem>`;
+      xml += `</DFeReferenciado>`;
+    }
+
     xml += `</det>`;
   });
 

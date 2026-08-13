@@ -1097,6 +1097,19 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 let ret = libNFe.CarregarINI(handle, iniContent);
                 if (ret !== 0) throw new Error('[NFE] CarregarINI: ' + lerRetornoACBr(libNFe, handle));
 
+                try {
+                    const bufPreXml = Buffer.alloc(TAMANHO_BUFFER);
+                    const bufPreXmlTam = Buffer.alloc(4);
+                    bufPreXmlTam.writeInt32LE(TAMANHO_BUFFER, 0);
+                    if (libNFe.ObterXml(handle, 0, bufPreXml, bufPreXmlTam) === 0) {
+                        const preXmlStr = bufPreXml.toString('utf8', 0, bufPreXmlTam.readInt32LE(0)).replace(/\0/g, '');
+                        const hasDFeRef = preXmlStr.includes('DFeReferenciado');
+                        console.log(`[FiscalLib] XML Gerado pela DLL antes do Enviar (DFeReferenciado=${hasDFeRef}) | Tamanho: ${preXmlStr.length}`);
+                    }
+                } catch (e) {
+                    console.warn('[FiscalLib] Erro ao obter XML pré-transmissão:', e.message);
+                }
+
                 const bufferResposta = Buffer.alloc(TAMANHO_BUFFER);
                 const bufferTamanho = Buffer.alloc(4);
                 bufferTamanho.writeInt32LE(TAMANHO_BUFFER, 0);

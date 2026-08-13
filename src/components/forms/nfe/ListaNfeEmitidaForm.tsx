@@ -216,12 +216,18 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
         }
       }
 
-      const { data, error } = await db.from("fiscal_nfe_cabecalho")
+      let query = db.from("fiscal_nfe_cabecalho")
         .select("*, cadastro(razao_social, cnpj)")
-        .in("empresa_id", empresaIds)
-        .gte("dt_emissao", XDtIni)
-        .lte("dt_emissao", XDtFim)
-        .order("created_at", { ascending: false });
+        .in("empresa_id", empresaIds);
+
+      if (XDtIni && String(XDtIni).trim() !== "") {
+        query = query.gte("dt_emissao", XDtIni);
+      }
+      if (XDtFim && String(XDtFim).trim() !== "") {
+        query = query.lte("dt_emissao", XDtFim);
+      }
+
+      const { data, error } = await query.order("created_at", { ascending: false });
 
       if (error) throw error;
       
@@ -600,12 +606,12 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
             <div className="flex items-center gap-2 bg-secondary/30 p-1 rounded-lg border border-border mr-4">
                <div className="flex flex-col px-2">
                 <span className="text-[9px] text-muted-foreground uppercase font-bold">Início</span>
-                <input type="date" value={XDtIni} onChange={e => setXDtIni(e.target.value)} className="bg-transparent border-none text-xs p-0 focus:ring-0 w-24" />
+                <input type="date" max="2099-12-31" value={XDtIni} onChange={e => setXDtIni(e.target.value)} className="bg-transparent border-none text-xs p-0 focus:ring-0 w-32" />
               </div>
               <div className="h-6 w-px bg-border" />
               <div className="flex flex-col px-2">
                 <span className="text-[9px] text-muted-foreground uppercase font-bold">Fim</span>
-                <input type="date" value={XDtFim} onChange={e => setXDtFim(e.target.value)} className="bg-transparent border-none text-xs p-0 focus:ring-0 w-24" />
+                <input type="date" max="2099-12-31" value={XDtFim} onChange={e => setXDtFim(e.target.value)} className="bg-transparent border-none text-xs p-0 focus:ring-0 w-32" />
               </div>
             </div>
             

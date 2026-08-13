@@ -256,6 +256,17 @@ export function gerarIniNfe(params: GerarIniParams): string {
       linhas.push(`vCOFINS=0.00`);
     }
     linhas.push(``);
+
+    // Referenciamento de item de outros DFe ([DFeReferenciado001])
+    const chaveItemRef = String(it.chave_ref_item || chavesParaRef[0] || (cabecalho as any).chave_ref || "").replace(/\D/g, "");
+    const nrItemOrigem = Number(it.nr_item_origem || (it.nfe_item_origem && it.nfe_item_origem.nr_item) || 0);
+
+    if (chaveItemRef.length === 44 && nrItemOrigem > 0) {
+      linhas.push(`[DFeReferenciado${nr}]`);
+      linhas.push(`chaveAcesso=${chaveItemRef}`);
+      linhas.push(`nItem=${nrItemOrigem}`);
+      linhas.push(``);
+    }
   }
 
   // ──────────────────────────────────────────────

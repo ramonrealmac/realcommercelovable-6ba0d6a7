@@ -8,7 +8,7 @@ import NfeItensTab from "./NfeItensTab";
 import NfePagamentoTab from "./NfePagamentoTab";
 import type { INfeCabecalho, TNfeSt } from "./types";
 import { NFE_ST_LABELS } from "./types";
-import { Search, Send } from "lucide-react";
+import { Search, Send, Printer } from "lucide-react";
 import { formatCPFCNPJ } from "@/lib/validators";
 import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
 import { useEnterTraversal } from "@/hooks/useEnterTraversal";
@@ -218,36 +218,77 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
         if (!currentRecord || isEditing) return null;
         const st = String(currentRecord.st_nf || "");
         const podeEnviar = ["A", "R", "3", "P"].includes(st) && Number(currentRecord.tp_nf) === 1;
-        if (!podeEnviar) return null;
-        return (
-          <button
-            type="button"
-            onClick={async () => {
-              if (!confirm(`Enviar NF-e #${currentRecord.nfe_cabecalho_id} para a SEFAZ via fiscal-worker?`)) return;
-              const tid = toast.loading("Enviando para fila do fiscal-worker...");
-              try {
-                const res = await fiscalEmissaoService.retransmitirDocumento(
-                  currentRecord.nfe_cabecalho_id,
-                  XEmpresaId
-                );
-                toast.dismiss(tid);
-                if (res.success) {
-                  toast.success(`Evento #${res.fiscal_evento_id} enfileirado. Aguarde o fiscal-worker processar.`);
-                  await refresh();
-                } else {
-                  toast.error("Falha: " + (res.message || "Erro desconhecido"));
+        const foiEmitida = ["E", "1"].includes(st);
+
+        if (foiEmitida) {
+          return (
+            <button
+              type="button"
+              onClick={async () => {
+                const tid = toast.loading("Gerando DANFE...");
+                try {
+                  const res = await fiscalEmissaoService.imprimirDocumento(
+                    currentRecord.nfe_cabecalho_id,
+                    currentRecord.empresa_id || XEmpresaId
+                  );
+                  toast.dismiss(tid);
+                  if (res.success && res.pdf_base64) {
+                    const binaryString = atob(res.pdf_base64);
+                    const bytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+                    const blob = new Blob([bytes], { type: "application/pdf" });
+                    const url = URL.createObjectURL(blob);
+                    window.open(url, "_blank");
+                    toast.success("DANFE gerado com sucesso.");
+                  } else {
+                    toast.error(res.message || "Falha ao gerar PDF do DANFE.");
+                  }
+                } catch (e: any) {
+                  toast.dismiss(tid);
+                  toast.error("Erro ao emitir DANFE: " + e.message);
                 }
-              } catch (e: any) {
-                toast.dismiss(tid);
-                toast.error("Erro: " + e.message);
-              }
-            }}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-primary text-primary-foreground rounded-md hover:opacity-90 shadow-sm"
-            title="Cria evento PENDENTE no fiscal_evento para que o fiscal-worker transmita a NF-e à SEFAZ"
-          >
-            <Send className="w-3.5 h-3.5" /> ENVIAR SEFAZ
-          </button>
-        );
+              }}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md shadow-sm"
+              title="Visualizar e Imprimir DANFE em PDF"
+            >
+              <Printer className="w-3.5 h-3.5" /> EMITIR DANFE
+            </button>
+          );
+        }
+
+        if (podeEnviar) {
+          return (
+            <button
+              type="button"
+              onClick={async () => {
+                if (!confirm(`Enviar NF-e #${currentRecord.nfe_cabecalho_id} para a SEFAZ via fiscal-worker?`)) return;
+                const tid = toast.loading("Enviando para fila do fiscal-worker...");
+                try {
+                  const res = await fiscalEmissaoService.retransmitirDocumento(
+                    currentRecord.nfe_cabecalho_id,
+                    XEmpresaId
+                  );
+                  toast.dismiss(tid);
+                  if (res.success) {
+                    toast.success(`Evento #${res.fiscal_evento_id} enfileirado. Aguarde o fiscal-worker processar.`);
+                    await refresh();
+                  } else {
+                    toast.error("Falha: " + (res.message || "Erro desconhecido"));
+                  }
+                } catch (e: any) {
+                  toast.dismiss(tid);
+                  toast.error("Erro: " + e.message);
+                }
+              }}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-primary text-primary-foreground rounded-md hover:opacity-90 shadow-sm"
+              title="Cria evento PENDENTE no fiscal_evento para que o fiscal-worker transmita a NF-e à SEFAZ"
+            >
+              <Send className="w-3.5 h-3.5" /> ENVIAR SEFAZ
+            </button>
+          );
+        }
+
+        return null;
       }}
       XExtraTabs={[
         {

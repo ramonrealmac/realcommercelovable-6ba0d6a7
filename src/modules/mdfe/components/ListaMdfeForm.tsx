@@ -100,12 +100,18 @@ const ListaMdfeForm: React.FC = () => {
     if (!XEmpresaId) return;
     setXLoading(true);
     try {
-      const { data, error } = await db.from("fiscal_mdf_manifesto")
+      let query = db.from("fiscal_mdf_manifesto")
         .select("*")
-        .eq("empresa_id", XEmpresaId)
-        .gte("dt_emissao", XDtIni)
-        .lte("dt_emissao", XDtFim)
-        .order("mdf_manifesto_id", { ascending: false });
+        .eq("empresa_id", XEmpresaId);
+
+      if (XDtIni && String(XDtIni).trim() !== "") {
+        query = query.gte("dt_emissao", XDtIni);
+      }
+      if (XDtFim && String(XDtFim).trim() !== "") {
+        query = query.lte("dt_emissao", XDtFim);
+      }
+
+      const { data, error } = await query.order("mdf_manifesto_id", { ascending: false });
 
       if (error) throw error;
       setXData(data || []);
@@ -347,12 +353,12 @@ const ListaMdfeForm: React.FC = () => {
             <div className="flex items-center gap-2 bg-secondary/30 p-1 rounded-lg border border-border mr-4">
                <div className="flex flex-col px-2">
                 <span className="text-[9px] text-muted-foreground uppercase font-bold">Início</span>
-                <input type="date" value={XDtIni} onChange={e => setXDtIni(e.target.value)} className="bg-transparent border-none text-xs p-0 focus:ring-0 w-24" />
+                <input type="date" max="2099-12-31" value={XDtIni} onChange={e => setXDtIni(e.target.value)} className="bg-transparent border-none text-xs p-0 focus:ring-0 w-32" />
               </div>
               <div className="h-6 w-px bg-border" />
               <div className="flex flex-col px-2">
                 <span className="text-[9px] text-muted-foreground uppercase font-bold">Fim</span>
-                <input type="date" value={XDtFim} onChange={e => setXDtFim(e.target.value)} className="bg-transparent border-none text-xs p-0 focus:ring-0 w-24" />
+                <input type="date" max="2099-12-31" value={XDtFim} onChange={e => setXDtFim(e.target.value)} className="bg-transparent border-none text-xs p-0 focus:ring-0 w-32" />
               </div>
               <button onClick={loadData} className="ml-2 p-1.5 hover:bg-secondary rounded-md"><RefreshCw className={`w-4 h-4 ${XLoading ? 'animate-spin' : ''}`} /></button>
             </div>

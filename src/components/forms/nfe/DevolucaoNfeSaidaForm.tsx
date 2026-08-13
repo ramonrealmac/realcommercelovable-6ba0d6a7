@@ -100,11 +100,16 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
         .eq("tp_nf", 1)
         .in("st_nf", ["E", "1"]) // Apenas notas fiscais autorizadas
         .neq("fin_nfe", 4) // não permitir devolver uma devolução
-        .eq("excluido", false)
-        .gte("dt_emissao", XDtIni)
-        .lte("dt_emissao", XDtFim)
-        .order("dt_emissao", { ascending: false })
-        .limit(200);
+        .eq("excluido", false);
+
+      if (XDtIni && String(XDtIni).trim() !== "") {
+        q = q.gte("dt_emissao", XDtIni);
+      }
+      if (XDtFim && String(XDtFim).trim() !== "") {
+        q = q.lte("dt_emissao", XDtFim);
+      }
+
+      q = q.order("dt_emissao", { ascending: false }).limit(200);
       const t = XBusca.trim();
       if (t) {
         if (/^\d+$/.test(t)) q = q.eq("nr_nota", t);
@@ -265,6 +270,9 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
           empresa_id: XEmpresaId,
           produto_id: it.produto_id,
           nr_item: idx + 1,
+          nfe_item_origem_id: o?.nfe_item_id || null,
+          nr_item_origem: Number(o?.nr_item || 1),
+          chave_ref_item: String(XSelecionada.chave_nfe || "").replace(/\D/g, ""),
           cd_prod_fornec: it.cd_produto,
           nm_produto: it.nm_produto,
           ncm: it.ncm,
