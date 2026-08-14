@@ -6,6 +6,7 @@ import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import type { IGridColumn } from "@/components/grid/DataGrid";
 import NfeXmlImporter from "./NfeXmlImporter";
 import NfeItensTab from "./NfeItensTab";
+import NfeTitulosTab from "./NfeTitulosTab";
 import FornecedorCheckDialog from "./FornecedorCheckDialog";
 import type { INfeCabecalho, INfeDadosXml, INfeXmlItem, TNfeSt, INfeXmlEmitente } from "./types";
 import { NFE_ST_LABELS } from "./types";
@@ -379,6 +380,92 @@ const NotaFiscalEntradaForm: React.FC<NotaFiscalEntradaFormProps> = ({ initialMo
       }
     }
 
+    // ── Geração do Contas a Pagar (tabela financeiro) ──
+    const docNr = String(rec.nr_nota || "");
+    if (docNr && rec.cadastro_id) {
+      let duplicatasXml: { n_dup: string; dt_vencto: string; v_dup: number }[] = [];
+
+      // Extrai as duplicatas (com data de vencimento dVenc) diretamente do XML da nota
+      if (rec.xml_nf) {
+        const parsed = parseNfeXml(rec.xml_nf);
+        if (parsed?.duplicatas && parsed.duplicatas.length > 0) {
+          duplicatasXml = parsed.duplicatas;
+        }
+      }
+
+      const dtEmissao = rec.dt_emissao ? String(rec.dt_emissao).substring(0, 10) : new Date().toISOString().substring(0, 10);
+      const dtEntrada = rec.dt_entrada ? String(rec.dt_entrada).substring(0, 10) : dtEmissao;
+
+      if (duplicatasXml.length > 0) {
+        for (let i = 0; i < duplicatasXml.length; i++) {
+          const dup = duplicatasXml[i];
+          const vDup = Number(dup.v_dup || 0);
+          if (vDup <= 0) continue;
+          const dtVenc = dup.dt_vencto ? dup.dt_vencto.substring(0, 10) : dtEntrada;
+          const numParcela = parseInt(String(dup.n_dup).replace(/\D/g, ""), 10) || (i + 1);
+
+          await db.from("financeiro").insert({
+            empresa_id: XEmpresaId,
+            documento: docNr,
+            parcela: numParcela,
+            tp_conta: "P",
+            dt_emissao: dtEmissao,
+            dt_vencto: dtVenc,
+            cadastro_id: rec.cadastro_id,
+            observacao1: `NF-e Entrada nº ${docNr} (Dup. ${dup.n_dup})`,
+            vl_titulo: vDup,
+            vl_pago: 0,
+            status: "A",
+            ativo: "S",
+          });
+        }
+      } else {
+        const { data: pagtos } = await db.from("fiscal_nfe_pagamento")
+          .select("*")
+          .eq("nfe_cabecalho_id", cabId);
+
+        if (pagtos && pagtos.length > 0) {
+          for (let i = 0; i < pagtos.length; i++) {
+            const pag = pagtos[i];
+            const vPag = Number(pag.v_pag || 0);
+            if (vPag <= 0) continue;
+            await db.from("financeiro").insert({
+              empresa_id: XEmpresaId,
+              documento: docNr,
+              parcela: i + 1,
+              tp_conta: "P",
+              dt_emissao: dtEmissao,
+              dt_vencto: dtEntrada,
+              cadastro_id: rec.cadastro_id,
+              observacao1: `NF-e Entrada nº ${docNr} (Parc. ${i + 1}/${pagtos.length})`,
+              vl_titulo: vPag,
+              vl_pago: 0,
+              status: "A",
+              ativo: "S",
+            });
+          }
+        } else {
+          const vlTotalNf = Number(rec.vl_total_nf || 0);
+          if (vlTotalNf > 0) {
+            await db.from("financeiro").insert({
+              empresa_id: XEmpresaId,
+              documento: docNr,
+              parcela: 1,
+              tp_conta: "P",
+              dt_emissao: dtEmissao,
+              dt_vencto: dtEntrada,
+              cadastro_id: rec.cadastro_id,
+              observacao1: `NF-e Entrada nº ${docNr}`,
+              vl_titulo: vlTotalNf,
+              vl_pago: 0,
+              status: "A",
+              ativo: "S",
+            });
+          }
+        }
+      }
+    }
+
     await db.from("fiscal_nfe_cabecalho").update({
       st_nf: "E", updated_at: new Date().toISOString(),
     }).eq("nfe_cabecalho_id", cabId);
@@ -390,7 +477,7 @@ const NotaFiscalEntradaForm: React.FC<NotaFiscalEntradaFormProps> = ({ initialMo
       }));
     }
 
-    toast.success("NF-e escriturada com sucesso! Estoque e custos atualizados.");
+    toast.success("NF-e escriturada com sucesso! Estoque, custos e Contas a Pagar gerados.");
     if (XRefreshRef.current) await XRefreshRef.current();
   }, [XEmpresaId]);
 
@@ -414,7 +501,24 @@ const NotaFiscalEntradaForm: React.FC<NotaFiscalEntradaFormProps> = ({ initialMo
         return;
       }
 
-      // 2. Inserir logs reversos no estoque_log para cada item
+      // 2. Verificar se há títulos no Contas a Pagar já baixados/pagos
+      const docNr = String(record.nr_nota || "");
+      if (docNr && record.cadastro_id) {
+        const { data: titulosBaixados } = await db.from("financeiro")
+          .select("financeiro_id, status, vl_pago")
+          .eq("empresa_id", XEmpresaId)
+          .eq("tp_conta", "P")
+          .eq("documento", docNr)
+          .eq("cadastro_id", record.cadastro_id)
+          .or("status.eq.B,vl_pago.gt.0");
+
+        if (titulosBaixados && titulosBaixados.length > 0) {
+          toast.error("Existe(m) título(s) no Contas a Pagar desta nota fiscal com pagamentos efetuados! Cancele as baixas no financeiro antes de estornar a escrituração.");
+          return;
+        }
+      }
+
+      // 3. Inserir logs reversos no estoque_log para cada item
       for (const item of itens) {
         if (!item.produto_id || !record.deposito_id) continue;
 
@@ -443,7 +547,18 @@ const NotaFiscalEntradaForm: React.FC<NotaFiscalEntradaFormProps> = ({ initialMo
         if (errEstoqueLog) throw errEstoqueLog;
       }
 
-      // 3. Atualizar status do cabeçalho de volta para "P" (Pendente)
+      // 4. Excluir completamente os títulos do Contas a Pagar (financeiro) ao estornar a escrituração
+      if (docNr && record.cadastro_id) {
+        await db.from("financeiro")
+          .delete()
+          .eq("empresa_id", XEmpresaId)
+          .eq("tp_conta", "P")
+          .eq("documento", docNr)
+          .eq("cadastro_id", record.cadastro_id)
+          .in("status", ["A", "C"]);
+      }
+
+      // 5. Atualizar status do cabeçalho de volta para "P" (Pendente)
       const { error: errUpdate } = await db.from("fiscal_nfe_cabecalho")
         .update({
           st_nf: "P",
@@ -460,7 +575,7 @@ const NotaFiscalEntradaForm: React.FC<NotaFiscalEntradaFormProps> = ({ initialMo
         }));
       }
 
-      toast.success("Escrituração estornada com sucesso! Estoque atualizado.");
+      toast.success("Escrituração estornada com sucesso! Estoque e Contas a Pagar atualizados.");
       if (XRefreshRef.current) await XRefreshRef.current();
     } catch (e: any) {
       toast.error("Erro ao estornar: " + e.message);
@@ -545,6 +660,23 @@ const NotaFiscalEntradaForm: React.FC<NotaFiscalEntradaFormProps> = ({ initialMo
     }
 
     setXDadosXml(dados);
+
+    if (dados.chave_nfe) {
+      const cleanChave = String(dados.chave_nfe).replace(/\D/g, "");
+      if (cleanChave.length === 44) {
+        const { data: existing } = await db.from("fiscal_nfe_cabecalho")
+          .select("nfe_cabecalho_id, nr_nota, serie")
+          .eq("empresa_id", XEmpresaId)
+          .eq("chave_nfe", cleanChave)
+          .eq("excluido", false)
+          .maybeSingle();
+
+        if (existing) {
+          toast.error(`A NF-e nº ${existing.nr_nota}/${existing.serie} (Chave ${cleanChave}) já está cadastrada no sistema.`);
+          return;
+        }
+      }
+    }
 
     // Verifica fornecedor
     const cnpjLimpo = dados.emitente.cnpj.replace(/\D/g, "");
@@ -674,7 +806,7 @@ const NotaFiscalEntradaForm: React.FC<NotaFiscalEntradaFormProps> = ({ initialMo
             const ids = [...new Set(rows.map(r => r.cadastro_id).filter(Boolean))] as number[];
             if (ids.length) ensureFornInfo(ids);
           },
-          XOnBeforeSave: (rec) => {
+          XOnBeforeSave: async (rec, mode) => {
             if (!rec.nr_nota?.trim()) throw new Error("Informe o número da Nota Fiscal.");
             if (!rec.dt_entrada) throw new Error("Informe a Data de Entrada.");
             if (!rec.deposito_id) throw new Error("Informe o Depósito de Entrada.");
@@ -682,6 +814,19 @@ const NotaFiscalEntradaForm: React.FC<NotaFiscalEntradaFormProps> = ({ initialMo
               const cleanChave = String(rec.chave_nfe).replace(/\D/g, "");
               if (cleanChave.length > 0 && cleanChave.length !== 44) {
                 throw new Error("A Chave de Acesso da NF-e deve conter exatamente 44 dígitos numéricos.");
+              }
+
+              if (cleanChave.length === 44) {
+                const { data: existing } = await db.from("fiscal_nfe_cabecalho")
+                  .select("nfe_cabecalho_id, nr_nota, serie")
+                  .eq("empresa_id", XEmpresaId)
+                  .eq("chave_nfe", cleanChave)
+                  .eq("excluido", false)
+                  .maybeSingle();
+
+                if (existing && String(existing.nfe_cabecalho_id) !== String(rec.nfe_cabecalho_id || "")) {
+                  throw new Error(`A Chave de Acesso (${cleanChave}) pertence à NF-e nº ${existing.nr_nota}/${existing.serie}, que já está cadastrada no sistema.`);
+                }
               }
             }
 
@@ -806,6 +951,27 @@ const NotaFiscalEntradaForm: React.FC<NotaFiscalEntradaFormProps> = ({ initialMo
                   onItensImportadosChanged={id ? undefined : setXXmlItens}
                   onItensChanged={(itens) => { XItemsRef.current = itens; }}
                   finNfe={(currentRecord || record)?.fin_nfe}
+                />
+              );
+            },
+          },
+          {
+            key: "titulos", label: "Títulos da NF-e",
+            render: ({ record, currentRecord }) => {
+              const rec = currentRecord || record;
+              const id = rec?.nfe_cabecalho_id || null;
+              const st = rec?.st_nf || "A";
+              return (
+                <NfeTitulosTab
+                  nfeCabecalhoId={id}
+                  empresaId={XEmpresaId}
+                  nrNota={rec?.nr_nota}
+                  cadastroId={rec?.cadastro_id}
+                  duplicatasXml={XDadosXml?.duplicatas}
+                  vlTotalNf={rec?.vl_total_nf || XDadosXml?.vl_total_nf}
+                  dtEmissao={rec?.dt_emissao || XDadosXml?.dt_emissao}
+                  dtEntrada={rec?.dt_entrada}
+                  podeEditar={st === "P" || st === "A"}
                 />
               );
             },

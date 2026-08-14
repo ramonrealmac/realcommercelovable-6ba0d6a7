@@ -1030,8 +1030,6 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
 
     cols.push(
       { key: "nm_produto",    label: "Desc. NF",    width: "1fr" },
-      { key: "ncm",           label: "NCM",         width: "75px" },
-      { key: "cest",          label: "CEST",        width: "75px" },
       { key: "cfop",          label: hideVinculo ? "CFOP" : "CFOP Orig.", width: "95px" },
     );
 
@@ -1084,11 +1082,6 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
       { key: "qt_entrada",    label: "Qtd.",        width: "90px",   align: "right", render: (r) => fmt4(r.qt_entrada) },
       { key: "vl_unit",       label: "Vlr. Unit.",  width: "90px",   align: "right", render: (r) => fmt2(r.vl_unit) },
       { key: "vl_desconto",   label: "Desc.",       width: "90px",   align: "right", render: (r) => fmt2(r.vl_desconto) },
-      { key: "vl_icms",       label: "ICMS",        width: "90px",   align: "right", render: (r) => fmt2(r.vl_icms) },
-      { key: "vl_icms_st",    label: "ICMS-ST",     width: "90px",   align: "right", render: (r) => fmt2(r.vl_icms_st) },
-      { key: "vl_ipi",        label: "IPI",         width: "90px",   align: "right", render: (r) => fmt2(r.vl_ipi) },
-      { key: "vl_pis",        label: "PIS",         width: "90px",   align: "right", render: (r) => fmt2(r.vl_pis) },
-      { key: "vl_cofins",     label: "COFINS",      width: "90px",   align: "right", render: (r) => fmt2(r.vl_cofins) },
       { key: "vl_total",      label: "Total",       width: "90px",   align: "right", render: (r) => fmt2(r.vl_total) }
     );
 

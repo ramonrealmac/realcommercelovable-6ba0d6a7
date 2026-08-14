@@ -135,7 +135,7 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "baixa-por-cliente": return <BaixaPorClienteForm />;
       case "baixa-cartao": return <BaixaCartaoForm />;
       case "consulta-titulos-pagar": return <ConsultaTitulosPagarForm />;
-      case "gerar-contas-pagar": return <GerarContasPagarForm />;
+      case "gerar-contas-pagar": return <GerarContasPagarForm initialId={params?.financeiro_id} />;
       case "baixa-por-fornecedor": return <BaixaPorFornecedorForm />;
       case "liberacao-pedidos": return <LiberacaoPedidosForm />;
       case "montagem-rota": return <MontagemRotaForm />;

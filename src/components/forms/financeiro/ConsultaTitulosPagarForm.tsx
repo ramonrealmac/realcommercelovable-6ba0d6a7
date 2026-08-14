@@ -16,6 +16,7 @@ interface IRow {
   financeiro_id: number | null;
   empresa: string;
   titulo: string | null;
+  parcela?: number | null;
   fornecedor: string;
   plano_conta: string;
   meio_pagamento: string;
@@ -33,6 +34,7 @@ interface IFinanceiroView {
   empresa_id: number | null;
   financeiro_id: number | null;
   documento: string | null;
+  parcela?: number | null;
   cadastro_id: number | null;
   vl_a_pagar: number | null;
   vl_pago: number | null;
@@ -56,6 +58,20 @@ const fmtDate = (v: string | null | undefined) => {
   const d = new Date(v);
   if (isNaN(d.getTime())) return "";
   return d.toLocaleDateString("pt-BR");
+};
+
+const getErrorMessage = (e: any): string => {
+  if (!e) return "Erro desconhecido";
+  if (typeof e === "string") return e;
+  if (e.message) return e.message;
+  if (e.details) return e.details;
+  if (e.error_description) return e.error_description;
+  if (e.hint) return e.hint;
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return String(e);
+  }
 };
 
 const toIsoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -213,7 +229,7 @@ const ConsultaTitulosPagarForm: React.FC = () => {
     try {
       let q = supabase
         .from("financeiro_view")
-        .select("empresa_id, financeiro_id, documento, cadastro_id, vl_a_pagar, vl_pago, vl_titulo, dt_emissao, dt_vencto, dias_atraso, situacao, plano_id, tp_conta, tp_documento_id")
+        .select("empresa_id, financeiro_id, documento, parcela, cadastro_id, vl_a_pagar, vl_pago, vl_titulo, dt_emissao, dt_vencto, dias_atraso, situacao, plano_id, tp_conta, tp_documento_id")
         .eq("tp_conta", "P")
         .order("dt_emissao", { ascending: false })
         .limit(1000);
@@ -321,6 +337,7 @@ const ConsultaTitulosPagarForm: React.FC = () => {
         financeiro_id: r.financeiro_id,
         empresa: empMap.get(r.empresa_id || 0) ?? "",
         titulo: r.documento,
+        parcela: r.parcela ?? 1,
         fornecedor: `${r.cadastro_id ?? ""} - ${cadMap.get(r.cadastro_id || 0) ?? ""}`,
         plano_conta: r.plano_id ? planoMap.get(r.plano_id || 0) ?? "" : "",
         meio_pagamento: r.tp_documento_id ? mpMap.get(r.tp_documento_id) ?? r.tp_documento_id : "-",
@@ -491,21 +508,35 @@ const ConsultaTitulosPagarForm: React.FC = () => {
       const empresa_id = XActionRow.empresa_id;
 
       if (XActionType === "BAIXAR") {
+        const cleanPortadorId = XBaixaPortadorId ? Number(XBaixaPortadorId) : null;
+        const cleanPlanoId = XBaixaPlanoId ? Number(XBaixaPlanoId) : null;
+
+        // Atualiza o cabeçalho no financeiro primeiro, garantindo que portador_id e plano_id estejam válidos para a trigger
+        await supabase
+          .from("financeiro")
+          .update({
+            portador_id: cleanPortadorId,
+            plano_id: cleanPlanoId,
+            planoconta_id: cleanPlanoId,
+            tp_documento_id: XBaixaMeioPagamentoId || null,
+          })
+          .eq("financeiro_id", financeiro_id);
+
         // Insert into financeiro_baixa
         const { error: insErr } = await supabase
           .from("financeiro_baixa")
           .insert({
             empresa_id,
             financeiro_id,
-            planoconta_id: XBaixaPlanoId,
-            plano_id: XBaixaPlanoId,
+            planoconta_id: cleanPlanoId,
+            plano_id: cleanPlanoId,
             vl_pago: parseMoneyToFloat(XBaixaVlPagoStr),
             vl_desconto: parseMoneyToFloat(XBaixaVlDescontoStr),
             vl_juros: parseMoneyToFloat(XBaixaVlJurosStr),
-            dt_pagamento: XBaixaDtPagamento,
-            cadastro_id: parseInt(XActionRow.fornecedor.split(" - ")[0], 10) || 0,
+            dt_pagamento: XBaixaDtPagamento || new Date().toISOString().substring(0, 10),
+            cadastro_id: XActionRow.cadastro_id || parseInt((XActionRow.fornecedor || "").split(" - ")[0], 10) || null,
             tp_conta: "P",
-            funcionario_id: XBaixaFuncionarioId
+            funcionario_id: XBaixaFuncionarioId ? Number(XBaixaFuncionarioId) : null
           });
         
         if (insErr) throw insErr;
@@ -603,9 +634,9 @@ const ConsultaTitulosPagarForm: React.FC = () => {
             vl_desconto: totalDesc,
             vl_adicional: totalJuros,
             status: novoStatus,
-            portador_id: XBaixaPortadorId,
-            plano_id: XBaixaPlanoId,
-            planoconta_id: XBaixaPlanoId,
+            portador_id: XBaixaPortadorId ? Number(XBaixaPortadorId) : null,
+            plano_id: XBaixaPlanoId ? Number(XBaixaPlanoId) : null,
+            planoconta_id: XBaixaPlanoId ? Number(XBaixaPlanoId) : null,
             tp_documento_id: XBaixaMeioPagamentoId || null
           })
           .eq("financeiro_id", financeiro_id);
@@ -630,8 +661,8 @@ const ConsultaTitulosPagarForm: React.FC = () => {
           .update({
             vl_pago: 0,
             status: "A",
-            plano_id: 0,
-            planoconta_id: 0
+            plano_id: null,
+            planoconta_id: null
           })
           .eq("financeiro_id", financeiro_id);
 
@@ -657,7 +688,7 @@ const ConsultaTitulosPagarForm: React.FC = () => {
       setXConfirmOpen(false);
 
     } catch (e: unknown) {
-      const errMsg = e instanceof Error ? e.message : String(e);
+      const errMsg = getErrorMessage(e);
       toast.error("Erro ao executar ação: " + errMsg);
     } finally {
       setXActionLoading(false);
@@ -674,8 +705,8 @@ const ConsultaTitulosPagarForm: React.FC = () => {
   const openTitulo = useCallback((row: IRow) => {
     if (!row.financeiro_id) return;
     openTab({
-      title: `Conta a Pagar ${row.titulo ?? ""}`,
-      component: "conta-pagar-detalhe",
+      title: "Títulos Recebidos",
+      component: "gerar-contas-pagar",
       params: { empresa_id: row.empresa_id, financeiro_id: row.financeiro_id },
     });
   }, [openTab]);
@@ -692,8 +723,8 @@ const ConsultaTitulosPagarForm: React.FC = () => {
   const XCols: IGridColumn[] = useMemo(() => [
     { key: "empresa", label: "Empresa", width: "1.2fr",
       render: (r: IRow) => <span className={rowColor(r.situacao)}>{r.empresa}</span> },
-    { key: "titulo", label: "Título", width: "120px",
-      render: (r: IRow) => <span className={rowColor(r.situacao)}>{r.titulo}</span> },
+    { key: "titulo", label: "Título / Parcela", width: "130px",
+      render: (r: IRow) => <span className={rowColor(r.situacao)}>{r.titulo ? `${r.titulo} / ${r.parcela ?? 1}` : ""}</span> },
     { key: "fornecedor", label: "Fornecedor", width: "2fr",
       render: (r: IRow) => <span className={rowColor(r.situacao)}>{r.fornecedor}</span> },
     { key: "meio_pagamento", label: "Meio Pagamento", width: "150px",
