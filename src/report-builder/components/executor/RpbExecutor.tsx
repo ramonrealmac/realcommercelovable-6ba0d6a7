@@ -3,14 +3,15 @@
 // Filtros + execução + diálogo de destino (sem preview automático)
 // ============================================================
 import React, { useState, useCallback, useEffect } from 'react';
-import type { IRpbRelatorio, IRpbFiltro, IRpbConexao } from '../../types';
-import { rpbListFiltros, rpbExecuteQuery } from '../../services/rpbService';
+import type { IRpbRelatorio, IRpbFiltro, IRpbConexao, RpbFiltroEmpresaMode } from '../../types';
+import { rpbListFiltros, rpbExecuteQuery, applyCompanyFilterToSql } from '../../services/rpbService';
 import { generateReportHtml } from '../renderer/rpbRenderer';
 import type { SubReportDataMap } from '../renderer/rpbRenderer';
 import { emptyLayout } from '../../types';
 import { Play, Printer, Loader2, FileText, FileSpreadsheet, Monitor, X, Download, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import RpbSearchDialog from './RpbSearchDialog';
+import { useAppContext } from '@/contexts/AppContext';
 
 interface Props {
   relatorio: IRpbRelatorio;
@@ -59,6 +60,7 @@ function exportTxt(data: any[], title: string) {
 
 // ── Componente Principal ──────────────────────────────────────
 const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empresaLogo }) => {
+  const { XEmpresaId, XEmpresaMatrizId } = useAppContext();
   const [filtros, setFiltros]         = useState<IRpbFiltro[]>([]);
   const [valores, setValores]         = useState<Record<string, any>>(initialValues || {});
   const [loading, setLoading]         = useState(false);
@@ -101,8 +103,16 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
     return true;
   };
 
+  // ── Variáveis de sistema (invisíveis ao usuário) ─────────────────────────
+  // Sempre injetadas: {sys_empresa_id} e {sys_matriz_id}
+  // Uso no SQL: WHERE empresa_id = {sys_empresa_id}
+  const sysVars = {
+    sys_empresa_id:  XEmpresaId  || 0,
+    sys_matriz_id:   XEmpresaMatrizId || XEmpresaId || 0,
+  };
+
   const buildParams = (): Record<string, any> => {
-    const params: Record<string, any> = { ...valores };
+    const params: Record<string, any> = { ...sysVars, ...valores };
     filtros.filter(f => f.tipo === 'date_range').forEach(f => {
       const v = valores[f.nome] || {};
       params[`${f.nome}_ini`] = v.ini || '';
@@ -119,11 +129,14 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
     try {
       const conexao = conexoes.find(c => c.rpb_conexao_id === relatorio.rpb_conexao_id) || null;
       const params = buildParams();
-      const { data: rows, error } = await rpbExecuteQuery(relatorio.query_sql, params, conexao);
+      const currentLayout = relatorio.layout_json || emptyLayout();
+      const mainFilterMode = currentLayout.filtroEmpresaMode || 'nenhum';
+      const mainSql = applyCompanyFilterToSql(relatorio.query_sql, mainFilterMode);
+
+      const { data: rows, error } = await rpbExecuteQuery(mainSql, params, conexao);
       if (error) { setLoading(false); toast.error('Erro na query: ' + error); return; }
 
       setData(rows);
-      const currentLayout = relatorio.layout_json || emptyLayout();
 
       const filtroVars: Record<string, any> = {};
       filtros.forEach(f => {
@@ -136,6 +149,7 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
         relatorio_descricao: relatorio.descricao || '',
         total_registros:     rows.length,
         empresa_logo:        empresaLogo || '',
+        ...sysVars,
         ...filtroVars,
       };
       setExtraVarsRef(evars);
@@ -149,6 +163,9 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
 
       for (const subComp of subComps) {
         if (!subComp.query_sql?.trim()) continue;
+        const rawSubMode = subComp.filtroEmpresaMode || 'herdar';
+        const subFilterMode = rawSubMode === 'herdar' ? mainFilterMode : rawSubMode;
+        const subSql = applyCompanyFilterToSql(subComp.query_sql, subFilterMode);
         subDataMap[subComp.id] = {};
         for (const row of rows) {
           // Monta chave de cache para esta linha
@@ -162,7 +179,7 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
               subParams[link.childParam] = row[link.parentField] ?? null;
             }
           }
-          const { data: subRows } = await rpbExecuteQuery(subComp.query_sql, subParams, conexao);
+          const { data: subRows } = await rpbExecuteQuery(subSql, subParams, conexao);
           subDataMap[subComp.id][rowKey] = subRows || [];
         }
       }
@@ -272,6 +289,12 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
       iframeDoc.close();
       await new Promise(r => setTimeout(r, 500));
 
+      const pdfFormat = pageSize === 'roll50'
+        ? [50, 200]
+        : pageSize === 'roll80'
+        ? [80, 200]
+        : pageSize;
+
       const pdfBlob: Blob = await (window as any).html2pdf()
         .set({
           // [top, right, bottom, left] em mm — usa as margens salvas no layout
@@ -279,7 +302,7 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
           filename: `${relatorio.nome}.pdf`,
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-          jsPDF: { unit: 'mm', format: pageSize, orientation },
+          jsPDF: { unit: 'mm', format: pdfFormat, orientation },
           pagebreak: { mode: ['css', 'legacy'] }
         })
         .from(iframeDoc.body)
@@ -365,7 +388,8 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
         );
       }
 
-      case 'lista_dinamica': {
+      case 'lista_dinamica':
+      case 'query_select': {
         const val = valores[f.nome];
         let label = 'Clique para selecionar...';
         if (Array.isArray(val)) {
@@ -403,7 +427,13 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
   let iframeWidth = '210mm';
   let iframeMinHeight = '297mm';
 
-  if (pageSize === 'a3') {
+  if (pageSize === 'roll50') {
+    iframeWidth = orientation === 'landscape' ? '200mm' : '50mm';
+    iframeMinHeight = orientation === 'landscape' ? '50mm' : '200mm';
+  } else if (pageSize === 'roll80') {
+    iframeWidth = orientation === 'landscape' ? '200mm' : '80mm';
+    iframeMinHeight = orientation === 'landscape' ? '80mm' : '200mm';
+  } else if (pageSize === 'a3') {
     iframeWidth = orientation === 'landscape' ? '420mm' : '297mm';
     iframeMinHeight = orientation === 'landscape' ? '297mm' : '420mm';
   } else if (pageSize === 'letter') {
@@ -418,7 +448,8 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
     <div className="flex flex-col h-full overflow-hidden">
       {/* Diálogo de Busca Dinâmica */}
       {searchFilter && (() => {
-        const [vField, lField, multiStr] = (searchFilter.opcoes_fixas || '').split(';');
+        const [vField, lField, multiStr, empresaModeStr] = (searchFilter.opcoes_fixas || '').split(';');
+        const empresaMode = (empresaModeStr as RpbFiltroEmpresaMode) || 'nenhum';
         return (
           <RpbSearchDialog
             open={!!searchFilter}
@@ -428,6 +459,7 @@ const RpbExecutor: React.FC<Props> = ({ relatorio, conexoes, initialValues, empr
             valueField={vField || 'id'}
             labelField={lField || 'nome'}
             multi={multiStr === 'true'}
+            filtroEmpresaMode={empresaMode}
             onSelect={(rows) => {
               const multi = multiStr === 'true';
               if (multi) {

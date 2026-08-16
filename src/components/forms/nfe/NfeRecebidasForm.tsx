@@ -8,6 +8,7 @@ import { RefreshCw, Download, CheckCircle, AlertTriangle, ShieldCheck, ShieldAle
 import { formatCPFCNPJ } from "@/lib/validators";
 import MonitorFiscalLogDialog from "../fiscal/MonitorFiscalLogDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import RpbFormReportsButton from "@/report-builder/components/executor/RpbFormReportsButton";
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -879,6 +880,7 @@ const NfeRecebidasForm: React.FC = () => {
                   <Target className="w-3 h-3" />
                   ALINHAR
                 </button>
+                <RpbFormReportsButton nmForm="nfe-recebidas" />
                 <button 
                   onClick={() => {
                     if (!XSelectedNfe) {

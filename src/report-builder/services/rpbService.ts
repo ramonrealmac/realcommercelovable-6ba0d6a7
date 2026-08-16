@@ -3,8 +3,34 @@
 // ============================================================
 import { supabase } from '@/integrations/supabase/client';
 import type {
-  IRpbRelatorio, IRpbFiltro, IRpbConexao, RpbLayout,
+  IRpbRelatorio, IRpbFiltro, IRpbConexao, RpbLayout, RpbFiltroEmpresaMode,
 } from '../types';
+
+// ── Aplica filtro automático de empresa/matriz se selecionado e não presente no SQL ──
+export function applyCompanyFilterToSql(sql: string, mode?: RpbFiltroEmpresaMode): string {
+  if (!sql || !mode || mode === 'nenhum') return sql;
+
+  // Se o SQL já contém {sys_empresa_id}, {sys_matriz_id} ou campo empresa_id, deixa o SQL manual do desenvolvedor
+  const hasCompanyFilter = /\{{1,2}\s*(?:sys_empresa_id|sys_matriz_id)\s*\}{1,2}|\bempresa_id\b|\bempresa_matriz_id\b/i.test(sql);
+  if (hasCompanyFilter) return sql;
+
+  const targetVar = mode === 'matriz' ? '{sys_matriz_id}' : '{sys_empresa_id}';
+  const filterClause = `empresa_id = ${targetVar}`;
+
+  const whereMatch = /\bWHERE\b/i.exec(sql);
+  if (whereMatch) {
+    const insertIdx = whereMatch.index + whereMatch[0].length;
+    return sql.slice(0, insertIdx) + ` ${filterClause} AND ` + sql.slice(insertIdx);
+  } else {
+    const clauseMatch = /\b(GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT)\b/i.exec(sql);
+    if (clauseMatch) {
+      const insertIdx = clauseMatch.index;
+      return sql.slice(0, insertIdx) + ` WHERE ${filterClause} ` + sql.slice(insertIdx);
+    } else {
+      return `${sql.trim()} WHERE ${filterClause}`;
+    }
+  }
+}
 
 const db = supabase as any;
 
@@ -22,11 +48,13 @@ export async function rpbGetRelatorio(id: number): Promise<IRpbRelatorio | null>
 }
 
 export async function rpbInsertRelatorio(payload: Partial<IRpbRelatorio>) {
-  return db.from('rpb_relatorio').insert(payload).select().single();
+  const { rpb_relatorio_id, created_at, updated_at, ...cleanPayload } = payload as any;
+  return db.from('rpb_relatorio').insert(cleanPayload).select().single();
 }
 
 export async function rpbUpdateRelatorio(id: number, payload: Partial<IRpbRelatorio>) {
-  return db.from('rpb_relatorio').update({ ...payload, updated_at: new Date().toISOString() })
+  const { rpb_relatorio_id, created_at, updated_at, ...cleanPayload } = payload as any;
+  return db.from('rpb_relatorio').update({ ...cleanPayload, updated_at: new Date().toISOString() })
     .eq('rpb_relatorio_id', id);
 }
 
@@ -45,15 +73,34 @@ export async function rpbListFiltros(relatorioId: number): Promise<IRpbFiltro[]>
   const { data } = await db.from('rpb_filtro')
     .select('*').eq('rpb_relatorio_id', relatorioId).eq('excluido', false)
     .order('ordem');
-  return data || [];
+  return (data || []).map((f: any) => ({
+    ...f,
+    tipo: f.tipo === 'query_select' ? 'lista_dinamica' : f.tipo
+  }));
 }
 
 export async function rpbInsertFiltro(payload: Partial<IRpbFiltro>) {
-  return db.from('rpb_filtro').insert(payload).select().single();
+  const { rpb_filtro_id, created_at, ...cleanPayload } = payload as any;
+  // Fallback seguro: se a constraint antiga no banco ainda exigir query_select
+  const dbPayload = {
+    ...cleanPayload,
+    tipo: cleanPayload.tipo === 'lista_dinamica' ? 'query_select' : cleanPayload.tipo
+  };
+  const res = await db.from('rpb_filtro').insert(dbPayload).select().single();
+  if (res.data && res.data.tipo === 'query_select') {
+    res.data.tipo = 'lista_dinamica';
+  }
+  return res;
 }
 
 export async function rpbUpdateFiltro(id: number, payload: Partial<IRpbFiltro>) {
-  return db.from('rpb_filtro').update(payload).eq('rpb_filtro_id', id);
+  const { rpb_filtro_id, created_at, ...cleanPayload } = payload as any;
+  // Fallback seguro: se a constraint antiga no banco ainda exigir query_select
+  const dbPayload = {
+    ...cleanPayload,
+    tipo: cleanPayload.tipo === 'lista_dinamica' ? 'query_select' : cleanPayload.tipo
+  };
+  return db.from('rpb_filtro').update(dbPayload).eq('rpb_filtro_id', id);
 }
 
 export async function rpbDeleteFiltro(id: number) {

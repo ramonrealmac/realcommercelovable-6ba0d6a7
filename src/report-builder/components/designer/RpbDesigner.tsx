@@ -47,6 +47,8 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
     { v: '{total_registros}',  d: 'Total de registros' },
     { v: '{relatorio_descricao}', d: 'Descrição do relatório' },
     { v: '{empresa_logo}',     d: 'URL da logomarca da empresa' },
+    { v: '{sys_empresa_id}',   d: 'ID da empresa logada (uso em filtros SQL)' },
+    { v: '{sys_matriz_id}',    d: 'ID da empresa matriz (uso em filtros SQL)' },
   ];
 
   const copyToClipboard = (text: string) => {
@@ -305,11 +307,13 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
           query_sql: '',
           links: [],
           columns: [],
-          headerStyle: { ...DEFAULT_STYLE, bold: true, bgColor: '#f1f5f9', border: 'all', borderColor: '#cbd5e1' },
+          headerStyle: { ...DEFAULT_STYLE, bold: true, bgColor: '#f1f5f9', border: 'all', borderColor: '#cbd5e1', padding: 4 },
           rowStyle: { ...DEFAULT_STYLE, border: 'bottom', borderColor: '#e2e8f0' },
           showHeader: true,
           showTitleBar: true,
           titleText: 'Sub-Relatório',
+          headerSubtitle: '',
+          showHeaderBadge: true,
           emptyMessage: 'Nenhum registro',
         } as RpbSubreportComp;
         break;
@@ -948,6 +952,8 @@ AND p.excluido = false`}</pre>
                 <option value="A4">A4 (210×297mm)</option>
                 <option value="A3">A3 (297×420mm)</option>
                 <option value="Letter">Letter (216×279mm)</option>
+                <option value="Roll50">Bobina 50mm (50mm)</option>
+                <option value="Roll80">Bobina 80mm (80mm)</option>
               </select>
             </div>
             <div>
@@ -988,6 +994,24 @@ AND p.excluido = false`}</pre>
                 </label>
               ))}
             </div>
+          </div>
+
+          <div className="mt-4 bg-emerald-50 border border-emerald-100 rounded-lg p-3">
+            <label className="text-[10px] text-emerald-800 font-bold uppercase block mb-1">
+              🔒 Filtro Automático de Empresa (Multitenant)
+            </label>
+            <select
+              value={layout.filtroEmpresaMode || 'nenhum'}
+              onChange={e => setLayout(p => ({ ...p, filtroEmpresaMode: e.target.value as any }))}
+              className="w-full border border-emerald-200 rounded px-2 py-1 text-xs bg-white text-emerald-900 font-medium"
+            >
+              <option value="nenhum">Nenhum (Desativado / Manual via SQL)</option>
+              <option value="empresa">Empresa Logada / Atual (empresa_id = &#123;sys_empresa_id&#125;)</option>
+              <option value="matriz">Matriz da Empresa Logada (empresa_id = &#123;sys_matriz_id&#125;)</option>
+            </select>
+            <p className="text-[9px] text-emerald-700 mt-1 italic">
+              Defina se a consulta do relatório deve filtrar automaticamente pela empresa logada, matriz ou sem restrição.
+            </p>
           </div>
 
         </div>

@@ -294,14 +294,52 @@ function renderComponent(
       const rs = c.rowStyle   || DEFAULT_STYLE;
       const fontSize = rs.fontSize || 9;
 
-      const titleHtml = c.showTitleBar
-          ? `<div style="font-size:${hs.fontSize || 9}pt;font-weight:bold;padding:3px 4px;
-             background-color:${hs.bgColor !== 'transparent' ? hs.bgColor : '#f1f5f9'};
-             border:1px solid ${hs.borderColor || '#ddd'};margin-bottom:1px;">${c.titleText || ''}</div>`
+      // Interpolação de variáveis no título e subtítulo do sub-relatório
+      const interpolateText = (txt?: string) => {
+        if (!txt) return '';
+        return txt.replace(/\{{1,2}\s*([\w\.]+)\s*\}{1,2}/g, (_, key) => {
+          const val = getFieldValue(row, key) ?? extraVars?.[key];
+          return val !== undefined && val !== null ? String(val) : `{${key}}`;
+        });
+      };
+
+      const titleTextInterpolated = interpolateText(c.titleText || '');
+      const subtitleTextInterpolated = interpolateText(c.headerSubtitle || '');
+
+      let headerSectionHtml = '';
+      if (c.showTitleBar) {
+        const bg = hs.bgColor !== 'transparent' ? hs.bgColor : '#f1f5f9';
+        const fg = hs.color || '#1e293b';
+        const fontSz = hs.fontSize || 9;
+        const fontW = hs.bold ? 'bold' : 'normal';
+        const fontSt = hs.italic ? 'italic' : 'normal';
+        const textAlg = hs.align || 'left';
+        const borderStyle = hs.border === 'none'
+          ? 'border:none;'
+          : hs.border === 'bottom'
+          ? `border-bottom:1px solid ${hs.borderColor || '#cbd5e1'};`
+          : `border:1px solid ${hs.borderColor || '#cbd5e1'};`;
+        const pad = hs.padding !== undefined ? hs.padding : 4;
+
+        const badgeHtml = c.showHeaderBadge
+          ? `<span style="font-size:${Math.max(7, fontSz - 2)}pt;font-weight:600;padding:1px 6px;border-radius:9999px;background-color:rgba(0,0,0,0.06);color:${fg};margin-left:6px;display:inline-block;">${subRows.length} registro(s)</span>`
           : '';
 
+        const subtitleHtml = subtitleTextInterpolated
+          ? `<div style="font-size:${Math.max(7.5, fontSz - 1.5)}pt;font-weight:normal;opacity:0.85;margin-top:2px;">${subtitleTextInterpolated}</div>`
+          : '';
+
+        headerSectionHtml = `<div style="font-size:${fontSz}pt;font-weight:${fontW};font-style:${fontSt};text-align:${textAlg};color:${fg};background-color:${bg};${borderStyle}padding:${pad}px ${pad + 2}px;margin-bottom:2px;border-radius:2px;box-sizing:border-box;">
+          <div>
+            <span>${titleTextInterpolated || ''}</span>
+            ${badgeHtml}
+          </div>
+          ${subtitleHtml}
+        </div>`;
+      }
+
       if (!subRows.length) {
-        return `${titleHtml}<div style="font-size:${fontSize}pt;color:#888;padding:2px 4px;font-style:italic;">${c.emptyMessage || 'Nenhum registro'}</div>`;
+        return `${headerSectionHtml}<div style="font-size:${fontSize}pt;color:#888;padding:2px 4px;font-style:italic;">${c.emptyMessage || 'Nenhum registro'}</div>`;
       }
 
       // Renderização Customizada (Livre)
@@ -314,7 +352,7 @@ function renderComponent(
             ${customComps.map(comp => renderComponent(comp, subRows, subRow, extraVars, undefined, undefined)).join('')}
           </div>`;
         }).join('');
-        return `${titleHtml}<div style="width:100%;display:flex;flex-direction:column;">${customHtml}</div>`;
+        return `${headerSectionHtml}<div style="width:100%;display:flex;flex-direction:column;">${customHtml}</div>`;
       }
 
       // Renderização Tabela (padrão)
@@ -342,7 +380,7 @@ function renderComponent(
         }).join('')}</tr>`;
       }).join('')}</tbody>`;
 
-      return `${titleHtml}<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:${fontSize}pt;">
+      return `${headerSectionHtml}<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:${fontSize}pt;">
         <colgroup>${colgroup}</colgroup>
         ${thead}${tbody}
       </table>`;
@@ -510,11 +548,21 @@ export function generateReportHtml(
   const headerHeight = layout.bands.pageHeader.visible ? (layout.bands.pageHeader.height || 0) : 0;
   const footerHeight = layout.bands.pageFooter.visible ? (layout.bands.pageFooter.height || 0) : 0;
 
+  const getPaperCssSize = (pageSize: string, orientation: string): string => {
+    const ps = (pageSize || 'a4').toString().toLowerCase();
+    const orient = orientation === 'landscape' ? 'landscape' : 'portrait';
+    if (ps === 'roll50') return orient === 'landscape' ? '200mm 50mm' : '50mm 200mm';
+    if (ps === 'roll80') return orient === 'landscape' ? '200mm 80mm' : '80mm 200mm';
+    return `${pageSize} ${orient}`;
+  };
+
+  const cssSize = getPaperCssSize(layout.pageSize, layout.orientation);
+
   let pageStyle = '';
   if (isPrint) {
     pageStyle = `
       @page {
-        size: ${layout.pageSize} ${layout.orientation};
+        size: ${cssSize};
         margin-top: ${top + headerHeight}mm;
         margin-bottom: ${bottom + footerHeight}mm;
         margin-left: ${left}mm;
@@ -577,7 +625,7 @@ export function generateReportHtml(
   } else {
     pageStyle = `
       @page {
-        size: ${layout.pageSize} ${layout.orientation};
+        size: ${cssSize};
         margin: 0;
       }
       * { box-sizing: border-box; }
