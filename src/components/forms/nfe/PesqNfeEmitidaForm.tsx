@@ -45,8 +45,9 @@ const ListaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialFi
             width: "150px",
             render: r => {
                 const statusMap: any = {
-                    "A": { label: "Aguardando", color: "bg-blue-100 text-blue-700", icon: Clock },
-                    "E": { label: "Autorizada", color: "bg-green-100 text-green-700", icon: CheckCircle2 },
+                    "A": { label: "Autorizada", color: "bg-green-100 text-green-700", icon: CheckCircle2 },
+                    "E": { label: "Enviada", color: "bg-blue-100 text-blue-700", icon: Clock },
+                    "P": { label: "Pendente", color: "bg-gray-100 text-gray-600", icon: Clock },
                     "C": { label: "Cancelada", color: "bg-red-100 text-red-700", icon: XCircle },
                     "D": { label: "Denegada", color: "bg-orange-100 text-orange-700", icon: AlertCircle },
                     "R": { label: "Rejeitada", color: "bg-red-100 text-red-700", icon: AlertCircle },

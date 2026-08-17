@@ -1803,32 +1803,71 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 });
             });
 
+        case 'CCE':
+        case 'ENVIAR_CCE':
+            return executarNaDLL(libNFe, config, async (handle) => {
+                libNFe.LimparListaEventos(handle);
+                console.log(`[FiscalLib] CarregarEventoINI (CC-e):\n${dados}`);
+                let ret = libNFe.CarregarEventoINI(handle, dados);
+                if (ret !== 0) throw new Error('[CCE] CarregarEventoINI: ' + lerRetornoACBr(libNFe, handle));
+
+                const bufferResposta = Buffer.alloc(TAMANHO_BUFFER);
+                const bufferTamanho = Buffer.alloc(4);
+                bufferTamanho.writeInt32LE(TAMANHO_BUFFER, 0);
+
+                ret = libNFe.EnviarEvento(handle, 1, bufferResposta, bufferTamanho);
+                const ultimoRetorno = lerRetornoACBr(libNFe, handle);
+                const tamanho = bufferTamanho.readInt32LE(0);
+                const xmlRetorno = tamanho > 0 && tamanho !== TAMANHO_BUFFER ? bufferResposta.toString('utf8', 0, tamanho) : '';
+
+                console.log(`[FiscalLib] EnviarEvento CCE ret=${ret} | UltimoRetorno: ${ultimoRetorno.substring(0, 300)}`);
+
+                const extrair = (chave) => {
+                    const m = (ultimoRetorno + xmlRetorno).match(new RegExp(`${chave}[=:]\\s*"?([^\\r\\n",}]+)"?`, 'i'));
+                    return m ? m[1].trim() : null;
+                };
+
+                const c_stat = extrair('cStat') || extrair('CStat');
+                const x_motivo = extrair('xMotivo') || extrair('XMotivo');
+                const nr_protocolo = extrair('nProt') || extrair('NProt');
+
+                const sucesso = ['135', '136'].includes(String(c_stat)) || String(ultimoRetorno).includes('135') || String(xmlRetorno).includes('135');
+
+                return {
+                    sucesso,
+                    c_stat,
+                    x_motivo,
+                    nr_protocolo,
+                    xml_retorno: xmlRetorno,
+                    retorno_completo: ultimoRetorno || xmlRetorno,
+                    erro: sucesso ? null : (x_motivo || ultimoRetorno || "Falha no envio da Carta de Correção")
+                };
+            });
+
         case 'INUTILIZAR_NFE':
         case 'INUTILIZAR_NFCE': {
-            // NFE_Inutilizar(handle, cUF, ano, CNPJ, mod, serie, nNFIni, nNFFin, xJust, sResposta, esTamanho)
+            // NFE_Inutilizar(handle, CNPJ, xJust, Ano, Mod, Serie, nNFIni, nNFFin, sResposta, esTamanho)
             config.modelo = comando === 'INUTILIZAR_NFCE' ? 65 : 55;
             return executarNaDLL(libNFe, config, async (handle) => {
-                // Carrega a função dinamicamente (pode não estar no loadLibrary)
                 let fnInutilizar;
                 try {
                     const koffi = (await import('koffi')).default;
                     const rawLib = koffi.load(process.env.FISCAL_LIB_PATH);
                     fnInutilizar = rawLib.func(
-                        'int __cdecl NFE_Inutilizar(void* handle, const char* cUF, const char* cAno, const char* CNPJ, ' +
-                        'const char* cMod, const char* cSerie, const char* nNFIni, const char* nNFFin, const char* xJust, ' +
+                        'int __cdecl NFE_Inutilizar(void* handle, const char* CNPJ, const char* xJust, ' +
+                        'int Ano, int Mod, int Serie, int nNFIni, int nNFFin, ' +
                         '_Out_ char* sResposta, _Out_ int* esTamanho)'
                     );
                 } catch (e) {
                     throw new Error('Função NFE_Inutilizar não disponível na DLL: ' + e.message);
                 }
 
-                const { cuf, ano, cnpj, serie, nr_ini, nr_fin, justificativa } = jsonPayload;
-                const mod = String(config.modelo);
+                const { ano, cnpj, serie, nr_ini, nr_fin, justificativa } = jsonPayload;
+                const modNum = parseInt(config.modelo || 55);
+                const anoNum = parseInt(String(ano || new Date().getFullYear()).slice(-2));
+                const cleanCnpj = String(cnpj || '').replace(/\D/g, '');
 
-                // Ano com 2 dígitos
-                const anoStr = String(ano || new Date().getFullYear()).slice(-2);
-
-                console.log(`[FiscalLib] Inutilizando: UF=${cuf} Ano=${anoStr} CNPJ=${cnpj} Mod=${mod} Série=${serie} NF ${nr_ini}-${nr_fin}`);
+                console.log(`[FiscalLib] Inutilizando: CNPJ=${cleanCnpj} Ano=${anoNum} Mod=${modNum} Série=${serie} NF ${nr_ini}-${nr_fin} Justificativa=${justificativa}`);
 
                 const bufferResposta = Buffer.alloc(TAMANHO_BUFFER);
                 const bufferTamanho = Buffer.alloc(4);
@@ -1836,14 +1875,13 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
 
                 const ret = fnInutilizar(
                     handle,
-                    String(cuf || ''),
-                    anoStr,
-                    String(cnpj || '').replace(/\D/g, ''),
-                    mod,
-                    String(serie || ''),
-                    String(nr_ini || ''),
-                    String(nr_fin || ''),
+                    cleanCnpj,
                     String(justificativa || ''),
+                    anoNum,
+                    modNum,
+                    parseInt(serie || 1),
+                    parseInt(nr_ini || 1),
+                    parseInt(nr_fin || 1),
                     bufferResposta,
                     bufferTamanho
                 );
@@ -1858,14 +1896,27 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
 
                 const retornoFinal = ultimoRetorno || xmlRetorno;
 
-                // Parse do retorno SEFAZ
-                const extrair = (chave) => {
-                    const m = retornoFinal.match(new RegExp(`${chave}[=:]\\s*"?([^\\r\\n",}]+)"?`, 'i'));
-                    return m ? m[1].trim() : null;
-                };
-                const c_stat = extrair('cStat') || extrair('CStat');
-                const x_motivo = extrair('xMotivo') || extrair('XMotivo');
-                const nr_protocolo = extrair('nProt') || extrair('NProt');
+                // Parse do retorno SEFAZ (suporta JSON e INI)
+                let c_stat = null;
+                let x_motivo = null;
+                let nr_protocolo = null;
+
+                try {
+                    const parsedObj = JSON.parse(retornoFinal);
+                    const rootKey = Object.keys(parsedObj)[0];
+                    const inuObj = parsedObj[rootKey] || parsedObj;
+                    c_stat = String(inuObj.CStat || inuObj.cStat || inuObj.Cstat || '');
+                    x_motivo = inuObj.Msg || inuObj.xMotivo || inuObj.XMotivo || inuObj.xmotivo || '';
+                    nr_protocolo = inuObj.NProt || inuObj.nProt || inuObj.nrProtocolo || null;
+                } catch {
+                    const extrair = (chave) => {
+                        const m = retornoFinal.match(new RegExp(`${chave}[=:]\\s*"?([^\\r\\n",}]+)"?`, 'i'));
+                        return m ? m[1].trim() : null;
+                    };
+                    c_stat = extrair('cStat') || extrair('CStat');
+                    x_motivo = extrair('Msg') || extrair('xMotivo') || extrair('XMotivo');
+                    nr_protocolo = extrair('nProt') || extrair('NProt');
+                }
 
                 // SEFAZ retorna 102 para inutilização aprovada
                 const sucesso = c_stat === '102';

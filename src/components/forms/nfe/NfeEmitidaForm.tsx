@@ -9,7 +9,9 @@ import NfePagamentoTab from "./NfePagamentoTab";
 import { NfeDocumentosReferenciadosTab } from "./NfeDocumentosReferenciadosTab";
 import type { INfeCabecalho, TNfeSt } from "./types";
 import { NFE_ST_LABELS } from "./types";
-import { Search, Send, Printer } from "lucide-react";
+import { Search, Send, Printer, Clock, FileText, AlertTriangle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { formatCPFCNPJ } from "@/lib/validators";
 import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
 import { useEnterTraversal } from "@/hooks/useEnterTraversal";
@@ -35,11 +37,12 @@ const XGridCols: IGridColumn[] = [
     render: r => {
       const label = NFE_ST_LABELS[r.st_nf as TNfeSt] || r.st_nf;
       const colors: any = {
-        "E": "bg-green-100 text-green-700",
+        "A": "bg-green-100 text-green-700",
+        "E": "bg-blue-100 text-blue-700",
+        "P": "bg-gray-100 text-gray-600",
         "C": "bg-red-100 text-red-700",
         "D": "bg-orange-100 text-orange-700",
         "R": "bg-red-100 text-red-700",
-        "A": "bg-blue-100 text-blue-700",
         "1": "bg-green-100 text-green-700",
         "2": "bg-orange-100 text-orange-700",
       };
@@ -56,7 +59,7 @@ const XGridCols: IGridColumn[] = [
 
 const XDefault: Partial<INfeCabecalho> = {
   origem_inclusao: "M",
-  st_nf: "A",
+  st_nf: "P",
   tp_nf: 1, // 1 = saída
   fin_nfe: 1,
   tp_emis: 1,
@@ -87,6 +90,19 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
   const [XSearchOpen, setXSearchOpen] = useState(false);
   const [XSearchTipo, setXSearchTipo] = useState<"cliente" | "fornecedor">("cliente");
   const [XSearchTarget, setXSearchTarget] = useState<((c: IClienteRow) => void) | null>(null);
+
+  const [XConsultaModal, setXConsultaModal] = useState<{
+    open: boolean;
+    loading: boolean;
+    nfeId?: number;
+    nrNota?: string;
+    stNf?: string;
+    cStat?: string | number;
+    xMotivo?: string;
+    nrProtocolo?: string;
+    chaveNfe?: string;
+    sucesso?: boolean;
+  }>({ open: false, loading: false });
 
   const destinatarioInputRef = useRef<HTMLInputElement>(null);
   const naturezaOperacaoInputRef = useRef<HTMLInputElement>(null);
@@ -174,7 +190,7 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
         XOrderBy: "nfe_cabecalho_id",
         XSoftDelete: false,
         XApplyFilter: (q) => q, // Remove filter to show both Entry/Exit or allow user to filter
-        XCanEdit: (rec: any) => !["E", "C", "D", "1", "2"].includes(String(rec.st_nf)),
+        XCanEdit: (rec: any) => !["A", "C", "D", "1", "2"].includes(String(rec.st_nf)),
         XOnAfterLoad: (rows: any[]) => {
           const ids = [...new Set(rows.map(r => r.cadastro_id).filter(Boolean))] as number[];
           if (ids.length) ensureClienteInfo(ids);
@@ -197,10 +213,11 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
       XToolbarExtras={({ currentRecord, isEditing, refresh }) => {
         if (!currentRecord || isEditing) return null;
         const st = String(currentRecord.st_nf || "");
-        const podeEnviar = ["A", "R", "3", "P"].includes(st);
-        const foiEmitida = ["E", "1"].includes(st);
+        const foiAutorizada = ["A", "1"].includes(st);
+        const foiEnviada = st === "E";
+        const podeEnviar = ["P", "R"].includes(st);
 
-        if (foiEmitida) {
+        if (foiAutorizada) {
           return (
             <button
               type="button"
@@ -268,6 +285,87 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
           );
         }
 
+        if (foiEnviada) {
+          return (
+            <button
+              type="button"
+              onClick={async () => {
+                setXConsultaModal({
+                  open: true,
+                  loading: true,
+                  nfeId: currentRecord.nfe_cabecalho_id,
+                  nrNota: currentRecord.nr_nota || String(currentRecord.nfe_cabecalho_id),
+                });
+
+                try {
+                  const { data: evs } = await db.from("fiscal_evento")
+                    .select("id, status, resposta, mensagem_erro")
+                    .eq("nfe_cabecalho_id", currentRecord.nfe_cabecalho_id)
+                    .order("id", { ascending: false })
+                    .limit(1);
+
+                  let lastEv = evs?.[0];
+                  if (lastEv && lastEv.status === "PENDENTE") {
+                    for (let i = 0; i < 30; i++) {
+                      await new Promise(r => setTimeout(r, 500));
+                      const { data: evCheck } = await db.from("fiscal_evento").select("status, resposta, mensagem_erro").eq("id", lastEv.id).maybeSingle();
+                      if (evCheck && evCheck.status !== "PENDENTE") {
+                        lastEv = evCheck;
+                        break;
+                      }
+                    }
+                  }
+
+                  const { data: cabUpdated } = await db.from("fiscal_nfe_cabecalho")
+                    .select("nfe_cabecalho_id, nr_nota, st_nf, c_stat, x_motivo, nr_protocolo, chave_nfe")
+                    .eq("nfe_cabecalho_id", currentRecord.nfe_cabecalho_id)
+                    .maybeSingle();
+
+                  await refresh();
+
+                  let respObj: any = null;
+                  if (lastEv?.resposta) {
+                    try {
+                      respObj = typeof lastEv.resposta === "string" ? JSON.parse(lastEv.resposta) : lastEv.resposta;
+                    } catch {}
+                  }
+
+                  const stFinal = cabUpdated?.st_nf || currentRecord.st_nf;
+                  const cStatFinal = cabUpdated?.c_stat || respObj?.c_stat || respObj?.cStat;
+                  const xMotivoFinal = cabUpdated?.x_motivo || respObj?.x_motivo || respObj?.xMotivo || lastEv?.mensagem_erro || "Consulta finalizada.";
+                  const nrProtFinal = cabUpdated?.nr_protocolo || respObj?.nr_protocolo || respObj?.nProt;
+                  const chaveFinal = cabUpdated?.chave_nfe || respObj?.chave_nfe;
+                  const sucessoFinal = ["A", "1"].includes(String(stFinal)) || ["100", "150"].includes(String(cStatFinal));
+
+                  setXConsultaModal({
+                    open: true,
+                    loading: false,
+                    nfeId: currentRecord.nfe_cabecalho_id,
+                    nrNota: cabUpdated?.nr_nota || currentRecord.nr_nota || String(currentRecord.nfe_cabecalho_id),
+                    stNf: stFinal,
+                    cStat: cStatFinal || (sucessoFinal ? 100 : undefined),
+                    xMotivo: xMotivoFinal,
+                    nrProtocolo: nrProtFinal,
+                    chaveNfe: chaveFinal,
+                    sucesso: sucessoFinal,
+                  });
+                } catch (e: any) {
+                  setXConsultaModal(prev => ({
+                    ...prev,
+                    loading: false,
+                    xMotivo: "Erro ao consultar status: " + e.message,
+                    sucesso: false,
+                  }));
+                }
+              }}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-blue-600 text-white rounded-md hover:opacity-90 shadow-sm"
+              title="Consultar imediatamente o retorno da SEFAZ para esta nota"
+            >
+              <Send className="w-3.5 h-3.5" /> CONSULTAR SEFAZ
+            </button>
+          );
+        }
+
         return null;
       }}
       XExtraTabs={[
@@ -276,7 +374,7 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
           render: ({ record, currentRecord }) => {
             const id = (currentRecord || record)?.nfe_cabecalho_id || null;
             const st = (currentRecord || record)?.st_nf || "A";
-            const podeEditar = !["E", "C", "D", "1", "2"].includes(String(st));
+            const podeEditar = !["A", "E", "C", "D", "1", "2"].includes(String(st));
             return (
               <NfeItensTab 
                 nfeCabecalhoId={id} 
@@ -293,16 +391,20 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
           render: ({ record, currentRecord }) => {
             const id = (currentRecord || record)?.nfe_cabecalho_id || null;
             const st = (currentRecord || record)?.st_nf || "A";
-            const podeEditar = !["E", "C", "D", "1", "2"].includes(String(st));
+            const podeEditar = !["A", "E", "C", "D", "1", "2"].includes(String(st));
             return <NfePagamentoTab nfeCabecalhoId={id} podeEditar={podeEditar} />;
           },
         },
         {
           key: "referenciadas", label: "Documentos Referenciados",
+          hide: ({ record, currentRecord }) => {
+            const fin = Number((currentRecord || record)?.fin_nfe ?? 1);
+            return fin === 1; // Oculta para Vendas Normais de Saída
+          },
           render: ({ record, currentRecord }) => {
             const id = (currentRecord || record)?.nfe_cabecalho_id || null;
             const st = (currentRecord || record)?.st_nf || "A";
-            const podeEditar = !["E", "C", "D", "1", "2"].includes(String(st));
+            const podeEditar = !["A", "E", "C", "D", "1", "2"].includes(String(st));
             return (
               <NfeDocumentosReferenciadosTab
                 nfeCabecalhoId={id}
@@ -428,7 +530,7 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
               </div>
               <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Status</label>
-                <input readOnly value={NFE_ST_LABELS[stAtual] || stAtual} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary" />
+                <input readOnly value={(NFE_ST_LABELS[stAtual] || stAtual).toUpperCase()} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary uppercase font-bold" />
               </div>
             </div>
 
@@ -574,6 +676,77 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
         tipo={XSearchTipo}
         onSelect={(c) => XSearchTarget?.(c)}
       />
+
+      <Dialog open={XConsultaModal.open} onOpenChange={(o) => !o && setXConsultaModal(prev => ({ ...prev, open: false }))}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-bold text-foreground">
+              <FileText className="w-5 h-5 text-primary" />
+              Resultado SEFAZ — NF-e #{XConsultaModal.nrNota}
+            </DialogTitle>
+          </DialogHeader>
+
+          {XConsultaModal.loading ? (
+            <div className="flex flex-col items-center justify-center py-8 space-y-3">
+              <Clock className="w-8 h-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground font-medium">Consultando status na SEFAZ...</p>
+            </div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground font-bold uppercase">Status Atual</span>
+                <Badge className={`font-bold text-xs uppercase ${
+                  XConsultaModal.sucesso || ["A", "1"].includes(String(XConsultaModal.stNf))
+                    ? "bg-green-100 text-green-700 border-none"
+                    : XConsultaModal.stNf === "E"
+                    ? "bg-blue-100 text-blue-700 border-none"
+                    : "bg-red-100 text-red-700 border-none"
+                }`}>
+                  {["A", "1"].includes(String(XConsultaModal.stNf)) ? "AUTORIZADA" : (XConsultaModal.stNf === "E" ? "ENVIADA / AGUARDANDO" : "FALHA / REJEITADA")}
+                </Badge>
+              </div>
+
+              {XConsultaModal.cStat && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground font-bold uppercase">Código cStat</span>
+                  <Badge className="bg-secondary text-secondary-foreground font-mono text-xs">
+                    {XConsultaModal.cStat}
+                  </Badge>
+                </div>
+              )}
+
+              <div className="p-3 bg-muted rounded-lg border border-border space-y-1">
+                <p className="text-[10px] text-muted-foreground font-bold uppercase">Retorno / Motivo SEFAZ</p>
+                <p className="text-sm font-medium text-foreground leading-relaxed">{XConsultaModal.xMotivo}</p>
+              </div>
+
+              {XConsultaModal.nrProtocolo && (
+                <div className="p-2 bg-background rounded border border-border flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground font-bold uppercase text-[10px]">Protocolo</span>
+                  <span className="font-mono font-bold">{XConsultaModal.nrProtocolo}</span>
+                </div>
+              )}
+
+              {XConsultaModal.chaveNfe && (
+                <div className="p-2 bg-background rounded border border-border space-y-1">
+                  <span className="text-muted-foreground font-bold uppercase text-[10px] block">Chave de Acesso</span>
+                  <span className="font-mono text-[11px] block break-all">{XConsultaModal.chaveNfe}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setXConsultaModal(prev => ({ ...prev, open: false }))}
+              className="w-full bg-primary text-primary-foreground font-bold py-2 rounded-lg hover:opacity-90 transition-opacity"
+            >
+              Fechar
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

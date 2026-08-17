@@ -33,16 +33,23 @@ const isExactMatchColumn = (key: string, col?: IFilterColumn) => {
   const labelStr = typeof col?.label === "string" ? col.label.toLowerCase() : "";
   return (
     isNumericCodeColumn(key, col) ||
-    k === "status" ||
-    k === "situacao" ||
-    k === "dt_baixa" ||
     k.startsWith("dt_") ||
     k.includes("date") ||
     k.includes("data") ||
-    labelStr.includes("data") ||
-    labelStr.includes("status") ||
-    labelStr.includes("situação")
+    labelStr.includes("data")
   );
+};
+
+const NFE_STATUS_MAP: Record<string, string[]> = {
+  A: ["autorizado", "autorizada", "1"],
+  1: ["autorizado", "autorizada", "a"],
+  E: ["enviado", "enviada", "transmissao", "lote"],
+  P: ["pendente", "rascunho", "digitaçao"],
+  C: ["cancelado", "cancelada"],
+  D: ["denegado", "denegada", "2"],
+  2: ["denegado", "denegada", "d"],
+  R: ["rejeitado", "rejeitada", "falha", "erro"],
+  F: ["falha", "erro"],
 };
 
 export function useGridFilter<T extends Record<string, any>>(
@@ -63,10 +70,20 @@ export function useGridFilter<T extends Record<string, any>>(
         if (isExactMatchColumn(key, col)) {
           if (normalizedVal !== filterValue) return false;
         } else {
-          if (!normalizedVal.includes(filterValue)) return false;
+          const k = key.toLowerCase();
+          if (k.includes("status") || k.includes("situacao") || k.startsWith("st_")) {
+            const rawMatch = normalizedVal.includes(filterValue);
+            if (rawMatch) continue;
+            const aliases = NFE_STATUS_MAP[val] || NFE_STATUS_MAP[normalizedVal.toUpperCase()] || [];
+            const aliasMatch = aliases.some(a => a.toLowerCase().includes(filterValue));
+            if (!aliasMatch) return false;
+          } else {
+            if (!normalizedVal.includes(filterValue)) return false;
+          }
         }
       }
       return true;
     });
   }, [data, filters, columns]);
 }
+
