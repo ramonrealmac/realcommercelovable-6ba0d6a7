@@ -1097,10 +1097,13 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
                   );
                 })}
               </div>
+                </div>
                 )}
               </div>
             </div>
           )}
+
+
 
           {/* ── Aba SQL ───────────────────────────────────────── */}
 {activeTab === 'sql' && (
