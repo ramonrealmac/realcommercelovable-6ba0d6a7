@@ -33,7 +33,7 @@ const FaturarPedidoDialog: React.FC<IProps> = ({ open, funcionarioId, empresaId,
   const [XClientesCache, setXClientesCache] = useState<Record<number, string>>({});
   const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
   const [XSelectedPedido, setXSelectedPedido] = useState<any | null>(null);
-  const [XModelo, setXModelo] = useState<"NFE" | "NFCE">("NFCE");
+  const [XModelo, setXModelo] = useState<"55" | "65">("65");
   const [XLoadingPedidos, setXLoadingPedidos] = useState(false);
   const [XFiltro, setXFiltro] = useState("");
   const [XSalvando, setXSalvando] = useState(false);
@@ -55,60 +55,78 @@ const FaturarPedidoDialog: React.FC<IProps> = ({ open, funcionarioId, empresaId,
     setXSelectedIdx(null);
     setXSelectedPedido(null);
     try {
-      const { data: movs, error: movErr } = await db.from("movimento")
-        .select("movimento_id, nr_movimento, dt_emissao, vl_movimento, cadastro_id, st_pedido")
+      // 1. Busca notas fiscais autorizadas/pendentes da empresa logada para saber movimentos já faturados
+      const { data: notasExistentes } = await db
+        .from("fiscal_nfe_cabecalho")
+        .select("movimento_id, modelo, st_nf")
         .eq("empresa_id", empresaId)
-        .eq("tp_movimento", "PD")
-        .eq("faturado", "N")
-        .neq("st_pedido", "C")
+        .in("st_nf", ["E", "1", "P", "A"])
+        .not("movimento_id", "is", null);
+
+      const movimentosComNota = new Set<number>(
+        (notasExistentes || []).map((n: any) => Number(n.movimento_id)).filter(Boolean)
+      );
+
+      // 2. Busca somente movimentos da empresa logada, recebidos no caixa (st_pedido = 'R'), com tp_movimento em ('PD', 'SV', 'VD', 'OR') e faturado != 'S'
+      const { data: movs, error: movErr } = await db.from("movimento")
+        .select("movimento_id, nr_movimento, dt_emissao, vl_movimento, cadastro_id, st_pedido, faturado, tp_movimento")
+        .eq("empresa_id", empresaId)
+        .in("tp_movimento", ["PD", "SV", "VD", "OR"])
+        .eq("st_pedido", "R")
+        .neq("faturado", "S")
         .order("nr_movimento", { ascending: false });
 
       if (movErr) throw movErr;
 
-      const rawMovs = movs || [];
-      setXPedidos(rawMovs);
+      // 3. Exclui movimentos que já possuem nota fiscal autorizada/pendente emitida
+      let rawMovs = (movs || []).filter((m: any) => !movimentosComNota.has(Number(m.movimento_id)));
 
-      // Carrega cache de clientes
+      // 4. Carrega cache de clientes
       const clientIds = Array.from(new Set(rawMovs.map((m: any) => m.cadastro_id).filter(Boolean))) as number[];
+      let cache: Record<number, string> = {};
       if (clientIds.length > 0) {
         const { data: clients, error: clientErr } = await db.from("cadastro")
           .select("cadastro_id, razao_social")
           .in("cadastro_id", clientIds);
 
         if (!clientErr && clients) {
-          const cache: Record<number, string> = {};
           clients.forEach((c: any) => {
             cache[c.cadastro_id] = c.razao_social;
           });
           setXClientesCache(cache);
         }
       }
+
+      // 5. Aplica o filtro de texto XFiltro (número do pedido ou cliente) APENAS no momento do clique em BUSCAR
+      if (XFiltro.trim()) {
+        const f = XFiltro.trim().toLowerCase();
+        rawMovs = rawMovs.filter((p: any) => {
+          const nr = String(p.nr_movimento || "");
+          const movId = String(p.movimento_id || "");
+          const cliente = (cache[p.cadastro_id] || XClientesCache[p.cadastro_id] || "").toLowerCase();
+          return nr.includes(f) || movId.includes(f) || cliente.includes(f);
+        });
+      }
+
+      setXPedidos(rawMovs);
     } catch (err: any) {
       toast.error("Erro ao carregar pedidos: " + err.message);
     } finally {
       setXLoadingPedidos(false);
     }
-  }, [empresaId]);
+  }, [empresaId, XFiltro, XClientesCache]);
 
   useEffect(() => {
     if (open) {
-      carregarPedidos();
+      setXPedidos([]);
+      setXSelectedIdx(null);
+      setXSelectedPedido(null);
       setXFiltro("");
-      setXModelo("NFCE");
+      setXModelo("65");
       setXStatus("");
       setXSalvando(false);
     }
-  }, [open, carregarPedidos]);
-
-  const pedidosFiltrados = useMemo(() => {
-    if (!XFiltro.trim()) return XPedidos;
-    const f = XFiltro.toLowerCase();
-    return XPedidos.filter(p => {
-      const nr = String(p.nr_movimento || "");
-      const cliente = (XClientesCache[p.cadastro_id] || "").toLowerCase();
-      return nr.includes(f) || cliente.includes(f);
-    });
-  }, [XPedidos, XFiltro, XClientesCache]);
+  }, [open]);
 
   const handleRowClick = (row: any, idx: number) => {
     setXSelectedIdx(idx);
@@ -121,14 +139,17 @@ const FaturarPedidoDialog: React.FC<IProps> = ({ open, funcionarioId, empresaId,
       return;
     }
 
+    const tipoEmissao = XModelo === "55" ? "NFE" : "NFCE";
+    const modLbl = XModelo === "55" ? "NF-e" : "NFC-e";
+
     setXSalvando(true);
-    setXStatus(`Gerando ${XModelo} e enviando ao Fiscal Worker...`);
+    setXStatus(`Gerando ${modLbl} e enviando ao Fiscal Worker...`);
 
     try {
       // 1. Gera documento fiscal
       const res = await fiscalEmissaoService.gerarDocumentoFiscalFromMovimento(
         XSelectedPedido.movimento_id,
-        XModelo,
+        tipoEmissao,
         empresaId,
         funcionarioId
       );
@@ -140,7 +161,7 @@ const FaturarPedidoDialog: React.FC<IProps> = ({ open, funcionarioId, empresaId,
       // 2. Aguarda autorização
       setXStatus("Aguardando autorização da SEFAZ...");
       const totalSeg = await fiscalEmissaoService.obterTimeoutFiscalSeg(empresaId);
-      setXProg({ open: true, titulo: `Emitindo ${XModelo}...`, total: totalSeg, restante: totalSeg });
+      setXProg({ open: true, titulo: `Emitindo ${modLbl}...`, total: totalSeg, restante: totalSeg });
 
       const ret = await fiscalEmissaoService.aguardarEvento(res.fiscal_evento_id, {
         empresaId,
@@ -152,7 +173,7 @@ const FaturarPedidoDialog: React.FC<IProps> = ({ open, funcionarioId, empresaId,
         throw new Error(ret.mensagem || "Rejeitado pela SEFAZ ou erro no worker.");
       }
 
-      toast.success(`${XModelo} emitida com sucesso!`);
+      toast.success(`${modLbl} emitida com sucesso!`);
 
       // 3. Atualiza o status do campo faturado para S
       setXStatus("Atualizando status do pedido...");
@@ -232,6 +253,7 @@ const FaturarPedidoDialog: React.FC<IProps> = ({ open, funcionarioId, empresaId,
                 placeholder="Filtrar por pedido ou cliente..."
                 value={XFiltro}
                 onChange={e => setXFiltro(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") carregarPedidos(); }}
                 disabled={XSalvando}
                 className="w-full bg-transparent border-none focus:outline-none focus:ring-0 placeholder-muted-foreground text-xs p-0 text-foreground"
               />
@@ -246,13 +268,23 @@ const FaturarPedidoDialog: React.FC<IProps> = ({ open, funcionarioId, empresaId,
               <span className="text-xs font-bold text-muted-foreground uppercase whitespace-nowrap">Modelo de Emissão:</span>
               <select
                 value={XModelo}
-                onChange={e => setXModelo(e.target.value as "NFE" | "NFCE")}
-                disabled={XSalvando}
+                onChange={e => setXModelo(e.target.value as "55" | "65")}
+                disabled={XSalvando || XLoadingPedidos}
                 className="text-xs bg-background text-foreground border border-border rounded px-2.5 py-1.5 h-8 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary shadow-sm font-semibold transition"
               >
-                <option value="NFCE">Cupom (NFC-e)</option>
-                <option value="NFE">Nota Fiscal (NF-e)</option>
+                <option value="65">65 - Cupom (NFC-e)</option>
+                <option value="55">55 - Nota Fiscal (NF-e)</option>
               </select>
+
+              <button
+                type="button"
+                onClick={carregarPedidos}
+                disabled={XSalvando || XLoadingPedidos}
+                className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold bg-primary text-primary-foreground rounded hover:opacity-90 shadow-sm transition disabled:opacity-50 h-8"
+              >
+                {XLoadingPedidos ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                BUSCAR
+              </button>
             </div>
           </div>
 
@@ -260,7 +292,7 @@ const FaturarPedidoDialog: React.FC<IProps> = ({ open, funcionarioId, empresaId,
           <div className="border border-border rounded-lg overflow-hidden">
             <DataGrid
               columns={cols}
-              data={pedidosFiltrados}
+              data={XPedidos}
               maxHeight="250px"
               showRecordCount={false}
               showExport={false}
@@ -268,9 +300,9 @@ const FaturarPedidoDialog: React.FC<IProps> = ({ open, funcionarioId, empresaId,
               selectedIdx={XSelectedIdx}
               headerClassName="bg-topbar text-topbar-foreground text-[10px] uppercase tracking-wider font-bold"
             />
-            {!XLoadingPedidos && pedidosFiltrados.length === 0 && (
+            {!XLoadingPedidos && XPedidos.length === 0 && (
               <div className="p-8 text-center text-xs text-muted-foreground">
-                Nenhum pedido faturável (faturado = N) encontrado.
+                Clique no botão <span className="font-bold text-primary font-mono">BUSCAR</span> para pesquisar os pedidos recebidos no caixa pendentes de faturamento.
               </div>
             )}
             {XLoadingPedidos && (

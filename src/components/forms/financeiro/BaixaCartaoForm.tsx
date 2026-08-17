@@ -196,9 +196,11 @@ const BaixaCartaoForm: React.FC = () => {
 
       // Filtros de data se houver tipo selecionado
       if (XTipoData === "EMISSAO") {
-        finQuery = finQuery.gte("dt_emissao", XDtInicial).lte("dt_emissao", XDtFinal);
+        if (XDtInicial && String(XDtInicial).trim() !== "") finQuery = finQuery.gte("dt_emissao", XDtInicial);
+        if (XDtFinal && String(XDtFinal).trim() !== "") finQuery = finQuery.lte("dt_emissao", XDtFinal);
       } else if (XTipoData === "VENCIMENTO") {
-        finQuery = finQuery.gte("dt_vencto", XDtInicial).lte("dt_vencto", XDtFinal);
+        if (XDtInicial && String(XDtInicial).trim() !== "") finQuery = finQuery.gte("dt_vencto", XDtInicial);
+        if (XDtFinal && String(XDtFinal).trim() !== "") finQuery = finQuery.lte("dt_vencto", XDtFinal);
       }
 
       const { data: finRows, error: finErr } = await finQuery;

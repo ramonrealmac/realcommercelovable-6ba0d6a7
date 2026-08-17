@@ -218,7 +218,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
           funcionario_id: caixaSelecionado.funcionario_id,
           colaborador_id: caixaSelecionado.funcionario_id,
           dt_movimento: caixaSelecionado.dt_abertura,
-          tp_movimento: tipo,
+          tp_movimento: isSup ? "E" : "S",
           tp_operacao: isSup ? "E" : "S",
           historico: XDescricao,
           vl_movimento: isSup ? vl : -vl,
@@ -238,8 +238,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
         cadastro_id: XCadastroSel?.cadastro_id && XCadastroSel.cadastro_id !== 0 ? XCadastroSel.cadastro_id : null,
         tp_movimento: tipo,
         tp_origem: "CAIXA",
-        st_pedido: "T",
-        status: "F",
+        st_pedido: "F",
         faturado: "S",
         dt_emissao: new Date().toISOString(),
         hr_movimento: horaAtual,
@@ -278,9 +277,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
       if (errIt) throw new Error(errIt.message);
 
       // === 5) Inserir caixa_movimento_item para refletir no fechamento ===
-      const newCmiId = await nextId("caixa_movimento_item", "caixa_movimento_item_id");
       const { error: errCmi } = await db.from("caixa_movimento_item").insert({
-        caixa_movimento_item_id: newCmiId,
         caixa_movimento_id: caixaMovimentoId,
         empresa_id: caixaSelecionado.empresa_id,
         condicao_id: null,

@@ -143,6 +143,14 @@ export function parseNfeXml(xmlString: string): INfeDadosXml | null {
       };
     });
 
+    // Cobrança / Duplicatas (<dup>)
+    const dups = Array.from(infNFe.querySelectorAll("dup"));
+    const duplicatas = dups.map((dup, idx) => ({
+      n_dup: txt(dup, "nDup") || String(idx + 1),
+      dt_vencto: txt(dup, "dVenc"),
+      v_dup: num(dup, "vDup"),
+    }));
+
     return {
       emitente,
       nr_nota,
@@ -165,6 +173,7 @@ export function parseNfeXml(xmlString: string): INfeDadosXml | null {
       obs_nf,
       obs_fisco,
       itens,
+      duplicatas,
       xmlRaw: xmlString,
       fin_nfe,
       destinatario_cnpj,

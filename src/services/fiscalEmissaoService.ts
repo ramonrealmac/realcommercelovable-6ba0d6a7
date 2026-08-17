@@ -259,13 +259,35 @@ export const fiscalEmissaoService = {
       console.log(`[FiscalService] Gerando ${isV2 ? 'XML (v2.0)' : 'INI (v1.0)'} para ${tipo}...`);
 
       // Busca dados dos itens inseridos para garantir integridade no conteúdo gerado
-      const { data: nfeItens } = await db.from("fiscal_nfe_item").select("*").eq("nfe_cabecalho_id", cabId);
+      const { data: nfeItens } = await db.from("fiscal_nfe_item").select("*").eq("nfe_cabecalho_id", cabId).eq("excluido", false).order("nr_item");
       const { data: nfePagtos } = await db.from("fiscal_nfe_pagamento").select("*").eq("nfe_cabecalho_id", cabId);
       const { data: nfeRefs } = await db.from("fiscal_nfe_referenciada")
         .select("chave_ref")
         .eq("nfe_cabecalho_id", cabId)
         .order("nfe_referenciada_id");
       const chavesRef = nfeRefs?.map((d: any) => d.chave_ref).filter(Boolean) || [];
+
+      const itensTratados = await Promise.all((nfeItens || []).map(async (it: any) => {
+        let nrItemOrigem = Number(it.nr_item_origem || 0);
+        let chaveRefItem = String(it.chave_ref_item || chavesRef[0] || "").replace(/\D/g, "");
+
+        if ((!nrItemOrigem || chaveRefItem.length !== 44) && it.nfe_item_origem_id) {
+          const { data: itemOrig } = await db.from("fiscal_nfe_item").select("nr_item, nfe_cabecalho_id").eq("nfe_item_id", it.nfe_item_origem_id).maybeSingle();
+          if (itemOrig) {
+            if (!nrItemOrigem) nrItemOrigem = Number(itemOrig.nr_item || 0);
+            if (chaveRefItem.length !== 44 && itemOrig.nfe_cabecalho_id) {
+              const { data: cabOrig } = await db.from("fiscal_nfe_cabecalho").select("chave_nfe").eq("nfe_cabecalho_id", itemOrig.nfe_cabecalho_id).maybeSingle();
+              if (cabOrig && cabOrig.chave_nfe) chaveRefItem = String(cabOrig.chave_nfe).replace(/\D/g, "");
+            }
+          }
+        }
+
+        return {
+          ...it,
+          nr_item_origem: nrItemOrigem,
+          chave_ref_item: chaveRefItem,
+        };
+      }));
 
       const params = {
         cabecalho: { 
@@ -274,7 +296,7 @@ export const fiscalEmissaoService = {
           chave_ref: chavesRef[0] || "", 
           chaves_ref: chavesRef 
         },
-        itens: nfeItens || [],
+        itens: itensTratados,
         pagamentos: nfePagtos || [],
         empresa: empresa,
         cadastro: parceiro,
@@ -376,13 +398,57 @@ export const fiscalEmissaoService = {
 
       const { data: nfeItens } = await db.from("fiscal_nfe_item").select("*").eq("nfe_cabecalho_id", nfeCabecalhoId);
       const { data: nfePagtos } = await db.from("fiscal_nfe_pagamento").select("*").eq("nfe_cabecalho_id", nfeCabecalhoId);
+      const { data: nfeRefs } = await db.from("fiscal_nfe_referenciada")
+        .select("chave_ref")
+        .eq("nfe_cabecalho_id", nfeCabecalhoId)
+        .order("nfe_referenciada_id");
+      const chavesRef = nfeRefs?.map((d: any) => d.chave_ref).filter(Boolean) || [];
 
       const versaoMetodo = tipo === "NFE" ? fConfig?.nfe_versao_metodo : fConfig?.nfce_versao_metodo;
       const isV2 = versaoMetodo === '2.0';
 
+      // Se a nota não possuir número de nota (nr_nota), atribui o próximo sequencial disponível
+      if (!cab.nr_nota || String(cab.nr_nota).trim() === "" || String(cab.nr_nota).trim() === "0") {
+        const proximoNr = Number(fConfigItem.sequencia || 1);
+        cab.nr_nota = String(proximoNr);
+        await db.from("fiscal_nfe_cabecalho")
+          .update({ nr_nota: String(proximoNr) })
+          .eq("nfe_cabecalho_id", nfeCabecalhoId);
+
+        await db.from("fiscal_config_item")
+          .update({ sequencia: proximoNr + 1 })
+          .eq("fiscal_config_item_id", fConfigItem.fiscal_config_item_id);
+      }
+
+      const itensTratados = await Promise.all((nfeItens || []).map(async (it: any) => {
+        let nrItemOrigem = Number(it.nr_item_origem || 0);
+        let chaveRefItem = String(it.chave_ref_item || chavesRef[0] || "").replace(/\D/g, "");
+
+        if ((!nrItemOrigem || chaveRefItem.length !== 44) && it.nfe_item_origem_id) {
+          const { data: itemOrig } = await db.from("fiscal_nfe_item").select("nr_item, nfe_cabecalho_id").eq("nfe_item_id", it.nfe_item_origem_id).maybeSingle();
+          if (itemOrig) {
+            if (!nrItemOrigem) nrItemOrigem = Number(itemOrig.nr_item || 0);
+            if (chaveRefItem.length !== 44 && itemOrig.nfe_cabecalho_id) {
+              const { data: cabOrig } = await db.from("fiscal_nfe_cabecalho").select("chave_nfe").eq("nfe_cabecalho_id", itemOrig.nfe_cabecalho_id).maybeSingle();
+              if (cabOrig && cabOrig.chave_nfe) chaveRefItem = String(cabOrig.chave_nfe).replace(/\D/g, "");
+            }
+          }
+        }
+
+        return {
+          ...it,
+          nr_item_origem: nrItemOrigem,
+          chave_ref_item: chaveRefItem,
+        };
+      }));
+
       const params = {
-        cabecalho: cab,
-        itens: nfeItens || [],
+        cabecalho: {
+          ...cab,
+          chave_ref: chavesRef[0] || "",
+          chaves_ref: chavesRef
+        },
+        itens: itensTratados,
         pagamentos: nfePagtos || [],
         empresa: empresa,
         cadastro: parceiro,
@@ -427,9 +493,9 @@ export const fiscalEmissaoService = {
 
       if (evErr) throw new Error("Falha ao criar evento de transmissão: " + evErr.message);
 
-      // Reseta status da NF-e para pendente, para refletir nova tentativa
+      // Reseta status da NF-e para pendente e limpa chave_nfe para forçar nova chave de acesso na SEFAZ
       await db.from("fiscal_nfe_cabecalho")
-        .update({ st_nf: "A" })
+        .update({ st_nf: "A", chave_nfe: "" })
         .eq("nfe_cabecalho_id", nfeCabecalhoId);
 
       return { success: true, nfe_cabecalho_id: nfeCabecalhoId, fiscal_evento_id: evento?.id };

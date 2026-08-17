@@ -52,6 +52,14 @@ export function gerarIniNfe(params: GerarIniParams): string {
   linhas.push(``);
 
   // ──────────────────────────────────────────────
+  const tpNF = (cabecalho.tp_nf !== undefined && cabecalho.tp_nf !== null && cabecalho.tp_nf !== "")
+    ? String(cabecalho.tp_nf)
+    : "1";
+  const finNFe = (cabecalho.fin_nfe !== undefined && cabecalho.fin_nfe !== null && cabecalho.fin_nfe !== "")
+    ? String(cabecalho.fin_nfe)
+    : "1";
+
+  // ──────────────────────────────────────────────
   // [Identificacao]
   // ──────────────────────────────────────────────
   linhas.push(`[Identificacao]`);
@@ -63,12 +71,12 @@ export function gerarIniNfe(params: GerarIniParams): string {
   linhas.push(`nNF=${nNF}`);
   linhas.push(`dhEmi=${dhEmi}`);
   if (!isNFCe && dhSai) linhas.push(`dhSaiEnt=${dhSai}`);
-  linhas.push(`tpNF=1`);                    // 1=Saída
+  linhas.push(`tpNF=${tpNF}`);                    // 0=Entrada, 1=Saída
   linhas.push(`idDest=1`);                  // 1=Operação interna
   linhas.push(`tpImp=${isNFCe ? '4' : '1'}`); // 4=DANFE NFCe, 1=Retrato
   linhas.push(`tpEmis=1`);                  // 1=Normal
   linhas.push(`tpAmb=${ambiente}`);
-  linhas.push(`finNFe=${cabecalho.fin_nfe || 1}`);
+  linhas.push(`finNFe=${finNFe}`);
   linhas.push(`indFinal=1`);                // 1=Consumidor final
   const indPres = String(cabecalho.ind_pres || '1');
   linhas.push(`indPres=${indPres}`);                 // Operação de presença
@@ -248,6 +256,17 @@ export function gerarIniNfe(params: GerarIniParams): string {
       linhas.push(`vCOFINS=0.00`);
     }
     linhas.push(``);
+
+    // Referenciamento de item de outros DFe ([DFeReferenciado001])
+    const chaveItemRef = String(it.chave_ref_item || chavesParaRef[0] || (cabecalho as any).chave_ref || "").replace(/\D/g, "");
+    const nrItemOrigem = Number(it.nr_item_origem || (it.nfe_item_origem && it.nfe_item_origem.nr_item) || 0);
+
+    if (chaveItemRef.length === 44 && nrItemOrigem > 0) {
+      linhas.push(`[DFeReferenciado${nr}]`);
+      linhas.push(`chaveAcesso=${chaveItemRef}`);
+      linhas.push(`nItem=${nrItemOrigem}`);
+      linhas.push(``);
+    }
   }
 
   // ──────────────────────────────────────────────

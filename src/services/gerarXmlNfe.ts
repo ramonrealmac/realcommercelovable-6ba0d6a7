@@ -49,9 +49,18 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
     cNF = limpaChave.substring(35, 43); // Posições 36 a 43 da chave (índices 35 a 43, exclusive 43)
   }
   
-  if (!cNF) {
+  if (cabecalho.st_nf === 'R') {
+    cNF = String(Math.floor(10000000 + Math.random() * 89999999));
+  } else if (!cNF) {
     cNF = String(Math.floor(10000000 + Math.random() * 89999999));
   }
+
+  const tpNF = (cabecalho.tp_nf !== undefined && cabecalho.tp_nf !== null && cabecalho.tp_nf !== "")
+    ? String(cabecalho.tp_nf)
+    : "1";
+  const finNFe = (cabecalho.fin_nfe !== undefined && cabecalho.fin_nfe !== null && cabecalho.fin_nfe !== "")
+    ? String(cabecalho.fin_nfe)
+    : "1";
 
   // Helper para escapar XML
   const esc = (s: any) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
@@ -61,7 +70,7 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
   xml += `<idLote>1</idLote>`;
   xml += `<indSinc>1</indSinc>`;
   xml += `<NFe>`;
-  xml += `<infNFe versao="4.00" Id="NFe${cUF}${dhEmi.substring(2, 4)}${dhEmi.substring(5, 7)}${empresa.cnpj.replace(/\D/g,'')}${modelo}${serie.padStart(3,'0')}${nNF.padStart(9,'0')}1${cNF}1">`;
+  xml += `<infNFe versao="4.00" Id="NFe${cUF}${dhEmi.substring(2, 4)}${dhEmi.substring(5, 7)}${empresa.cnpj.replace(/\D/g,'')}${modelo}${serie.padStart(3,'0')}${nNF.padStart(9,'0')}${tpNF}${cNF}1">`;
   
   // Determina IE e Indicador do IE do Destinatário
   const ieDest = limparNumeros(cadastro?.inscricao_estadual || '');
@@ -80,24 +89,29 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
   xml += `<serie>${serie}</serie>`;
   xml += `<nNF>${nNF}</nNF>`;
   xml += `<dhEmi>${dhEmi}</dhEmi>`;
-  if (Number(cabecalho.fin_nfe) === 4) {
-    const chaves: string[] = (cabecalho as any).chaves_ref || [];
-    const finalChaves = chaves.length > 0 
-      ? chaves 
-      : ((cabecalho as any).chave_ref ? [(cabecalho as any).chave_ref] : []);
 
-    finalChaves.forEach(ch => {
-      xml += `<NFref><refNFe>${ch}</refNFe></NFref>`;
-    });
+  let chavesParaRef: string[] = (cabecalho as any).chaves_ref || [];
+  if (chavesParaRef.length === 0 && (cabecalho as any).chave_ref) {
+    chavesParaRef = [(cabecalho as any).chave_ref];
   }
-  xml += `<tpNF>${cabecalho.tp_nf || '1'}</tpNF>`;
+
+  // Fallback: Se for devolução (finNFe = 4) e nenhuma chave veio pelas props, tenta extrair a chave de 44 dígitos da obs_nf/infCpl
+  if (chavesParaRef.length === 0 && Number(finNFe) === 4) {
+    const texto = String((cabecalho as any).obs_nf || "") + " " + String((cabecalho as any).infCpl || "");
+    const m = texto.match(/(\d{44})/g);
+    if (m) {
+      chavesParaRef = Array.from(new Set(m));
+    }
+  }
+
+  xml += `<tpNF>${tpNF}</tpNF>`;
   xml += `<idDest>${(cadastro?.endereco_uf !== empresa.endereco_uf) ? '2' : '1'}</idDest>`; 
   xml += `<cMunFG>${cMunEmit}</cMunFG>`;
   xml += `<tpImp>${isNFCe ? '4' : '1'}</tpImp>`;
   xml += `<tpEmis>1</tpEmis>`;
   xml += `<cDV>0</cDV>`; // O ACBr calcula o dígito real
   xml += `<tpAmb>${ambiente}</tpAmb>`;
-  xml += `<finNFe>${cabecalho.fin_nfe || '1'}</finNFe>`;
+  xml += `<finNFe>${finNFe}</finNFe>`;
   xml += `<indFinal>${isConsumidorFinal}</indFinal>`;
   const indPres = cabecalho.ind_pres || '1';
   xml += `<indPres>${indPres}</indPres>`;
@@ -106,6 +120,16 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
   }
   xml += `<procEmi>0</procEmi>`;
   xml += `<verProc>RealCommerce2.0</verProc>`;
+
+  if (chavesParaRef.length > 0) {
+    chavesParaRef.forEach(ch => {
+      const limpa = String(ch || "").replace(/\D/g, "");
+      if (limpa.length === 44) {
+        xml += `<NFref><refNFe>${limpa}</refNFe></NFref>`;
+      }
+    });
+  }
+
   xml += `</ide>`;
 
   // <emit>
@@ -326,6 +350,18 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
     xml += `</COFINS>`;
     
     xml += `</imposto>`;
+    
+    // Referenciamento de item de outros DFe (<DFeReferenciado>)
+    const chaveItemRef = String(it.chave_ref_item || chavesParaRef[0] || (cabecalho as any).chave_ref || "").replace(/\D/g, "");
+    const nrItemOrigem = Number(it.nr_item_origem || (it.nfe_item_origem && it.nfe_item_origem.nr_item) || 0);
+
+    if (chaveItemRef.length === 44 && nrItemOrigem > 0) {
+      xml += `<DFeReferenciado>`;
+      xml += `<chaveAcesso>${chaveItemRef}</chaveAcesso>`;
+      xml += `<nItem>${nrItemOrigem}</nItem>`;
+      xml += `</DFeReferenciado>`;
+    }
+
     xml += `</det>`;
   });
 

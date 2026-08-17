@@ -206,6 +206,12 @@ export interface INfeXmlItem {
   cfop_entrada?: string | null;
 }
 
+export interface INfeXmlDuplicata {
+  n_dup: string;
+  dt_vencto: string;
+  v_dup: number;
+}
+
 export interface INfeDadosXml {
   emitente: INfeXmlEmitente;
   nr_nota: string;
@@ -231,6 +237,7 @@ export interface INfeDadosXml {
   obs_nf: string;
   obs_fisco: string;
   itens: INfeXmlItem[];
+  duplicatas?: INfeXmlDuplicata[];
   xmlRaw: string;
   fin_nfe?: number;
   destinatario_cnpj?: string;

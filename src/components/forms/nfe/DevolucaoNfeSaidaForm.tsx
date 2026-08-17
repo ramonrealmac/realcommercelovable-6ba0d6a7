@@ -98,12 +98,18 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
         .select("nfe_cabecalho_id,nr_nota,serie,dt_emissao,dt_saida,vl_total_nf,chave_nfe,cadastro_id,st_nf,modelo,tp_nf,fin_nfe,cadastro:cadastro_id(razao_social,cnpj)")
         .eq("empresa_id", XEmpresaId)
         .eq("tp_nf", 1)
+        .in("st_nf", ["E", "1"]) // Apenas notas fiscais autorizadas
         .neq("fin_nfe", 4) // não permitir devolver uma devolução
-        .eq("excluido", false)
-        .gte("dt_emissao", XDtIni)
-        .lte("dt_emissao", XDtFim)
-        .order("dt_emissao", { ascending: false })
-        .limit(200);
+        .eq("excluido", false);
+
+      if (XDtIni && String(XDtIni).trim() !== "") {
+        q = q.gte("dt_emissao", XDtIni);
+      }
+      if (XDtFim && String(XDtFim).trim() !== "") {
+        q = q.lte("dt_emissao", XDtFim);
+      }
+
+      q = q.order("dt_emissao", { ascending: false }).limit(200);
       const t = XBusca.trim();
       if (t) {
         if (/^\d+$/.test(t)) q = q.eq("nr_nota", t);
@@ -133,6 +139,10 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
         .eq("nfe_cabecalho_id", initialNfeId)
         .maybeSingle();
       if (error || !data) { toast.error("NF-e de origem não encontrada."); return; }
+      if (!["E", "1"].includes(String(data.st_nf))) {
+        toast.error(`A nota ${data.nr_nota || initialNfeId} não está autorizada e não pode ser devolvida.`);
+        return;
+      }
       await selecionarNota(data);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -200,6 +210,23 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
       const obs = `Devolução referente à NF-e de venda nº ${XSelecionada.nr_nota}/${XSelecionada.serie} — Chave: ${XSelecionada.chave_nfe || "-"}`;
       const vlProduto = itensValidos.reduce((s, it) => s + it.qt_devolver * it.vl_unit, 0);
 
+      // Busca sequência da empresa/modelo
+      let nrNotaDev = "";
+      const { data: cfgItens } = await db
+        .from("fiscal_config_item")
+        .select("*")
+        .eq("empresa_id", XEmpresaId)
+        .eq("modelo", XSelecionada.modelo || "55")
+        .eq("serie", XSelecionada.serie || "1");
+      const cfgItem = cfgItens?.[0];
+      if (cfgItem) {
+        nrNotaDev = String(cfgItem.sequencia || 1);
+        await db
+          .from("fiscal_config_item")
+          .update({ sequencia: Number(cfgItem.sequencia || 1) + 1 })
+          .eq("fiscal_config_item_id", cfgItem.fiscal_config_item_id);
+      }
+
       const { data: novo, error: eCab } = await db.from("fiscal_nfe_cabecalho").insert({
         empresa_id: XEmpresaId,
         cadastro_id: XSelecionada.cadastro_id,
@@ -211,7 +238,7 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
         tp_emis: 1,
         modelo: XSelecionada.modelo || "55",
         nat_op: XNatOp,
-        nr_nota: "",
+        nr_nota: nrNotaDev,
         serie: XSelecionada.serie || "1",
         chave_nfe: "",
         nr_protocolo: "",
@@ -243,6 +270,9 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
           empresa_id: XEmpresaId,
           produto_id: it.produto_id,
           nr_item: idx + 1,
+          nfe_item_origem_id: o?.nfe_item_id || null,
+          nr_item_origem: Number(o?.nr_item || 1),
+          chave_ref_item: String(XSelecionada.chave_nfe || "").replace(/\D/g, ""),
           cd_prod_fornec: it.cd_produto,
           nm_produto: it.nm_produto,
           ncm: it.ncm,
@@ -402,7 +432,11 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
                       <span className="font-semibold">{r.cadastro?.razao_social || `#${r.cadastro_id || "-"}`}</span>
                       <span className="text-muted-foreground"> — {formatCPFCNPJ(r.cadastro?.cnpj || "")}</span>
                     </div>
-                    <div className="col-span-1 text-center text-[10px] font-bold uppercase">{r.st_nf}</div>
+                    <div className="col-span-1 text-center">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                        {r.st_nf === "E" || r.st_nf === "1" ? "Autorizada" : (r.st_nf === "C" ? "Cancelada" : r.st_nf)}
+                      </span>
+                    </div>
                     <div className="col-span-2 text-right font-mono font-bold">
                       {Number(r.vl_total_nf || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                     </div>

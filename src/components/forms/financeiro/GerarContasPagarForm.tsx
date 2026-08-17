@@ -219,7 +219,11 @@ const MeioPagamentoSelect: React.FC<{
   );
 };
 
-const GerarContasPagarForm: React.FC = () => {
+interface GerarContasPagarFormProps {
+  initialId?: number;
+}
+
+const GerarContasPagarForm: React.FC<GerarContasPagarFormProps> = ({ initialId }) => {
   const { XEmpresaId, XEmpresas } = useAppContext();
 
   const [XEmpresasOpt, setXEmpresasOpt] = useState<IOpt[]>([]);
@@ -291,11 +295,12 @@ const GerarContasPagarForm: React.FC = () => {
   return (
     <>
       <StandardCrudForm<IFinanceiro>
-      config={{
-        XTableName: "financeiro",
-        XPrimaryKey: "financeiro_id",
-        XTitle: "Gerenciador de Títulos Manuais (Pagar)",
-        XEmpresaId: XEmpresaId,
+        XInitialId={initialId}
+        config={{
+          XTableName: "financeiro",
+          XPrimaryKey: "financeiro_id",
+          XTitle: "Títulos Recebidos",
+          XEmpresaId: XEmpresaId,
         XDefaultRecord,
         XSoftDelete: false,
         XCanEdit: (rec) => {

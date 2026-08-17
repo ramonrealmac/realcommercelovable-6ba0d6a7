@@ -180,44 +180,21 @@ const EmpresaForm: React.FC = () => {
 
   /* ── Load ── */
   const loadData = useCallback(async () => {
-    if (!XEmpresaId) return;
-
-    // Busca a empresa ativa para obter o ID da matriz
-    const { data: myEmp } = await db
-      .from("empresa")
-      .select("empresa_id, empresa_matriz_id")
-      .eq("empresa_id", XEmpresaId)
-      .maybeSingle();
-
-    const matrizId = myEmp?.empresa_matriz_id || XEmpresaId;
-
-    // Filtra para trazer apenas a matriz, as empresas irmãs e as empresas filhas
+    // Carrega todas as empresas cadastradas no sistema que não estão excluídas
     const { data } = await db
       .from("empresa")
       .select("*")
       .eq("excluido", false)
-      .or(`empresa_id.eq.${matrizId},empresa_matriz_id.eq.${matrizId},empresa_matriz_id.eq.${XEmpresaId}`)
       .order("empresa_id");
 
     if (data) setXData(data);
-  }, [XEmpresaId]);
+  }, []);
 
   const loadLookups = useCallback(async () => {
-    if (!XEmpresaId) return;
-
-    const { data: myEmp } = await db
-      .from("empresa")
-      .select("empresa_id, empresa_matriz_id")
-      .eq("empresa_id", XEmpresaId)
-      .maybeSingle();
-
-    const matrizId = myEmp?.empresa_matriz_id || XEmpresaId;
-
     const [empRes, depRes] = await Promise.all([
       db.from("empresa")
         .select("empresa_id, razao_social")
         .eq("excluido", false)
-        .or(`empresa_id.eq.${matrizId},empresa_matriz_id.eq.${matrizId},empresa_matriz_id.eq.${XEmpresaId}`)
         .order("razao_social"),
       db.from("deposito")
         .select("deposito_id, nome")
@@ -226,7 +203,7 @@ const EmpresaForm: React.FC = () => {
     ]);
     if (empRes.data) setXEmpresasLookup(empRes.data);
     if (depRes.data) setXDepositos(depRes.data);
-  }, [XEmpresaId]);
+  }, []);
 
   const loadHorarios = useCallback(async (empresaId: number) => {
     const { data: h } = await db.from("empresa_hs_lojavirtual").select("*").eq("empresa_id", empresaId).order("dia_semana");
@@ -1210,13 +1187,30 @@ const EmpresaForm: React.FC = () => {
         {/* ── Localizar ── */}
         {XInnerTab === "localizar" && (
           <DataGrid
-            columns={XLocalizarColumns}
+            columns={[
+              ...XLocalizarColumns,
+              {
+                key: "acoes",
+                label: "Ação",
+                width: "90px",
+                align: "center",
+                render: row => (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectFromSearch(row)}
+                    className="px-2 py-1 text-xs bg-primary text-primary-foreground rounded hover:opacity-90 font-bold"
+                  >
+                    Abrir
+                  </button>
+                )
+              }
+            ]}
             data={XFiltered}
             showFilters
             filterValues={XSearchFilters}
             onFilterChange={(key, value) => setXSearchFilters(prev => ({ ...prev, [key]: value }))}
             onRowDoubleClick={handleSelectFromSearch}
-            maxHeight="400px"
+            maxHeight="calc(100vh - 220px)"
             exportTitle="Empresas"
           />
         )}

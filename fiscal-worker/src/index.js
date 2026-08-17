@@ -75,17 +75,76 @@ const montarPayloadEmissaoNfe = async (evento, payloadAtual) => {
         .maybeSingle();
     if (cabErr || !cab) throw new Error(`NF-e/NFC-e #${nfeId} não localizada para emissão.`);
 
-    const [{ data: empresaRaw }, { data: cadastroRaw }, { data: fiscalConfig }, { data: itens }, { data: pagamentos }, { data: configItens }] = await Promise.all([
+    const [{ data: empresaRaw }, { data: cadastroRaw }, { data: fiscalConfig }, { data: itensRaw }, { data: pagamentos }, { data: configItens }, { data: nfeRefs }] = await Promise.all([
         supabase.from('empresa').select('*').eq('empresa_id', cab.empresa_id).maybeSingle(),
         cab.cadastro_id ? supabase.from('cadastro').select('*').eq('cadastro_id', cab.cadastro_id).maybeSingle() : Promise.resolve({ data: null }),
         supabase.from('fiscal_config').select('*').eq('empresa_id', cab.empresa_id).maybeSingle(),
-        supabase.from('fiscal_nfe_item').select('*').eq('nfe_cabecalho_id', nfeId).order('nr_item', { ascending: true }),
+        supabase.from('fiscal_nfe_item').select('*').eq('nfe_cabecalho_id', nfeId).eq('excluido', false).order('nr_item', { ascending: true }),
         supabase.from('fiscal_nfe_pagamento').select('*').eq('nfe_cabecalho_id', nfeId),
         supabase.from('fiscal_config_item').select('*').eq('empresa_id', cab.empresa_id),
+        supabase.from('fiscal_nfe_referenciada').select('chave_ref').eq('nfe_cabecalho_id', nfeId).order('nfe_referenciada_id', { ascending: true }),
     ]);
 
     if (!empresaRaw) throw new Error(`Empresa #${cab.empresa_id} não localizada para emissão.`);
     if (!fiscalConfig) throw new Error(`Configuração fiscal da empresa #${cab.empresa_id} não localizada.`);
+
+    const chavesRef = (nfeRefs || []).map(r => r.chave_ref).filter(Boolean);
+    const cabecalhoFinal = {
+        ...cab,
+        chave_ref: chavesRef[0] || cab.chave_ref || '',
+        chaves_ref: chavesRef.length > 0 ? chavesRef : (cab.chave_ref ? [cab.chave_ref] : [])
+    };
+
+    // Resolver referências de item original se nfe_item_origem_id estiver gravado mas nr_item_origem/chave_ref_item não
+    const itens = await Promise.all((itensRaw || []).map(async (it) => {
+        let nrItemOrigem = Number(it.nr_item_origem || 0);
+        let chaveRefItem = String(it.chave_ref_item || cabecalhoFinal.chave_ref || '').replace(/\D/g, '');
+
+        if ((!nrItemOrigem || chaveRefItem.length !== 44) && it.nfe_item_origem_id) {
+            const { data: itemOrig } = await supabase
+                .from('fiscal_nfe_item')
+                .select('nr_item, nfe_cabecalho_id')
+                .eq('nfe_item_id', it.nfe_item_origem_id)
+                .maybeSingle();
+
+            if (itemOrig) {
+                if (!nrItemOrigem) nrItemOrigem = Number(itemOrig.nr_item || 0);
+
+                if (chaveRefItem.length !== 44 && itemOrig.nfe_cabecalho_id) {
+                    const { data: cabOrig } = await supabase
+                        .from('fiscal_nfe_cabecalho')
+                        .select('chave_nfe')
+                        .eq('nfe_cabecalho_id', itemOrig.nfe_cabecalho_id)
+                        .maybeSingle();
+                    if (cabOrig && cabOrig.chave_nfe) {
+                        chaveRefItem = String(cabOrig.chave_nfe).replace(/\D/g, '');
+                    }
+                }
+            }
+        }
+
+        return {
+            ...it,
+            nr_item_origem: nrItemOrigem,
+            chave_ref_item: chaveRefItem
+        };
+    }));
+
+    // Validação impeditiva antes de gerar o payload para Devoluções (fin_nfe = 4)
+    if (Number(cab.fin_nfe) === 4) {
+        if (!cabecalhoFinal.chaves_ref || cabecalhoFinal.chaves_ref.length === 0) {
+            throw new Error(`Não foi possível transmitir a NF-e de devolução. Nenhuma NF-e de origem vinculada no cabeçalho.`);
+        }
+        for (const it of itens) {
+            const chaveClean = String(it.chave_ref_item || cabecalhoFinal.chave_ref || '').replace(/\D/g, '');
+            const nrOrig = Number(it.nr_item_origem || 0);
+
+            if (chaveClean.length !== 44 || nrOrig <= 0) {
+                const codProd = it.cd_prod_fornec || it.produto_id || '?';
+                throw new Error(`Não foi possível transmitir a NF-e de devolução. O item ${codProd} - ${it.nm_produto || ''} não possui vínculo com o item da NF-e original.`);
+            }
+        }
+    }
 
     const configItem = (configItens || []).find(ci => String(ci.modelo) === String(cab.modelo) && Number(ci.serie) === Number(cab.serie))
         || (configItens || []).find(ci => String(ci.modelo) === String(cab.modelo));
@@ -93,7 +152,7 @@ const montarPayloadEmissaoNfe = async (evento, payloadAtual) => {
 
     const empresa = await attachCidade(empresaRaw);
     const cadastro = await attachCidade(cadastroRaw);
-    const iniContent = gerarIniNfe({ cabecalho: cab, itens: itens || [], pagamentos: pagamentos || [], empresa, cadastro, fiscalConfig, configItem });
+    const iniContent = gerarIniNfe({ cabecalho: cabecalhoFinal, itens: itens || [], pagamentos: pagamentos || [], empresa, cadastro, fiscalConfig, configItem });
     validarIniAcbr(iniContent);
     const isNfce = String(cab.modelo) === '65' || evento.comando === 'EMITIR_NFCE';
 
@@ -408,15 +467,25 @@ const processarEvento = async (evento) => {
         if (nfeCabecalhoId) {
             if (isEmissao) {
                 const isDenegada = ['110', '301', '302', '303'].includes(String(resultado.c_stat));
+
+                let chaveNfeEncontrada = resultado.chave_nfe;
+                if (!chaveNfeEncontrada) {
+                    const textoBusca = (resultado.xml_nfe || '') + (resultado.xml_retorno || '') + (resultado.retorno_completo || '') + (payload.dados || '');
+                    const mChave = textoBusca.match(/NFe(\d{44})/i) || textoBusca.match(/(\d{44})/);
+                    if (mChave) chaveNfeEncontrada = mChave[1];
+                }
+
                 const updateNfe = {
                     c_stat: resultado.c_stat ? parseInt(String(resultado.c_stat)) : null,
                     x_motivo: resultado.x_motivo || (resultado.sucesso ? 'Autorizado' : 'Rejeitado'),
-                    chave_nfe: resultado.chave_nfe,
-                    nr_protocolo: resultado.nr_protocolo,
-                    recibo_sefaz: resultado.recibo_sefaz,
                     st_nf: resultado.sucesso ? 'E' : (isDenegada ? 'D' : 'R'), // E=Emitido, D=Denegado, R=Rejeitado
                     updated_at: new Date().toISOString()
                 };
+
+                if (chaveNfeEncontrada) updateNfe.chave_nfe = chaveNfeEncontrada;
+                if (resultado.nr_protocolo) updateNfe.nr_protocolo = resultado.nr_protocolo;
+                if (resultado.recibo_sefaz) updateNfe.recibo_sefaz = resultado.recibo_sefaz;
+
                 const xmlParaSalvar = resultado.xml_nfe || resultado.xml_retorno;
                 if (xmlParaSalvar) updateNfe.xml_nf = xmlParaSalvar;
 

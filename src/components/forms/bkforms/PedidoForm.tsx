@@ -283,9 +283,52 @@ const PedidoForm: React.FC = () => {
                     <input disabled={ro} value={record.numero_entrega ?? ""} onChange={e => setField("numero_entrega" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
                   </div>
                 </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">E-mail</label>
-                  <input disabled={ro} value={record.email_entrega ?? ""} onChange={e => setField("email_entrega" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
+                <div className="grid grid-cols-12 gap-3">
+                  <div className="col-span-6">
+                    <label className="text-xs text-muted-foreground">E-mail</label>
+                    <input
+                      id="email_entrega_input"
+                      disabled={ro}
+                      value={record.email_entrega ?? ""}
+                      onChange={e => setField("email_entrega" as any, e.target.value as any)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const field = document.getElementById("contato_entrega_input");
+                          if (field) {
+                            field.focus();
+                            (field as HTMLInputElement).select?.();
+                          }
+                        }
+                      }}
+                      className="w-full border border-border rounded px-2 py-1 text-sm"
+                    />
+                  </div>
+                  <div className="col-span-6">
+                    <label className="text-xs text-muted-foreground">Contato</label>
+                    <input
+                      id="contato_entrega_input"
+                      disabled={ro}
+                      value={record.nm_responsavel ?? ""}
+                      onChange={e => setField("nm_responsavel" as any, e.target.value as any)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setInnerTab("adicionais");
+                          setTimeout(() => {
+                            const field = document.getElementById("obs_pedido_textarea");
+                            if (field) {
+                              field.focus();
+                              (field as HTMLTextAreaElement).select?.();
+                            }
+                          }, 150);
+                        }
+                      }}
+                      className="w-full border border-border rounded px-2 py-1 text-sm"
+                    />
+                  </div>
                 </div>
               </div>
             );
