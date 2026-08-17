@@ -22,7 +22,7 @@ interface Props {
   onClose:       () => void;
 }
 
-type Tab = 'geral' | 'cabecalho' | 'sql' | 'links' | 'colunas';
+type Tab = 'geral' | 'formatacao' | 'sql' | 'links';
 
 // ── Constantes do Canvas ──────────────────────────────────
 // Área de trabalho: largura da faixa em mm = largura A4 menos margens ≈ 190mm
@@ -101,7 +101,7 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
 
   // Teclado: mover elemento selecionado com setas
   useEffect(() => {
-    if (activeTab !== 'colunas' || draft.tipoLayout !== 'custom') return;
+    if (activeTab !== 'formatacao' || draft.tipoLayout !== 'custom') return;
     const onKey = (e: KeyboardEvent) => {
       if (!selectedId) return;
       if (!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) return;
@@ -161,7 +161,7 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
     }));
     patch({ columns: cols });
     toast.success(`${cols.length} coluna(s) detectada(s).`);
-    setActiveTab('colunas');
+    setActiveTab('formatacao');
   }, [draft.query_sql]);
 
   // ── Links ──────────────────────────────────────────────────
@@ -187,11 +187,10 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
 
   const input = 'w-full border border-border rounded px-2 py-1 text-xs bg-card focus:ring-1 focus:ring-ring outline-none';
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: 'geral',     label: 'Geral',     icon: <Settings2 size={13} />   },
-    { key: 'cabecalho', label: 'Cabeçalho', icon: <PanelTop size={13} />    },
-    { key: 'sql',       label: 'SQL',       icon: <LayoutList size={13} />  },
-    { key: 'links',     label: 'Vínculos',  icon: <Link2 size={13} />       },
-    { key: 'colunas',   label: draft.tipoLayout === 'custom' ? 'Layout Custom.' : 'Colunas',  icon: <Table2 size={13} />      },
+    { key: 'geral',      label: 'Geral',      icon: <Settings2 size={13} />   },
+    { key: 'formatacao', label: 'Formatação', icon: <PanelTop size={13} />    },
+    { key: 'sql',        label: 'SQL',        icon: <LayoutList size={13} />  },
+    { key: 'links',      label: 'Vínculos',   icon: <Link2 size={13} />       },
   ];
 
   return (
@@ -229,7 +228,7 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
               {t.key === 'links' && draft.links.length > 0 &&
                 <span className="ml-1 bg-primary/10 text-primary rounded-full px-1.5 py-0 text-[10px] font-bold">{draft.links.length}</span>
               }
-              {t.key === 'colunas' && (
+              {t.key === 'formatacao' && (
                 draft.tipoLayout === 'custom'
                   ? (draft.customComponents?.length || 0) > 0 && <span className="ml-1 bg-emerald-100 text-emerald-700 rounded-full px-1.5 py-0 text-[10px] font-bold">{draft.customComponents?.length}</span>
                   : draft.columns.length > 0 && <span className="ml-1 bg-emerald-100 text-emerald-700 rounded-full px-1.5 py-0 text-[10px] font-bold">{draft.columns.length}</span>
@@ -345,9 +344,21 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
             </div>
           )}
 
-          {/* ── Aba Cabeçalho ─────────────────────────────────── */}
-          {activeTab === 'cabecalho' && (
-            <div className="space-y-5">
+          {/* ── Aba Formatação (Cabeçalho & Corpo) ───────────── */}
+          {activeTab === 'formatacao' && (
+            <div className="space-y-6">
+              {/* ── Seção 1: Cabeçalho do Sub-Relatório ────────── */}
+              <div className="border border-border rounded-xl p-4 bg-secondary/10 space-y-4">
+                <div className="flex items-center justify-between border-b border-border pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <PanelTop className="w-4 h-4 text-primary" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                      Formatação do Cabeçalho
+                    </h3>
+                  </div>
+                </div>
+
+<div className="space-y-5">
               <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-secondary/20">
                 <div>
                   <label className="text-xs font-bold text-foreground flex items-center gap-1.5 cursor-pointer">
@@ -583,137 +594,21 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
                 </>
               )}
             </div>
-          )}
-
-          {/* ── Aba SQL ───────────────────────────────────────── */}
-          {activeTab === 'sql' && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold">Query SQL do sub-relatório</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Use <code className="bg-muted rounded px-1">{'{variavel}'}</code> para referenciar parâmetros vinculados ao relatório pai.
-                  </p>
-                </div>
-                <button
-                  onClick={handleDetectCols}
-                  disabled={detecting}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded border border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 disabled:opacity-50"
-                >
-                  {detecting ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-                  Detectar Colunas
-                </button>
               </div>
 
-              <textarea
-                value={draft.query_sql}
-                onChange={e => patch({ query_sql: e.target.value })}
-                placeholder={`-- Exemplo de sub-relatório de pagamentos vinculado ao pedido pai:\nSELECT\n  fp.descricao AS forma_pagamento,\n  p.valor\nFROM PAGAMENTO p\nJOIN FORMA_PAGAMENTO fp ON fp.forma_pagamento_id = p.forma_pagamento_id\nWHERE p.pedido_id = {pedido_id}\nAND p.excluido = false`}
-                rows={14}
-                className="w-full border border-border rounded px-3 py-2 text-xs bg-card font-mono focus:ring-1 focus:ring-ring outline-none resize-none"
-                spellCheck={false}
-              />
-
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-[11px] text-blue-700 space-y-1">
-                <p className="font-semibold">💡 Dicas de SQL</p>
-                <ul className="list-disc list-inside space-y-0.5 text-blue-600">
-                  <li>Use <code className="bg-blue-100 rounded px-1">{'{campo_pai}'}</code> para parâmetros vinculados (configure na aba Vínculos)</li>
-                  <li>Filtre sempre por <code className="bg-blue-100 rounded px-1">excluido = false</code> se a tabela tiver exclusão lógica</li>
-                  <li>Após salvar o SQL, clique em <strong>Detectar Colunas</strong> para gerar automaticamente as colunas</li>
-                </ul>
-              </div>
-
-              <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3 text-[11px] text-emerald-700 space-y-1">
-                <p className="font-semibold">🔒 Variáveis de Sistema & Herança de Filtro</p>
-                <ul className="list-disc list-inside space-y-0.5 text-emerald-600">
-                  <li><code className="bg-emerald-100 rounded px-1">{'{sys_empresa_id}'}</code> — ID da empresa logada</li>
-                  <li><code className="bg-emerald-100 rounded px-1">{'{sys_matriz_id}'}</code> — ID da empresa matriz</li>
-                </ul>
-                <p className="mt-1 text-emerald-600 font-medium">
-                  ℹ️ Por padrão, o sub-relatório <strong>herda automaticamente a seleção de empresa/matriz do relatório principal</strong>.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* ── Aba Vínculos ──────────────────────────────────── */}
-          {activeTab === 'links' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold">Vínculos Pai → Filho</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Define como os valores do relatório principal são passados como parâmetros para o SQL do sub-relatório.
-                  </p>
-                </div>
-                <button onClick={addLink} className="flex items-center gap-1 px-3 py-1.5 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90">
-                  <Plus size={13} /> Adicionar Vínculo
-                </button>
-              </div>
-
-              {draft.links.length === 0 && (
-                <div className="text-center py-10 border-2 border-dashed border-border rounded-lg text-muted-foreground">
-                  <Link2 className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">Nenhum vínculo configurado</p>
-                  <p className="text-xs mt-1">O sub-relatório será executado sem parâmetros do pai</p>
-                  <button onClick={addLink} className="mt-3 text-xs text-primary hover:underline">+ Adicionar primeiro vínculo</button>
-                </div>
-              )}
-
-              {draft.links.map((link, i) => (
-                <div key={i} className="flex items-start gap-3 p-3 border border-border rounded-lg bg-secondary/20">
-                  <div className="flex-1 grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] font-semibold text-muted-foreground uppercase block mb-1">
-                        Campo do Pai
-                      </label>
-                      <select
-                        value={link.parentField}
-                        onChange={e => updateLink(i, { parentField: e.target.value })}
-                        className={input}
-                      >
-                        <option value="">— Selecione —</option>
-                        {parentColumns.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">Coluna do dataset principal</p>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-semibold text-muted-foreground uppercase block mb-1">
-                        Parâmetro no SQL Filho
-                      </label>
-                      <input
-                        className={input}
-                        value={link.childParam}
-                        onChange={e => updateLink(i, { childParam: e.target.value })}
-                        placeholder="pedido_id"
-                      />
-                      <p className="text-[10px] text-muted-foreground mt-0.5">Nome sem chaves — use <code>{'{' + (link.childParam || 'param') + '}'}</code> no SQL</p>
-                    </div>
+              {/* ── Seção 2: Corpo do Sub-Relatório ────────────── */}
+              <div className="border border-border rounded-xl p-4 bg-secondary/10 space-y-4">
+                <div className="flex items-center justify-between border-b border-border pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <Table2 className="w-4 h-4 text-primary" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                      {draft.tipoLayout === 'custom' ? 'Formatação do Corpo — Layout Customizado' : 'Formatação do Corpo — Grade de Colunas'}
+                    </h3>
                   </div>
-                  <button onClick={() => removeLink(i)} title="Remover vínculo" className="mt-5 p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10">
-                    <Trash2 size={14} />
-                  </button>
                 </div>
-              ))}
 
-              {draft.links.length > 0 && (
-                <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-[11px] text-amber-700">
-                  <p className="font-semibold mb-1">📌 Como funciona</p>
-                  <p>Para cada linha do relatório pai, o motor injeta o valor do <strong>Campo do Pai</strong> como parâmetro no SQL filho. Exemplo:</p>
-                  {draft.links[0] && (
-                    <code className="block mt-1.5 bg-amber-100 rounded p-2 font-mono text-amber-800">
-                      {`-- Para cada linha onde ${draft.links[0].parentField} = 42:`}<br />
-                      {`-- ${'{' + draft.links[0].childParam + '}'} é substituído por 42`}
-                    </code>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── Aba Colunas ───────────────────────────────────── */}
-          {activeTab === 'colunas' && draft.tipoLayout !== 'custom' && (
-            <div className="space-y-3">
+                {draft.tipoLayout !== 'custom' ? (
+                  <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold">Colunas do Sub-Relatório</p>
@@ -794,10 +689,8 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
                 </div>
               )}
             </div>
-          )}
-
-          {activeTab === 'colunas' && draft.tipoLayout === 'custom' && (
-            <div className="space-y-4">
+                ) : (
+                  <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold">Layout Customizado (Elementos Livres)</p>
@@ -1204,6 +1097,134 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
                   );
                 })}
               </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Aba SQL ───────────────────────────────────────── */}
+{activeTab === 'sql' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold">Query SQL do sub-relatório</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Use <code className="bg-muted rounded px-1">{'{variavel}'}</code> para referenciar parâmetros vinculados ao relatório pai.
+                  </p>
+                </div>
+                <button
+                  onClick={handleDetectCols}
+                  disabled={detecting}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded border border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 disabled:opacity-50"
+                >
+                  {detecting ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                  Detectar Colunas
+                </button>
+              </div>
+
+              <textarea
+                value={draft.query_sql}
+                onChange={e => patch({ query_sql: e.target.value })}
+                placeholder={`-- Exemplo de sub-relatório de pagamentos vinculado ao pedido pai:\nSELECT\n  fp.descricao AS forma_pagamento,\n  p.valor\nFROM PAGAMENTO p\nJOIN FORMA_PAGAMENTO fp ON fp.forma_pagamento_id = p.forma_pagamento_id\nWHERE p.pedido_id = {pedido_id}\nAND p.excluido = false`}
+                rows={14}
+                className="w-full border border-border rounded px-3 py-2 text-xs bg-card font-mono focus:ring-1 focus:ring-ring outline-none resize-none"
+                spellCheck={false}
+              />
+
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-[11px] text-blue-700 space-y-1">
+                <p className="font-semibold">💡 Dicas de SQL</p>
+                <ul className="list-disc list-inside space-y-0.5 text-blue-600">
+                  <li>Use <code className="bg-blue-100 rounded px-1">{'{campo_pai}'}</code> para parâmetros vinculados (configure na aba Vínculos)</li>
+                  <li>Filtre sempre por <code className="bg-blue-100 rounded px-1">excluido = false</code> se a tabela tiver exclusão lógica</li>
+                  <li>Após salvar o SQL, clique em <strong>Detectar Colunas</strong> para gerar automaticamente as colunas</li>
+                </ul>
+              </div>
+
+              <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3 text-[11px] text-emerald-700 space-y-1">
+                <p className="font-semibold">🔒 Variáveis de Sistema & Herança de Filtro</p>
+                <ul className="list-disc list-inside space-y-0.5 text-emerald-600">
+                  <li><code className="bg-emerald-100 rounded px-1">{'{sys_empresa_id}'}</code> — ID da empresa logada</li>
+                  <li><code className="bg-emerald-100 rounded px-1">{'{sys_matriz_id}'}</code> — ID da empresa matriz</li>
+                </ul>
+                <p className="mt-1 text-emerald-600 font-medium">
+                  ℹ️ Por padrão, o sub-relatório <strong>herda automaticamente a seleção de empresa/matriz do relatório principal</strong>.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Aba Vínculos ──────────────────────────────────── */}
+{activeTab === 'links' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold">Vínculos Pai → Filho</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Define como os valores do relatório principal são passados como parâmetros para o SQL do sub-relatório.
+                  </p>
+                </div>
+                <button onClick={addLink} className="flex items-center gap-1 px-3 py-1.5 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90">
+                  <Plus size={13} /> Adicionar Vínculo
+                </button>
+              </div>
+
+              {draft.links.length === 0 && (
+                <div className="text-center py-10 border-2 border-dashed border-border rounded-lg text-muted-foreground">
+                  <Link2 className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">Nenhum vínculo configurado</p>
+                  <p className="text-xs mt-1">O sub-relatório será executado sem parâmetros do pai</p>
+                  <button onClick={addLink} className="mt-3 text-xs text-primary hover:underline">+ Adicionar primeiro vínculo</button>
+                </div>
+              )}
+
+              {draft.links.map((link, i) => (
+                <div key={i} className="flex items-start gap-3 p-3 border border-border rounded-lg bg-secondary/20">
+                  <div className="flex-1 grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-semibold text-muted-foreground uppercase block mb-1">
+                        Campo do Pai
+                      </label>
+                      <select
+                        value={link.parentField}
+                        onChange={e => updateLink(i, { parentField: e.target.value })}
+                        className={input}
+                      >
+                        <option value="">— Selecione —</option>
+                        {parentColumns.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Coluna do dataset principal</p>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-muted-foreground uppercase block mb-1">
+                        Parâmetro no SQL Filho
+                      </label>
+                      <input
+                        className={input}
+                        value={link.childParam}
+                        onChange={e => updateLink(i, { childParam: e.target.value })}
+                        placeholder="pedido_id"
+                      />
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Nome sem chaves — use <code>{'{' + (link.childParam || 'param') + '}'}</code> no SQL</p>
+                    </div>
+                  </div>
+                  <button onClick={() => removeLink(i)} title="Remover vínculo" className="mt-5 p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+
+              {draft.links.length > 0 && (
+                <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-[11px] text-amber-700">
+                  <p className="font-semibold mb-1">📌 Como funciona</p>
+                  <p>Para cada linha do relatório pai, o motor injeta o valor do <strong>Campo do Pai</strong> como parâmetro no SQL filho. Exemplo:</p>
+                  {draft.links[0] && (
+                    <code className="block mt-1.5 bg-amber-100 rounded p-2 font-mono text-amber-800">
+                      {`-- Para cada linha onde ${draft.links[0].parentField} = 42:`}<br />
+                      {`-- ${'{' + draft.links[0].childParam + '}'} é substituído por 42`}
+                    </code>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
