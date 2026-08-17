@@ -1097,7 +1097,7 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
                   );
                 })}
               </div>
-                )}
+
               </div>
             </div>
           )}
