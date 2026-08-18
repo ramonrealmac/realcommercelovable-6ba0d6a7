@@ -21,13 +21,17 @@ import { Plus, Trash2, Pencil, Play, PenTool, HelpCircle, FileUp, Download, Uplo
 import { useRef } from 'react';
 import { MENU_CONFIG, getLeafItems } from '@/config/menuConfig';
 
-const RpbDesigner = lazy(() => import('../designer/RpbDesigner'));
+import RpbDesigner from '../designer/RpbDesigner';
 
-// ── Remove prefixos de schema do SQL (dbo., public., banco.dbo., etc.) ──
-const cleanSqlPrefixes = (sql: string): string =>
-  sql
+// ── Remove prefixos de schema do SQL e converte parâmetros Jasper ($P{x} → {x}) ──
+const cleanSqlPrefixes = (sql: string): string => {
+  if (!sql) return '';
+  return sql
     .replace(/\b\w+\.\w+\.(\w+)\b/g, '$1')           // banco.dbo.tabela → tabela
-    .replace(/\b(?:dbo|public|\w+schema)\.(\w+)\b/gi, '$1'); // dbo.tabela → tabela
+    .replace(/\b(?:dbo|public|\w+schema)\.(\w+)\b/gi, '$1') // dbo.tabela → tabela
+    .replace(/\$P\{([^}]+)\}/g, '{$1}')               // Jasper $P{param} → {param}
+    .replace(/\$F\{([^}]+)\}/g, '{$1}');              // Jasper $F{field} → {field}
+};
 
 // ── Colunas da grid ──────────────────────────────────────────
 const GRID_COLS: IGridColumn[] = [
@@ -144,61 +148,136 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
 
   // ── Exportar .rpb ─────────────────────────────────────────
   const handleExportRpb = async (rel: IRpbRelatorio) => {
-    const filtrosExp = await rpbListFiltros(rel.rpb_relatorio_id);
-    const payload = {
-      __rpb_version: '1.0',
-      nome: rel.nome,
-      descricao: rel.descricao,
-      categoria: rel.categoria,
-      nm_form: rel.nm_form || '',
-      query_sql: rel.query_sql,
-      layout_json: rel.layout_json,
-      filtros: filtrosExp.map(({ rpb_filtro_id, rpb_relatorio_id, empresa_id, excluido, ...f }) => f),
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `${rel.nome.replace(/[^\w]/g, '_')}.rpb`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success(`Relatório exportado: ${a.download}`);
+    try {
+      const filtrosExp = await rpbListFiltros(rel.rpb_relatorio_id);
+      
+      let cleanLayout = rel.layout_json;
+      if (typeof cleanLayout === 'string') {
+        try { cleanLayout = JSON.parse(cleanLayout); } catch (_) { cleanLayout = null; }
+      }
+
+      const payload = {
+        __rpb_version: '1.0',
+        nome: rel.nome,
+        descricao: rel.descricao || '',
+        categoria: rel.categoria || '',
+        nm_form: rel.nm_form || '',
+        query_sql: rel.query_sql || '',
+        layout_json: cleanLayout,
+        filtros: filtrosExp.map(({ rpb_filtro_id, rpb_relatorio_id, empresa_id, excluido, ...f }) => f),
+      };
+
+      const jsonStr = JSON.stringify(payload, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      
+      const sanitizedName = (rel.nome || 'relatorio')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        .replace(/_+/g, '_');
+      
+      a.download = `${sanitizedName}.rpb`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Relatório exportado: ${a.download}`);
+    } catch (err: any) {
+      toast.error('Erro ao exportar relatório: ' + (err?.message || err));
+    }
   };
 
-  // ── Importar .rpb ─────────────────────────────────────────
+  // ── Helper para importar um item individual ───────────────
+  const processSingleImportItem = async (item: any): Promise<{ nome: string; filtrosCount: number }> => {
+    let targetNome = item.nome || 'Relatório Importado';
+    let targetDesc = item.descricao || '';
+    let targetCat  = item.categoria || 'Importados';
+    let targetForm = item.nm_form || '';
+    let targetSql  = item.query_sql || '';
+    let targetLayout = item.layout_json;
+
+    // Suporte caso o JSON seja um layout avulso
+    if (!item.query_sql && item.bands && item.pageSize) {
+      targetLayout = item;
+      targetNome = 'Layout Importado';
+    }
+
+    if (typeof targetLayout === 'string') {
+      try { targetLayout = JSON.parse(targetLayout); } catch (_) {}
+    }
+
+    const { data: novo, error } = await rpbInsertRelatorio({
+      empresa_id:  XEmpresaId,
+      nome:        targetNome + ' (importado)',
+      descricao:   targetDesc,
+      categoria:   targetCat,
+      nm_form:     targetForm,
+      query_sql:   targetSql,
+      layout_json: targetLayout || null,
+      rpb_conexao_id: null,
+    });
+
+    if (error || !novo) throw new Error(error?.message || `Falha ao criar relatório "${targetNome}".`);
+
+    let filtrosRestaurados = 0;
+    if (Array.isArray(item.filtros) && item.filtros.length > 0) {
+      for (const f of item.filtros) {
+        const { rpb_filtro_id, rpb_relatorio_id, empresa_id, excluido, ...cleanF } = f;
+        await rpbInsertFiltro({ ...cleanF, rpb_relatorio_id: novo.rpb_relatorio_id, empresa_id: XEmpresaId });
+        filtrosRestaurados++;
+      }
+    }
+
+    return { nome: targetNome, filtrosCount: filtrosRestaurados };
+  };
+
+  // ── Importar .rpb / .json ─────────────────────────────────
   const handleRpbImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = async (ev) => {
       try {
-        const payload = JSON.parse(ev.target?.result as string);
-        if (!payload.__rpb_version) throw new Error('Arquivo .rpb inválido ou corrompido.');
+        const text = ev.target?.result as string;
+        let payload: any;
+        try {
+          payload = JSON.parse(text);
+        } catch (_) {
+          throw new Error('O arquivo selecionado não é um JSON/.rpb válido.');
+        }
 
-        // Cria o relatório
-        const { data: novo, error } = await rpbInsertRelatorio({
-          empresa_id:  XEmpresaId,
-          nome:        payload.nome + ' (importado)',
-          descricao:   payload.descricao || '',
-          categoria:   payload.categoria || '',
-          nm_form:     payload.nm_form || '',
-          query_sql:   payload.query_sql || '',
-          layout_json: payload.layout_json || null,
-          rpb_conexao_id: null,
-        });
-        if (error || !novo) throw new Error(error?.message || 'Falha ao criar relatório.');
+        const itemsToImport: any[] = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.relatorios)
+          ? payload.relatorios
+          : Array.isArray(payload?.data)
+          ? payload.data
+          : [payload];
 
-        // Recria os filtros
-        if (Array.isArray(payload.filtros) && payload.filtros.length > 0) {
-          for (const f of payload.filtros) {
-            await rpbInsertFiltro({ ...f, rpb_relatorio_id: novo.rpb_relatorio_id, empresa_id: XEmpresaId });
-          }
+        if (itemsToImport.length === 0) {
+          throw new Error('Nenhum relatório encontrado no arquivo.');
+        }
+
+        let importedCount = 0;
+        let totalFiltros = 0;
+        const names: string[] = [];
+
+        for (const item of itemsToImport) {
+          const res = await processSingleImportItem(item);
+          importedCount++;
+          totalFiltros += res.filtrosCount;
+          names.push(res.nome);
         }
 
         await load();
-        toast.success(`"${payload.nome}" importado com sucesso! ${payload.filtros?.length || 0} filtro(s) restaurado(s).`);
+        if (importedCount === 1) {
+          toast.success(`"${names[0]}" importado com sucesso! ${totalFiltros} filtro(s) restaurado(s).`);
+        } else {
+          toast.success(`${importedCount} relatórios importados com sucesso! (${totalFiltros} filtros no total).`);
+        }
       } catch (err: any) {
-        toast.error('Erro ao importar .rpb: ' + err.message);
+        toast.error('Erro ao importar: ' + err.message);
       } finally {
         if (rpbInputRef.current) rpbInputRef.current.value = '';
       }

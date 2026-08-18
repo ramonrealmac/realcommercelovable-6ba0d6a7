@@ -67,8 +67,8 @@ const SistemaVersoesForm = lazy(() => import("@/components/forms/config/SistemaV
 const BackupForm = lazy(() => import("@/components/forms/config/BackupForm"));
 const NfeInutilizacaoForm = lazy(() => import("@/components/forms/nfe/NfeInutilizacaoForm"));
 const RbReportExecutor = lazy(() => import("@/rbuilder/components/rb_ReportExecutor"));
-const RpbManager = lazy(() => import("@/report-builder").then(m => ({ default: m.RpbManager })));
-const RpbStandaloneExecutor = lazy(() => import("@/report-builder/components/executor/RpbStandaloneExecutor"));
+import RpbManager from "@/report-builder/components/manager/RpbManager";
+import RpbStandaloneExecutor from "@/report-builder/components/executor/RpbStandaloneExecutor";
 
 // --- PDV Lazy Imports ---
 const PdvTela = lazy(() => import("@/components/forms/pdv/PdvTela"));

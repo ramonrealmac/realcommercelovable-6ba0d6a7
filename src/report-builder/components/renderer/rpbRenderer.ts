@@ -303,11 +303,16 @@ function renderComponent(
         });
       };
 
-      const titleTextInterpolated = interpolateText(c.titleText || '');
-      const subtitleTextInterpolated = interpolateText(c.headerSubtitle || '');
-
-      let headerSectionHtml = '';
-      if (c.showTitleBar) {
+      // ── 1. Banda de Cabeçalho do Sub-Relatório ─────────────────
+      let headerHtml = '';
+      if (c.headerComponents && c.headerComponents.length > 0) {
+        const hHeight = c.headerHeight || 15;
+        headerHtml = `<div style="position:relative;width:100%;height:${hHeight}mm;overflow:hidden;box-sizing:border-box;">
+          ${c.headerComponents.map(hComp => renderComponent(hComp, subRows, row, extraVars, undefined, undefined)).join('')}
+        </div>`;
+      } else if (c.showTitleBar) {
+        const titleTextInterpolated = interpolateText(c.titleText || '');
+        const subtitleTextInterpolated = interpolateText(c.headerSubtitle || '');
         const bg = hs.bgColor !== 'transparent' ? hs.bgColor : '#f1f5f9';
         const fg = hs.color || '#1e293b';
         const fontSz = hs.fontSize || 9;
@@ -329,7 +334,7 @@ function renderComponent(
           ? `<div style="font-size:${Math.max(7.5, fontSz - 1.5)}pt;font-weight:normal;opacity:0.85;margin-top:2px;">${subtitleTextInterpolated}</div>`
           : '';
 
-        headerSectionHtml = `<div style="font-size:${fontSz}pt;font-weight:${fontW};font-style:${fontSt};text-align:${textAlg};color:${fg};background-color:${bg};${borderStyle}padding:${pad}px ${pad + 2}px;margin-bottom:2px;border-radius:2px;box-sizing:border-box;">
+        headerHtml = `<div style="font-size:${fontSz}pt;font-weight:${fontW};font-style:${fontSt};text-align:${textAlg};color:${fg};background-color:${bg};${borderStyle}padding:${pad}px ${pad + 2}px;margin-bottom:2px;border-radius:2px;box-sizing:border-box;">
           <div>
             <span>${titleTextInterpolated || ''}</span>
             ${badgeHtml}
@@ -338,12 +343,20 @@ function renderComponent(
         </div>`;
       }
 
-      if (!subRows.length) {
-        return `${headerSectionHtml}<div style="font-size:${fontSize}pt;color:#888;padding:2px 4px;font-style:italic;">${c.emptyMessage || 'Nenhum registro'}</div>`;
+      // ── 2. Banda de Rodapé do Sub-Relatório ───────────────────
+      let footerHtml = '';
+      if (c.footerComponents && c.footerComponents.length > 0) {
+        const fHeight = c.footerHeight || 15;
+        footerHtml = `<div style="position:relative;width:100%;height:${fHeight}mm;overflow:hidden;box-sizing:border-box;">
+          ${c.footerComponents.map(fComp => renderComponent(fComp, subRows, row, extraVars, undefined, undefined)).join('')}
+        </div>`;
       }
 
-      // Renderização Customizada (Livre)
-      if (c.tipoLayout === 'custom') {
+      // ── 3. Corpo/Detalhe do Sub-Relatório ──────────────────────
+      let bodyHtml = '';
+      if (!subRows.length) {
+        bodyHtml = `<div style="font-size:${fontSize}pt;color:#888;padding:2px 4px;font-style:italic;">${c.emptyMessage || 'Nenhum registro'}</div>`;
+      } else if (c.tipoLayout === 'custom') {
         const customComps = c.customComponents || [];
         const customHtml = subRows.map((subRow, i) => {
           const bg = i % 2 === 1 && c.altRowBg && c.altRowBg !== 'transparent'
@@ -352,38 +365,43 @@ function renderComponent(
             ${customComps.map(comp => renderComponent(comp, subRows, subRow, extraVars, undefined, undefined)).join('')}
           </div>`;
         }).join('');
-        return `${headerSectionHtml}<div style="width:100%;display:flex;flex-direction:column;">${customHtml}</div>`;
+        bodyHtml = `<div style="width:100%;display:flex;flex-direction:column;">${customHtml}</div>`;
+      } else {
+        // Renderização Tabela (padrão)
+        const colgroup = cols.map(col => `<col style="width:${col.w}mm" />`).join('');
+        const thead = c.showHeader && cols.length ? `
+          <thead><tr>${cols.map(col => {
+            const colHs = { ...hs };
+            return `<th style="padding:${colHs.padding}px;text-align:${col.align};
+              font-size:${(col as any).fontSize || colHs.fontSize || fontSize}pt;
+              font-weight:bold;
+              background-color:${colHs.bgColor !== 'transparent' ? colHs.bgColor : '#f1f5f9'};
+              border:1px solid ${colHs.borderColor || '#ddd'};box-sizing:border-box;">${col.label}</th>`;
+          }).join('')}</tr></thead>` : '';
+
+        const tbody = `<tbody>${subRows.map((subRow, i) => {
+          const bg = i % 2 === 1 ? 'background-color:#f8fafc;' : '';
+          return `<tr style="${bg}">${cols.map(col => {
+            const colColor = (col as any).color || rs.color || '#1a1a1a';
+            return `<td style="padding:${rs.padding}px;text-align:${col.align};
+              font-size:${(col as any).fontSize || fontSize}pt;
+              color:${colColor};
+              border:1px solid #e5e7eb;box-sizing:border-box;">
+              ${formatValue(getFieldValue(subRow, col.field), col.format, { decimals: (col as any).decimals, dateFormat: (col as any).dateFormat as RpbDateFormat })}
+            </td>`;
+          }).join('')}</tr>`;
+        }).join('')}</tbody>`;
+
+        bodyHtml = `<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:${fontSize}pt;">
+          <colgroup>${colgroup}</colgroup>
+          ${thead}${tbody}
+        </table>`;
       }
 
-      // Renderização Tabela (padrão)
-      const colgroup = cols.map(col => `<col style="width:${col.w}mm" />`).join('');
-      const thead = c.showHeader && cols.length ? `
-        <thead><tr>${cols.map(col => {
-          const colHs = { ...hs };
-          return `<th style="padding:${colHs.padding}px;text-align:${col.align};
-            font-size:${(col as any).fontSize || colHs.fontSize || fontSize}pt;
-            font-weight:bold;
-            background-color:${colHs.bgColor !== 'transparent' ? colHs.bgColor : '#f1f5f9'};
-            border:1px solid ${colHs.borderColor || '#ddd'};box-sizing:border-box;">${col.label}</th>`;
-        }).join('')}</tr></thead>` : '';
+      const subreportHtml = `${headerHtml}${bodyHtml}${footerHtml}`;
 
-      const tbody = `<tbody>${subRows.map((subRow, i) => {
-        const bg = i % 2 === 1 ? 'background-color:#f8fafc;' : '';
-        return `<tr style="${bg}">${cols.map(col => {
-          const colColor = (col as any).color || rs.color || '#1a1a1a';
-          return `<td style="padding:${rs.padding}px;text-align:${col.align};
-            font-size:${(col as any).fontSize || fontSize}pt;
-            color:${colColor};
-            border:1px solid #e5e7eb;box-sizing:border-box;">
-            ${formatValue(getFieldValue(subRow, col.field), col.format, { decimals: (col as any).decimals, dateFormat: (col as any).dateFormat as RpbDateFormat })}
-          </td>`;
-        }).join('')}</tr>`;
-      }).join('')}</tbody>`;
-
-      return `${headerSectionHtml}<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:${fontSize}pt;">
-        <colgroup>${colgroup}</colgroup>
-        ${thead}${tbody}
-      </table>`;
+      // Posicionamento absoluto do sub-relatório dentro da banda onde foi inserido
+      return `<div style="${pos} height:auto; overflow:visible;">${subreportHtml}</div>`;
     }
 
     default: return '';
@@ -406,16 +424,14 @@ function renderBand(
     ? band.components.filter(c => c.type !== 'table')
     : band.components;
 
-  // Usa height fixo (não min-height) para que position:absolute funcione corretamente
-  // rpb-band-row: classe usada pelo CSS de impressão para remover overflow:hidden
-  return `<div class="rpb-band-row" style="position:relative;width:100%;height:${band.height}mm;${bg}overflow:hidden;page-break-inside:avoid;break-inside:avoid;">
+  return `<div class="rpb-band-row" style="position:relative;width:100%;min-height:${band.height}mm;${bg}overflow:visible;page-break-inside:avoid;break-inside:avoid;">
     ${comps.map(c => renderComponent(c, data, row, extraVars, undefined, subDataMap)).join('')}
   </div>`;
 }
 
 // ── Renderiza banda de detalhe (tabela + texto por linha) ─────
 // Tabelas são exibidas uma vez para todos os dados.
-// Componentes text/outros são renderizados por linha individualmente.
+// Componentes text/outros/subreports são renderizados por linha individualmente respeitando coordenadas.
 function renderDetailBand(
   band: RpbBand, 
   data: any[], 
@@ -427,7 +443,6 @@ function renderDetailBand(
 
   const tableComps = band.components.filter(c => c.type === 'table') as RpbTableComp[];
   const otherComps = band.components.filter(c => c.type !== 'table');
-  const subComps   = band.components.filter(c => c.type === 'subreport') as RpbSubreportComp[];
 
   let html = '';
 
@@ -436,29 +451,16 @@ function renderDetailBand(
     html += tableComps.map(comp => renderComponent(comp, data, {}, extraVars, altBgColor, subDataMap)).join('');
   }
 
-  // Renderiza componentes text/outros + subreports uma vez por linha de dados
-  if (otherComps.length > 0 || subComps.length > 0) {
+  // Renderiza componentes posicionados (text, line, box, image, totalizer, subreport) uma vez por linha de dados
+  if (otherComps.length > 0) {
     data.forEach((row, i) => {
       const isAlt = i % 2 === 1;
       const rowColor = isAlt ? (altBgColor || 'transparent') : (band.bgColor || 'transparent');
       const bgStyle = (rowColor && rowColor !== 'transparent') ? `background-color:${rowColor} !important;` : '';
 
-      // Componentes posicionados (text etc.) ficam num div com height fixo
-      // rpb-detail-row: classe usada pelo CSS de impressão para remover overflow:hidden e evitar corte
-      const nonSubComps = otherComps.filter(c => c.type !== 'subreport');
-      const positionedHtml = nonSubComps.length > 0
-        ? `<div class="rpb-detail-row" style="position:relative;width:100%;height:${band.height}mm;${bgStyle}overflow:hidden;page-break-inside:avoid;break-inside:avoid;">
-             ${nonSubComps.map(c => renderComponent(c, data, row, extraVars, altBgColor, subDataMap)).join('')}
-           </div>`
-        : '';
-
-      // Sub-relatórios ficam em divs de fluxo (sem height fixo) abaixo
-      const subHtml = subComps.map(c => {
-        const rendered = renderComponent(c, data, row, extraVars, altBgColor, subDataMap);
-        return `<div style="width:100%;padding:2px 0;">${rendered}</div>`;
-      }).join('');
-
-      html += positionedHtml + subHtml;
+      html += `<div class="rpb-detail-row" style="position:relative;width:100%;min-height:${band.height}mm;${bgStyle}overflow:visible;page-break-inside:avoid;break-inside:avoid;">
+        ${otherComps.map(c => renderComponent(c, data, row, extraVars, altBgColor, subDataMap)).join('')}
+      </div>`;
     });
   }
 

@@ -136,6 +136,11 @@ const CompItem: React.FC<{
     );
   } else if (comp.type === 'subreport') {
     const src = comp as any;
+    const hasHeaderBand = src.headerComponents && src.headerComponents.length > 0;
+    const hasFooterBand = src.footerComponents && src.footerComponents.length > 0;
+    const headerStatus = hasHeaderBand ? 'Cab: Banda ✓' : src.showTitleBar ? 'Cab: Título ✓' : 'Cab: —';
+    const footerStatus = hasFooterBand ? 'Rod: Banda ✓' : 'Rod: —';
+
     inner = (
       <div style={{
         width: '100%', height: '100%',
@@ -155,11 +160,11 @@ const CompItem: React.FC<{
         <span style={{ fontSize: '8px', color: src.query_sql ? '#16a34a' : '#d97706' }}>
           {src.query_sql ? `SQL ✓ · ${src.columns?.length || 0} col.` : '⚠ Configure o SQL'}
         </span>
-        {src.links?.length > 0 && (
-          <span style={{ fontSize: '8px', color: '#6366f1' }}>
-            🔗 {src.links.length} vínculo(s)
-          </span>
-        )}
+        <div style={{ display: 'flex', gap: '4px', fontSize: '7.5px', color: '#4f46e5' }}>
+          <span>{headerStatus}</span>
+          <span>·</span>
+          <span>{footerStatus}</span>
+        </div>
       </div>
     );
   }

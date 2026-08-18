@@ -139,7 +139,11 @@ export interface RpbSubreportComp extends RpbBaseComp {
   emptyMessage:  string;             // mensagem quando não há linhas
   tipoLayout?:   'tabela' | 'custom';
   rowHeight?:    number;             // em mm para layout customizado
-  customComponents?: RpbComponent[]; // elementos do layout customizado
+  customComponents?: RpbComponent[]; // elementos do layout customizado de detalhe
+  headerHeight?:     number;           // altura da banda de cabeçalho do sub-relatório (mm)
+  headerComponents?: RpbComponent[]; // elementos livres da banda de cabeçalho do sub-relatório
+  footerHeight?:     number;           // altura da banda de rodapé do sub-relatório (mm)
+  footerComponents?: RpbComponent[]; // elementos livres da banda de rodapé do sub-relatório (ex: totalizadores)
   filtroEmpresaMode?: RpbFiltroEmpresaMode; // filtro automático por empresa/matriz
 }
 

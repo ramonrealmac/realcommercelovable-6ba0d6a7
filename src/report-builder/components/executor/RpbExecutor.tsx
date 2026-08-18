@@ -33,28 +33,58 @@ const DESTINOS: { key: Destino; icon: React.ReactNode; label: string; desc: stri
 
 // ── Exportações ───────────────────────────────────────────────
 function exportCsv(data: any[], title: string) {
-  if (!data.length) return;
-  const keys = Object.keys(data[0]);
+  if (!data || !data.length) return;
+  const sample = data[0];
+  const keys = Object.keys(sample).filter(k => !k.startsWith('__subData_'));
+  
+  const formatVal = (v: any) => {
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'object') return JSON.stringify(v);
+    return String(v).replace(/"/g, '""');
+  };
+
   const header = keys.map(k => `"${k}"`).join(';');
-  const rows = data.map(r => keys.map(k => `"${String(r[k] ?? '')}"`).join(';'));
+  const rows = data.map(r => keys.map(k => `"${formatVal(r[k])}"`).join(';'));
   const csv = '\uFEFF' + [header, ...rows].join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = `${title}.csv`; a.click();
+  const a = document.createElement('a'); a.href = url;
+  
+  const sanitizedTitle = (title || 'relatorio')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]/g, '_');
+    
+  a.download = `${sanitizedTitle}.csv`; a.click();
   URL.revokeObjectURL(url);
 }
 
 function exportTxt(data: any[], title: string) {
-  if (!data.length) return;
-  const keys = Object.keys(data[0]);
-  const widths = keys.map(k => Math.max(k.length, ...data.map(r => String(r[k] ?? '').length)));
+  if (!data || !data.length) return;
+  const sample = data[0];
+  const keys = Object.keys(sample).filter(k => !k.startsWith('__subData_'));
+  
+  const formatVal = (v: any) => {
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'object') return JSON.stringify(v);
+    return String(v);
+  };
+
+  const widths = keys.map(k => Math.max(k.length, ...data.map(r => formatVal(r[k]).length)));
   const line   = widths.map(w => '-'.repeat(w)).join('-+-');
   const header = keys.map((k, i) => k.padEnd(widths[i])).join(' | ');
-  const rows   = data.map(r => keys.map((k, i) => String(r[k] ?? '').padEnd(widths[i])).join(' | '));
+  const rows   = data.map(r => keys.map((k, i) => formatVal(r[k]).padEnd(widths[i])).join(' | '));
   const txt = [title, '', header, line, ...rows, '', `Total: ${data.length} registro(s)`].join('\n');
   const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = `${title}.txt`; a.click();
+  const a = document.createElement('a'); a.href = url;
+  
+  const sanitizedTitle = (title || 'relatorio')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]/g, '_');
+    
+  a.download = `${sanitizedTitle}.txt`; a.click();
   URL.revokeObjectURL(url);
 }
 
