@@ -290,7 +290,7 @@ const DevolucaoNfeEntradaForm: React.FC<DevolucaoNfeEntradaFormProps> = ({ initi
         cadastro_id: XSelecionada.cadastro_id,
         deposito_id: XDepositoId,
         origem_inclusao: "M",
-        st_nf: "A",
+        st_nf: "P",
         tp_nf: 1,           // saída
         fin_nfe: 4,         // devolução
         tp_emis: 1,

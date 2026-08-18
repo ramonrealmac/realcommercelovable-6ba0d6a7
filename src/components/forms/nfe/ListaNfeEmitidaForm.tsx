@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAppContext } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -19,7 +19,9 @@ import {
   MoreHorizontal,
   FileX,
   CheckSquare,
-  ArrowUpFromLine
+  ArrowUpFromLine,
+  Filter,
+  RotateCcw
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -43,10 +45,27 @@ interface IProps {
 
 const db = supabase as any;
 
-
+const formatarDataEmissao = (dt: any) => {
+  if (!dt) return "";
+  const s = String(dt);
+  if (s.includes("T")) {
+    const datePart = s.split("T")[0];
+    const [y, m, d] = datePart.split("-");
+    if (y && m && d) return `${d}/${m}/${y}`;
+  }
+  if (s.includes("-")) {
+    const [y, m, d] = s.split("-");
+    if (y && m && d) return `${d}/${m}/${y.substring(0, 4)}`;
+  }
+  return new Date(dt).toLocaleDateString("pt-BR", { timeZone: "UTC" });
+};
 
 const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
   const { XEmpresaId, XEmpresas, openTab } = useAppContext();
+
+  const dtIniRef = useRef<HTMLInputElement>(null);
+  const dtFimRef = useRef<HTMLInputElement>(null);
+  const filtrarBtnRef = useRef<HTMLButtonElement>(null);
 
   const XGridCols: IGridColumn[] = [
     { 
@@ -104,7 +123,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
         );
       }
     },
-    { key: "dt_emissao", label: "Emissão", width: "85px", render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
+    { key: "dt_emissao", label: "Emissão", width: "85px", render: r => formatarDataEmissao(r.dt_emissao) },
     { key: "nm_destinatario", label: "Destinatário", width: "240px" },
     { key: "cnpj_destinatario", label: "CNPJ/CPF", width: "130px", render: r => formatCPFCNPJ(r.cnpj_destinatario) },
     { key: "vl_total_nf", label: "Valor", width: "100px", align: "right", render: r => Number(r.vl_total_nf || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) },
@@ -141,9 +160,10 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
 
   const [XData, setXData] = useState<any[]>([]);
   const [XLoading, setXLoading] = useState(false);
-  const [XDtIni, setXDtIni] = useState(new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().substring(0, 10));
-  const [XDtFim, setXDtFim] = useState(new Date().toISOString().substring(0, 10));
+  const [XDtIni, setXDtIni] = useState("");
+  const [XDtFim, setXDtFim] = useState("");
   const [XSearchFilters, setXSearchFilters] = useState<Record<string, string>>({});
+  const [XHasFiltered, setXHasFiltered] = useState(false);
   
   // Log Dialog State
   const [XLogDialogOpen, setXLogDialogOpen] = useState(false);
@@ -228,7 +248,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
         query = query.lte("dt_emissao", XDtFim);
       }
 
-      const { data, error } = await query.order("created_at", { ascending: false });
+      const { data, error } = await query.order("nr_nota", { ascending: false, nullsFirst: false });
 
       if (error) throw error;
       
@@ -265,6 +285,13 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
         };
       });
 
+      // Ordenar estritamente decrescente pela coluna Nota (nr_nota)
+      mappedData.sort((a: any, b: any) => {
+        const numA = Number(a.nr_nota) || Number(a.nfe_cabecalho_id) || 0;
+        const numB = Number(b.nr_nota) || Number(b.nfe_cabecalho_id) || 0;
+        return numB - numA;
+      });
+
       setXData(mappedData);
     } catch (e: any) {
       toast.error("Erro ao carregar notas: " + e.message);
@@ -273,15 +300,33 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
     }
   };
 
+  const handleFiltrar = async () => {
+    if (XDtIni && XDtFim && XDtIni > XDtFim) {
+      toast.error("A data de início não pode ser maior que a data de fim.");
+      return;
+    }
+    setXHasFiltered(true);
+    await loadData();
+  };
+
+  const handleLimparFiltros = () => {
+    setXDtIni("");
+    setXDtFim("");
+    setXSearchFilters({});
+    setXData([]);
+    setXSelectedIds(new Set());
+    setXHasFiltered(false);
+  };
+
   useEffect(() => {
-    loadData();
-    // Realtime subscription para atualizar status automaticamente
+    if (!XHasFiltered) return;
+    // Realtime subscription para atualizar status automaticamente após filtrar
     const ch = (supabase as any).channel('nfe_changes')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fiscal_nfe_cabecalho' }, () => loadData())
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fiscal_evento' }, () => loadData())
       .subscribe();
     return () => { try { (supabase as any).removeChannel(ch); } catch {} };
-  }, [XEmpresaId, XDtIni, XDtFim]);
+  }, [XEmpresaId, XHasFiltered]);
 
   const XFilteredData = useGridFilter(XData, XSearchFilters, XGridCols);
 
@@ -607,23 +652,60 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
             <div className="flex items-center gap-2 bg-secondary/30 p-1 rounded-lg border border-border mr-4">
                <div className="flex flex-col px-2">
                 <span className="text-[9px] text-muted-foreground uppercase font-bold">Início</span>
-                <input type="date" max="2099-12-31" value={XDtIni} onChange={e => setXDtIni(e.target.value)} className="bg-transparent border-none text-xs p-0 focus:ring-0 w-32" />
+                <input 
+                  ref={dtIniRef}
+                  type="date" 
+                  max="2099-12-31" 
+                  value={XDtIni} 
+                  onChange={e => setXDtIni(e.target.value)} 
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      dtFimRef.current?.focus();
+                    }
+                  }}
+                  className="bg-transparent border-none text-xs p-0 focus:ring-0 w-32" 
+                />
               </div>
               <div className="h-6 w-px bg-border" />
               <div className="flex flex-col px-2">
                 <span className="text-[9px] text-muted-foreground uppercase font-bold">Fim</span>
-                <input type="date" max="2099-12-31" value={XDtFim} onChange={e => setXDtFim(e.target.value)} className="bg-transparent border-none text-xs p-0 focus:ring-0 w-32" />
+                <input 
+                  ref={dtFimRef}
+                  type="date" 
+                  max="2099-12-31" 
+                  value={XDtFim} 
+                  onChange={e => setXDtFim(e.target.value)} 
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      filtrarBtnRef.current?.focus();
+                    }
+                  }}
+                  className="bg-transparent border-none text-xs p-0 focus:ring-0 w-32" 
+                />
               </div>
             </div>
             
             <button 
-              onClick={loadData}
+              ref={filtrarBtnRef}
+              onClick={handleFiltrar}
               disabled={XLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-secondary/50 rounded-md hover:bg-secondary transition-colors"
-              title="Atualizar dados"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors mr-2 shadow-sm"
+              title="Filtrar dados"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${XLoading ? "animate-spin" : ""}`} />
-              ATUALIZAR
+              <Filter className={`w-3.5 h-3.5 ${XLoading ? "animate-spin" : ""}`} />
+              FILTRAR
+            </button>
+
+            <button 
+              onClick={handleLimparFiltros}
+              disabled={XLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-secondary/80 text-secondary-foreground rounded-md hover:bg-secondary transition-colors mr-4"
+              title="Limpar filtros e grid"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              LIMPAR FILTROS
             </button>
 
             <RpbFormReportsButton nmForm="nfe-emitidas" />
