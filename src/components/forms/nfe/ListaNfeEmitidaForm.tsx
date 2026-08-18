@@ -114,11 +114,11 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
       width: "105px", 
       render: r => {
         const labels: any = {
-          "E": "Autorizada",
+          "A": "Autorizada",
+          "E": "Enviada",
+          "P": "Pendente",
           "C": "Cancelada",
           "D": "Denegada",
-          "P": "Pendente",
-          "A": "Aguardando",
           "R": "Rejeitada",
           "1": "Autorizada",
           "2": "Denegada"
@@ -126,11 +126,11 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
         const label = labels[r.st_nf] || r.st_nf || "Pendente";
         return (
           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-            r.st_nf === "E" || r.st_nf === "1" ? "bg-green-100 text-green-700" :
+            r.st_nf === "A" || r.st_nf === "1" ? "bg-green-100 text-green-700" :
+            r.st_nf === "E" ? "bg-blue-100 text-blue-700" :
             r.st_nf === "C" ? "bg-red-100 text-red-700" :
             r.st_nf === "D" || r.st_nf === "2" ? "bg-orange-100 text-orange-700" : 
-            r.st_nf === "R" ? "bg-red-100 text-red-700" :
-            r.st_nf === "A" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"
+            r.st_nf === "R" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"
           }`}>
             {label}
           </span>
@@ -283,12 +283,12 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
     return () => { try { (supabase as any).removeChannel(ch); } catch {} };
   }, [XEmpresaId, XDtIni, XDtFim]);
 
-  const XFilteredData = useGridFilter(XData, XSearchFilters);
+  const XFilteredData = useGridFilter(XData, XSearchFilters, XGridCols);
 
 
   const handleTransmitir = async (row: any) => {
     if (!XEmpresaId) return;
-    const statusConclusivos = ["E", "C", "D", "1", "2"];
+    const statusConclusivos = ["A", "C", "D", "1", "2"];
     if (statusConclusivos.includes(String(row.st_nf))) {
       toast.error(`Esta nota está em status "${row.st_nf}" e não pode ser retransmitida.`);
       return;
@@ -319,7 +319,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
   };
 
   const handleImprimir = async (row: any) => {
-    if (!["E", "1"].includes(String(row.st_nf))) {
+    if (!["A", "1"].includes(String(row.st_nf))) {
       toast.error("Somente notas autorizadas podem ser impressas.");
       return;
     }
@@ -434,7 +434,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
       toast.error("Esta nota já está cancelada.");
       return;
     }
-    if (!["E", "1"].includes(String(row.st_nf))) {
+    if (!["A", "1"].includes(String(row.st_nf))) {
       toast.error("Apenas notas autorizadas podem ser canceladas.");
       return;
     }
@@ -529,19 +529,19 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onClick={() => handleTransmitir(r)} disabled={["E", "C", "D", "1", "2"].includes(String(r.st_nf))}>
+                      <DropdownMenuItem onClick={() => handleTransmitir(r)} disabled={["A", "C", "D", "1", "2"].includes(String(r.st_nf))}>
                         <Send className="w-4 h-4 mr-2 text-blue-500" /> Transmitir SEFAZ
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleValidar(r)} disabled={["E", "C", "D", "1", "2"].includes(String(r.st_nf))}>
+                      <DropdownMenuItem onClick={() => handleValidar(r)} disabled={["A", "C", "D", "1", "2"].includes(String(r.st_nf))}>
                         <CheckSquare className="w-4 h-4 mr-2 text-emerald-500" /> Validar XML (Schema)
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleImprimir(r)} disabled={!["E", "1"].includes(String(r.st_nf))}>
+                      <DropdownMenuItem onClick={() => handleImprimir(r)} disabled={!["A", "1"].includes(String(r.st_nf))}>
                         <Printer className="w-4 h-4 mr-2 text-gray-500" /> Imprimir DANFE
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleDownloadXml(r)} disabled={!r.xml_nf}>
                         <Download className="w-4 h-4 mr-2 text-blue-400" /> Baixar XML
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleOpenEmailDialog(r)} disabled={!["E", "1"].includes(String(r.st_nf))}>
+                      <DropdownMenuItem onClick={() => handleOpenEmailDialog(r)} disabled={!["A", "1"].includes(String(r.st_nf))}>
                         <Mail className="w-4 h-4 mr-2 text-indigo-400" /> Enviar por E-mail
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => { setXLogNfeId(r.nfe_cabecalho_id); setXLogDialogOpen(true); }}>
@@ -557,7 +557,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
                           component: "devolucao-nfe-saida",
                           params: { nfe_cabecalho_id: r.nfe_cabecalho_id },
                         })}
-                        disabled={String(r.tp_nf) !== "1" || !["E", "1"].includes(String(r.st_nf))}
+                        disabled={String(r.tp_nf) !== "1" || !["A", "1"].includes(String(r.st_nf))}
                       >
                         <ArrowUpFromLine className="w-4 h-4 mr-2 text-orange-500" /> Devolver Nota
                       </DropdownMenuItem>

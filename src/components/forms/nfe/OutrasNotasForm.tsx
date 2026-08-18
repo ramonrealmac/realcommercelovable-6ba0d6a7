@@ -34,11 +34,12 @@ const XGridCols: IGridColumn[] = [
     render: r => {
       const label = NFE_ST_LABELS[r.st_nf as TNfeSt] || r.st_nf;
       const colors: any = {
-        "E": "bg-green-100 text-green-700",
+        "A": "bg-green-100 text-green-700",
+        "E": "bg-blue-100 text-blue-700",
+        "P": "bg-gray-100 text-gray-600",
         "C": "bg-red-100 text-red-700",
         "D": "bg-orange-100 text-orange-700",
         "R": "bg-red-100 text-red-700",
-        "A": "bg-blue-100 text-blue-700",
         "1": "bg-green-100 text-green-700",
         "2": "bg-orange-100 text-orange-700",
       };
@@ -55,7 +56,7 @@ const XGridCols: IGridColumn[] = [
 
 const XDefault: Partial<INfeCabecalho> = {
   origem_inclusao: "M",
-  st_nf: "A",
+  st_nf: "P",
   tp_nf: 1, // 1 = saída
   fin_nfe: 1,
   tp_emis: 1,
@@ -196,7 +197,7 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
         XOrderBy: "nfe_cabecalho_id",
         XSoftDelete: false,
         XApplyFilter: (q) => q, 
-        XCanEdit: (rec: any) => !["E", "C", "D", "1", "2"].includes(String(rec.st_nf)),
+        XCanEdit: (rec: any) => !["A", "C", "D", "1", "2"].includes(String(rec.st_nf)),
         XOnAfterLoad: (rows: any[]) => {
           const ids = [...new Set(rows.map(r => r.cadastro_id).filter(Boolean))] as number[];
           if (ids.length) ensureClienteInfo(ids);
@@ -217,8 +218,8 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
       XToolbarExtras={({ currentRecord, isEditing, refresh }) => {
         if (!currentRecord || isEditing) return null;
         const st = String(currentRecord.st_nf || "");
-        const podeEnviar = ["A", "R", "3", "P"].includes(st) && Number(currentRecord.tp_nf) === 1;
-        const foiEmitida = ["E", "1"].includes(st);
+        const podeEnviar = ["P", "E", "R", "3"].includes(st) && Number(currentRecord.tp_nf) === 1;
+        const foiEmitida = ["A", "1"].includes(st);
 
         if (foiEmitida) {
           return (

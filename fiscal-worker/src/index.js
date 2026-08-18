@@ -408,6 +408,56 @@ const processarEvento = async (evento) => {
             await supabase.from('fiscal_evento').update({ payload }).eq('id', evento.id);
         }
 
+        const isCce = ['CCE', 'ENVIAR_CCE'].includes(evento.comando);
+        if (isCce) {
+            const nfeId = evento.nfe_cabecalho_id || payload.nfe_cabecalho_id;
+            const { data: cab, error: cabErr } = await supabase
+                .from('fiscal_nfe_cabecalho')
+                .select('chave_nfe, modelo, serie, empresa_id, nr_nota')
+                .eq('nfe_cabecalho_id', nfeId)
+                .maybeSingle();
+
+            if (cabErr || !cab) throw new Error(`NF-e/NFC-e #${nfeId} não localizada para emissão da CC-e.`);
+            if (!cab.chave_nfe) throw new Error(`NF-e nº ${cab.nr_nota || nfeId} não possui chave de acesso salva para emissão da CC-e.`);
+
+            const UF_IBGE_MAP = {
+                'AC': '12', 'AL': '27', 'AP': '16', 'AM': '13', 'BA': '29', 'CE': '23', 'DF': '53', 'ES': '32', 'GO': '52',
+                'MA': '21', 'MT': '51', 'MS': '50', 'MG': '31', 'PA': '15', 'PB': '25', 'PR': '41', 'PE': '26', 'PI': '22',
+                'RJ': '33', 'RN': '24', 'RS': '43', 'RO': '11', 'RR': '14', 'SC': '42', 'SP': '35', 'SE': '28', 'TO': '17'
+            };
+
+            const now = new Date();
+            const d = String(now.getDate()).padStart(2, '0');
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const y = now.getFullYear();
+            const h = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            const dhEvento = `${d}/${m}/${y} ${h}:${min}:${s}`;
+
+            const cleanCnpj = String(empresaRaw?.cnpj || '').replace(/\D/g, '');
+            const companyUfAbbr = payload.config?.uf || 'SP';
+            const cOrgaoCode = UF_IBGE_MAP[companyUfAbbr] || '35';
+
+            const seq = payload.nr_sequencial || 1;
+            const xCorrecao = payload.x_correcao || '';
+
+            const iniContent = `[EVENTO]\r\n` +
+                `idLote=1\r\n` +
+                `[EVENTO001]\r\n` +
+                `chNFe=${cab.chave_nfe}\r\n` +
+                `cOrgao=${cOrgaoCode}\r\n` +
+                `CNPJ=${cleanCnpj}\r\n` +
+                `dhEvento=${dhEvento}\r\n` +
+                `tpEvento=110110\r\n` +
+                `nSeqEvento=${seq}\r\n` +
+                `xCorrecao=${xCorrecao}`;
+
+            payload.dados = iniContent;
+            logger.info(`[CC-e] INI de Carta de Correção gerado para a chave ${cab.chave_nfe}:\n${iniContent}`);
+            await supabase.from('fiscal_evento').update({ payload }).eq('id', evento.id);
+        }
+
         // 3. Chama a biblioteca nativa passando o JSON payload atualizado
         const resultado = await executarComandoFiscal(evento.comando, payload);
 
@@ -478,7 +528,7 @@ const processarEvento = async (evento) => {
                 const updateNfe = {
                     c_stat: resultado.c_stat ? parseInt(String(resultado.c_stat)) : null,
                     x_motivo: resultado.x_motivo || (resultado.sucesso ? 'Autorizado' : 'Rejeitado'),
-                    st_nf: resultado.sucesso ? 'E' : (isDenegada ? 'D' : 'R'), // E=Emitido, D=Denegado, R=Rejeitado
+                    st_nf: resultado.sucesso ? 'A' : (isDenegada ? 'D' : 'R'), // A=Autorizada, D=Denegado, R=Rejeitado
                     updated_at: new Date().toISOString()
                 };
 
@@ -563,6 +613,35 @@ const processarEvento = async (evento) => {
                 };
                 await supabase.from('fiscal_mdf_manifesto').update(updateMdfe).eq('mdf_manifesto_id', evento.mdf_manifesto_id);
                 logger.info(`MDF-e #${evento.mdf_manifesto_id} atualizado (Encerramento) - Status: E`);
+            } else if (isCce && payload.nfe_cce_id) {
+                const updateCce = {
+                    st_evento: resultado.sucesso ? 'E' : 'F',
+                    nr_protocolo: resultado.nr_protocolo || null,
+                    c_stat: resultado.c_stat ? parseInt(String(resultado.c_stat)) : null,
+                    x_motivo: resultado.x_motivo || null,
+                    xml_retorno: resultado.xml_retorno || null,
+                    updated_at: new Date().toISOString()
+                };
+                const { error: errCce } = await supabase.from('fiscal_nfe_cce').update(updateCce).eq('nfe_cce_id', payload.nfe_cce_id);
+                if (errCce) {
+                    logger.error(`[CC-e] Erro ao atualizar fiscal_nfe_cce #${payload.nfe_cce_id}: ${errCce.message}`);
+                } else {
+                    logger.info(`[CC-e] Registro fiscal_nfe_cce #${payload.nfe_cce_id} atualizado com st_evento=${updateCce.st_evento}`);
+                }
+            } else if (isInutilizacao && payload.inutilizacao_id) {
+                const updateInut = {
+                    st_inutilizacao: resultado.sucesso ? 'CONCLUIDO' : 'ERRO',
+                    c_stat: resultado.c_stat ? parseInt(String(resultado.c_stat)) : null,
+                    x_motivo: resultado.x_motivo || null,
+                    nr_protocolo: resultado.nr_protocolo || null,
+                    updated_at: new Date().toISOString()
+                };
+                const { error: errInut } = await supabase.from('fiscal_nfe_inutilizacao').update(updateInut).eq('inutilizacao_id', payload.inutilizacao_id);
+                if (errInut) {
+                    logger.error(`[Inutilização] Erro ao atualizar fiscal_nfe_inutilizacao #${payload.inutilizacao_id}: ${errInut.message}`);
+                } else {
+                    logger.info(`[Inutilização] Registro fiscal_nfe_inutilizacao #${payload.inutilizacao_id} atualizado com st_inutilizacao=${updateInut.st_inutilizacao}`);
+                }
             }
         }
 
@@ -616,7 +695,7 @@ const processarEvento = async (evento) => {
 
         // 6. Salva o resultado final (JSON) e marca status final do evento.
         const statusFinal = resultado.sucesso
-            ? (isInutilizacao ? 'CONCLUIDO' : 'EMITIDO')
+            ? (isInutilizacao || isCce ? 'CONCLUIDO' : 'EMITIDO')
             : 'ERRO';
         const { error: errEv } = await supabase
             .from('fiscal_evento')

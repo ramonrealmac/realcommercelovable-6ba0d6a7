@@ -100,6 +100,7 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
 }) => {
   const clientInputRef = useRef<HTMLInputElement>(null);
   const vendedorSelectRef = useRef<HTMLSelectElement>(null);
+  const dtEmissaoInputRef = useRef<HTMLInputElement>(null);
   const tabelaPrecoSelectRef = useRef<HTMLSelectElement>(null);
 
   // Auto-foco no campo do cliente ao inserir ou alterar
@@ -270,7 +271,20 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
         </div>
         <div className="col-span-3">
           <label className="text-xs text-muted-foreground">Vendedor <span className="text-destructive">*</span></label>
-          <select ref={vendedorSelectRef} disabled={ro} value={record.funcionario_id ?? ""} onChange={e => setField("funcionario_id", e.target.value ? Number(e.target.value) : null as any)} className="w-full border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none">
+          <select 
+            ref={vendedorSelectRef} 
+            disabled={ro} 
+            value={record.funcionario_id ?? ""} 
+            onChange={e => setField("funcionario_id", e.target.value ? Number(e.target.value) : null as any)} 
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.stopPropagation();
+                dtEmissaoInputRef.current?.focus();
+              }
+            }}
+            className="w-full border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
+          >
             <option value="">--</option>
             {vendedores.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
           </select>
@@ -300,7 +314,7 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
       <div className="grid grid-cols-12 gap-3">
         <div className="col-span-2">
           <label className="text-xs text-muted-foreground">Dt. Emissão <span className="text-destructive">*</span></label>
-          <input type="date" tabIndex={-1} disabled={ro} value={(record.dt_emissao || "").toString().substring(0, 10)} onChange={e => setField("dt_emissao", e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary/20 focus:outline-none" />
+          <input ref={dtEmissaoInputRef} type="date" disabled={ro} value={(record.dt_emissao || "").toString().substring(0, 10)} onChange={e => setField("dt_emissao", e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary/20 focus:outline-none" />
         </div>
         <div className="col-span-2">
           <label className="text-xs text-muted-foreground">Entrega <span className="text-destructive">*</span></label>
@@ -410,6 +424,8 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
                       setInnerTab("itens");
                     }
                   }
+                } else {
+                  setInnerTab("itens");
                 }
               }
             }}

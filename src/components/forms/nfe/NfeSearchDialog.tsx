@@ -14,6 +14,8 @@ export interface INfeRow {
   vl_total_nf: number;
   cadastro_id: number;
   st_nf: string;
+  chave_nfe?: string;
+  modelo?: string;
   razao_social?: string;
 }
 
@@ -31,15 +33,19 @@ export async function buscarNfePorNumero(
   if (!t) return null;
 
   let query = db.from("fiscal_nfe_cabecalho")
-    .select("nfe_cabecalho_id, nr_nota, serie, dt_emissao, vl_total_nf, cadastro_id, st_nf")
+    .select("nfe_cabecalho_id, nr_nota, serie, dt_emissao, vl_total_nf, cadastro_id, st_nf, chave_nfe, modelo")
     .eq("empresa_id", empresaId)
+    .eq("tp_nf", 1) // Somente notas emitidas pela própria empresa
+    .in("st_nf", ["A", "1"]) // Somente autorizadas
+    .neq("chave_nfe", "")
+    .not("chave_nfe", "is", null)
+    .neq("excluido", true)
     .limit(5);
 
   if (/^\d+$/.test(t)) {
     query = query.eq("nr_nota", t);
   } else {
-    // Busca por chave ou outro campo se necessário
-    return null;
+    query = query.ilike("chave_nfe", `%${t}%`);
   }
 
   const { data } = await query;
@@ -61,13 +67,20 @@ const NfeSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
   const [XTermo, setXTermo] = useState("");
   const [XRows, setXRows] = useState<INfeRow[]>([]);
   const [XLoading, setXLoading] = useState(false);
+  const [XSelectedId, setXSelectedId] = useState<number | null>(null);
   const [XClienteCache, setXClienteCache] = useState<Record<number, string>>({});
 
   const buscar = useCallback(async (termo: string) => {
     setXLoading(true);
+    setXSelectedId(null);
     let query = db.from("fiscal_nfe_cabecalho")
-      .select("nfe_cabecalho_id, nr_nota, serie, dt_emissao, vl_total_nf, cadastro_id, st_nf")
+      .select("nfe_cabecalho_id, nr_nota, serie, dt_emissao, vl_total_nf, cadastro_id, st_nf, chave_nfe, modelo")
       .eq("empresa_id", XEmpresaId)
+      .eq("tp_nf", 1) // Somente notas emitidas pela própria empresa (Saída)
+      .in("st_nf", ["A", "1"]) // Somente NF-e / NFC-e autorizadas pela SEFAZ
+      .neq("chave_nfe", "")
+      .not("chave_nfe", "is", null)
+      .neq("excluido", true)
       .order("nfe_cabecalho_id", { ascending: false })
       .limit(50);
 
@@ -75,6 +88,8 @@ const NfeSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
     if (t) {
       if (/^\d+$/.test(t)) {
         query = query.eq("nr_nota", t);
+      } else {
+        query = query.ilike("chave_nfe", `%${t}%`);
       }
     }
 
@@ -113,6 +128,12 @@ const NfeSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
     return () => clearTimeout(t);
   }, [XTermo, open, buscar]);
 
+  const handleConfirmSelect = (r: INfeRow) => {
+    const razaoSocial = r.razao_social || XClienteCache[r.cadastro_id] || `#${r.cadastro_id}`;
+    onSelect({ ...r, razao_social: razaoSocial });
+    onClose();
+  };
+
   const fmtNum = (v: number) => (v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
@@ -121,7 +142,7 @@ const NfeSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Search className="w-5 h-5 text-primary" />
-            Pesquisar NF-e / NFC-e
+            Pesquisar NF-e / NFC-e Emitidas Autorizadas
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
@@ -131,7 +152,7 @@ const NfeSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
               autoFocus
               value={XTermo}
               onChange={e => setXTermo(e.target.value)}
-              placeholder="Digite o número da nota fiscal..."
+              placeholder="Digite o número da nota fiscal ou chave de acesso..."
               className="w-full pl-9 pr-9 py-2 border border-border rounded-lg text-sm bg-card focus:ring-1 focus:ring-primary outline-none"
             />
             {XTermo && (
@@ -150,30 +171,35 @@ const NfeSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
               <div className="col-span-2 text-right">Valor</div>
             </div>
             <div className="max-h-[400px] overflow-y-auto">
-              {XLoading && <div className="p-10 text-center text-sm text-muted-foreground animate-pulse">Carregando documentos...</div>}
+              {XLoading && <div className="p-10 text-center text-sm text-muted-foreground animate-pulse">Carregando documentos autorizados...</div>}
               {!XLoading && XRows.length === 0 && (
-                <div className="p-10 text-center text-sm text-muted-foreground italic">Nenhuma nota fiscal localizada.</div>
+                <div className="p-10 text-center text-sm text-muted-foreground italic">Nenhuma nota fiscal emitida e autorizada localizada.</div>
               )}
               {!XLoading && XRows.map((r, idx) => {
-                const zebra = idx % 2 === 1 ? "bg-muted/20" : "bg-card";
+                const isSelected = XSelectedId === r.nfe_cabecalho_id;
+                const zebra = isSelected 
+                  ? "bg-primary/15 border-primary/40 font-semibold" 
+                  : (idx % 2 === 1 ? "bg-muted/20" : "bg-card");
+                const razaoSocial = r.razao_social || XClienteCache[r.cadastro_id] || `#${r.cadastro_id}`;
                 return (
                   <div
                     key={r.nfe_cabecalho_id}
-                    onClick={() => { onSelect({ ...r, razao_social: XClienteCache[r.cadastro_id] }); onClose(); }}
-                    className={`grid grid-cols-12 gap-2 px-4 py-3 text-sm border-b border-border last:border-0 cursor-pointer transition-colors hover:bg-primary/5 ${zebra}`}
+                    onClick={() => setXSelectedId(r.nfe_cabecalho_id)}
+                    onDoubleClick={() => handleConfirmSelect(r)}
+                    className={`grid grid-cols-12 gap-2 px-4 py-3 text-sm border-b border-border last:border-0 cursor-pointer transition-colors hover:bg-primary/10 ${zebra}`}
                   >
                     <div className="col-span-2 font-bold flex items-center gap-2">
-                      <FileText className="w-3.5 h-3.5 text-muted-foreground" />
+                      <FileText className={`w-3.5 h-3.5 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
                       {r.nr_nota}
                     </div>
                     <div className="col-span-1 text-center font-mono text-xs">{r.serie}</div>
                     <div className="col-span-2 text-center text-xs text-muted-foreground flex items-center justify-center gap-1">
                       <Calendar className="w-3 h-3" />
-                      {new Date(r.dt_emissao).toLocaleDateString("pt-BR")}
+                      {r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "-"}
                     </div>
                     <div className="col-span-5 truncate text-xs flex items-center gap-1">
                       <User className="w-3 h-3 text-muted-foreground" />
-                      {XClienteCache[r.cadastro_id] || `#${r.cadastro_id}`}
+                      {razaoSocial}
                     </div>
                     <div className="col-span-2 text-right font-mono font-bold text-primary flex items-center justify-end gap-1">
                       <DollarSign className="w-3 h-3" />
@@ -184,8 +210,8 @@ const NfeSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
               })}
             </div>
           </div>
-          <p className="text-[10px] text-muted-foreground italic px-1">
-            * Clique em uma linha para selecionar o documento fiscal.
+          <p className="text-[10px] text-muted-foreground italic px-1 pt-1">
+            * Dê <strong>duplo clique</strong> em um item para selecionar a NF-e / NFC-e autorizada.
           </p>
         </div>
       </DialogContent>

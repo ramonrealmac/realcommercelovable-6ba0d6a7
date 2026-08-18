@@ -49,6 +49,7 @@ const ConsultaTitulosPagarForm = lazy(() => import("@/components/forms/financeir
 const GerarContasPagarForm = lazy(() => import("@/components/forms/financeiro/GerarContasPagarForm"));
 const BaixaPorFornecedorForm = lazy(() => import("@/components/forms/financeiro/BaixaPorFornecedorForm"));
 const LiberacaoPedidosForm = lazy(() => import("@/components/forms/financeiro/LiberacaoPedidosForm"));
+const MovimentacaoFinanceiraForm = lazy(() => import("@/components/forms/financeiro/MovimentacaoFinanceiraForm"));
 const MontagemRotaForm = lazy(() => import("@/components/forms/entrega/MontagemRotaForm"));
 const RotasMontadasForm = lazy(() => import("@/components/forms/entrega/RotasMontadasForm"));
 const FiscalConfigForm = lazy(() => import("@/components/forms/fiscal/FiscalConfigForm"));
@@ -138,6 +139,8 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "gerar-contas-pagar": return <GerarContasPagarForm initialId={params?.financeiro_id} />;
       case "baixa-por-fornecedor": return <BaixaPorFornecedorForm />;
       case "liberacao-pedidos": return <LiberacaoPedidosForm />;
+      case "mov-financeiras":
+      case "movimentacao-financeira": return <MovimentacaoFinanceiraForm />;
       case "montagem-rota": return <MontagemRotaForm />;
       case "rotas-montadas": return <RotasMontadasForm />;
       case "fiscal-config": return <FiscalConfigForm />;

@@ -60,7 +60,7 @@ const FaturarPedidoDialog: React.FC<IProps> = ({ open, funcionarioId, empresaId,
         .from("fiscal_nfe_cabecalho")
         .select("movimento_id, modelo, st_nf")
         .eq("empresa_id", empresaId)
-        .in("st_nf", ["E", "1", "P", "A"])
+        .in("st_nf", ["A", "1", "P", "E"])
         .not("movimento_id", "is", null);
 
       const movimentosComNota = new Set<number>(

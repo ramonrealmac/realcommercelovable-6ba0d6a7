@@ -493,9 +493,9 @@ export const fiscalEmissaoService = {
 
       if (evErr) throw new Error("Falha ao criar evento de transmissão: " + evErr.message);
 
-      // Reseta status da NF-e para pendente e limpa chave_nfe para forçar nova chave de acesso na SEFAZ
+      // Reseta status da NF-e para Enviada (aguardando transmissão) e limpa chave_nfe para forçar nova chave de acesso na SEFAZ
       await db.from("fiscal_nfe_cabecalho")
-        .update({ st_nf: "A", chave_nfe: "" })
+        .update({ st_nf: "E", chave_nfe: "" })
         .eq("nfe_cabecalho_id", nfeCabecalhoId);
 
       return { success: true, nfe_cabecalho_id: nfeCabecalhoId, fiscal_evento_id: evento?.id };
