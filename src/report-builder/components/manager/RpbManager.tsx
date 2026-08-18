@@ -339,6 +339,7 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
       nome: rel.nome, descricao: rel.descricao,
       categoria: rel.categoria, nm_form: rel.nm_form || '',
       query_sql: rel.query_sql, rpb_conexao_id: rel.rpb_conexao_id,
+      layout_json: rel.layout_json,
     });
     setMode('edit');
     setView('dados');
@@ -347,7 +348,8 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
   const handleSave = async () => {
     if (!form.nome?.trim()) { toast.error('Nome é obrigatório.'); return; }
     setSaving(true);
-    const payload = { empresa_id: XEmpresaId, ...form };
+    const layoutToKeep = form.layout_json || selected?.layout_json || null;
+    const payload = { empresa_id: XEmpresaId, ...form, layout_json: layoutToKeep };
     if (mode === 'insert') {
       const { data, error } = await rpbInsertRelatorio(payload);
       if (error) { toast.error('Erro: ' + error.message); setSaving(false); return; }
@@ -399,6 +401,7 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
       toast.success('Layout salvo!');
       // Atualiza localmente para manter sincronia (useEffect do designer depende de layout_json)
       setSelected(prev => prev ? { ...prev, layout_json: layout } : prev);
+      setForm(prev => ({ ...prev, layout_json: layout }));
       load();
     }
   };
@@ -709,10 +712,14 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
                 </label>
                 {isEditing ? (
                   <select
-                    value={(form.layout_json as any)?.filtroEmpresaMode || 'nenhum'}
+                    value={(form.layout_json as any)?.filtroEmpresaMode || (selected?.layout_json as any)?.filtroEmpresaMode || 'nenhum'}
                     onChange={e => {
-                      const currentL = form.layout_json || emptyLayout();
-                      setF('layout_json', { ...currentL, filtroEmpresaMode: e.target.value as any });
+                      const currentL = form.layout_json || selected?.layout_json || emptyLayout();
+                      const updatedLayout = { ...currentL, filtroEmpresaMode: e.target.value as any };
+                      setF('layout_json', updatedLayout);
+                      if (selected) {
+                        setSelected({ ...selected, layout_json: updatedLayout });
+                      }
                     }}
                     className={sel}
                   >
