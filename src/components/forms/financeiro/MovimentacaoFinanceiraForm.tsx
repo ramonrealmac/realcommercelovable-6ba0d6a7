@@ -7,14 +7,14 @@ import {
   Search, 
   Filter as FilterIcon, 
   RefreshCw, 
-  Calendar, 
   Wallet, 
   AlignLeft, 
   Eye, 
   FileText,
   DollarSign,
-  Building2,
-  Receipt
+  Receipt,
+  Lock,
+  History
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppContext } from "@/contexts/AppContext";
@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import RpbFormReportsButton from "@/report-builder/components/executor/RpbFormReportsButton";
+import DataGrid, { type IGridColumn } from "@/components/grid/DataGrid";
 
 const db = supabase as any;
 
@@ -37,14 +38,15 @@ interface IFinanceiroConsolidadoRow {
   valor: number;
   historico: string | null;
   usuario_id: string | null;
-  origem: string; // 'R' | 'P' | 'M'
+  origem: string; // 'R' | 'P' | 'M' | 'C'
   id_da_origem: number | null;
   created_at: string;
   updated_at: string;
-  // Joined fields
+  // Joined fields & Extrato Conta Corrente
   portador_nome?: string;
   plano_conta_nome?: string;
   plano_conta_codigo?: string;
+  saldo_acumulado?: number;
 }
 
 interface IPortadorOpt {
@@ -91,10 +93,23 @@ const fmtDateTime = (v: string | null | undefined) => {
   return `${day}/${month}/${year} ${hours}:${minutes}`;
 };
 
+// Retorna o dia imediatamente anterior a uma data no formato YYYY-MM-DD
+const getPreviousDay = (isoDateStr: string) => {
+  if (!isoDateStr) return "";
+  const [year, month, day] = isoDateStr.split("-").map(Number);
+  if (!year || !month || !day) return "";
+  const d = new Date(year, month - 1, day);
+  d.setDate(d.getDate() - 1);
+  const prevYear = d.getFullYear();
+  const prevMonth = String(d.getMonth() + 1).padStart(2, "0");
+  const prevDay = String(d.getDate()).padStart(2, "0");
+  return `${prevYear}-${prevMonth}-${prevDay}`;
+};
+
 const MovimentacaoFinanceiraForm: React.FC = () => {
   const { XEmpresaId } = useAppContext();
 
-  // Refs para controle de navegação por teclado (ENTER e Alt+ArrowDown)
+  // Refs para controle explícito de foco e navegação (ENTER / Alt+ArrowDown)
   const dtInicioRef = useRef<HTMLInputElement>(null);
   const dtFimRef = useRef<HTMLInputElement>(null);
   const origemSelectRef = useRef<HTMLSelectElement>(null);
@@ -102,7 +117,15 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
   const planoContaSelectRef = useRef<HTMLSelectElement>(null);
   const btnFiltrarRef = useRef<HTMLButtonElement>(null);
 
-  // Função auxiliar para resolver o ID da empresa ativa
+  // Foco inicial automático em Data Início ao abrir a tela
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      dtInicioRef.current?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Função para resolver a empresa ativa dinamicamente
   const getActiveEmpresaId = useCallback(() => {
     if (XEmpresaId && XEmpresaId > 0) return XEmpresaId;
     try {
@@ -112,35 +135,24 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
     return 5;
   }, [XEmpresaId]);
 
-  // Datas padrão: Primeiro dia do mês atual até hoje
-  const getDefaultDates = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const isoFirst = `${year}-${month}-01`;
-    const day = String(now.getDate()).padStart(2, "0");
-    const isoToday = `${year}-${month}-${day}`;
-    return { dtIni: isoFirst, dtFim: isoToday };
-  };
-
-  const { dtIni: defaultDtIni, dtFim: defaultDtFim } = getDefaultDates();
-
-  // Estados de Filtros
-  const [XDnInicio, setXDnInicio] = useState<string>(defaultDtIni);
-  const [XDnFim, setXDnFim] = useState<string>(defaultDtFim);
-  const [XOrigemFilter, setXOrigemFilter] = useState<string>("TODOS");
-  const [XPortadorFilter, setXPortadorFilter] = useState<string>("TODOS");
-  const [XPlanoContaFilter, setXPlanoContaFilter] = useState<string>("TODOS");
+  // Estados de Filtros - Inicia limpo com campos e combos em branco
+  const [XDnInicio, setXDnInicio] = useState<string>("");
+  const [XDnFim, setXDnFim] = useState<string>("");
+  const [XOrigemFilter, setXOrigemFilter] = useState<string>("");
+  const [XPortadorFilter, setXPortadorFilter] = useState<string>("");
+  const [XPlanoContaFilter, setXPlanoContaFilter] = useState<string>("");
   const [XBuscaText, setXBuscaText] = useState<string>("");
 
   // Listas auxiliares para combos
   const [XPortadores, setXPortadores] = useState<IPortadorOpt[]>([]);
   const [XPlanosConta, setXPlanosConta] = useState<IPlanoContaOpt[]>([]);
 
-  // Estado de Dados
+  // Estado de Dados, Saldo Anterior e Pesquisa
   const [XRows, setXRows] = useState<IFinanceiroConsolidadoRow[]>([]);
+  const [XSaldoAnterior, setXSaldoAnterior] = useState<number>(0);
+  const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
   const [XLoading, setXLoading] = useState<boolean>(false);
-  const [XHasSearched, setXHasSearched] = useState<boolean>(false);
+  const [XHasSearched, setXHasSearched] = useState<boolean>(false); // A tela abre limpa; só popula ao filtrar
 
   // Modal de Detalhes
   const [XDetailModal, setXDetailModal] = useState<{
@@ -148,7 +160,7 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
     row: IFinanceiroConsolidadoRow | null;
   }>({ open: false, row: null });
 
-  // Carrega opções dos combos (Portadores e Planos de Contas)
+  // Carrega opções dos combos dinamicamente (Portadores e Planos de Contas)
   useEffect(() => {
     async function loadAuxData() {
       const empId = getActiveEmpresaId();
@@ -166,22 +178,8 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
     loadAuxData();
   }, [XEmpresaId, getActiveEmpresaId]);
 
-  // Carrega os registros de movimentação financeira consolidada
+  // Carrega movimentações e calcula o Saldo Anterior SOMENTE quando acionado (Clique em Filtrar ou Enter)
   const carregarMovimentacoes = useCallback(async () => {
-    // Validação: ao menos um filtro informado
-    const temFiltroData = Boolean(XDnInicio || XDnFim);
-    const temFiltroOrigem = XOrigemFilter !== "TODOS";
-    const temFiltroPortador = XPortadorFilter !== "TODOS";
-    const temFiltroPlano = XPlanoContaFilter !== "TODOS";
-    const temFiltroBusca = Boolean(XBuscaText.trim());
-
-    if (!temFiltroData && !temFiltroOrigem && !temFiltroPortador && !temFiltroPlano && !temFiltroBusca) {
-      toast.error("Ao menos 1 filtro deve ser preenchido para realizar a pesquisa.");
-      dtInicioRef.current?.focus();
-      return;
-    }
-
-    // Validação de intervalo de datas
     if (XDnInicio && XDnFim && XDnInicio > XDnFim) {
       toast.error("A Data Início não pode ser maior que a Data Fim.");
       dtInicioRef.current?.focus();
@@ -192,25 +190,66 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
     if (!empId) return;
 
     setXLoading(true);
-    setXHasSearched(true);
+    setXHasSearched(true); // Marca que o usuário clicou em filtrar
     try {
+      const pPortador = XPortadorFilter !== "TODOS" && XPortadorFilter !== "" ? Number(XPortadorFilter) : null;
+      const pPlano = XPlanoContaFilter !== "TODOS" && XPlanoContaFilter !== "" ? Number(XPlanoContaFilter) : null;
+
+      // 1. Cálculo Dinâmico do Saldo Anterior até o dia anterior a XDnInicio
+      let saldoAnt = 0;
+      if (XDnInicio) {
+        const { data: rpcRes, error: rpcErr } = await db.rpc("fn_get_saldo_anterior_consolidado", {
+          p_empresa_id: empId,
+          p_dt_inicio: XDnInicio,
+          p_portador_id: pPortador,
+          p_plano_conta_id: pPlano
+        });
+
+        if (!rpcErr && rpcRes !== null && rpcRes !== undefined) {
+          saldoAnt = Number(rpcRes) || 0;
+        } else {
+          // Fallback de consulta direta se RPC indisponível
+          let qAnt = db
+            .from("financeiro_consolidado")
+            .select("origem, valor")
+            .eq("empresa_id", empId)
+            .lt("data_ocorrencia", XDnInicio);
+          if (pPortador) qAnt = qAnt.eq("portador_id", pPortador);
+          if (pPlano) qAnt = qAnt.eq("plano_conta_id", pPlano);
+
+          const { data: antData } = await qAnt;
+          if (antData) {
+            saldoAnt = antData.reduce((acc: number, item: any) => {
+              const val = Number(item.valor) || 0;
+              if (item.origem === 'R') return acc + val;
+              if (item.origem === 'P') return acc - val;
+              if (item.origem === 'C') return acc + val;
+              return acc + val;
+            }, 0);
+          }
+        }
+      }
+      setXSaldoAnterior(saldoAnt);
+
+      // 2. Consulta dos lançamentos no período selecionado
       let query = db
         .from("financeiro_consolidado")
         .select("*")
         .eq("empresa_id", empId)
-        .order("data_ocorrencia", { ascending: false })
-        .order("created_at", { ascending: false });
+        .order("data_ocorrencia", { ascending: true })
+        .order("created_at", { ascending: true })
+        .range(0, 9999);
 
       if (XDnInicio) query = query.gte("data_ocorrencia", XDnInicio);
       if (XDnFim) query = query.lte("data_ocorrencia", XDnFim);
-      if (XOrigemFilter !== "TODOS") query = query.eq("origem", XOrigemFilter);
-      if (XPortadorFilter !== "TODOS") query = query.eq("portador_id", Number(XPortadorFilter));
-      if (XPlanoContaFilter !== "TODOS") query = query.eq("plano_conta_id", Number(XPlanoContaFilter));
+      if (XOrigemFilter !== "TODOS" && XOrigemFilter !== "") query = query.eq("origem", XOrigemFilter);
+      if (XPortadorFilter !== "TODOS" && XPortadorFilter !== "") query = query.eq("portador_id", pPortador);
+      if (XPlanoContaFilter !== "TODOS" && XPlanoContaFilter !== "") query = query.eq("plano_conta_id", pPlano);
 
       const { data, error } = await query;
       if (error) throw error;
 
-      // Mapeia os dados com os nomes dos portadores e planos de conta
+      // Mapeia dinamicamente os nomes dos portadores e planos de conta
       const portMap = new Map(XPortadores.map((p) => [p.portador_id, p.nome]));
       const planoMap = new Map(XPlanosConta.map((pc) => [pc.plano_conta_id, { conta: pc.conta, nome: pc.nome }]));
 
@@ -225,7 +264,28 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
         };
       });
 
-      setXRows(mapped);
+      // 3. Cálculo Cronológico do Saldo Acumulado Movimento a Movimento (Conta Corrente)
+      let runningBalance = saldoAnt;
+      const mappedWithRunningBalance = mapped.map((r) => {
+        const v = Number(r.valor) || 0;
+        if (r.origem === "R") {
+          runningBalance += v;
+        } else if (r.origem === "P") {
+          runningBalance -= v;
+        } else if (r.origem === "C") {
+          runningBalance += v;
+        } else {
+          runningBalance += v;
+        }
+        return {
+          ...r,
+          saldo_acumulado: r.vl_saldo_acumulado !== undefined && r.vl_saldo_acumulado !== null ? Number(r.vl_saldo_acumulado) : runningBalance
+        };
+      });
+
+      // Exibe na ordem decrescente (mais recentes primeiro no extrato) com o saldo acumulado preservado
+      const rowsDesc = [...mappedWithRunningBalance].reverse();
+      setXRows(rowsDesc);
     } catch (e: any) {
       console.error("Erro ao carregar movimentações consolidadas:", e);
       toast.error("Erro ao carregar movimentações: " + (e.message || "Falha de conexão"));
@@ -234,7 +294,7 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
     }
   }, [getActiveEmpresaId, XDnInicio, XDnFim, XOrigemFilter, XPortadorFilter, XPlanoContaFilter, XPortadores, XPlanosConta]);
 
-  // Inscreve no Supabase Realtime apenas se o usuário já tiver clicado em Filtrar
+  // Realtime subscription: atualiza somente se o usuário já tiver filtrado
   useEffect(() => {
     if (!XHasSearched) return;
 
@@ -256,9 +316,9 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
     return () => {
       db.removeChannel(channel);
     };
-  }, [XHasSearched, carregarMovimentacoes, XEmpresaId, getActiveEmpresaId]);
+  }, [XHasSearched, carregarMovimentacoes, getActiveEmpresaId]);
 
-  // Filtro secundário via texto no histórico (client-side)
+  // Filtro secundário de pesquisa em texto (client-side)
   const XFilteredRows = useMemo(() => {
     if (!XBuscaText.trim()) return XRows;
     const term = XBuscaText.toLowerCase();
@@ -271,7 +331,7 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
     );
   }, [XRows, XBuscaText]);
 
-  // Cálculo dos KPIs / Totais
+  // Cálculo dos KPIs / Totais Consolidados de Conta Corrente
   const XKpis = useMemo(() => {
     let totalEntradas = 0;
     let totalSaidas = 0;
@@ -286,206 +346,325 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
       } else if (r.origem === "P") {
         totalSaidas += v;
         countSaidas++;
+      } else if (r.origem === "C") {
+        if (v >= 0) {
+          totalEntradas += v;
+          if (v > 0) countEntradas++;
+        } else {
+          totalSaidas += Math.abs(v);
+          countSaidas++;
+        }
       }
     }
 
-    const saldo = totalEntradas - totalSaidas;
+    const saldoConsolidado = XSaldoAnterior + totalEntradas - totalSaidas;
 
     return {
       totalEntradas,
       totalSaidas,
-      saldo,
+      saldoConsolidado,
       countEntradas,
       countSaidas,
       totalRegistros: XFilteredRows.length,
     };
-  }, [XFilteredRows]);
+  }, [XFilteredRows, XSaldoAnterior]);
 
+  // Clique em Limpar Filtros: limpa tudo e joga o foco na data início
   const handleLimparFiltros = () => {
     setXDnInicio("");
     setXDnFim("");
-    setXOrigemFilter("TODOS");
-    setXPortadorFilter("TODOS");
-    setXPlanoContaFilter("TODOS");
+    setXOrigemFilter("");
+    setXPortadorFilter("");
+    setXPlanoContaFilter("");
     setXBuscaText("");
     setXRows([]);
+    setXSaldoAnterior(0);
     setXHasSearched(false);
     setTimeout(() => {
       dtInicioRef.current?.focus();
     }, 50);
   };
 
-  const getOrigemBadge = (origem: string) => {
+  const getOrigemBadge = useCallback((origem: string) => {
     switch (origem) {
       case "R":
         return (
-          <Badge className="bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 font-bold flex items-center gap-1">
+          <Badge className="bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 font-bold flex items-center gap-1 text-[10px]">
             <ArrowDownToLine className="w-3 h-3 text-emerald-600" />
             ENTRADA (RECEBIMENTO)
           </Badge>
         );
       case "P":
         return (
-          <Badge className="bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 font-bold flex items-center gap-1">
+          <Badge className="bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 font-bold flex items-center gap-1 text-[10px]">
             <ArrowUpFromLine className="w-3 h-3 text-rose-600" />
             SAÍDA (PAGAMENTO)
           </Badge>
         );
+      case "C":
+        return (
+          <Badge className="bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800 font-bold flex items-center gap-1 text-[10px]">
+            <Lock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+            FECHAMENTO DE CAIXA
+          </Badge>
+        );
       default:
         return (
-          <Badge className="bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800 font-bold flex items-center gap-1">
+          <Badge className="bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800 font-bold flex items-center gap-1 text-[10px]">
             <ArrowRightLeft className="w-3 h-3 text-blue-600" />
             MOVIMENTAÇÃO
           </Badge>
         );
     }
-  };
+  }, []);
+
+  // Definição das colunas do Extrato de Conta Corrente no DataGrid
+  const XCols: IGridColumn[] = useMemo(() => [
+    {
+      key: "data_ocorrencia",
+      label: "Data Ocorrência",
+      width: "120px",
+      align: "center",
+      getValue: (r: IFinanceiroConsolidadoRow) => r.data_ocorrencia ?? "",
+      render: (r: IFinanceiroConsolidadoRow) => <span>{fmtDate(r.data_ocorrencia)}</span>
+    },
+    {
+      key: "origem",
+      label: "Origem",
+      width: "180px",
+      render: (r: IFinanceiroConsolidadoRow) => getOrigemBadge(r.origem)
+    },
+    {
+      key: "historico",
+      label: "Histórico / Descrição",
+      width: "2.2fr",
+      render: (r: IFinanceiroConsolidadoRow) => (
+        <span className="font-medium text-foreground truncate block" title={r.historico || "—"}>
+          {r.historico || "—"}
+        </span>
+      )
+    },
+    {
+      key: "portador_nome",
+      label: "Portador (Conta/Caixa)",
+      width: "1.4fr",
+      render: (r: IFinanceiroConsolidadoRow) => (
+        <span className="text-muted-foreground truncate block">{r.portador_nome || "—"}</span>
+      )
+    },
+    {
+      key: "plano_conta_nome",
+      label: "Plano de Contas",
+      width: "1.6fr",
+      render: (r: IFinanceiroConsolidadoRow) => (
+        <span className="text-muted-foreground truncate block">{r.plano_conta_nome || "—"}</span>
+      )
+    },
+    {
+      key: "valor",
+      label: "Valor Movimento",
+      width: "125px",
+      align: "right",
+      getValue: (r: IFinanceiroConsolidadoRow) => Number(r.valor ?? 0),
+      render: (r: IFinanceiroConsolidadoRow) => {
+        const isEntrada = r.origem === "R" || (r.origem === "C" && Number(r.valor) >= 0);
+        const isSaida = r.origem === "P" || (r.origem === "C" && Number(r.valor) < 0);
+        return (
+          <span className={`font-bold text-xs ${isEntrada ? "text-emerald-600 dark:text-emerald-400" : isSaida ? "text-rose-600 dark:text-rose-400" : ""}`}>
+            {isSaida ? `- ${fmtMoney(r.valor)}` : fmtMoney(r.valor)}
+          </span>
+        );
+      }
+    },
+    {
+      key: "saldo_acumulado",
+      label: "Saldo Acumulado",
+      width: "135px",
+      align: "right",
+      getValue: (r: IFinanceiroConsolidadoRow) => Number(r.saldo_acumulado ?? 0),
+      render: (r: IFinanceiroConsolidadoRow) => {
+        const v = Number(r.saldo_acumulado ?? 0);
+        return (
+          <span className={`font-bold text-xs ${v >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`}>
+            {fmtMoney(v)}
+          </span>
+        );
+      }
+    },
+    {
+      key: "acoes",
+      label: "Ações",
+      width: "75px",
+      align: "center",
+      render: (r: IFinanceiroConsolidadoRow) => (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setXDetailModal({ open: true, row: r });
+          }}
+          className="p-1 text-muted-foreground hover:text-primary transition-colors rounded hover:bg-accent"
+          title="Ver Detalhes"
+        >
+          <Eye className="w-4 h-4" />
+        </button>
+      )
+    }
+  ], [getOrigemBadge]);
+
+  // Data do dia anterior para exibição no card de Saldo Anterior
+  const dataAnteriorLabel = useMemo(() => {
+    if (!XDnInicio) return "Início do Histórico";
+    const prevIso = getPreviousDay(XDnInicio);
+    return `Saldo em ${fmtDate(prevIso)}`;
+  }, [XDnInicio]);
 
   return (
-    <div className="flex flex-col gap-4 p-4 max-w-7xl mx-auto w-full">
+    <div className="p-3 min-h-screen lg:h-full lg:flex lg:flex-col lg:overflow-hidden bg-background">
       {/* ── Topo: Título & Relatórios ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 text-primary">
-            <BarChart3 className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-foreground">Movimentações Financeiras Consolidadas</h2>
-            <p className="text-xs text-muted-foreground">
-              Extrato consolidado de entradas, saídas e movimentações de caixa/bancos.
-            </p>
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3 shrink-0 border-b border-border pb-2">
+        <div className="flex items-center gap-2">
+          <BarChart3 className="w-5 h-5 text-primary" />
+          <h2 className="text-xs font-bold uppercase tracking-wider text-foreground">
+            Extrato de Conta Corrente / Movimentações Consolidadas
+          </h2>
         </div>
-
         <div className="flex items-center gap-2">
           <RpbFormReportsButton formId="movimentacao-financeira" formTitle="Movimentações Financeiras" />
         </div>
       </div>
 
-      {/* ── Cards de KPIs ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Entradas */}
-        <div className="bg-card border border-border rounded-xl p-3.5 shadow-sm flex items-center justify-between">
+      {/* ── Cards de KPIs / Extrato de Conta Corrente ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3 shrink-0">
+        {/* Card 1: Saldo Anterior */}
+        <div className="bg-card border border-border rounded-lg p-3 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              Saldo Anterior
+            </span>
+            <p className={`text-base font-extrabold mt-0.5 ${
+              XSaldoAnterior >= 0 
+                ? "text-blue-600 dark:text-blue-400" 
+                : "text-rose-600 dark:text-rose-400"
+            }`}>
+              {XHasSearched ? fmtMoney(XSaldoAnterior) : fmtMoney(0)}
+            </p>
+            <span className="text-[10px] text-muted-foreground font-medium">
+              {XHasSearched ? dataAnteriorLabel : "Informe os filtros"}
+            </span>
+          </div>
+          <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-950/40 flex items-center justify-center text-blue-600">
+            <History className="w-4 h-4" />
+          </div>
+        </div>
+
+        {/* Card 2: Total Entradas no Período */}
+        <div className="bg-card border border-border rounded-lg p-3 shadow-sm flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
               Total Entradas
             </span>
-            <p className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">
-              {fmtMoney(XKpis.totalEntradas)}
+            <p className="text-base font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">
+              {XHasSearched ? fmtMoney(XKpis.totalEntradas) : fmtMoney(0)}
             </p>
-            <span className="text-[11px] text-muted-foreground">{XKpis.countEntradas} lançamento(s)</span>
+            <span className="text-[10px] text-muted-foreground">
+              {XHasSearched ? `${XKpis.countEntradas} entrada(s) no período` : "Informe os filtros"}
+            </span>
           </div>
-          <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600">
-            <ArrowDownToLine className="w-5 h-5" />
+          <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600">
+            <ArrowDownToLine className="w-4 h-4" />
           </div>
         </div>
 
-        {/* Saídas */}
-        <div className="bg-card border border-border rounded-xl p-3.5 shadow-sm flex items-center justify-between">
+        {/* Card 3: Total Saídas no Período */}
+        <div className="bg-card border border-border rounded-lg p-3 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
               Total Saídas
             </span>
-            <p className="text-lg font-extrabold text-rose-600 dark:text-rose-400 mt-0.5">
-              {fmtMoney(XKpis.totalSaidas)}
+            <p className="text-base font-extrabold text-rose-600 dark:text-rose-400 mt-0.5">
+              {XHasSearched ? fmtMoney(XKpis.totalSaidas) : fmtMoney(0)}
             </p>
-            <span className="text-[11px] text-muted-foreground">{XKpis.countSaidas} lançamento(s)</span>
+            <span className="text-[10px] text-muted-foreground">
+              {XHasSearched ? `${XKpis.countSaidas} saída(s) no período` : "Informe os filtros"}
+            </span>
           </div>
-          <div className="w-9 h-9 rounded-lg bg-rose-100 dark:bg-rose-950/40 flex items-center justify-center text-rose-600">
-            <ArrowUpFromLine className="w-5 h-5" />
+          <div className="w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-950/40 flex items-center justify-center text-rose-600">
+            <ArrowUpFromLine className="w-4 h-4" />
           </div>
         </div>
 
-        {/* Saldo Consolidado */}
-        <div className="bg-card border border-border rounded-xl p-3.5 shadow-sm flex items-center justify-between">
+        {/* Card 4: Saldo Consolidado Atual */}
+        <div className="bg-card border border-border rounded-lg p-3 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
               Saldo Consolidado
             </span>
-            <p className={`text-lg font-extrabold mt-0.5 ${
-              XKpis.saldo >= 0 
+            <p className={`text-base font-extrabold mt-0.5 ${
+              XKpis.saldoConsolidado >= 0 
                 ? "text-emerald-600 dark:text-emerald-400" 
                 : "text-rose-600 dark:text-rose-400"
             }`}>
-              {fmtMoney(XKpis.saldo)}
+              {XHasSearched ? fmtMoney(XKpis.saldoConsolidado) : fmtMoney(0)}
             </p>
-            <span className="text-[11px] text-muted-foreground">Entradas - Saídas</span>
+            <span className="text-[10px] text-muted-foreground">Anterior + Entradas - Saídas</span>
           </div>
-          <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-            XKpis.saldo >= 0 ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600" : "bg-rose-100 dark:bg-rose-950/40 text-rose-600"
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+            XKpis.saldoConsolidado >= 0 ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600" : "bg-rose-100 dark:bg-rose-950/40 text-rose-600"
           }`}>
-            <DollarSign className="w-5 h-5" />
-          </div>
-        </div>
-
-        {/* Lançamentos */}
-        <div className="bg-card border border-border rounded-xl p-3.5 shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Lançamentos
-            </span>
-            <p className="text-lg font-extrabold text-foreground mt-0.5">
-              {XKpis.totalRegistros}
-            </p>
-            <span className="text-[11px] text-muted-foreground">Registros exibidos</span>
-          </div>
-          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-            <Receipt className="w-5 h-5" />
+            <DollarSign className="w-4 h-4" />
           </div>
         </div>
       </div>
 
-      {/* ── Painel de Filtros Avançados ── */}
-      <div className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-3">
-        <div className="flex items-center gap-2 border-b border-border/60 pb-2">
-          <FilterIcon className="w-4 h-4 text-primary" />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Filtros de Pesquisa</h3>
+      {/* ── Painel de Filtros de Pesquisa ── */}
+      <div className="border border-border rounded-md p-3 mb-3 bg-card shrink-0">
+        <div className="flex items-center gap-2 mb-2 text-[9px] uppercase font-bold tracking-wider text-muted-foreground">
+          <FilterIcon size={12} /> Filtros do Extrato
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          {/* Data Início */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-muted-foreground">Data Início</label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 items-end">
+          {/* 1. Data Início -> ENTER -> vai para Data Fim */}
+          <div>
+            <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-0.5">Data Início</label>
             <input
               ref={dtInicioRef}
               type="date"
-              min="2000-01-01"
-              max="2099-12-31"
               value={XDnInicio}
               onChange={(e) => setXDnInicio(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
+                  e.stopPropagation();
                   dtFimRef.current?.focus();
                 }
               }}
-              className="border border-border rounded-md px-2 py-1.5 text-xs bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full border border-border rounded px-1.5 py-0.5 text-[11px] bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary h-7"
             />
           </div>
 
-          {/* Data Fim */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-muted-foreground">Data Fim</label>
+          {/* 2. Data Fim -> ENTER -> vai para Combo Tipo de Movimento */}
+          <div>
+            <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-0.5">Data Fim</label>
             <input
               ref={dtFimRef}
               type="date"
-              min="2000-01-01"
-              max="2099-12-31"
               value={XDnFim}
               onChange={(e) => setXDnFim(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
+                  e.stopPropagation();
                   origemSelectRef.current?.focus();
                 }
               }}
-              className="border border-border rounded-md px-2 py-1.5 text-xs bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full border border-border rounded px-1.5 py-0.5 text-[11px] bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary h-7"
             />
           </div>
 
-          {/* Tipo / Origem */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-muted-foreground">Tipo de Movimento</label>
+          {/* 3. Tipo de Movimento -> Alt+Down abre combo | ENTER -> vai para Combo Portador */}
+          <div>
+            <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-0.5">Tipo de Movimento</label>
             <select
               ref={origemSelectRef}
               value={XOrigemFilter}
@@ -493,24 +672,30 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
               onKeyDown={(e) => {
                 if (e.altKey && e.key === "ArrowDown") {
                   e.preventDefault();
-                  origemSelectRef.current?.showPicker?.();
+                  e.stopPropagation();
+                  try {
+                    (origemSelectRef.current as any)?.showPicker?.();
+                  } catch {}
                 } else if (e.key === "Enter") {
                   e.preventDefault();
+                  e.stopPropagation();
                   portadorSelectRef.current?.focus();
                 }
               }}
-              className="border border-border rounded-md px-2 py-1.5 text-xs bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full border border-border rounded px-1.5 py-0.5 text-[11px] bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary h-7"
             >
-              <option value="TODOS">Todos os Tipos</option>
+              <option value=""></option>
+              <option value="TODOS">Todos</option>
               <option value="R">Entradas (Recebimentos)</option>
               <option value="P">Saídas (Pagamentos)</option>
+              <option value="C">Fechamentos de Caixa</option>
               <option value="M">Outras Movimentações</option>
             </select>
           </div>
 
-          {/* Portador */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-muted-foreground">Portador (Conta/Caixa)</label>
+          {/* 4. Portador -> Alt+Down abre combo | ENTER -> vai para Combo Plano de Contas */}
+          <div>
+            <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-0.5">Portador (Conta/Caixa)</label>
             <select
               ref={portadorSelectRef}
               value={XPortadorFilter}
@@ -518,15 +703,20 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
               onKeyDown={(e) => {
                 if (e.altKey && e.key === "ArrowDown") {
                   e.preventDefault();
-                  portadorSelectRef.current?.showPicker?.();
+                  e.stopPropagation();
+                  try {
+                    (portadorSelectRef.current as any)?.showPicker?.();
+                  } catch {}
                 } else if (e.key === "Enter") {
                   e.preventDefault();
+                  e.stopPropagation();
                   planoContaSelectRef.current?.focus();
                 }
               }}
-              className="border border-border rounded-md px-2 py-1.5 text-xs bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full border border-border rounded px-1.5 py-0.5 text-[11px] bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary h-7"
             >
-              <option value="TODOS">Todos os Portadores</option>
+              <option value=""></option>
+              <option value="TODOS">Todos</option>
               {XPortadores.map((p) => (
                 <option key={p.portador_id} value={p.portador_id}>
                   {p.nome}
@@ -535,9 +725,9 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
             </select>
           </div>
 
-          {/* Plano de Conta */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-muted-foreground">Plano de Contas</label>
+          {/* 5. Plano de Contas -> Alt+Down abre combo | ENTER -> vai para Botão Filtrar */}
+          <div>
+            <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-0.5">Plano de Contas</label>
             <select
               ref={planoContaSelectRef}
               value={XPlanoContaFilter}
@@ -545,15 +735,20 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
               onKeyDown={(e) => {
                 if (e.altKey && e.key === "ArrowDown") {
                   e.preventDefault();
-                  planoContaSelectRef.current?.showPicker?.();
+                  e.stopPropagation();
+                  try {
+                    (planoContaSelectRef.current as any)?.showPicker?.();
+                  } catch {}
                 } else if (e.key === "Enter") {
                   e.preventDefault();
+                  e.stopPropagation();
                   btnFiltrarRef.current?.focus();
                 }
               }}
-              className="border border-border rounded-md px-2 py-1.5 text-xs bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full border border-border rounded px-1.5 py-0.5 text-[11px] bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary h-7"
             >
-              <option value="TODOS">Todos os Planos</option>
+              <option value=""></option>
+              <option value="TODOS">Todos</option>
               {XPlanosConta.map((pc) => (
                 <option key={pc.plano_conta_id} value={pc.plano_conta_id}>
                   {pc.conta} - {pc.nome}
@@ -564,22 +759,29 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
         </div>
 
         {/* Linha de busca rápida e ações */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border/40">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 mt-2 border-t border-border/40">
           <div className="relative flex-1 min-w-[240px]">
-            <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-2.5 top-2.5" />
+            <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-2.5 top-2" />
             <input
               type="text"
               value={XBuscaText}
               onChange={(e) => setXBuscaText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  carregarMovimentacoes();
+                }
+              }}
               placeholder="Pesquisar no histórico, portador ou plano de contas..."
-              className="w-full pl-8 pr-3 py-1.5 text-xs border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full pl-8 pr-3 py-1 text-[11px] border border-border rounded bg-card focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary h-7"
             />
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={handleLimparFiltros}
-              className="px-3 py-1.5 text-xs font-medium border border-border rounded-md hover:bg-accent transition-colors"
+              className="px-2.5 py-0.5 text-[11px] border border-border rounded hover:bg-accent h-7"
             >
               Limpar Filtros
             </button>
@@ -587,123 +789,56 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
               ref={btnFiltrarRef}
               onClick={carregarMovimentacoes}
               disabled={XLoading}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors focus:ring-2 focus:ring-primary/50 focus:outline-none"
+              className="px-3 py-0.5 text-[11px] rounded bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5 h-7 font-bold uppercase tracking-wide"
             >
-              <FilterIcon className="w-3.5 h-3.5" />
-              Filtrar
+              <FilterIcon size={12} />
+              Filtrar Extrato
             </button>
           </div>
         </div>
       </div>
 
-      {/* ── Tabela de Dados Consolidados ── */}
-      <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+      {/* ── Grid Principal de Dados (DataGrid Extrato de Conta Corrente) ── */}
+      <div className="flex-1 min-h-[380px] lg:min-h-0 flex flex-col">
         {!XHasSearched ? (
-          <div className="flex flex-col items-center justify-center py-14 gap-3 text-muted-foreground">
+          <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground bg-card border border-border rounded-xl">
             <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
               <FilterIcon className="w-6 h-6" />
             </div>
             <div className="text-center max-w-sm">
               <p className="text-sm font-semibold text-foreground">Defina os filtros de pesquisa</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Selecione o período e os parâmetros desejados acima e clique em <strong className="text-foreground">Filtrar</strong> para consultar as movimentações financeiras.
+                Selecione o período e os parâmetros desejados acima e clique em <strong className="text-foreground">Filtrar Extrato</strong> para consultar as movimentações financeiras.
               </p>
             </div>
           </div>
-        ) : XLoading ? (
-          <div className="flex flex-col items-center justify-center py-12 gap-2 text-muted-foreground">
-            <RefreshCw className="w-6 h-6 animate-spin text-primary" />
-            <span className="text-xs">Carregando movimentações consolidadas...</span>
-          </div>
-        ) : XFilteredRows.length === 0 ? (
-          <div className="py-12 text-center text-sm text-muted-foreground">
-            Nenhuma movimentação financeira consolidada encontrada para os filtros selecionados.
-          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="bg-muted/60 border-b border-border">
-                  <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">Data Ocorrência</th>
-                  <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">Origem</th>
-                  <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">Histórico / Descrição</th>
-                  <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">Portador</th>
-                  <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">Plano de Contas</th>
-                  <th className="text-right px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">Valor</th>
-                  <th className="text-center px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {XFilteredRows.map((r, idx) => {
-                  const isEntrada = r.origem === "R";
-                  const isSaida = r.origem === "P";
-
-                  return (
-                    <tr
-                      key={r.financeiro_consolidado_id}
-                      onClick={() => setXDetailModal({ open: true, row: r })}
-                      className={`border-t border-border/60 cursor-pointer hover:bg-primary/5 transition-colors ${
-                        idx % 2 === 1 ? "bg-muted/20" : ""
-                      }`}
-                    >
-                      {/* Data */}
-                      <td className="px-3 py-2.5 whitespace-nowrap font-medium text-foreground">
-                        {fmtDate(r.data_ocorrencia)}
-                      </td>
-
-                      {/* Origem */}
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        {getOrigemBadge(r.origem)}
-                      </td>
-
-                      {/* Histórico */}
-                      <td className="px-3 py-2.5 text-foreground max-w-sm truncate" title={r.historico || ""}>
-                        {r.historico || "—"}
-                      </td>
-
-                      {/* Portador */}
-                      <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <Wallet className="w-3.5 h-3.5 text-primary/70 shrink-0" />
-                          <span>{r.portador_nome}</span>
-                        </div>
-                      </td>
-
-                      {/* Plano de Contas */}
-                      <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <AlignLeft className="w-3.5 h-3.5 text-primary/70 shrink-0" />
-                          <span>{r.plano_conta_nome}</span>
-                        </div>
-                      </td>
-
-                      {/* Valor */}
-                      <td className="px-3 py-2.5 text-right font-mono font-bold whitespace-nowrap">
-                        <span className={isEntrada ? "text-emerald-600 dark:text-emerald-400" : isSaida ? "text-rose-600 dark:text-rose-400" : "text-foreground"}>
-                          {isEntrada ? "+ " : isSaida ? "- " : ""}
-                          {fmtMoney(r.valor)}
-                        </span>
-                      </td>
-
-                      {/* Ações */}
-                      <td className="px-3 py-2.5 text-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setXDetailModal({ open: true, row: r });
-                          }}
-                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                          title="Ver detalhes"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid
+            columns={XCols}
+            data={XFilteredRows}
+            loading={XLoading}
+            selectedIdx={XSelectedIdx}
+            onRowClick={(_r, i) => setXSelectedIdx(i)}
+            onRowDoubleClick={(r) => setXDetailModal({ open: true, row: r as IFinanceiroConsolidadoRow })}
+            exportTitle="Extrato de Conta Corrente"
+            minWidth="1250px"
+            maxHeight="100%"
+            toolbarLeft={
+              <>
+                <button
+                  onClick={carregarMovimentacoes}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-accent"
+                  title="Atualizar"
+                >
+                  <RefreshCw size={14} className={XLoading ? "animate-spin" : ""} /> Atualizar
+                </button>
+                <RpbFormReportsButton 
+                  nmForm="movimentacao-financeira" 
+                  currentRecord={XSelectedIdx !== null && XFilteredRows[XSelectedIdx] ? (XFilteredRows[XSelectedIdx] as Record<string, any>) : undefined} 
+                />
+              </>
+            }
+          />
         )}
       </div>
 
@@ -716,7 +851,7 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 font-bold text-foreground">
               <FileText className="w-5 h-5 text-primary" />
-              Detalhes da Movimentação Consolidada
+              Detalhes do Lançamento Consolidado
             </DialogTitle>
           </DialogHeader>
 
@@ -729,11 +864,24 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-card p-2.5 rounded-md border border-border">
-                  <span className="text-[10px] text-muted-foreground uppercase font-semibold">Valor</span>
+                  <span className="text-[10px] text-muted-foreground uppercase font-semibold">Valor Movimento</span>
                   <p className={`text-base font-extrabold mt-0.5 ${
-                    XDetailModal.row.origem === "R" ? "text-emerald-600" : XDetailModal.row.origem === "P" ? "text-rose-600" : "text-foreground"
+                    XDetailModal.row.origem === "R" 
+                      ? "text-emerald-600" 
+                      : XDetailModal.row.origem === "P" 
+                        ? "text-rose-600" 
+                        : XDetailModal.row.origem === "C" 
+                          ? "text-amber-600 dark:text-amber-400" 
+                          : "text-foreground"
                   }`}>
                     {fmtMoney(XDetailModal.row.valor)}
+                  </p>
+                </div>
+
+                <div className="bg-card p-2.5 rounded-md border border-border">
+                  <span className="text-[10px] text-muted-foreground uppercase font-semibold">Saldo Acumulado</span>
+                  <p className="text-base font-extrabold text-emerald-700 dark:text-emerald-400 mt-0.5">
+                    {fmtMoney(XDetailModal.row.saldo_acumulado)}
                   </p>
                 </div>
 
@@ -748,13 +896,6 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
                   <span className="text-[10px] text-muted-foreground uppercase font-semibold">Competência</span>
                   <p className="text-sm font-semibold text-foreground mt-0.5">
                     {XDetailModal.row.data_competencia || "—"}
-                  </p>
-                </div>
-
-                <div className="bg-card p-2.5 rounded-md border border-border">
-                  <span className="text-[10px] text-muted-foreground uppercase font-semibold">Data da Baixa</span>
-                  <p className="text-sm font-semibold text-foreground mt-0.5">
-                    {fmtDateTime(XDetailModal.row.data_baixa)}
                   </p>
                 </div>
               </div>
