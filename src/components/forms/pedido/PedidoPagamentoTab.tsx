@@ -267,7 +267,7 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
       condicao_id: l.condicao_id,
       vl_pagamento: l.vl_pagamento,
       n_parcelas: l.n_parcelas,
-      vl_parcelas: l.vl_parcelas,
+      vl_parcelas: l.vl_parcelas || (l.n_parcelas > 0 ? Number((l.vl_pagamento / l.n_parcelas).toFixed(2)) : l.vl_pagamento),
       tp_pagamento: l.tp_pagamento || "DI",
       portador_id: l.portador_id || null
     }));

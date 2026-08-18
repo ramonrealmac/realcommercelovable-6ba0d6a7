@@ -197,16 +197,32 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
           .eq("excluido", false)
           .order("movimento_pagamento_id");
 
+const getQtdParcelasCondicao = (c: ICondicao | null | undefined): number => {
+  if (!c) return 1;
+  if (c.qtd_parcelas && c.qtd_parcelas > 0) return c.qtd_parcelas;
+  let count = 0;
+  for (let i = 1; i <= 12; i++) {
+    const key = `prazo_${i}` as keyof ICondicao;
+    if (c[key] && Number(c[key]) > 0) count++;
+  }
+  return count > 0 ? count : 1;
+};
+
         if (pagtoData && pagtoData.length > 0) {
           const linhasMapeadas: IPagamentoLinha[] = pagtoData.map((p) => {
             const cond = conds.find((c) => c.condicao_id === p.condicao_id);
+            const nParc = p.n_parcelas || getQtdParcelasCondicao(cond);
+            const vlParc = Number(p.vl_parcelas) > 0 
+              ? Number(p.vl_parcelas) 
+              : (nParc > 0 ? Number((Number(p.vl_pagamento || 0) / nParc).toFixed(2)) : Number(p.vl_pagamento || 0));
+
             return {
               uid: String(p.movimento_pagamento_id || crypto.randomUUID()),
               movimento_pagamento_id: p.movimento_pagamento_id,
               condicao_id: p.condicao_id,
               condicao_descricao: cond?.descricao || `Condição ${p.condicao_id}`,
-              n_parcelas: p.n_parcelas || 1,
-              vl_parcelas: Number(p.vl_parcelas || 0),
+              n_parcelas: nParc,
+              vl_parcelas: vlParc,
               vl_pagamento: Number(p.vl_pagamento || 0),
               tp_pagamento: p.tp_pagamento || "DI",
               empresa_id: p.empresa_id,
@@ -225,12 +241,11 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
           if (hasCond) {
             setXCondicaoId(defaultCondId);
             const cObj = conds.find(c => c.condicao_id === defaultCondId);
-            if (cObj?.qtd_parcelas) setXQtParcela(cObj.qtd_parcelas);
+            if (cObj) setXQtParcela(getQtdParcelasCondicao(cObj));
           } else {
             setXCondicaoId(0);
           }
           setXVlPagar(dbMov);
-          setXQtParcela(1);
           setXEditUid(null);
 
           if (defaultPortadorId) {
@@ -544,7 +559,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
                       const cid = Number(e.target.value);
                       setXCondicaoId(cid);
                       const c = XCondicoes.find(x => x.condicao_id === cid);
-                      if (c?.qtd_parcelas) setXQtParcela(c.qtd_parcelas);
+                      if (c) setXQtParcela(getQtdParcelasCondicao(c));
                     }} 
                     onKeyDown={e => {
                       if (e.key === "Enter") {

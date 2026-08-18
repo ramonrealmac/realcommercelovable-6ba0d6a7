@@ -40,10 +40,41 @@ const formatVisor = (v: string) => {
   return parts.length > 1 ? `${formattedInteger},${parts[1]}` : formattedInteger;
 };
 
-interface ICondicao { condicao_id: number; descricao: string; qtd_parcelas: number | null; tp_documento?: number | null; plano_conta_id?: number | null; meio_pagamento_id?: number | null; }
+interface ICondicao { 
+  condicao_id: number; 
+  descricao: string; 
+  qtd_parcelas: number | null; 
+  tipo_prazo?: string | null;
+  prazo_1?: number | null;
+  prazo_2?: number | null;
+  prazo_3?: number | null;
+  prazo_4?: number | null;
+  prazo_5?: number | null;
+  prazo_6?: number | null;
+  prazo_7?: number | null;
+  prazo_8?: number | null;
+  prazo_9?: number | null;
+  prazo_10?: number | null;
+  prazo_11?: number | null;
+  prazo_12?: number | null;
+  tp_documento?: number | null; 
+  plano_conta_id?: number | null; 
+  meio_pagamento_id?: number | null; 
+}
 interface IBandeira { bandeira_id: number; descricao: string; }
 interface IOperadora { operadora_id: number; razao: string; }
 interface IPortador { portador_id: number; cd_portador: number; nome: string; banco_id: number | null; }
+
+const getQtdParcelasCondicaoPDV = (c: ICondicao | null | undefined): number => {
+  if (!c) return 1;
+  if (c.qtd_parcelas && c.qtd_parcelas > 0) return c.qtd_parcelas;
+  let count = 0;
+  for (let i = 1; i <= 12; i++) {
+    const key = `prazo_${i}` as keyof ICondicao;
+    if (c[key] && Number(c[key]) > 0) count++;
+  }
+  return count > 0 ? count : 1;
+};
 
 interface IProps {
   open: boolean;
@@ -222,7 +253,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
 
         // Fetch Condições filtradas pela empresa logada
         let condRes = await db.from("condicao_pagamento")
-          .select("condicao_id, descricao, qtd_parcelas, plano_conta_id, meio_pagamento_id")
+          .select("condicao_id, descricao, qtd_parcelas, tipo_prazo, prazo_1, prazo_2, prazo_3, prazo_4, prazo_5, prazo_6, prazo_7, prazo_8, prazo_9, prazo_10, prazo_11, prazo_12, plano_conta_id, meio_pagamento_id")
           .eq("empresa_id", XEmpresaId)
           .eq("excluido", false);
         if (condRes.error || !condRes.data || condRes.data.length === 0) {
@@ -347,7 +378,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
   const setCondicao = (cid: number) => {
     setXCondicaoId(cid);
     const c = XCondicoes.find(x => x.condicao_id === cid);
-    if (c?.qtd_parcelas) setXQtParcela(c.qtd_parcelas);
+    if (c) setXQtParcela(getQtdParcelasCondicaoPDV(c));
     // Se virou cartão, foca a bandeira
     if (c?.meio_pagamento_id === 3 || c?.meio_pagamento_id === 4) {
       setTimeout(() => bandeiraRef.current?.focus(), 50);
