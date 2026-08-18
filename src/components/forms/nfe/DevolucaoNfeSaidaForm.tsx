@@ -21,6 +21,7 @@ interface IItemDevolucao {
   cfop_devolucao: string;
   ncm: string;
   gtin: string;
+  deposito_id?: number | null;
   origem_item: any;
 }
 
@@ -66,13 +67,15 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
   const [XDtFim, setXDtFim] = useState(new Date().toISOString().substring(0, 10));
   const [XLoading, setXLoading] = useState(false);
   const [XResultados, setXResultados] = useState<any[]>([]);
-  const [XSelecionada, setXSelecionada] = useState<any | null>(null);
 
   // Step 2
-  const [XDepositos, setXDepositos] = useState<{ deposito_id: number; nome: string }[]>([]);
-  const [XDepositoId, setXDepositoId] = useState<number | null>(null);
+  const [XSelecionada, setXSelecionada] = useState<any | null>(null);
   const [XItens, setXItens] = useState<IItemDevolucao[]>([]);
-  const [XNatOp, setXNatOp] = useState("Devolução de Venda");
+  const [XDepositos, setXDepositos] = useState<any[]>([]);
+  const [XDepositoId, setXDepositoId] = useState<number | null>(null);
+  const [XNatOp, setXNatOp] = useState("DEVOLUCAO DE VENDA DE MERCADORIA");
+
+  // Step 3
   const [XGerando, setXGerando] = useState(false);
   const [XNovoNfeId, setXNovoNfeId] = useState<number | null>(null);
 
@@ -171,6 +174,7 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
         cfop_devolucao: cfopDevolucaoSugerido(it.cfop || ""),
         ncm: it.ncm || "",
         gtin: it.gtin || "",
+        deposito_id: it.deposito_id || XDepositoId || (XDepositos.length > 0 ? XDepositos[0].deposito_id : null),
         origem_item: it,
       }));
       setXSelecionada(nfe);
@@ -191,6 +195,9 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
   const setCfop = (idx: number, v: string) => {
     setXItens(prev => prev.map((it, i) => i === idx ? { ...it, cfop_devolucao: v.replace(/\D/g, "").substring(0, 4) } : it));
   };
+  const setDeposito = (idx: number, depId: number) => {
+    setXItens(prev => prev.map((it, i) => i === idx ? { ...it, deposito_id: depId } : it));
+  };
 
   const totalDevolucao = useMemo(
     () => XItens.reduce((s, it) => s + it.qt_devolver * it.vl_unit, 0),
@@ -201,7 +208,7 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
   const gerarDevolucao = async () => {
     const itensValidos = XItens.filter(it => it.qt_devolver > 0);
     if (!itensValidos.length) { toast.error("Informe a quantidade a devolver em pelo menos 1 item."); return; }
-    if (!XDepositoId) { toast.error("Selecione o depósito."); return; }
+    if (itensValidos.some(it => !it.deposito_id)) { toast.error("Selecione o depósito de entrada para todos os itens a devolver."); return; }
     if (!XSelecionada?.cadastro_id) { toast.error("NF-e de origem sem cliente."); return; }
     if (!confirm(`Confirma a geração da NF-e de DEVOLUÇÃO DE VENDA para ${itensValidos.length} item(s) — Total R$ ${totalDevolucao.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}?`)) return;
 
@@ -227,10 +234,12 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
           .eq("fiscal_config_item_id", cfgItem.fiscal_config_item_id);
       }
 
+      const defaultDepId = itensValidos[0]?.deposito_id || XDepositoId || XDepositos[0]?.deposito_id || null;
+
       const { data: novo, error: eCab } = await db.from("fiscal_nfe_cabecalho").insert({
         empresa_id: XEmpresaId,
         cadastro_id: XSelecionada.cadastro_id,
-        deposito_id: XDepositoId,
+        deposito_id: defaultDepId,
         origem_inclusao: "M",
         st_nf: "P",
         tp_nf: 0,           // entrada (mercadoria retornando)
@@ -268,6 +277,7 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
         return {
           nfe_cabecalho_id: novoId,
           empresa_id: XEmpresaId,
+          deposito_id: it.deposito_id || defaultDepId,
           produto_id: it.produto_id,
           nr_item: idx + 1,
           nfe_item_origem_id: o?.nfe_item_id || null,
@@ -479,11 +489,11 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
             <div className="border border-border rounded-lg overflow-hidden flex-1 flex flex-col">
               <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-muted/50 text-[10px] font-bold uppercase text-muted-foreground border-b">
                 <div className="col-span-1">Cód.</div>
-                <div className="col-span-4">Descrição</div>
+                <div className="col-span-3">Descrição</div>
                 <div className="col-span-1 text-center">Und</div>
                 <div className="col-span-1 text-right">Qt. Origem</div>
                 <div className="col-span-2 text-right">Qt. a Devolver</div>
-                <div className="col-span-1 text-center">CFOP Orig.</div>
+                <div className="col-span-2 text-left">Depósito Entrada</div>
                 <div className="col-span-1 text-center">CFOP Dev.</div>
                 <div className="col-span-1 text-right">Vl. Unit.</div>
               </div>
@@ -491,7 +501,7 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
                 {XItens.map((it, idx) => (
                   <div key={it.nfe_item_id} className={`grid grid-cols-12 gap-2 px-3 py-2 text-sm border-b last:border-0 ${idx % 2 ? "bg-muted/20" : ""}`}>
                     <div className="col-span-1 font-mono text-xs truncate">{it.cd_produto}</div>
-                    <div className="col-span-4 truncate text-xs text-blue-800 dark:text-blue-300 font-medium">{it.nm_produto}</div>
+                    <div className="col-span-3 truncate text-xs text-blue-800 dark:text-blue-300 font-medium">{it.nm_produto}</div>
                     <div className="col-span-1 text-center text-xs">{it.unidade}</div>
                     <div className="col-span-1 text-right font-mono text-xs">{it.qt_origem.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
                     <div className="col-span-2 text-right">
@@ -503,7 +513,18 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
                         className={`w-full text-right px-2 py-1 text-xs border rounded font-mono ${it.qt_devolver > 0 ? "border-primary bg-primary/5 font-bold" : "border-border bg-background"}`}
                       />
                     </div>
-                    <div className="col-span-1 text-center font-mono text-xs">{it.cfop_origem}</div>
+                    <div className="col-span-2">
+                      <select
+                        value={it.deposito_id ?? ""}
+                        onChange={e => setDeposito(idx, Number(e.target.value))}
+                        className="w-full text-xs border border-border rounded px-1.5 py-1 bg-background font-medium"
+                      >
+                        <option value="">— Selecione —</option>
+                        {XDepositos.map(d => (
+                          <option key={d.deposito_id} value={d.deposito_id}>{d.nome}</option>
+                        ))}
+                      </select>
+                    </div>
                     <div className="col-span-1 text-center">
                       <input value={it.cfop_devolucao} onChange={e => setCfop(idx, e.target.value)} className="w-full text-center px-1 py-1 text-xs border border-border rounded font-mono" />
                     </div>
