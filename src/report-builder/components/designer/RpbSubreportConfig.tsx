@@ -36,6 +36,7 @@ const UnifiedSubreportSheetCanvas: React.FC<{
   draft: RpbSubreportComp;
   onPatch: (patch: Partial<RpbSubreportComp>) => void;
   childColumns: string[];
+  parentColumns: string[];
   handleDetectCols: () => void;
   detecting: boolean;
   colDragRef: React.MutableRefObject<{ fromIndex: number } | null>;
@@ -45,7 +46,7 @@ const UnifiedSubreportSheetCanvas: React.FC<{
   updateCol: (i: number, patch: Partial<RpbTableColumn>) => void;
   removeCol: (i: number) => void;
 }> = ({
-  draft, onPatch, childColumns, handleDetectCols, detecting,
+  draft, onPatch, childColumns, parentColumns, handleDetectCols, detecting,
   colDragRef, colDragOver, setColDragOver, reorderCol, updateCol, removeCol,
 }) => {
   const [activeSubBand, setActiveSubBand] = useState<SubBandTarget>('header');
@@ -113,7 +114,7 @@ const UnifiedSubreportSheetCanvas: React.FC<{
     };
   }, [handleMouseMove, handleMouseUp]);
 
-  // ── Teclas de seta para mover elemento selecionado ──
+  // ── Teclas de seta para mover elemento selecionado em qualquer banda ──
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!selectedCompId) return;
@@ -128,16 +129,20 @@ const UnifiedSubreportSheetCanvas: React.FC<{
         ArrowRight: ['x',  step],
       };
       const [axis, val] = delta[e.key];
-      const comps = getCompsByBand(activeSubBand);
-      const target = comps.find(c => c.id === selectedCompId);
-      if (target) {
-        const cur = (target as any)[axis] as number;
-        patchCompInBand(activeSubBand, selectedCompId, { [axis]: Math.max(0, Math.round((cur + val) * 10) / 10) });
+
+      for (const b of ['header', 'detail', 'footer'] as SubBandTarget[]) {
+        const comps = getCompsByBand(b);
+        const target = comps.find(c => c.id === selectedCompId);
+        if (target) {
+          const cur = (target as any)[axis] as number;
+          patchCompInBand(b, selectedCompId, { [axis]: Math.max(0, Math.round((cur + val) * 10) / 10) });
+          break;
+        }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedCompId, activeSubBand, getCompsByBand, patchCompInBand]);
+  }, [selectedCompId, getCompsByBand, patchCompInBand]);
 
   // Adicionar novo elemento na banda ativa
   const addElementToActiveBand = (type: 'text' | 'line' | 'box' | 'image' | 'totalizer') => {
@@ -158,6 +163,34 @@ const UnifiedSubreportSheetCanvas: React.FC<{
     updateCompsByBand(activeSubBand, [...curComps, newComp]);
     setSelectedCompId(newComp.id);
   };
+
+  // Reordenar camada do elemento na banda
+  const moveLayerInBand = (band: SubBandTarget, id: string, direction: 'back' | 'backward' | 'forward' | 'front') => {
+    const comps = [...getCompsByBand(band)];
+    const index = comps.findIndex(c => c.id === id);
+    if (index === -1) return;
+    const item = comps[index];
+    comps.splice(index, 1);
+    let newIndex = index;
+    if (direction === 'back') newIndex = 0;
+    else if (direction === 'backward') newIndex = Math.max(0, index - 1);
+    else if (direction === 'forward') newIndex = Math.min(comps.length, index + 1);
+    else if (direction === 'front') newIndex = comps.length;
+    comps.splice(newIndex, 0, item);
+    updateCompsByBand(band, comps);
+  };
+
+  // Encontrar o componente selecionado e a banda correspondente
+  let selectedComp: RpbComponent | null = null;
+  let selectedBand: SubBandTarget = activeSubBand;
+  for (const b of ['header', 'detail', 'footer'] as SubBandTarget[]) {
+    const found = getCompsByBand(b).find(c => c.id === selectedCompId);
+    if (found) {
+      selectedComp = found;
+      selectedBand = b;
+      break;
+    }
+  }
 
   // Redimensionamento de altura de banda por drag
   const handleStartResizeBand = (band: SubBandTarget, currentH: number, e: React.MouseEvent) => {
@@ -260,7 +293,7 @@ const UnifiedSubreportSheetCanvas: React.FC<{
             >
               {(draft.headerComponents && draft.headerComponents.length > 0) || (!draft.showTitleBar) ? (
                 headerComps.map((c, idx) => {
-                  const isSel = selectedCompId === c.id && activeSubBand === 'header';
+                  const isSel = selectedCompId === c.id;
                   return (
                     <div
                       key={c.id}
@@ -354,7 +387,7 @@ const UnifiedSubreportSheetCanvas: React.FC<{
                 </div>
               ) : (
                 detailComps.map((c, idx) => {
-                  const isSel = selectedCompId === c.id && activeSubBand === 'detail';
+                  const isSel = selectedCompId === c.id;
                   return (
                     <div
                       key={c.id}
@@ -415,7 +448,7 @@ const UnifiedSubreportSheetCanvas: React.FC<{
               onClick={() => setActiveSubBand('footer')}
             >
               {footerComps.map((c, idx) => {
-                const isSel = selectedCompId === c.id && activeSubBand === 'footer';
+                const isSel = selectedCompId === c.id;
                 return (
                   <div
                     key={c.id}
@@ -460,7 +493,7 @@ const UnifiedSubreportSheetCanvas: React.FC<{
         </div>
       </div>
 
-      {draft.tipoLayout !== 'custom' && activeSubBand === 'detail' ? (
+      {draft.tipoLayout !== 'custom' && activeSubBand === 'detail' && !selectedComp ? (
         <div className="space-y-3 p-4 border border-border rounded-lg bg-card shadow-sm">
           <div className="flex items-center justify-between">
             <div>
@@ -542,18 +575,244 @@ const UnifiedSubreportSheetCanvas: React.FC<{
             </div>
           )}
         </div>
-      ) : selectedCompId ? (
-        <div className="p-4 border border-border rounded-lg bg-card shadow-sm space-y-3">
-          <div className="flex items-center justify-between border-b border-border pb-2">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-primary capitalize">
-                Propriedades: Selecionado
-              </span>
+              ) : selectedComp ? (() => {
+        const s = (selectedComp as any).style || DEFAULT_STYLE;
+        return (
+          <div className="p-4 border border-border rounded-lg bg-card shadow-sm space-y-3">
+            <div className="flex items-center justify-between border-b border-border pb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-primary capitalize">
+                  Propriedades do Elemento: {selectedComp.type === 'text' ? 'Caixa de Texto' : selectedComp.type === 'line' ? 'Linha' : selectedComp.type === 'box' ? 'Retângulo' : selectedComp.type === 'totalizer' ? 'Totalizador' : 'Imagem'}
+                </span>
+                <span className="text-[10px] bg-secondary border border-border text-muted-foreground px-1.5 py-0.5 rounded font-mono font-semibold">
+                  ID: {selectedComp.id}
+                </span>
+                <span className="text-[10px] bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded font-semibold uppercase">
+                  Banda: {selectedBand === 'header' ? 'Sub-Cabeçalho' : selectedBand === 'detail' ? 'Sub-Corpo' : 'Sub-Rodapé'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="flex items-center gap-0.5 mr-2">
+                  <button type="button" onClick={() => moveLayerInBand(selectedBand, selectedComp!.id, 'back')} title="Enviar para trás" className="p-1 rounded hover:bg-accent text-muted-foreground"><ChevronsDown size={13} /></button>
+                  <button type="button" onClick={() => moveLayerInBand(selectedBand, selectedComp!.id, 'backward')} title="Recuar camada" className="p-1 rounded hover:bg-accent text-muted-foreground"><ChevronDown size={13} /></button>
+                  <button type="button" onClick={() => moveLayerInBand(selectedBand, selectedComp!.id, 'forward')} title="Avançar camada" className="p-1 rounded hover:bg-accent text-muted-foreground"><ChevronUp size={13} /></button>
+                  <button type="button" onClick={() => moveLayerInBand(selectedBand, selectedComp!.id, 'front')} title="Trazer para frente" className="p-1 rounded hover:bg-accent text-muted-foreground"><ChevronsUp size={13} /></button>
+                </div>
+                <button
+                  onClick={() => {
+                    updateCompsByBand(selectedBand, getCompsByBand(selectedBand).filter(c => c.id !== selectedComp!.id));
+                    setSelectedCompId(null);
+                  }}
+                  className="text-xs text-destructive hover:bg-destructive/10 px-2 py-1 rounded font-semibold"
+                >
+                  Excluir Elemento
+                </button>
+              </div>
             </div>
+
+            {/* Grid de Coordenadas X, Y, W, H */}
+            <div className="grid grid-cols-4 gap-2 text-xs">
+              <div>
+                <label className="text-[10px] text-muted-foreground block">Posição X (mm)</label>
+                <input type="number" step="0.1" className={inputCls} value={selectedComp.x} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { x: parseFloat(e.target.value) || 0 })} />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground block">Posição Y (mm)</label>
+                <input type="number" step="0.1" className={inputCls} value={selectedComp.y} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { y: parseFloat(e.target.value) || 0 })} />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground block">Largura W (mm)</label>
+                <input type="number" step="0.1" className={inputCls} value={selectedComp.w} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { w: parseFloat(e.target.value) || 0 })} />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground block">Altura H (mm)</label>
+                <input type="number" step="0.1" className={inputCls} value={selectedComp.h} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { h: parseFloat(e.target.value) || 0 })} />
+              </div>
+            </div>
+
+            {/* Edição Específica por Tipo */}
+            {selectedComp.type === 'text' && (
+              <div className="space-y-2 pt-1 border-t border-border">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2">
+                    <label className="text-[10px] text-muted-foreground block">Conteúdo do Texto</label>
+                    <input className={inputCls} value={(selectedComp as any).content || ''} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { content: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-primary font-bold block">➕ Inserir Campo na Posição</label>
+                    <select
+                      className={inputCls + ' border-primary/40 bg-primary/5 font-semibold text-primary'}
+                      defaultValue=""
+                      onChange={e => {
+                        if (e.target.value) {
+                          const curText = (selectedComp as any).content || '';
+                          patchCompInBand(selectedBand, selectedComp!.id, { content: curText + `{${e.target.value}}` });
+                          e.target.value = '';
+                        }
+                      }}
+                    >
+                      <option value="">— Selecione um Campo —</option>
+                      {childColumns.length > 0 && (
+                        <optgroup label="Colunas do Sub-Relatório">
+                          {childColumns.map(c => <option key={c} value={c}>{c}</option>)}
+                        </optgroup>
+                      )}
+                      {parentColumns.length > 0 && (
+                        <optgroup label="Campos do Relatório Pai">
+                          {parentColumns.map(c => <option key={c} value={c}>{c}</option>)}
+                        </optgroup>
+                      )}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-5 gap-2 text-xs items-end">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block">Tamanho (pt)</label>
+                    <input type="number" className={inputCls} value={s.fontSize || 9} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { style: { ...s, fontSize: parseInt(e.target.value) || 9 } })} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block">Cor Texto</label>
+                    <input type="color" className="w-full h-6 border rounded" value={s.color || '#1a1a1a'} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { style: { ...s, color: e.target.value } })} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block">Alinhamento</label>
+                    <select className={inputCls} value={s.align || 'left'} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { style: { ...s, align: e.target.value } })}>
+                      <option value="left">Esquerda</option>
+                      <option value="center">Centro</option>
+                      <option value="right">Direita</option>
+                    </select>
+                  </div>
+                  <div className="flex gap-1 justify-center">
+                    <button type="button" onClick={() => patchCompInBand(selectedBand, selectedComp!.id, { style: { ...s, bold: !s.bold } })} className={`px-2 py-1 rounded border text-xs ${s.bold ? 'bg-primary text-primary-foreground font-bold' : 'bg-card'}`}>N</button>
+                    <button type="button" onClick={() => patchCompInBand(selectedBand, selectedComp!.id, { style: { ...s, italic: !s.italic } })} className={`px-2 py-1 rounded border text-xs ${s.italic ? 'bg-primary text-primary-foreground font-bold' : 'bg-card'}`}>I</button>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block">Cor Fundo</label>
+                    <input type="color" className="w-full h-6 border rounded" value={s.bgColor === 'transparent' ? '#ffffff' : (s.bgColor || '#ffffff')} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { style: { ...s, bgColor: e.target.value } })} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {selectedComp.type === 'totalizer' && (
+              <div className="space-y-2 pt-1 border-t border-border text-xs">
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block">Campo a Totalizar</label>
+                    <select className={inputCls} value={(selectedComp as any).field || ''} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { field: e.target.value })}>
+                      <option value="">— Selecione o Campo —</option>
+                      {childColumns.length > 0 && (
+                        <optgroup label="Colunas do Sub-Relatório">
+                          {childColumns.map(c => <option key={c} value={c}>{c}</option>)}
+                        </optgroup>
+                      )}
+                      {parentColumns.length > 0 && (
+                        <optgroup label="Campos do Relatório Pai">
+                          {parentColumns.map(c => <option key={c} value={c}>{c}</option>)}
+                        </optgroup>
+                      )}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block">Operação</label>
+                    <select className={inputCls} value={(selectedComp as any).operation || 'sum'} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { operation: e.target.value })}>
+                      <option value="sum">Soma (Σ)</option>
+                      <option value="avg">Média (X̄)</option>
+                      <option value="count">Contagem (#)</option>
+                      <option value="min">Mínimo (Min)</option>
+                      <option value="max">Máximo (Max)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block">Rótulo Exibido</label>
+                    <input className={inputCls} value={(selectedComp as any).labelText || ''} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { labelText: e.target.value })} placeholder="Ex: Total: " />
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block">Formato</label>
+                    <select className={inputCls} value={(selectedComp as any).format || 'currency'} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { format: e.target.value })}>
+                      <option value="currency">Moeda (R$)</option>
+                      <option value="number">Número</option>
+                      <option value="percent">Percentual (%)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block">Tamanho Fonte (pt)</label>
+                    <input type="number" className={inputCls} value={s.fontSize || 9} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { style: { ...s, fontSize: parseInt(e.target.value) || 9 } })} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block">Cor Texto</label>
+                    <input type="color" className="w-full h-6 border rounded" value={s.color || '#1a1a1a'} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { style: { ...s, color: e.target.value } })} />
+                  </div>
+                  <div className="flex items-end">
+                    <button type="button" onClick={() => patchCompInBand(selectedBand, selectedComp!.id, { style: { ...s, bold: !s.bold } })} className={`w-full py-1 rounded border ${s.bold ? 'bg-primary text-primary-foreground font-bold' : 'bg-card'}`}>Negrito</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {selectedComp.type === 'line' && (
+              <div className="grid grid-cols-3 gap-2 pt-1 border-t border-border text-xs">
+                <div>
+                  <label className="text-[10px] text-muted-foreground block">Orientação</label>
+                  <select className={inputCls} value={(selectedComp as any).orientation || 'horizontal'} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { orientation: e.target.value })}>
+                    <option value="horizontal">Horizontal</option>
+                    <option value="vertical">Vertical</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground block">Espessura (px)</label>
+                  <input type="number" className={inputCls} value={(selectedComp as any).thickness || 1} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { thickness: parseInt(e.target.value) || 1 })} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground block">Cor</label>
+                  <input type="color" className="w-full h-6 border rounded" value={(selectedComp as any).color || '#1a1a1a'} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { color: e.target.value })} />
+                </div>
+              </div>
+            )}
+
+            {selectedComp.type === 'box' && (
+              <div className="grid grid-cols-4 gap-2 pt-1 border-t border-border text-xs">
+                <div>
+                  <label className="text-[10px] text-muted-foreground block">Cor da Borda</label>
+                  <input type="color" className="w-full h-6 border rounded" value={(selectedComp as any).borderColor || '#cccccc'} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { borderColor: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground block">Espessura Borda</label>
+                  <input type="number" className={inputCls} value={(selectedComp as any).borderThickness || 1} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { borderThickness: parseInt(e.target.value) || 1 })} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground block">Cor de Fundo</label>
+                  <input type="color" className="w-full h-6 border rounded" value={(selectedComp as any).bgColor === 'transparent' ? '#ffffff' : ((selectedComp as any).bgColor || '#ffffff')} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { bgColor: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground block">Arredondamento</label>
+                  <input type="number" className={inputCls} value={(selectedComp as any).borderRadius || 0} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { borderRadius: parseInt(e.target.value) || 0 })} />
+                </div>
+              </div>
+            )}
+
+            {selectedComp.type === 'image' && (
+              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border text-xs">
+                <div>
+                  <label className="text-[10px] text-muted-foreground block">URL ou Caminho da Imagem</label>
+                  <input className={inputCls} value={(selectedComp as any).src || ''} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { src: e.target.value })} placeholder="https://..." />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground block">Ajuste da Imagem</label>
+                  <select className={inputCls} value={(selectedComp as any).fit || 'contain'} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { fit: e.target.value })}>
+                    <option value="contain">Conter (Proporcional)</option>
+                    <option value="cover">Cobrir</option>
+                    <option value="fill">Esticar</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="text-xs text-muted-foreground italic">Use a aba de propriedades completa no editor principal.</div>
-        </div>
-      ) : null}
+        );
+      })() : null}
     </div>
   );
 };
@@ -697,6 +956,7 @@ const RpbSubreportConfig: React.FC<Props> = ({ comp, parentColumns, onChange, on
               draft={draft}
               onPatch={patch}
               childColumns={childColsList}
+              parentColumns={parentColumns}
               handleDetectCols={handleDetectCols}
               detecting={detecting}
               colDragRef={colDragRef}
