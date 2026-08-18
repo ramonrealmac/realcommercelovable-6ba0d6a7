@@ -173,6 +173,9 @@ const CompItem: React.FC<{
     <div 
       style={style} 
       onMouseDown={(e) => {
+        if (['INPUT', 'TEXTAREA', 'SELECT'].includes((document.activeElement as HTMLElement)?.tagName || '')) {
+          (document.activeElement as HTMLElement)?.blur();
+        }
         moved.current = false;
         const isMulti = e.ctrlKey || e.metaKey;
         onStartDrag(e, isMulti);
@@ -269,6 +272,9 @@ const BandRow: React.FC<{
           style={{ width: mm(pageW), height: mm(band.height), overflow: 'hidden' }}
           onClick={e => {
             if (e.target === e.currentTarget) {
+              if (['INPUT', 'TEXTAREA', 'SELECT'].includes((document.activeElement as HTMLElement)?.tagName || '')) {
+                (document.activeElement as HTMLElement)?.blur();
+              }
               onActivate();
               onClearSelection();
             }

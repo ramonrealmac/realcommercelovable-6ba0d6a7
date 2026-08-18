@@ -369,32 +369,68 @@ function renderComponent(
       } else {
         // Renderização Tabela (padrão)
         const colgroup = cols.map(col => `<col style="width:${col.w}mm" />`).join('');
+        const totals = (c as any).showColumnTotals ? calcTotals(subRows, cols) : {};
+
         const thead = c.showHeader && cols.length ? `
           <thead><tr>${cols.map(col => {
-            const colHs = { ...hs };
-            return `<th style="padding:${colHs.padding}px;text-align:${col.align};
-              font-size:${(col as any).fontSize || colHs.fontSize || fontSize}pt;
-              font-weight:bold;
-              background-color:${colHs.bgColor !== 'transparent' ? colHs.bgColor : '#f1f5f9'};
-              border:1px solid ${colHs.borderColor || '#ddd'};box-sizing:border-box;">${col.label}</th>`;
+            const colHs = (col as any).headerStyle ? { ...hs, ...(col as any).headerStyle } : hs;
+            const colBg = colHs.bgColor !== 'transparent' ? colHs.bgColor : '#f1f5f9';
+            const colFg = colHs.color || '#1e293b';
+            const colFontSz = (col as any).fontSize || colHs.fontSize || fontSize;
+            const colFontW = colHs.bold !== false ? 'bold' : 'normal';
+            const colFontSt = colHs.italic ? 'italic' : 'normal';
+            const colBorderColor = colHs.borderColor || '#cbd5e1';
+            const colBorder = colHs.border === 'none' ? 'border:none;'
+              : colHs.border === 'bottom' ? `border-bottom:1px solid ${colBorderColor};`
+              : `border:1px solid ${colBorderColor};`;
+            return `<th style="padding:${colHs.padding ?? 4}px;text-align:${col.align || 'left'};
+              font-size:${colFontSz}pt;
+              font-weight:${colFontW};
+              font-style:${colFontSt};
+              color:${colFg};
+              background-color:${colBg};
+              ${colBorder}box-sizing:border-box;">${col.label}</th>`;
           }).join('')}</tr></thead>` : '';
 
         const tbody = `<tbody>${subRows.map((subRow, i) => {
-          const bg = i % 2 === 1 ? 'background-color:#f8fafc;' : '';
-          return `<tr style="${bg}">${cols.map(col => {
+          const rowBg = i % 2 === 1 && (c as any).altRowBg && (c as any).altRowBg !== 'transparent'
+            ? `background-color:${(c as any).altRowBg};`
+            : rs.bgColor && rs.bgColor !== 'transparent'
+            ? `background-color:${rs.bgColor};`
+            : i % 2 === 1 ? 'background-color:#f8fafc;' : '';
+          return `<tr style="${rowBg}">${cols.map(col => {
+            const colFontSize = (col as any).fontSize || rs.fontSize || fontSize;
             const colColor = (col as any).color || rs.color || '#1a1a1a';
-            return `<td style="padding:${rs.padding}px;text-align:${col.align};
-              font-size:${(col as any).fontSize || fontSize}pt;
+            const colBold = (col as any).bold || (col as any).style?.bold || rs.bold ? 'font-weight:bold;' : '';
+            const colItalic = (col as any).italic || (col as any).style?.italic || rs.italic ? 'font-style:italic;' : '';
+            const colBorderColor = rs.borderColor || '#e5e7eb';
+            const colBorder = rs.border === 'none' ? 'border:none;'
+              : rs.border === 'bottom' ? `border-bottom:1px solid ${colBorderColor};`
+              : `border:1px solid ${colBorderColor};`;
+            return `<td style="padding:${rs.padding ?? 4}px;text-align:${col.align || 'left'};
+              font-size:${colFontSize}pt;
               color:${colColor};
-              border:1px solid #e5e7eb;box-sizing:border-box;">
+              ${colBold}
+              ${colItalic}
+              ${colBorder}box-sizing:border-box;">
               ${formatValue(getFieldValue(subRow, col.field), col.format, { decimals: (col as any).decimals, dateFormat: (col as any).dateFormat as RpbDateFormat })}
             </td>`;
           }).join('')}</tr>`;
         }).join('')}</tbody>`;
 
+        const tfoot = (c as any).showColumnTotals && Object.keys(totals).length ? `
+          <tfoot>
+            <tr style="font-weight:bold;background:#f1f5f9;">
+              ${cols.map(col => `
+                <td style="padding:${rs.padding ?? 4}px;text-align:${col.align || 'left'};border:1px solid #cbd5e1;box-sizing:border-box;font-size:${rs.fontSize || fontSize}pt;">
+                  ${totals[col.field] !== undefined ? formatValue(totals[col.field], col.format, { decimals: (col as any).decimals }) : ''}
+                </td>`).join('')}
+            </tr>
+          </tfoot>` : '';
+
         bodyHtml = `<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:${fontSize}pt;">
           <colgroup>${colgroup}</colgroup>
-          ${thead}${tbody}
+          ${thead}${tbody}${tfoot}
         </table>`;
       }
 

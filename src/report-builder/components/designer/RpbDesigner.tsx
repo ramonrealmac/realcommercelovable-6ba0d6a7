@@ -466,7 +466,7 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
         return;
       }
 
-      const step = 1; // 1mm
+      const step = (e.ctrlKey || e.metaKey) ? 0.1 : 1;
       const isShift = e.shiftKey;
       let dx = 0, dy = 0, dw = 0, dh = 0;
 
@@ -493,10 +493,10 @@ const RpbDesigner: React.FC<Props> = ({ relatorio, queryColumns: qColsFromParent
                 if (selectedIds.includes(c.id)) {
                   return {
                     ...c,
-                    x: Math.max(0, c.x + dx),
-                    y: Math.max(0, c.y + dy),
-                    w: Math.max(1, c.w + dw),
-                    h: Math.max(1, c.h + dh),
+                    x: Math.max(0, Math.round((c.x + dx) * 10) / 10),
+                    y: Math.max(0, Math.round((c.y + dy) * 10) / 10),
+                    w: Math.max(1, Math.round((c.w + dw) * 10) / 10),
+                    h: Math.max(1, Math.round((c.h + dh) * 10) / 10),
                   };
                 }
                 return c;

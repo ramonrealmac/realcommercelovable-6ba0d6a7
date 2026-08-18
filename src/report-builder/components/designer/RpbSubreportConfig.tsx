@@ -31,6 +31,95 @@ const canvasPx = (mm: number) => Math.round(mm * CANVAS_SCALE);
 const pxToMm = (px: number) => Math.round((px / CANVAS_SCALE) * 10) / 10;
 const inputCls = 'w-full border border-border rounded px-2 py-1 text-xs bg-card focus:ring-1 focus:ring-ring outline-none';
 
+// ── Componente de preview dos elementos do sub-relatório ─────────────────
+const SubreportCompItemPreview: React.FC<{ c: RpbComponent }> = ({ c }) => {
+  const s = (c as any).style || DEFAULT_STYLE;
+
+  if (c.type === 'text') {
+    const fontSz = s.fontSize || 9;
+    const justify = s.align === 'center' ? 'center' : s.align === 'right' ? 'flex-end' : 'flex-start';
+    const bgStyle = s.bgColor && s.bgColor !== 'transparent' ? s.bgColor : undefined;
+    return (
+      <div style={{
+        width: '100%', height: '100%',
+        fontSize: `${fontSz}pt`,
+        fontWeight: s.bold ? 'bold' : 'normal',
+        fontStyle: s.italic ? 'italic' : 'normal',
+        color: s.color || '#1e293b',
+        textAlign: s.align || 'left',
+        backgroundColor: bgStyle,
+        display: 'flex', alignItems: 'center',
+        justifyContent: justify,
+        padding: '1px 3px',
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        boxSizing: 'border-box',
+      }}>
+        {(c as any).content || 'Texto'}
+      </div>
+    );
+  }
+
+  if (c.type === 'line') {
+    const lc = c as any;
+    if (lc.orientation === 'vertical') {
+      return <div style={{ width: Math.max(1, lc.thickness || 1), height: '100%', backgroundColor: lc.color || '#1a1a1a', margin: '0 auto' }} />;
+    }
+    return (
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center' }}>
+        <hr style={{ width: '100%', border: 'none', borderTop: `${lc.thickness || 1}px solid ${lc.color || '#1a1a1a'}`, margin: 0 }} />
+      </div>
+    );
+  }
+
+  if (c.type === 'box') {
+    const bc = c as any;
+    return (
+      <div style={{
+        width: '100%', height: '100%',
+        border: `${bc.borderThickness || 1}px solid ${bc.borderColor || '#cccccc'}`,
+        backgroundColor: bc.bgColor && bc.bgColor !== 'transparent' ? bc.bgColor : undefined,
+        borderRadius: bc.borderRadius ? `${bc.borderRadius}px` : undefined,
+        boxSizing: 'border-box',
+      }} />
+    );
+  }
+
+  if (c.type === 'totalizer') {
+    const tc = c as any;
+    const fontSz = s.fontSize || 9;
+    const justify = s.align === 'center' ? 'center' : s.align === 'right' ? 'flex-end' : 'flex-start';
+    const bgStyle = s.bgColor && s.bgColor !== 'transparent' ? s.bgColor : undefined;
+    return (
+      <div style={{
+        width: '100%', height: '100%',
+        fontSize: `${fontSz}pt`,
+        fontWeight: s.bold ? 'bold' : 'normal',
+        color: s.color || '#1e293b',
+        backgroundColor: bgStyle,
+        display: 'flex', alignItems: 'center',
+        justifyContent: justify,
+        padding: '1px 3px', gap: '3px',
+        whiteSpace: 'nowrap', overflow: 'hidden',
+        boxSizing: 'border-box',
+      }}>
+        <span style={{ opacity: 0.7 }}>{tc.labelText || 'Total'}</span>
+        <span style={{ fontWeight: 'bold' }}>Σ {tc.field || '—'}</span>
+      </div>
+    );
+  }
+
+  if (c.type === 'image') {
+    const ic = c as any;
+    return (
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(254,243,199,0.5)', border: '1px solid #fde68a', fontSize: '9px', color: '#b45309' }}>
+        🖼 {ic.src?.includes('{') ? ic.src : 'Imagem'}
+      </div>
+    );
+  }
+
+  return null;
+};
+
 // ── Editor Canvas de Folha Única Contínua (Idêntico ao Relatório Principal) ─────────
 const UnifiedSubreportSheetCanvas: React.FC<{
   draft: RpbSubreportComp;
@@ -114,28 +203,36 @@ const UnifiedSubreportSheetCanvas: React.FC<{
     };
   }, [handleMouseMove, handleMouseUp]);
 
-  // ── Teclas de seta para mover elemento selecionado em qualquer banda ──
+  // ── Teclas de seta para mover e redimensionar elemento selecionado em qualquer banda ──
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!selectedCompId) return;
       if (!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) return;
-      if (['INPUT','TEXTAREA','SELECT'].includes((e.target as HTMLElement)?.tagName)) return;
+      const target = e.target as HTMLElement;
+      if (['INPUT','TEXTAREA','SELECT'].includes(target?.tagName) || target?.isContentEditable) return;
       e.preventDefault();
-      const step = e.shiftKey ? 0.1 : 1;
-      const delta: Record<string, [string, number]> = {
-        ArrowUp:    ['y', -step],
-        ArrowDown:  ['y',  step],
-        ArrowLeft:  ['x', -step],
-        ArrowRight: ['x',  step],
-      };
-      const [axis, val] = delta[e.key];
+
+      const step = (e.ctrlKey || e.metaKey) ? 0.1 : 1;
+      const isShift = e.shiftKey;
+      let dx = 0, dy = 0, dw = 0, dh = 0;
+
+      if (e.key === 'ArrowLeft')  isShift ? (dw = -step) : (dx = -step);
+      if (e.key === 'ArrowRight') isShift ? (dw = step)  : (dx = step);
+      if (e.key === 'ArrowUp')    isShift ? (dh = -step) : (dy = -step);
+      if (e.key === 'ArrowDown')  isShift ? (dh = step)  : (dy = step);
+
+      if (dx === 0 && dy === 0 && dw === 0 && dh === 0) return;
 
       for (const b of ['header', 'detail', 'footer'] as SubBandTarget[]) {
         const comps = getCompsByBand(b);
-        const target = comps.find(c => c.id === selectedCompId);
-        if (target) {
-          const cur = (target as any)[axis] as number;
-          patchCompInBand(b, selectedCompId, { [axis]: Math.max(0, Math.round((cur + val) * 10) / 10) });
+        const targetComp = comps.find(c => c.id === selectedCompId);
+        if (targetComp) {
+          patchCompInBand(b, selectedCompId, {
+            x: Math.max(0, Math.round((targetComp.x + dx) * 10) / 10),
+            y: Math.max(0, Math.round((targetComp.y + dy) * 10) / 10),
+            w: Math.max(1, Math.round((targetComp.w + dw) * 10) / 10),
+            h: Math.max(1, Math.round((targetComp.h + dh) * 10) / 10),
+          });
           break;
         }
       }
@@ -364,6 +461,59 @@ const UnifiedSubreportSheetCanvas: React.FC<{
                       </div>
                     </div>
 
+                    <div>
+                      <label className="text-[10px] text-muted-foreground block">Formato do Campo</label>
+                      <select
+                        className={inputCls}
+                        value={(selectedComp as any).format || 'text'}
+                        onChange={e => patchCompInBand(selectedBand, selectedComp!.id, {
+                          format: e.target.value as any,
+                          dateFormat: undefined,
+                          decimals: undefined
+                        })}
+                      >
+                        <option value="text">Texto (padrão)</option>
+                        <option value="date">Data</option>
+                        <option value="datetime">Data + Hora</option>
+                        <option value="number">Número</option>
+                        <option value="currency">Moeda (R$)</option>
+                        <option value="percent">Percentual (%)</option>
+                      </select>
+                    </div>
+
+                    {['date', 'datetime'].includes((selectedComp as any).format || '') && (
+                      <div>
+                        <label className="text-[10px] text-muted-foreground block">Máscara de Data</label>
+                        <select
+                          className={inputCls}
+                          value={(selectedComp as any).dateFormat || ((selectedComp as any).format === 'datetime' ? 'dd/mm/yyyy hh:mm' : 'dd/mm/yyyy')}
+                          onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { dateFormat: e.target.value as any })}
+                        >
+                          <option value="dd/mm/yyyy">dd/mm/yyyy</option>
+                          <option value="dd/mm/yy">dd/mm/yy</option>
+                          <option value="dd/mm/yyyy hh:mm">dd/mm/yyyy hh:mm</option>
+                          <option value="dd/mm/yy hh:mm">dd/mm/yy hh:mm</option>
+                          <option value="hh:mm">hh:mm (só hora)</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {['number', 'currency', 'percent'].includes((selectedComp as any).format || '') && (
+                      <div>
+                        <label className="text-[10px] text-muted-foreground block">Casas Decimais</label>
+                        <input
+                          type="number" min={0} max={10}
+                          className={inputCls}
+                          value={(selectedComp as any).decimals !== undefined ? (selectedComp as any).decimals : ''}
+                          placeholder="2 (padrão)"
+                          onChange={e => {
+                            const v = parseInt(e.target.value);
+                            patchCompInBand(selectedBand, selectedComp!.id, { decimals: isNaN(v) ? undefined : v });
+                          }}
+                        />
+                      </div>
+                    )}
+
                     <div className="flex gap-2">
                       <button type="button" onClick={() => patchCompInBand(selectedBand, selectedComp!.id, { style: { ...s, bold: !s.bold } })} className={`flex-1 py-1 rounded border text-xs ${s.bold ? 'bg-primary text-primary-foreground font-bold' : 'bg-card'}`}>Negrito</button>
                       <button type="button" onClick={() => patchCompInBand(selectedBand, selectedComp!.id, { style: { ...s, italic: !s.italic } })} className={`flex-1 py-1 rounded border text-xs ${s.italic ? 'bg-primary text-primary-foreground font-bold' : 'bg-card'}`}>Itálico</button>
@@ -420,6 +570,22 @@ const UnifiedSubreportSheetCanvas: React.FC<{
                         <input type="number" className={inputCls} value={s.fontSize || 9} onChange={e => patchCompInBand(selectedBand, selectedComp!.id, { style: { ...s, fontSize: parseInt(e.target.value) || 9 } })} />
                       </div>
                     </div>
+
+                    {['number', 'currency', 'percent'].includes((selectedComp as any).format || 'currency') && (
+                      <div>
+                        <label className="text-[10px] text-muted-foreground block">Casas Decimais</label>
+                        <input
+                          type="number" min={0} max={10}
+                          className={inputCls}
+                          value={(selectedComp as any).decimals !== undefined ? (selectedComp as any).decimals : ''}
+                          placeholder="2 (padrão)"
+                          onChange={e => {
+                            const v = parseInt(e.target.value);
+                            patchCompInBand(selectedBand, selectedComp!.id, { decimals: isNaN(v) ? undefined : v });
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -536,7 +702,7 @@ const UnifiedSubreportSheetCanvas: React.FC<{
                           <Trash2 size={12} />
                         </button>
                       </div>
-                      <div className="grid grid-cols-2 gap-1 text-[11px]">
+                      <div className="grid grid-cols-2 gap-1.5 text-[11px] pt-1">
                         <div>
                           <label className="text-[9px] text-muted-foreground block">Rótulo</label>
                           <input className={inputCls} value={col.label} onChange={e => updateCol(i, { label: e.target.value })} />
@@ -544,6 +710,51 @@ const UnifiedSubreportSheetCanvas: React.FC<{
                         <div>
                           <label className="text-[9px] text-muted-foreground block">Largura (mm)</label>
                           <input type="number" className={inputCls} value={col.w} min={5} max={210} onChange={e => updateCol(i, { w: Number(e.target.value) })} />
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-muted-foreground block">Alinhamento</label>
+                          <select className={inputCls} value={col.align || 'left'} onChange={e => updateCol(i, { align: e.target.value as any })}>
+                            <option value="left">Esquerda</option>
+                            <option value="center">Centro</option>
+                            <option value="right">Direita</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-muted-foreground block">Formato</label>
+                          <select className={inputCls} value={col.format || 'text'} onChange={e => updateCol(i, { format: e.target.value as any })}>
+                            <option value="text">Texto</option>
+                            <option value="currency">Moeda (R$)</option>
+                            <option value="number">Número</option>
+                            <option value="percent">Percentual (%)</option>
+                            <option value="date">Data</option>
+                            <option value="datetime">Data e Hora</option>
+                          </select>
+                        </div>
+                        {['number', 'currency', 'percent'].includes(col.format) && (
+                          <div>
+                            <label className="text-[9px] text-muted-foreground block">Decimais</label>
+                            <input type="number" min={0} max={6} className={inputCls} value={col.decimals ?? 2} onChange={e => updateCol(i, { decimals: parseInt(e.target.value) || 0 })} />
+                          </div>
+                        )}
+                        {['date', 'datetime'].includes(col.format) && (
+                          <div>
+                            <label className="text-[9px] text-muted-foreground block">Máscara Data</label>
+                            <select className={inputCls} value={col.dateFormat || 'dd/mm/yyyy'} onChange={e => updateCol(i, { dateFormat: e.target.value as any })}>
+                              <option value="dd/mm/yyyy">dd/mm/yyyy</option>
+                              <option value="dd/mm/yy">dd/mm/yy</option>
+                              <option value="dd/mm/yyyy hh:mm">dd/mm/yyyy hh:mm</option>
+                              <option value="dd/mm/yy hh:mm">dd/mm/yy hh:mm</option>
+                              <option value="hh:mm">hh:mm</option>
+                            </select>
+                          </div>
+                        )}
+                        <div>
+                          <label className="text-[9px] text-muted-foreground block">Fonte (pt)</label>
+                          <input type="number" min={6} max={36} className={inputCls} value={col.fontSize || 9} onChange={e => updateCol(i, { fontSize: parseInt(e.target.value) || 9 })} />
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-muted-foreground block">Cor Texto</label>
+                          <input type="color" className="w-full h-6 border rounded" value={col.color || '#1a1a1a'} onChange={e => updateCol(i, { color: e.target.value })} />
                         </div>
                       </div>
                     </div>
@@ -641,6 +852,9 @@ const UnifiedSubreportSheetCanvas: React.FC<{
                         }}
                         onMouseDown={e => {
                           e.stopPropagation();
+                          if (['INPUT', 'TEXTAREA', 'SELECT'].includes((document.activeElement as HTMLElement)?.tagName || '')) {
+                            (document.activeElement as HTMLElement)?.blur();
+                          }
                           setActiveSubBand('header');
                           setSelectedCompId(c.id);
                           dragRef.current = {
@@ -650,9 +864,7 @@ const UnifiedSubreportSheetCanvas: React.FC<{
                           };
                         }}
                       >
-                        <span style={{ fontSize: 9, color: '#1e293b', padding: '1px 3px', display: 'block', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', fontWeight: 600 }}>
-                          {c.type === 'text' ? ((c as any).content || 'Texto') : c.type === 'line' ? '─ linha' : c.type === 'box' ? '□ retângulo' : '🖼 imagem'}
-                        </span>
+                        <SubreportCompItemPreview c={c} />
                       </div>
                     );
                   })
@@ -739,6 +951,9 @@ const UnifiedSubreportSheetCanvas: React.FC<{
                         }}
                         onMouseDown={e => {
                           e.stopPropagation();
+                          if (['INPUT', 'TEXTAREA', 'SELECT'].includes((document.activeElement as HTMLElement)?.tagName || '')) {
+                            (document.activeElement as HTMLElement)?.blur();
+                          }
                           setActiveSubBand('detail');
                           setSelectedCompId(c.id);
                           dragRef.current = {
@@ -748,9 +963,7 @@ const UnifiedSubreportSheetCanvas: React.FC<{
                           };
                         }}
                       >
-                        <span style={{ fontSize: 9, color: '#1e293b', padding: '1px 3px', display: 'block', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', fontWeight: 600 }}>
-                          {c.type === 'text' ? ((c as any).content || 'Texto') : c.type === 'line' ? '─ linha' : c.type === 'box' ? '□ retângulo' : '🖼 imagem'}
-                        </span>
+                        <SubreportCompItemPreview c={c} />
                       </div>
                     );
                   })
@@ -804,6 +1017,9 @@ const UnifiedSubreportSheetCanvas: React.FC<{
                       }}
                       onMouseDown={e => {
                         e.stopPropagation();
+                        if (['INPUT', 'TEXTAREA', 'SELECT'].includes((document.activeElement as HTMLElement)?.tagName || '')) {
+                          (document.activeElement as HTMLElement)?.blur();
+                        }
                         setActiveSubBand('footer');
                         setSelectedCompId(c.id);
                         dragRef.current = {
@@ -813,9 +1029,7 @@ const UnifiedSubreportSheetCanvas: React.FC<{
                         };
                       }}
                     >
-                      <span style={{ fontSize: 9, color: '#1e293b', padding: '1px 3px', display: 'block', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', fontWeight: 600 }}>
-                        {c.type === 'text' ? ((c as any).content || 'Texto') : c.type === 'totalizer' ? `Σ ${(c as any).labelText || ''} ${(c as any).field || ''}` : c.type === 'line' ? '─ linha' : c.type === 'box' ? '□ retângulo' : '🖼 imagem'}
-                      </span>
+                      <SubreportCompItemPreview c={c} />
                     </div>
                   );
                 })}
