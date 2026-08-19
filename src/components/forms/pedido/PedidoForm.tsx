@@ -83,7 +83,8 @@ interface PedidoCadastroFormContentProps {
   setXMovimentoParaBuscar: (id: number | null) => void;
   setXModoInsertSemId: (val: boolean) => void;
   handleKeyDown: (e: React.KeyboardEvent<HTMLElement>) => void;
-  onSalvar?: () => Promise<void>;
+  onSalvar?: () => Promise<any>;
+  handleEditar?: () => void;
   fetchItensCadastro?: (id: number) => Promise<void>;
 
   tabelasPreco: ILookup[];
@@ -95,7 +96,7 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
   vendedores, tpOperacoes, rotas, cidades, clientesCache, setXClientesCache,
   abrirPesquisaCliente, clientePadraoId, ensureClienteInfo,
   pedidoTotalCtx, setXMovimentoParaBuscar, setXModoInsertSemId, handleKeyDown,
-  onSalvar, fetchItensCadastro,
+  onSalvar, handleEditar, fetchItensCadastro,
   tabelasPreco, onTabelaPrecoChange
 }) => {
   const clientInputRef = useRef<HTMLInputElement>(null);
@@ -423,16 +424,14 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
               if (e.key === "Enter") {
                 e.preventDefault();
                 e.stopPropagation();
-                if (mode === "insert") {
-                  if (onSalvar) {
-                    const saved = await onSalvar();
-                    if (saved) {
-                      setInnerTab("itens");
-                    }
-                  }
-                } else {
-                  setInnerTab("itens");
+                if (onSalvar) {
+                  const saved = await onSalvar();
+                  if (saved === null) return;
                 }
+                if (handleEditar) {
+                  handleEditar();
+                }
+                setInnerTab("itens");
               }
             }}
             className="w-full border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
@@ -1367,7 +1366,7 @@ const PedidoForm: React.FC = () => {
             },
           },
         ]}
-        renderCadastro={({ record, setField, setRecord, mode, isEditing, currentRecord, setInnerTab, onSalvar }) => {
+        renderCadastro={({ record, setField, setRecord, mode, isEditing, currentRecord, setInnerTab, onSalvar, handleEditar }) => {
           return (
             <PedidoCadastroFormContent
               record={record}
@@ -1378,6 +1377,7 @@ const PedidoForm: React.FC = () => {
               currentRecord={currentRecord}
               setInnerTab={setInnerTab}
               onSalvar={onSalvar}
+              handleEditar={handleEditar}
               vendedores={XVendedores}
               tpOperacoes={XTpOperacoes}
               rotas={XRotas}

@@ -152,13 +152,17 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
     setTimeout(() => codigoRef.current?.focus(), 50);
   }, [XDepositos, pedido?.st_entrega]);
 
-  // Auto disparar "novo" após inserção do cabeçalho
+  // Auto disparar "novo" e dar foco no código do produto
   useEffect(() => {
-    if (autoNovoTrigger && pedido?.movimento_id && podeEditar && !XEdit) {
-      novo();
+    if (pedido?.movimento_id && podeEditar) {
+      if (!XEdit) {
+        novo();
+      } else {
+        setTimeout(() => codigoRef.current?.focus(), 50);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoNovoTrigger, pedido?.movimento_id]);
+  }, [autoNovoTrigger, pedido?.movimento_id, podeEditar]);
 
   const carregarEstoquePorDeposito = useCallback(async (produto_id: number) => {
     const ids = XGroupEmpresaIds.length > 0 ? XGroupEmpresaIds : [XEmpresaId];

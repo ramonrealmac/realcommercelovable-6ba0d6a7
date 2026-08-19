@@ -194,43 +194,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
       const meio = ((meios || []) as any[])[0];
       if (!meio) throw new Error("Nenhum meio de pagamento com soma_vl_caixa='S' configurado.");
 
-      // === 2) Garantir caixa_movimento do dia/funcionário ===
-      let caixaMovimentoId: number | null = null;
-      const { data: cmExist } = await db
-        .from("caixa_movimento")
-        .select("caixa_movimento_id")
-        .eq("empresa_id", caixaSelecionado.empresa_id)
-        .eq("funcionario_id", caixaSelecionado.funcionario_id)
-        .eq("dt_movimento", caixaSelecionado.dt_abertura)
-        .eq("excluido", false)
-        .order("caixa_movimento_id", { ascending: false })
-        .limit(1);
-      if (((cmExist || []) as any[]).length > 0) {
-        caixaMovimentoId = (cmExist as any[])[0].caixa_movimento_id;
-        await db
-          .from("caixa_movimento")
-          .update({ caixa_abertura_id: caixaSelecionado.caixa_abertura_id })
-          .eq("caixa_movimento_id", caixaMovimentoId);
-      } else {
-        const newCmId = await nextId("caixa_movimento", "caixa_movimento_id");
-        const { error: errCm } = await db.from("caixa_movimento").insert({
-          caixa_movimento_id: newCmId,
-          empresa_id: caixaSelecionado.empresa_id,
-          funcionario_id: caixaSelecionado.funcionario_id,
-          colaborador_id: caixaSelecionado.funcionario_id,
-          dt_movimento: caixaSelecionado.dt_abertura,
-          tp_movimento: isSup ? "E" : "S",
-          tp_operacao: isSup ? "E" : "S",
-          historico: XDescricao,
-          vl_movimento: isSup ? vl : -vl,
-          excluido: false,
-          caixa_abertura_id: caixaSelecionado.caixa_abertura_id,
-        });
-        if (errCm) throw new Error(errCm.message);
-        caixaMovimentoId = newCmId;
-      }
-
-      // === 3) Inserir movimento (cabeçalho) ===
+      // === 2) Inserir movimento (cabeçalho) ===
       const newMovId = await nextId("movimento", "movimento_id");
       const horaAtual = new Date().toTimeString().slice(0, 8);
       const { error: errMov } = await db.from("movimento").insert({
@@ -260,7 +224,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
       });
       if (errMov) throw new Error(errMov.message);
 
-      // === 4) Inserir movimento_item (uma linha representando o lançamento) ===
+      // === 3) Inserir movimento_item (uma linha representando o lançamento) ===
       const newItemId = await nextId("movimento_item", "movimento_item_id");
       const { error: errIt } = await db.from("movimento_item").insert({
         movimento_item_id: newItemId,
@@ -277,9 +241,27 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
       });
       if (errIt) throw new Error(errIt.message);
 
+      // === 4) Inserir novo caixa_movimento dedicado a este lançamento (Suprimento ou Sangria) ===
+      const newCmId = await nextId("caixa_movimento", "caixa_movimento_id");
+      const { error: errCm } = await db.from("caixa_movimento").insert({
+        caixa_movimento_id: newCmId,
+        empresa_id: caixaSelecionado.empresa_id,
+        funcionario_id: caixaSelecionado.funcionario_id,
+        colaborador_id: caixaSelecionado.funcionario_id,
+        dt_movimento: caixaSelecionado.dt_abertura,
+        tp_movimento: isSup ? "E" : "S",
+        tp_operacao: isSup ? "E" : "S",
+        historico: XDescricao,
+        vl_movimento: isSup ? vl : -vl,
+        excluido: false,
+        caixa_abertura_id: caixaSelecionado.caixa_abertura_id,
+        movimento_id: newMovId,
+      });
+      if (errCm) throw new Error(errCm.message);
+
       // === 5) Inserir caixa_movimento_item para refletir no fechamento ===
       const { error: errCmi } = await db.from("caixa_movimento_item").insert({
-        caixa_movimento_id: caixaMovimentoId,
+        caixa_movimento_id: newCmId,
         empresa_id: caixaSelecionado.empresa_id,
         condicao_id: null,
         prazo_pagamento_id: null,
@@ -325,11 +307,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
     if (e.key === "Enter") {
       e.preventDefault();
       e.stopPropagation();
-      if (!XCadastroSel) {
-        setXSearchOpen(true);
-      } else {
-        document.getElementById("ss_confirmar_btn")?.focus();
-      }
+      document.getElementById("ss_confirmar_btn")?.focus();
     }
   };
 
@@ -353,6 +331,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
+                  e.stopPropagation();
                   document.getElementById("ss_valor_input")?.focus();
                 }
               }}
@@ -390,6 +369,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
+                  e.stopPropagation();
                   document.getElementById("ss_plano_select")?.focus();
                 }
               }}
@@ -408,6 +388,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
+                  e.stopPropagation();
                   document.getElementById("ss_descricao_input")?.focus();
                 }
               }}
@@ -435,6 +416,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
+                e.stopPropagation();
                 document.getElementById("ss_responsavel_input")?.focus();
               }
             }}
@@ -530,6 +512,13 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
           <button
             id="ss_confirmar_btn"
             onClick={salvar}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.stopPropagation();
+                salvar();
+              }
+            }}
             disabled={XSalvando}
             className={`text-sm px-4 py-1.5 rounded text-white flex items-center gap-2 disabled:opacity-50 transition-colors focus:ring-2 focus:ring-ring outline-none ${
               isSup ? "bg-emerald-600 hover:bg-emerald-700 focus:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700 focus:bg-rose-700"

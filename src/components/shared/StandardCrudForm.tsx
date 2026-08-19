@@ -31,7 +31,8 @@ interface StandardCrudFormProps<T extends Record<string, any>> {
     isEditing: boolean;
     currentRecord: any | null;
     setInnerTab: (tab: string) => void;
-    onSalvar?: () => Promise<void>;
+    onSalvar?: () => Promise<any>;
+    handleEditar?: () => void;
     handleIncluir?: () => void;
     data?: T[];
   }) => React.ReactNode;
@@ -310,6 +311,7 @@ function StandardCrudForm<T extends Record<string, any>>({
           currentRecord: XEffectiveCurrentRecord,
           setInnerTab: setXInnerTab,
           onSalvar: ctrl.handleSalvar,
+          handleEditar: ctrl.handleEditar,
           handleIncluir: () => { ctrl.handleIncluir(); setXInnerTab("cadastro"); },
           data: ctrl.XData
         })}
