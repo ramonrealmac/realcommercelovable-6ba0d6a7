@@ -17,6 +17,7 @@ const GrupoProdutosForm = lazy(() => import("@/components/forms/produtos/GrupoPr
 const SubgrupoProdutosForm = lazy(() => import("@/components/forms/produtos/SubgrupoProdutosForm"));
 const UnidadeForm = lazy(() => import("@/components/forms/produtos/UnidadeForm"));
 const TabelaPrecoForm = lazy(() => import("@/components/forms/produtos/TabelaPrecoForm"));
+const PromocaoForm = lazy(() => import("@/components/forms/produtos/PromocaoForm"));
 const EstoqueForm = lazy(() => import("@/components/forms/estoques/EstoqueForm"));
 const DepositoForm = lazy(() => import("@/components/forms/estoques/DepositoForm"));
 const EstadoForm = lazy(() => import("@/components/forms/enderecos/EstadoForm"));
@@ -105,6 +106,7 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "subgrupo-produtos": return <SubgrupoProdutosForm />;
       case "unidades": return <UnidadeForm />;
       case "tabelas-preco": return <TabelaPrecoForm />;
+      case "promocoes": return <PromocaoForm />;
       case "estoque": return <EstoqueForm />;
       case "depositos": return <DepositoForm />;
       case "estados": return <EstadoForm />;

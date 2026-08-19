@@ -43,6 +43,7 @@ import {
   ShoppingCart,
   Package2,
   Settings2,
+  Tag,
   Database,
   FolderOpen,
   Folder,
@@ -120,12 +121,8 @@ export const MENU_CONFIG: MenuItem[] = [
           { id: "rotas", title: "Rotas", icon: Route },
         ],
       },
-      {
-        id: "cad-tabelas-preco",
-        title: "Tabelas de Preço",
-        icon: DollarSign,
-        children: [{ id: "tabelas-preco", title: "Tabelas", icon: AlignJustify }],
-      },
+      { id: "tabelas-preco", title: "Tabelas de Preço", icon: DollarSign },
+      { id: "promocoes", title: "Tabelas de Promoções", icon: Tag },
       {
         id: "cad-financeiro",
         title: "Financeiro",

@@ -238,7 +238,13 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
             <input
               ref={clientInputRef}
               readOnly
-              value={record.cadastro_id ? (clientesCache[record.cadastro_id]?.razao || `#${clientesCache[record.cadastro_id]?.cd_cadastro ?? record.cadastro_id}`) : ""}
+              value={
+                record.cadastro_id
+                  ? clientesCache[record.cadastro_id]
+                    ? `${clientesCache[record.cadastro_id].cd_cadastro ?? record.cadastro_id} - ${clientesCache[record.cadastro_id].razao}`
+                    : `#${record.cadastro_id}`
+                  : ""
+              }
               placeholder="F2 = Padrão, Enter = Pesquisar..."
               className="flex-1 border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
               data-lookup="true"

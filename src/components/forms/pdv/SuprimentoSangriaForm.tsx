@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { ArrowDownToLine, ArrowUpFromLine, Save, X, Search } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CurrencyInput } from "@/components/shared/CurrencyInput";
+import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 
 const db = supabase as any;
 const fmt = (v: number) =>
@@ -238,7 +239,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
         cadastro_id: XCadastroSel?.cadastro_id && XCadastroSel.cadastro_id !== 0 ? XCadastroSel.cadastro_id : null,
         tp_movimento: tipo,
         tp_origem: "CAIXA",
-        st_pedido: "F",
+        st_pedido: "R",
         faturado: "S",
         dt_emissao: new Date().toISOString(),
         hr_movimento: horaAtual,
@@ -307,11 +308,28 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
     }
   };
 
+  const { handleKeyDown } = useEnterTraversal();
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (funcionarioId || XCaixaSel) {
+        document.getElementById("ss_valor_input")?.focus();
+      } else {
+        document.getElementById("ss_caixa_select")?.focus();
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [funcionarioId, XCaixaSel]);
+
   const handleResponsavelKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
       e.stopPropagation();
-      setXSearchOpen(true);
+      if (!XCadastroSel) {
+        setXSearchOpen(true);
+      } else {
+        document.getElementById("ss_confirmar_btn")?.focus();
+      }
     }
   };
 
@@ -322,7 +340,7 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
         <h2 className="text-sm font-semibold">{titulo}</h2>
       </div>
 
-      <div className="p-6 space-y-4">
+      <div className="p-6 space-y-4" onKeyDown={handleKeyDown}>
         {/* Caixa + Data */}
         <div className="grid grid-cols-12 gap-3">
           <div className="col-span-7 space-y-1">
