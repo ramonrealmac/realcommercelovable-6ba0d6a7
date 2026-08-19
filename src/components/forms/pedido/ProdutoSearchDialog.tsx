@@ -91,7 +91,7 @@ export async function buscarProdutoPorCodigo(
 ): Promise<IProdutoRow | null> {
   const t = (termo || "").trim();
   if (!t) return null;
-  const ids = XGroupEmpresaIds.length > 0 ? XGroupEmpresaIds : [XEmpresaId];
+  const ids = Array.from(new Set([...(XGroupEmpresaIds.length > 0 ? XGroupEmpresaIds : [XEmpresaId]), XEmpresaId, 1]));
 
   // 1. Tentar encontrar pelo cod_barra na tabela produto_codbarra
   const { data: codBarraData } = await db.from("produto_codbarra")
@@ -109,7 +109,7 @@ export async function buscarProdutoPorCodigo(
   if (codBarraData?.produto_id) {
     q = q.eq("produto_id", codBarraData.produto_id);
   } else if (/^\d+$/.test(t)) {
-    q = q.or(`cd_produto.eq.${t},referencia.eq.${t},gtin.eq.${t}`);
+    q = q.or(`produto_id.eq.${t},cd_produto.eq.${t},referencia.eq.${t},gtin.eq.${t}`);
   } else {
     q = q.or(`referencia.eq.${t},gtin.eq.${t}`);
   }

@@ -401,13 +401,13 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
                 value={XCodigo}
                 onChange={e => setXCodigo(e.target.value)}
                 onBlur={onCodigoBlur}
-                onKeyDown={e => {
+                onKeyDown={async e => {
                   if (e.key === "Enter") {
                     const t = XCodigo.trim();
                     if (t) {
                       e.preventDefault();
                       e.stopPropagation();
-                      (e.target as HTMLInputElement).blur();
+                      await onCodigoBlur();
                     }
                   }
                 }}
