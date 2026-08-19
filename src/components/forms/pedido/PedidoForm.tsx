@@ -538,7 +538,7 @@ const PedidoForm: React.FC = () => {
       "cidade",
     );
     load(
-      db.from("tabela_preco").select("tabela_id, descricao").eq("empresa_id", XEmpresaId).eq("excluido", false).eq("ativa", true).order("descricao"),
+      db.from("tabela_preco").select("tabela_id, descricao").eq("empresa_id", XEmpresaId).eq("excluido", false).order("descricao"),
       (d) => setXTabelasPreco(d.map((t: any) => ({ id: t.tabela_id, label: t.descricao }))),
       "tabela_preco",
     );

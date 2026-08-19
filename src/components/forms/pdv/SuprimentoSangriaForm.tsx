@@ -195,10 +195,8 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
       if (!meio) throw new Error("Nenhum meio de pagamento com soma_vl_caixa='S' configurado.");
 
       // === 2) Inserir movimento (cabeçalho) ===
-      const newMovId = await nextId("movimento", "movimento_id");
       const horaAtual = new Date().toTimeString().slice(0, 8);
-      const { error: errMov } = await db.from("movimento").insert({
-        movimento_id: newMovId,
+      const { data: insertedMov, error: errMov } = await db.from("movimento").insert({
         empresa_id: XEmpresaId,
         cadastro_id: XCadastroSel?.cadastro_id && XCadastroSel.cadastro_id !== 0 ? XCadastroSel.cadastro_id : null,
         tp_movimento: tipo,
@@ -221,8 +219,9 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
         id_transacao_abacatepay: "",
         gerou_financeiro: "N",
         mot_cancelamento: "",
-      });
+      }).select("movimento_id").single();
       if (errMov) throw new Error(errMov.message);
+      const newMovId = insertedMov.movimento_id;
 
       // === 3) Inserir movimento_item (uma linha representando o lançamento) ===
       const newItemId = await nextId("movimento_item", "movimento_item_id");

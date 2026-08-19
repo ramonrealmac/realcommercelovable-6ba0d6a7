@@ -240,7 +240,6 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     const total = totalReceber;
 
     const mov = {
-      movimento_id: movId,
       empresa_id: XEmpresaId,
       cadastro_id: XCliente?.cadastro_id || null,
       funcionario_id: XVendedor?.cadastro_id || caixa.funcionario_id,
@@ -260,8 +259,9 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       deposito_id: XParams!.deposito_estoque_caixa,
       excluido: false,
     };
-    const { error } = await db.from("movimento").insert(mov);
+    const { data: insMov, error } = await db.from("movimento").insert(mov).select("movimento_id").single();
     if (error) throw new Error("Falha ao criar venda: " + error.message);
+    const movId = insMov.movimento_id;
 
     const { data: maxIt } = await db.from("movimento_item")
       .select("movimento_item_id").order("movimento_item_id", { ascending: false }).limit(1);
