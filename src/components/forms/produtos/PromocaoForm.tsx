@@ -11,6 +11,8 @@ import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, File,
 import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 import ProdutoSearchDialog, { IProdutoRow } from "@/components/forms/pedido/ProdutoSearchDialog";
 
+import { Checkbox } from "@/components/ui/checkbox";
+
 const db = supabase as any;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -22,6 +24,7 @@ interface IPromocao {
   descricao: string;
   dt_inicial: string | null;
   dt_final: string | null;
+  ativa?: boolean;
   excluido: boolean;
 }
 
@@ -58,6 +61,7 @@ const XGridCols: IGridColumn[] = [
   { key: "descricao", label: "Descrição", width: "2fr" },
   { key: "dt_inicial", label: "Dt. Inicial", width: "110px", align: "center", render: r => r.dt_inicial ?? "" },
   { key: "dt_final", label: "Dt. Final", width: "110px", align: "center", render: r => r.dt_final ?? "" },
+  { key: "ativa", label: "Ativa", width: "80px", align: "center", render: r => (r.ativa ?? true) ? "Sim" : "Não" },
 ];
 
 // ─── Items Sub-grid ────────────────────────────────────────────────────────────
@@ -646,6 +650,7 @@ const PromocaoForm: React.FC = () => {
           descricao: "",
           dt_inicial: null,
           dt_final: null,
+          ativa: true,
         },
         XOnBeforeSave: async (rec, mode) => {
           if (!rec.descricao?.trim()) throw new Error("A descrição da promoção é obrigatória.");
@@ -664,11 +669,12 @@ const PromocaoForm: React.FC = () => {
               cd_promocao: nextCd,
               empresa_id: XEmpresaMatrizId,
               descricao: rec.descricao!.trim(),
+              ativa: rec.ativa ?? true,
               excluido: false,
             };
           }
 
-          return { ...rec, descricao: rec.descricao!.trim() };
+          return { ...rec, descricao: rec.descricao!.trim(), ativa: rec.ativa ?? true };
         },
       }}
       XGridCols={XGridCols}
@@ -676,7 +682,7 @@ const PromocaoForm: React.FC = () => {
       XAfterInsertTab="cadastro"
       renderCadastro={({ record, setField, mode, isEditing, currentRecord }) => (
         <div className="space-y-4" onKeyDown={handleKeyDown}>
-          {/* Header Row: Código + Empresa + Descrição + Dt. Inicial + Dt. Final */}
+          {/* Header Row: Código + Empresa + Descrição + Dt. Inicial + Dt. Final + Ativa */}
           <div className="flex flex-wrap items-end gap-3 bg-secondary/10 p-3 rounded-lg border border-border/60">
             {/* Código */}
             <div className="w-24 shrink-0">
@@ -740,6 +746,19 @@ const PromocaoForm: React.FC = () => {
               readOnly={!isEditing}
               className="w-44 shrink-0"
             />
+
+            {/* Ativa */}
+            <div className="w-24 shrink-0 flex flex-col justify-end pb-1.5">
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">Status</label>
+              <label className="flex items-center gap-2 text-sm font-medium cursor-pointer h-[34px]">
+                <Checkbox
+                  checked={record.ativa ?? true}
+                  onCheckedChange={c => setField("ativa", !!c as any)}
+                  disabled={!isEditing}
+                />
+                <span>{(record.ativa ?? true) ? "Ativa" : "Inativa"}</span>
+              </label>
+            </div>
           </div>
 
           {/* Products grid */}

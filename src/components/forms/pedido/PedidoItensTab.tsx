@@ -209,32 +209,13 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
     setF(key, n);
   };
 
-  const obterPrecoTabela = async (produtoId: number, tabelaId: number): Promise<number | null> => {
-    try {
-      const { data, error } = await db.from("tabela_preco_item")
-        .select("preco")
-        .eq("tabela_id", tabelaId)
-        .eq("produto_id", produtoId)
-        .eq("excluido", false)
-        .maybeSingle();
-      if (error) throw error;
-      return data ? Number(data.preco) : null;
-    } catch (e) {
-      console.warn("Falha ao obter preço da tabela:", e);
-      return null;
-    }
-  };
-
   const aplicarProduto = useCallback(async (p: IProdutoRow, deposito_id?: number) => {
-    let preco = Number(p.st_promo && p.preco_promocional > 0 ? p.preco_promocional : p.preco_venda) || 0;
-
-    if (tabelaPrecoId) {
-      const precoTabela = await obterPrecoTabela(p.produto_id, tabelaPrecoId);
-      if (precoTabela !== null) {
-        preco = precoTabela;
-      } else {
-        toast.info("Preço não cadastrado na tabela selecionada. Usando preço padrão.");
-      }
+    const { preco, fonte } = await obterPrecoUnitarioItem(p.produto_id, tabelaPrecoId, Number(p.st_promo && p.preco_promocional > 0 ? p.preco_promocional : p.preco_venda) || 0);
+    
+    if (fonte === "promocao") {
+      toast.info("Preço promocional aplicado.");
+    } else if (fonte === "padrao" && tabelaPrecoId) {
+      toast.info("Preço não cadastrado na tabela selecionada (ou tabela inativa). Usando preço padrão.");
     }
 
     setXEdit(prev => recalc({

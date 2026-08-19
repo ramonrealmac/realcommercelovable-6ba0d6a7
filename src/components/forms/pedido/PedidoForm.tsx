@@ -14,6 +14,7 @@ import ClienteSearchDialog, { IClienteRow } from "./ClienteSearchDialog";
 import { Search, Send, Reply, Lock, Unlock, Ban, ArrowLeftRight, Wallet, CircleDollarSign, Package } from "lucide-react";
 import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 import { ToolbarBtn, ToolbarSeparator } from "@/components/shared/FormToolbar";
+import { obterPrecoUnitarioItem } from "@/services/precoService";
 
 const db = supabase as any;
 
@@ -537,7 +538,7 @@ const PedidoForm: React.FC = () => {
       "cidade",
     );
     load(
-      db.from("tabela_preco").select("tabela_id, descricao").eq("empresa_id", XEmpresaId).eq("excluido", false).order("descricao"),
+      db.from("tabela_preco").select("tabela_id, descricao").eq("empresa_id", XEmpresaId).eq("excluido", false).eq("ativa", true).order("descricao"),
       (d) => setXTabelasPreco(d.map((t: any) => ({ id: t.tabela_id, label: t.descricao }))),
       "tabela_preco",
     );
@@ -838,30 +839,7 @@ const PedidoForm: React.FC = () => {
 
       // 2. Recalculate price for each item
       for (const item of itens) {
-        let newPreco = null;
-        if (tabelaId) {
-          // Fetch price from tabela_preco_item
-          const { data: tpItem } = await db.from("tabela_preco_item")
-            .select("preco")
-            .eq("tabela_id", tabelaId)
-            .eq("produto_id", item.produto_id)
-            .eq("excluido", false)
-            .maybeSingle();
-          if (tpItem) {
-            newPreco = Number(tpItem.preco);
-          }
-        }
-
-        if (newPreco === null) {
-          // Fallback to product standard price
-          const { data: prod } = await db.from("produto")
-            .select("preco_venda")
-            .eq("produto_id", item.produto_id)
-            .maybeSingle();
-          if (prod) {
-            newPreco = Number(prod.preco_venda);
-          }
-        }
+        const { preco: newPreco } = await obterPrecoUnitarioItem(item.produto_id, tabelaId);
 
         if (newPreco !== null) {
           // Calculate new item totals
