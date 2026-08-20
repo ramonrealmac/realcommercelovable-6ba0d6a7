@@ -15,11 +15,12 @@ import { Search, Send, Reply, Lock, Unlock, Ban, ArrowLeftRight, Wallet, CircleD
 import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 import { ToolbarBtn, ToolbarSeparator } from "@/components/shared/FormToolbar";
 import { obterPrecoUnitarioItem } from "@/services/precoService";
+import { obterProximoNrMovimento } from "@/services/movimentoSequenceService";
 
 const db = supabase as any;
 
 interface ILookup { id: number; label: string; }
-interface IClienteInfo { id: number; cnpj: string; razao: string; fantasia: string; cd_cadastro?: number | null; tabela_preco_id?: number | null; }
+interface IClienteInfo { id: number; cnpj: string; razao: string; fantasia: string; cd_cadastro?: number | null; tabela_preco_id?: number | null; condicao_id?: number | null; }
 
 const buildGridCols = (
   vendedores: ILookup[],
@@ -56,6 +57,7 @@ const XDefaultRecord: Partial<IMovimento> = {
   vl_seguro: 0,
   vl_outro: 0,
   tabela_preco_id: null,
+  condicao_id: null,
   obs_pedido: "",
   dt_emissao: new Date().toISOString().substring(0, 10),
   dt_entrega: new Date().toISOString().substring(0, 10),
@@ -89,6 +91,7 @@ interface PedidoCadastroFormContentProps {
   fetchItensCadastro?: (id: number) => Promise<void>;
 
   tabelasPreco: ILookup[];
+  condicoesPagamento: ILookup[];
   onTabelaPrecoChange?: (tabelaId: number | null) => Promise<void>;
 }
 
@@ -98,11 +101,12 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
   abrirPesquisaCliente, clientePadraoId, ensureClienteInfo,
   pedidoTotalCtx, setXMovimentoParaBuscar, setXModoInsertSemId, handleKeyDown,
   onSalvar, handleEditar, fetchItensCadastro,
-  tabelasPreco, onTabelaPrecoChange
+  tabelasPreco, condicoesPagamento, onTabelaPrecoChange
 }) => {
   const clientInputRef = useRef<HTMLInputElement>(null);
   const vendedorSelectRef = useRef<HTMLSelectElement>(null);
   const dtEmissaoInputRef = useRef<HTMLInputElement>(null);
+  const condicaoSelectRef = useRef<HTMLSelectElement>(null);
   const tabelaPrecoSelectRef = useRef<HTMLSelectElement>(null);
 
   // Auto-foco no campo do cliente ao inserir ou alterar
@@ -124,6 +128,9 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
         await ensureClienteInfo([clientePadraoId]);
         setField("cadastro_id", clientePadraoId as any);
         const cliInfo = clientesCache[clientePadraoId];
+        if (cliInfo?.condicao_id) {
+          setField("condicao_id", cliInfo.condicao_id as any);
+        }
         if (cliInfo?.tabela_preco_id) {
           setField("tabela_preco_id", cliInfo.tabela_preco_id as any);
           if (onTabelaPrecoChange) await onTabelaPrecoChange(cliInfo.tabela_preco_id);
@@ -161,10 +168,14 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
           cnpj: c.cnpj || "",
           razao: c.razao_social || "",
           fantasia: c.nome_fantasia || "",
-          tabela_preco_id: c.tabela_preco_id
+          tabela_preco_id: c.tabela_preco_id,
+          condicao_id: c.condicao_id
         }
       }));
       setField("cadastro_id", c.cadastro_id as any);
+      if (c.condicao_id) {
+        setField("condicao_id", c.condicao_id as any);
+      }
       if (c.tabela_preco_id) {
         setField("tabela_preco_id", c.tabela_preco_id as any);
         if (onTabelaPrecoChange) await onTabelaPrecoChange(c.tabela_preco_id);
@@ -390,7 +401,7 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
         </div>
       </div>
 
-      {/* Linha do Tipo de Desconto e Tabela de Preço */}
+      {/* Linha do Tipo de Desconto, Condição de Pagamento e Tabela de Preço */}
       <div className="grid grid-cols-12 gap-3 items-end">
         <div className="col-span-3">
           <label className="text-xs text-muted-foreground">Tipo de Desconto <span className="text-destructive">*</span></label>
@@ -402,7 +413,7 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
               if (e.key === "Enter") {
                 e.preventDefault();
                 e.stopPropagation();
-                tabelaPrecoSelectRef.current?.focus();
+                condicaoSelectRef.current?.focus();
               }
             }}
             className="w-full border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
@@ -411,6 +422,26 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
           </select>
         </div>
         <div className="col-span-4">
+          <label className="text-xs text-muted-foreground">Condição de Pagamento</label>
+          <select
+            ref={condicaoSelectRef}
+            disabled={ro}
+            value={record.condicao_id ?? ""}
+            onChange={e => setField("condicao_id", e.target.value ? Number(e.target.value) : null as any)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.stopPropagation();
+                tabelaPrecoSelectRef.current?.focus();
+              }
+            }}
+            className="w-full border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
+          >
+            <option value="">-- Selecione a Condição --</option>
+            {condicoesPagamento.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+          </select>
+        </div>
+        <div className="col-span-5">
           <label className="text-xs text-muted-foreground">Tabela de Preço</label>
           <select
             ref={tabelaPrecoSelectRef}
@@ -490,7 +521,9 @@ const PedidoForm: React.FC = () => {
   const [XRotas, setXRotas] = useState<ILookup[]>([]);
   const [XCidades, setXCidades] = useState<ILookup[]>([]);
   const [XTabelasPreco, setXTabelasPreco] = useState<ILookup[]>([]);
+  const [XCondicoesPagamento, setXCondicoesPagamento] = useState<ILookup[]>([]);
   const [XClientesCache, setXClientesCache] = useState<Record<number, IClienteInfo>>({});
+
   const [XSearchOpen, setXSearchOpen] = useState(false);
   const [XSearchTarget, setXSearchTarget] = useState<((c: IClienteRow) => void) | null>(null);
   const [XAutoNovoItem, setXAutoNovoItem] = useState(0);
@@ -541,6 +574,11 @@ const PedidoForm: React.FC = () => {
       db.from("tabela_preco").select("tabela_id, descricao").eq("empresa_id", XEmpresaId).eq("excluido", false).order("descricao"),
       (d) => setXTabelasPreco(d.map((t: any) => ({ id: t.tabela_id, label: t.descricao }))),
       "tabela_preco",
+    );
+    load(
+      db.from("condicao_pagamento").select("condicao_id, cd_condicao_pagamento, descricao").eq("empresa_id", XEmpresaId).eq("excluido", false).order("cd_condicao_pagamento"),
+      (d) => setXCondicoesPagamento(d.map((c: any) => ({ id: c.condicao_id, label: `${c.cd_condicao_pagamento ?? c.condicao_id} - ${c.descricao}` }))),
+      "condicao_pagamento",
     );
   }, [XEmpresaId]);
 
@@ -649,14 +687,14 @@ const PedidoForm: React.FC = () => {
     const faltando = ids.filter(id => id && !XClientesCacheRef.current[id]);
     if (!faltando.length) return;
     const { data, error } = await db.from("cadastro")
-      .select("cadastro_id, cd_cadastro, cnpj, razao_social, nome_fantasia, tabela_preco_id")
+      .select("cadastro_id, cd_cadastro, cnpj, razao_social, nome_fantasia, tabela_preco_id, condicao_id")
       .in("cadastro_id", faltando);
     if (error) { toast.error("Erro ao carregar clientes: " + error.message); return; }
     if (data) {
       setXClientesCache(prev => {
         const next = { ...prev };
         for (const c of data as any[]) {
-          next[c.cadastro_id] = { id: c.cadastro_id, cd_cadastro: c.cd_cadastro, cnpj: c.cnpj || "", razao: c.razao_social || "", fantasia: c.nome_fantasia || "", tabela_preco_id: c.tabela_preco_id };
+          next[c.cadastro_id] = { id: c.cadastro_id, cd_cadastro: c.cd_cadastro, cnpj: c.cnpj || "", razao: c.razao_social || "", fantasia: c.nome_fantasia || "", tabela_preco_id: c.tabela_preco_id, condicao_id: c.condicao_id };
         }
         return next;
       });
@@ -1040,10 +1078,11 @@ const PedidoForm: React.FC = () => {
               cleanRec.vl_movimento = subtotalItens;
             }
 
-            if (mode === "insert" && !cleanRec.nr_movimento) {
-              const { data: maxNr } = await db.from("movimento")
-                .select("nr_movimento").eq("empresa_id", XEmpresaId).order("nr_movimento", { ascending: false }).limit(1);
-              cleanRec.nr_movimento = ((maxNr && maxNr[0]?.nr_movimento) || 0) + 1;
+            if (mode === "insert") {
+              delete cleanRec.movimento_id;
+              if (!cleanRec.nr_movimento) {
+                cleanRec.nr_movimento = await obterProximoNrMovimento(XEmpresaId);
+              }
             }
 
             return { ...cleanRec, empresa_id: cleanRec.empresa_id || XEmpresaId };
@@ -1371,6 +1410,7 @@ const PedidoForm: React.FC = () => {
               handleKeyDown={handleKeyDown}
               fetchItensCadastro={fetchItensCadastro}
               tabelasPreco={XTabelasPreco}
+              condicoesPagamento={XCondicoesPagamento}
               onTabelaPrecoChange={handleTabelaPrecoChange}
             />
           );

@@ -47,11 +47,18 @@ function parseAnyDate(val: string): Date | null {
 /**
  * 1. Verifica se o produto possui preço em uma PROMOÇÃO ativa, não excluída e válida pelas datas inicial/final.
  */
-export async function obterPrecoPromocional(produtoId: number): Promise<number | null> {
+/**
+ * 1. Verifica se o produto possui preço em uma PROMOÇÃO ativa, não excluída e válida pelas datas inicial/final.
+ * promocaoModo: 'V' (A VISTA) | 'P' (A PRAZO)
+ */
+export async function obterPrecoPromocional(
+  produtoId: number,
+  promocaoModo: "V" | "P" = "V"
+): Promise<number | null> {
   try {
     const { data: items, error } = await db
       .from("promocao_item")
-      .select("valor_promocional, promocao_id")
+      .select("valor_promocional, valor_promocional_prazo, promocao_id")
       .eq("produto_id", produtoId)
       .eq("excluido", false);
 
@@ -70,6 +77,10 @@ export async function obterPrecoPromocional(produtoId: number): Promise<number |
         (promo.ativa ?? true) &&
         isPromocaoValida(promo.dt_inicial, promo.dt_final)
       ) {
+        if (promocaoModo === "P") {
+          const pPrazo = Number(item.valor_promocional_prazo);
+          return pPrazo > 0 ? pPrazo : Number(item.valor_promocional);
+        }
         return Number(item.valor_promocional);
       }
     }
@@ -113,23 +124,43 @@ export async function obterPrecoTabela(produtoId: number, tabelaId: number): Pro
 
 /**
  * 3. Função principal de obtenção do Preço Unitário para o Pedido:
- * Ordem de prioridade:
- * 1º Preço em Promoção (se ativa, não excluída e válida pelas datas inicial/final)
- * 2º Preço na Tabela de Preços do cliente (se ativa, não excluída e válida pelas datas)
- * 3º Preço de venda padrão do Produto (fallback)
+ * Regras:
+ * - Se condicao.promocao === 'N' (NÃO) -> Pega o valor unitário da tabela de preço (ou preço padrão do produto).
+ * - Se condicao.promocao === 'V' (A VISTA) -> Pega o valor a vista da tabela de promoções (se ativa e não vencida).
+ * - Se condicao.promocao === 'P' (A PRAZO) -> Pega o valor a prazo da tabela de promoções (se ativa e não vencida).
  */
 export async function obterPrecoUnitarioItem(
   produtoId: number,
   tabelaPrecoId?: number | null,
-  precoVendaPadrao?: number | null
+  precoVendaPadrao?: number | null,
+  condicaoId?: number | null
 ): Promise<{ preco: number; fonte: "promocao" | "tabela" | "padrao" }> {
-  // 1. Tenta Promoção
-  const precoPromo = await obterPrecoPromocional(produtoId);
-  if (precoPromo !== null) {
-    return { preco: precoPromo, fonte: "promocao" };
+  // Descobre o modo de promoção da condição de pagamento selecionada
+  let promocaoModo: "N" | "V" | "P" = "N";
+  if (condicaoId) {
+    try {
+      const { data: cond } = await db
+        .from("condicao_pagamento")
+        .select("promocao")
+        .eq("condicao_id", condicaoId)
+        .maybeSingle();
+      if (cond?.promocao) {
+        promocaoModo = cond.promocao as "N" | "V" | "P";
+      }
+    } catch (e) {
+      console.warn("Erro ao carregar promocao da condicao_pagamento:", e);
+    }
   }
 
-  // 2. Tenta Tabela de Preço do Cliente
+  // 1. Se promocao !== 'N', tenta buscar na Tabela de Promoções
+  if (promocaoModo === "V" || promocaoModo === "P") {
+    const precoPromo = await obterPrecoPromocional(produtoId, promocaoModo);
+    if (precoPromo !== null) {
+      return { preco: precoPromo, fonte: "promocao" };
+    }
+  }
+
+  // 2. Se promocao === 'N' ou produto não estiver em promoção válida/ativa, tenta Tabela de Preço
   if (tabelaPrecoId) {
     const precoTab = await obterPrecoTabela(produtoId, tabelaPrecoId);
     if (precoTab !== null) {

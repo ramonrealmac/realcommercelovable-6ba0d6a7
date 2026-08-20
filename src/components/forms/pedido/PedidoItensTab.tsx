@@ -8,6 +8,7 @@ import { Search } from "lucide-react";
 import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 import type { IMovimento, IMovimentoItem } from "./types";
 import ProdutoSearchDialog, { IProdutoRow, buscarProdutoPorCodigo } from "./ProdutoSearchDialog";
+import { obterPrecoUnitarioItem } from "@/services/precoService";
 
 import { CurrencyInput } from "@/components/shared/CurrencyInput";
 
@@ -21,6 +22,7 @@ interface IProps {
   onTotalsChanged?: (total: number, itens: IMovimentoItem[]) => void;
   autoNovoTrigger?: number;
   tabelaPrecoId?: number | null;
+  condicaoId?: number | null;
 }
 
 const fmt = (v: number, dec = 2) =>
@@ -46,7 +48,7 @@ const parseNum = (v: any) => {
   return isNaN(n) ? 0 : n;
 };
 
-const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged, autoNovoTrigger, tabelaPrecoId }) => {
+const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged, autoNovoTrigger, tabelaPrecoId, condicaoId }) => {
   const { XEmpresaId, XEmpresaMatrizId, XEmpresas } = useAppContext();
   const { handleKeyDown } = useEnterTraversal();
   const [XItens, setXItens] = useState<IMovimentoItem[]>([]);
@@ -210,7 +212,13 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
   };
 
   const aplicarProduto = useCallback(async (p: IProdutoRow, deposito_id?: number) => {
-    const { preco, fonte } = await obterPrecoUnitarioItem(p.produto_id, tabelaPrecoId, Number(p.st_promo && p.preco_promocional > 0 ? p.preco_promocional : p.preco_venda) || 0);
+    const activeCondicaoId = condicaoId ?? pedido?.condicao_id ?? null;
+    const { preco, fonte } = await obterPrecoUnitarioItem(
+      p.produto_id,
+      tabelaPrecoId,
+      Number(p.st_promo && p.preco_promocional > 0 ? p.preco_promocional : p.preco_venda) || 0,
+      activeCondicaoId
+    );
     
     if (fonte === "promocao") {
       toast.info("Preço promocional aplicado.");
@@ -232,7 +240,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
     carregarEstoquePorDeposito(p.produto_id);
     // foco no preço unitário
     setTimeout(() => { precoUnitRef.current?.focus(); precoUnitRef.current?.select(); }, 80);
-  }, [carregarEstoquePorDeposito, tabelaPrecoId]);
+  }, [carregarEstoquePorDeposito, tabelaPrecoId, condicaoId, pedido?.condicao_id]);
 
   const onCodigoBlur = async () => {
     const t = XCodigo.trim();
@@ -289,7 +297,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
     }
 
     const {
-      vl_produto, vl_movimento,
+      vl_produto, vl_movimento, movimento_item_id,
       ...basePayload
     } = XEdit;
     
@@ -306,7 +314,16 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
       const { error } = await db.from("movimento_item").update(payload).eq("movimento_item_id", XEditingId);
       if (error) { toast.error(error.message); return; }
     } else {
-      const { error } = await db.from("movimento_item").insert(payload);
+      let { error } = await db.from("movimento_item").insert(payload);
+      if (error && (error.message?.includes("movimento_item_pkey") || error.message?.includes("duplicate key") || error.code === "23505")) {
+        const { data: maxIt } = await db.from("movimento_item")
+          .select("movimento_item_id")
+          .order("movimento_item_id", { ascending: false })
+          .limit(1);
+        const nextId = ((maxIt && maxIt[0]?.movimento_item_id) || 0) + 1;
+        const retryRes = await db.from("movimento_item").insert({ ...payload, movimento_item_id: nextId });
+        error = retryRes.error;
+      }
       if (error) { toast.error(error.message); return; }
     }
     toast.success("Item salvo.");

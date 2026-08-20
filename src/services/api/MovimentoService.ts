@@ -1,5 +1,6 @@
 import { BaseService } from "./BaseService";
 import type { Database } from "@/integrations/supabase/types";
+import { obterProximoNrMovimento } from "@/services/movimentoSequenceService";
 
 type Movimento = Database["public"]["Tables"]["movimento"]["Row"];
 type MovimentoInsert = Database["public"]["Tables"]["movimento"]["Insert"];
@@ -33,19 +34,7 @@ export class MovimentoService extends BaseService<Movimento, MovimentoInsert, Mo
    * Obtém o próximo número do movimento sequencial para a empresa.
    */
   private async getProximoNumeroMovimento(empresaId: number): Promise<number> {
-    const { data, error } = await this.client
-      .from("movimento")
-      .select("nr_movimento")
-      .eq("empresa_id", empresaId)
-      .order("nr_movimento", { ascending: false })
-      .limit(1);
-
-    if (error) {
-      throw new Error(`Erro ao obter o número do movimento: ${error.message}`);
-    }
-
-    const maxNr = data && data[0]?.nr_movimento ? Number(data[0].nr_movimento) : 0;
-    return maxNr + 1;
+    return obterProximoNrMovimento(empresaId);
   }
 
   /**

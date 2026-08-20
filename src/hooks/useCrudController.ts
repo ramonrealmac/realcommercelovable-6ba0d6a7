@@ -150,7 +150,14 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
         }
       });
 
-      const { data: ins, error } = await db.from(config.XTableName).insert(insertPayload).select().single();
+      let { data: ins, error } = await db.from(config.XTableName).insert(insertPayload).select().single();
+      if (error && error.message?.includes("promocao")) {
+        const insertNoPromo = { ...insertPayload };
+        delete (insertNoPromo as any).promocao;
+        const retryIns = await db.from(config.XTableName).insert(insertNoPromo).select().single();
+        ins = retryIns.data;
+        error = retryIns.error;
+      }
       if (error) { toast.error("Erro: " + error.message); return null; }
       savedRec = (ins || payload) as Partial<T>;
       toast.success("Registro incluído com sucesso.");
@@ -176,6 +183,17 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
           .select().maybeSingle();
         upd = fallbackRes.data;
         error = fallbackRes.error;
+      }
+
+      if (error && error.message?.includes("promocao")) {
+        const updateNoPromo = { ...updatePayload };
+        delete (updateNoPromo as any).promocao;
+        const retryUpd = await db.from(config.XTableName)
+          .update(updateNoPromo)
+          .eq(config.XPrimaryKey, XCurrentRecord[config.XPrimaryKey])
+          .select().maybeSingle();
+        upd = retryUpd.data;
+        error = retryUpd.error;
       }
 
       if (error) { toast.error("Erro: " + error.message); return null; }

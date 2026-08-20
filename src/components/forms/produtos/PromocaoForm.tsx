@@ -38,6 +38,9 @@ interface IPromocaoItem {
   percentual_desconto: number;
   valor_desconto: number;
   valor_promocional: number;
+  percentual_desconto_prazo?: number;
+  valor_desconto_prazo?: number;
+  valor_promocional_prazo?: number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -73,11 +76,14 @@ export interface IItensGridProps {
 
 export const ITEM_COLS: IGridColumn[] = [
   { key: "cd_produto", label: "Código", width: "90px", align: "right", render: r => r.cd_produto || r.produto_id },
-  { key: "nm_produto", label: "Descrição", width: "2.5fr" },
+  { key: "nm_produto", label: "Descrição", width: "2fr" },
   { key: "preco_base", label: "Preço Base", width: "110px", align: "right", render: r => fmt(r.preco_base) },
-  { key: "percentual_desconto", label: "% Desconto", width: "100px", align: "right", render: r => `${fmt(r.percentual_desconto)}%` },
-  { key: "valor_desconto", label: "R$ Desconto", width: "110px", align: "right", render: r => fmt(r.valor_desconto) },
-  { key: "valor_promocional", label: "Preço Promocional", width: "130px", align: "right", render: r => fmt(r.valor_promocional) },
+  { key: "percentual_desconto", label: "% Desc A Vista", width: "110px", align: "right", render: r => `${fmt(r.percentual_desconto)}%` },
+  { key: "valor_desconto", label: "$ Desc A Vista", width: "110px", align: "right", render: r => fmt(r.valor_desconto) },
+  { key: "valor_promocional", label: "Preço A Vista", width: "120px", align: "right", render: r => fmt(r.valor_promocional) },
+  { key: "percentual_desconto_prazo", label: "% Desc A Prazo", width: "110px", align: "right", render: r => `${fmt(r.percentual_desconto_prazo ?? 0)}%` },
+  { key: "valor_desconto_prazo", label: "$ Desc A Prazo", width: "110px", align: "right", render: r => fmt(r.valor_desconto_prazo ?? 0) },
+  { key: "valor_promocional_prazo", label: "Preço A Prazo", width: "120px", align: "right", render: r => fmt(r.valor_promocional_prazo ?? r.preco_base ?? 0) },
 ];
 
 export const ItensGrid: React.FC<IItensGridProps> = ({ promocao, isEditing }) => {
@@ -95,6 +101,9 @@ export const ItensGrid: React.FC<IItensGridProps> = ({ promocao, isEditing }) =>
   const percentualInputRef = useRef<HTMLInputElement>(null);
   const valorDescontoInputRef = useRef<HTMLInputElement>(null);
   const valorPromocionalInputRef = useRef<HTMLInputElement>(null);
+  const percentualPrazoInputRef = useRef<HTMLInputElement>(null);
+  const valorDescontoPrazoInputRef = useRef<HTMLInputElement>(null);
+  const valorPromocionalPrazoInputRef = useRef<HTMLInputElement>(null);
   const salvarBtnRef = useRef<HTMLButtonElement>(null);
 
   // Paginação
@@ -234,7 +243,10 @@ export const ItensGrid: React.FC<IItensGridProps> = ({ promocao, isEditing }) =>
       preco_base: 0,
       percentual_desconto: 0,
       valor_desconto: 0,
-      valor_promocional: 0
+      valor_promocional: 0,
+      percentual_desconto_prazo: 0,
+      valor_desconto_prazo: 0,
+      valor_promocional_prazo: 0,
     });
     setXSearchTerm("");
     setTimeout(() => {
@@ -243,7 +255,12 @@ export const ItensGrid: React.FC<IItensGridProps> = ({ promocao, isEditing }) =>
   };
 
   const editar = (it: IPromocaoItem) => {
-    setXEdit({ ...it });
+    setXEdit({
+      ...it,
+      percentual_desconto_prazo: it.percentual_desconto_prazo ?? 0,
+      valor_desconto_prazo: it.valor_desconto_prazo ?? 0,
+      valor_promocional_prazo: it.valor_promocional_prazo ?? it.preco_base ?? 0,
+    });
     setXEditingId(it.promocao_item_id);
     setXSearchTerm(it.cd_produto || String(it.produto_id));
   };
@@ -254,7 +271,7 @@ export const ItensGrid: React.FC<IItensGridProps> = ({ promocao, isEditing }) =>
     setXSearchTerm("");
   };
 
-  // Recálculos dinâmicos dos valores promocionais
+  // Recálculos dinâmicos A Vista
   const handlePercentualChange = (pct: number) => {
     const base = Number(XEdit?.preco_base || 0);
     const descVal = base * (pct / 100);
@@ -294,12 +311,55 @@ export const ItensGrid: React.FC<IItensGridProps> = ({ promocao, isEditing }) =>
     }));
   };
 
+  // Recálculos dinâmicos A Prazo
+  const handlePercentualPrazoChange = (pct: number) => {
+    const base = Number(XEdit?.preco_base || 0);
+    const descVal = base * (pct / 100);
+    const promoVal = base - descVal;
+
+    setXEdit(prev => ({
+      ...prev!,
+      percentual_desconto_prazo: pct,
+      valor_desconto_prazo: Number(descVal.toFixed(4)),
+      valor_promocional_prazo: Number(promoVal.toFixed(4)),
+    }));
+  };
+
+  const handleValorDescontoPrazoChange = (vDesc: number) => {
+    const base = Number(XEdit?.preco_base || 0);
+    const pct = base > 0 ? (vDesc / base) * 100 : 0;
+    const promoVal = base - vDesc;
+
+    setXEdit(prev => ({
+      ...prev!,
+      valor_desconto_prazo: vDesc,
+      percentual_desconto_prazo: Number(pct.toFixed(4)),
+      valor_promocional_prazo: Number(promoVal.toFixed(4)),
+    }));
+  };
+
+  const handleValorPromocionalPrazoChange = (vPromo: number) => {
+    const base = Number(XEdit?.preco_base || 0);
+    const descVal = base - vPromo;
+    const pct = base > 0 ? (descVal / base) * 100 : 0;
+
+    setXEdit(prev => ({
+      ...prev!,
+      valor_promocional_prazo: vPromo,
+      valor_desconto_prazo: Number(descVal.toFixed(4)),
+      percentual_desconto_prazo: Number(pct.toFixed(4)),
+    }));
+  };
+
   const salvar = async () => {
     if (!promocao?.promocao_id) { toast.error("Salve a promoção antes de incluir produtos."); return; }
     if (!XEdit?.produto_id) { toast.error("Selecione um produto."); return; }
 
-    const vPromo = parseNum(XEdit.valor_promocional);
-    if (vPromo < 0) { toast.error("Preço promocional não pode ser negativo."); return; }
+    const vPromoVista = parseNum(XEdit.valor_promocional);
+    if (vPromoVista < 0) { toast.error("Preço A Vista não pode ser negativo."); return; }
+
+    const vPromoPrazo = parseNum(XEdit.valor_promocional_prazo);
+    if (vPromoPrazo < 0) { toast.error("Preço A Prazo não pode ser negativo."); return; }
 
     const payload = {
       promocao_id: promocao.promocao_id,
@@ -309,7 +369,10 @@ export const ItensGrid: React.FC<IItensGridProps> = ({ promocao, isEditing }) =>
       preco_base: parseNum(XEdit.preco_base),
       percentual_desconto: parseNum(XEdit.percentual_desconto),
       valor_desconto: parseNum(XEdit.valor_desconto),
-      valor_promocional: vPromo,
+      valor_promocional: vPromoVista,
+      percentual_desconto_prazo: parseNum(XEdit.percentual_desconto_prazo),
+      valor_desconto_prazo: parseNum(XEdit.valor_desconto_prazo),
+      valor_promocional_prazo: vPromoPrazo,
       excluido: false,
     };
 
@@ -351,6 +414,9 @@ export const ItensGrid: React.FC<IItensGridProps> = ({ promocao, isEditing }) =>
       percentual_desconto: 0,
       valor_desconto: 0,
       valor_promocional: base,
+      percentual_desconto_prazo: 0,
+      valor_desconto_prazo: 0,
+      valor_promocional_prazo: base,
     }));
     setXSearchTerm(String(p.cd_produto ?? p.produto_id));
     setXOpenProdutoSearch(false);
@@ -466,10 +532,11 @@ export const ItensGrid: React.FC<IItensGridProps> = ({ promocao, isEditing }) =>
 
       <div className={!isPromocaoSaved ? "opacity-40 pointer-events-none select-none cursor-not-allowed" : ""}>
         {XEdit && (
-          <div className="border border-border rounded p-3 space-y-2 bg-card mb-3" onKeyDown={handleKeyDown}>
-            <div className="grid grid-cols-12 gap-2 items-end">
+          <div className="border border-border rounded p-3 space-y-3 bg-card mb-3" onKeyDown={handleKeyDown}>
+            {/* Linha 1: Produto + Preço Base */}
+            <div className="flex flex-wrap items-end gap-2">
               {/* Código */}
-              <div className="col-span-1">
+              <div className="w-24">
                 <label className="text-xs text-muted-foreground">Código</label>
                 <input
                   ref={codigoInputRef}
@@ -488,7 +555,7 @@ export const ItensGrid: React.FC<IItensGridProps> = ({ promocao, isEditing }) =>
                 />
               </div>
               {/* Lupa Pesquisa */}
-              <div className="col-span-1 flex items-end pb-px">
+              <div className="pb-px">
                 <button
                   type="button"
                   disabled={ro || !!XEditingId}
@@ -500,7 +567,7 @@ export const ItensGrid: React.FC<IItensGridProps> = ({ promocao, isEditing }) =>
                 </button>
               </div>
               {/* Descrição */}
-              <div className="col-span-3">
+              <div className="flex-1 min-w-[200px]">
                 <label className="text-xs text-muted-foreground">Descrição</label>
                 <input
                   readOnly
@@ -511,18 +578,22 @@ export const ItensGrid: React.FC<IItensGridProps> = ({ promocao, isEditing }) =>
                 />
               </div>
               {/* Preço Base */}
-              <div className="col-span-1.5">
-                <label className="text-xs text-muted-foreground">Preço Base</label>
+              <div className="w-32">
+                <label className="text-xs font-semibold text-muted-foreground">Preço Base</label>
                 <input
                   readOnly
                   tabIndex={-1}
                   value={fmt(Number(XEdit.preco_base || 0))}
-                  className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right font-mono"
+                  className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right font-mono font-semibold"
                 />
               </div>
-              {/* % Desconto */}
-              <div className="col-span-1.5">
-                <label className="text-xs text-muted-foreground">% Desconto</label>
+            </div>
+
+            {/* Linha 2: A Vista + A Prazo + Ações */}
+            <div className="flex flex-wrap items-end gap-2 border-t border-border/40 pt-2">
+              {/* % Desc A Vista */}
+              <div className="w-28">
+                <label className="text-xs text-muted-foreground">% Desc A Vista</label>
                 <CurrencyInput
                   ref={percentualInputRef}
                   disabled={ro}
@@ -539,9 +610,9 @@ export const ItensGrid: React.FC<IItensGridProps> = ({ promocao, isEditing }) =>
                   className="w-full border border-border rounded px-2 py-1 text-sm text-right"
                 />
               </div>
-              {/* R$ Desconto */}
-              <div className="col-span-1.5">
-                <label className="text-xs text-muted-foreground">R$ Desconto</label>
+              {/* $ Desc A Vista */}
+              <div className="w-28">
+                <label className="text-xs text-muted-foreground">$ Desc A Vista</label>
                 <CurrencyInput
                   ref={valorDescontoInputRef}
                   disabled={ro}
@@ -558,9 +629,9 @@ export const ItensGrid: React.FC<IItensGridProps> = ({ promocao, isEditing }) =>
                   className="w-full border border-border rounded px-2 py-1 text-sm text-right"
                 />
               </div>
-              {/* Valor Promocional */}
-              <div className="col-span-1.5">
-                <label className="text-xs font-bold text-primary">Valor Promo <span className="text-destructive">*</span></label>
+              {/* Preço A Vista */}
+              <div className="w-32">
+                <label className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Preço A Vista <span className="text-destructive">*</span></label>
                 <CurrencyInput
                   ref={valorPromocionalInputRef}
                   disabled={ro}
@@ -570,26 +641,85 @@ export const ItensGrid: React.FC<IItensGridProps> = ({ promocao, isEditing }) =>
                   onKeyDown={e => {
                     if (e.key === "Enter") {
                       e.preventDefault();
+                      percentualPrazoInputRef.current?.focus();
+                      percentualPrazoInputRef.current?.select();
+                    }
+                  }}
+                  className="w-full border border-emerald-500/50 font-bold text-emerald-600 dark:text-emerald-400 rounded px-2 py-1 text-sm text-right bg-emerald-500/5"
+                />
+              </div>
+
+              {/* % Desc A Prazo */}
+              <div className="w-28 border-l border-border/50 pl-2">
+                <label className="text-xs text-muted-foreground">% Desc A Prazo</label>
+                <CurrencyInput
+                  ref={percentualPrazoInputRef}
+                  disabled={ro}
+                  value={Number(XEdit.percentual_desconto_prazo || 0)}
+                  decimals={2}
+                  onChange={handlePercentualPrazoChange}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      valorDescontoPrazoInputRef.current?.focus();
+                      valorDescontoPrazoInputRef.current?.select();
+                    }
+                  }}
+                  className="w-full border border-border rounded px-2 py-1 text-sm text-right"
+                />
+              </div>
+              {/* $ Desc A Prazo */}
+              <div className="w-28">
+                <label className="text-xs text-muted-foreground">$ Desc A Prazo</label>
+                <CurrencyInput
+                  ref={valorDescontoPrazoInputRef}
+                  disabled={ro}
+                  value={Number(XEdit.valor_desconto_prazo || 0)}
+                  decimals={2}
+                  onChange={handleValorDescontoPrazoChange}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      valorPromocionalPrazoInputRef.current?.focus();
+                      valorPromocionalPrazoInputRef.current?.select();
+                    }
+                  }}
+                  className="w-full border border-border rounded px-2 py-1 text-sm text-right"
+                />
+              </div>
+              {/* Preço A Prazo */}
+              <div className="w-32">
+                <label className="text-xs font-bold text-sky-600 dark:text-sky-400">Preço A Prazo <span className="text-destructive">*</span></label>
+                <CurrencyInput
+                  ref={valorPromocionalPrazoInputRef}
+                  disabled={ro}
+                  value={Number(XEdit.valor_promocional_prazo || 0)}
+                  decimals={2}
+                  onChange={handleValorPromocionalPrazoChange}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
                       salvarBtnRef.current?.focus();
                     }
                   }}
-                  className="w-full border border-primary/50 font-bold text-primary rounded px-2 py-1 text-sm text-right bg-primary/5"
+                  className="w-full border border-sky-500/50 font-bold text-sky-600 dark:text-sky-400 rounded px-2 py-1 text-sm text-right bg-sky-500/5"
                 />
               </div>
+
               {/* Ações */}
-              <div className="col-span-1 flex items-end gap-1 justify-end">
+              <div className="flex items-end gap-1 ml-auto pt-2 sm:pt-0">
                 <button
                   ref={salvarBtnRef}
                   onClick={salvar}
                   disabled={ro}
-                  className="text-xs px-2.5 py-1.5 rounded bg-primary text-primary-foreground disabled:opacity-50 hover:opacity-90 transition-opacity font-semibold"
+                  className="text-xs px-3 py-1.5 rounded bg-primary text-primary-foreground disabled:opacity-50 hover:opacity-90 transition-opacity font-semibold"
                 >
                   {XEditingId ? "Salvar" : "Inserir"}
                 </button>
                 <button
                   type="button"
                   onClick={cancelar}
-                  className="text-xs px-2 py-1.5 rounded border border-border hover:bg-accent transition-colors"
+                  className="text-xs px-2.5 py-1.5 rounded border border-border hover:bg-accent transition-colors"
                 >
                   Cancelar
                 </button>

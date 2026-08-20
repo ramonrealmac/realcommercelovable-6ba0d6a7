@@ -16,6 +16,7 @@ interface ICondicao {
   prazo_5: number; prazo_6: number; prazo_7: number; prazo_8: number;
   prazo_9: number; prazo_10: number; prazo_11: number; prazo_12: number;
   empresa_id: number;
+  promocao: string | null;
 }
 
 const TIPO_PRAZO_OPTIONS = [
@@ -23,10 +24,17 @@ const TIPO_PRAZO_OPTIONS = [
   { v: "V", l: "Variável" },
 ];
 
+const PROMOCAO_OPTIONS = [
+  { v: "N", l: "NÃO" },
+  { v: "V", l: "A VISTA" },
+  { v: "P", l: "A PRAZO" },
+];
+
 const PRAZO_KEYS = ["prazo_1","prazo_2","prazo_3","prazo_4","prazo_5","prazo_6","prazo_7","prazo_8","prazo_9","prazo_10","prazo_11","prazo_12"] as const;
 
 const XDefault: Partial<ICondicao> = {
   descricao: "", tipo_prazo: "F", meio_pagamento_id: null, cd_condicao_pagamento: null, qtd_parcelas: null, intervalo: null,
+  promocao: "N",
   prazo_1: 0, prazo_2: 0, prazo_3: 0, prazo_4: 0, prazo_5: 0, prazo_6: 0,
   prazo_7: 0, prazo_8: 0, prazo_9: 0, prazo_10: 0, prazo_11: 0, prazo_12: 0,
 };
@@ -69,6 +77,12 @@ const CondicaoPagamentoForm: React.FC = () => {
       render: (row) => row.tipo_prazo === "F" ? "Fixo" : row.tipo_prazo === "V" ? "Variável" : ""
     },
     { 
+      key: "promocao", 
+      label: "Promoção", 
+      width: "100px",
+      render: (row: ICondicao) => row.promocao === "V" ? "A VISTA" : row.promocao === "P" ? "A PRAZO" : "NÃO"
+    },
+    { 
       key: "qtd_parcelas", 
       label: "Parcelas", 
       width: "80px", 
@@ -102,7 +116,7 @@ const CondicaoPagamentoForm: React.FC = () => {
         XPrimaryKey: "condicao_id",
         XTitle: "Condições de Pagamento",
         XEmpresaId,
-        XSelectCols: "condicao_id,descricao,tipo_prazo,meio_pagamento_id,cd_condicao_pagamento,qtd_parcelas,intervalo,prazo_1,prazo_2,prazo_3,prazo_4,prazo_5,prazo_6,prazo_7,prazo_8,prazo_9,prazo_10,prazo_11,prazo_12,empresa_id",
+        XSelectCols: "*",
         XDefaultRecord: XDefault,
         XOnBeforeSave: async (rec, mode) => {
           if (!rec.descricao?.trim()) throw new Error("A descrição é obrigatória.");
@@ -129,6 +143,7 @@ const CondicaoPagamentoForm: React.FC = () => {
             empresa_id: XEmpresaId,
             meio_pagamento_id: rec.meio_pagamento_id || null,
             tipo_prazo: rec.tipo_prazo || null,
+            promocao: rec.promocao || "N",
             qtd_parcelas: rec.tipo_prazo === "F" ? (parseInt(String(rec.qtd_parcelas)) || null) : null,
             intervalo: rec.tipo_prazo === "F" ? (parseInt(String(rec.intervalo)) || null) : null,
           };
@@ -211,6 +226,24 @@ const CondicaoPagamentoForm: React.FC = () => {
                   {XMeiosPagamento.map(m => (
                     <option key={m.meio_pagamento_id} value={m.meio_pagamento_id}>
                       {m.descricao}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="w-full md:w-36">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Promoção</label>
+                <select
+                  value={record.promocao ?? "N"}
+                  onChange={e => setField("promocao", e.target.value)}
+                  disabled={!isEditing}
+                  className={`w-full border border-border rounded px-3 py-1.5 text-sm h-[34px] ${
+                    isEditing ? "bg-card focus:ring-2 focus:ring-ring outline-none cursor-pointer" : "bg-secondary text-muted-foreground appearance-none disabled:opacity-100"
+                  }`}
+                >
+                  {PROMOCAO_OPTIONS.map(o => (
+                    <option key={o.v} value={o.v}>
+                      {o.l}
                     </option>
                   ))}
                 </select>

@@ -8,6 +8,7 @@ import type { IMovimento } from "../pedido/types";
 import { ToolbarBtn, ToolbarSeparator } from "@/components/shared/FormToolbar";
 import { Send, CheckCircle2, Lock, Trash2, Calendar, ClipboardList } from "lucide-react";
 import AjusteEstoqueItensTab from "./AjusteEstoqueItensTab";
+import { obterProximoNrMovimento } from "@/services/movimentoSequenceService";
 
 const db = supabase as any;
 
@@ -181,15 +182,11 @@ export default function AjusteEstoqueForm() {
           cleanRec.obs_pedido = cleanRec.observacao;
 
           // Gerar sequencial de número de ajuste se for insert novo
-          if (mode === "insert" && !cleanRec.nr_movimento) {
-            const { data: maxNr } = await db.from("movimento")
-              .select("nr_movimento")
-              .eq("empresa_id", XEmpresaId)
-              .eq("tp_movimento", "AE")
-              .order("nr_movimento", { ascending: false })
-              .limit(1);
-            
-            cleanRec.nr_movimento = ((maxNr && maxNr[0]?.nr_movimento) || 0) + 1;
+          if (mode === "insert") {
+            delete cleanRec.movimento_id;
+            if (!cleanRec.nr_movimento) {
+              cleanRec.nr_movimento = await obterProximoNrMovimento(XEmpresaId);
+            }
           }
 
           return { ...cleanRec, empresa_id: cleanRec.empresa_id || XEmpresaId };

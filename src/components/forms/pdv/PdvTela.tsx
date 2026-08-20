@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
 import { LogOut, Search, Trash2, Plus, Receipt, RefreshCw, Settings, Wrench, Percent, ShoppingCart, Tag, CircleDollarSign, Package, CornerDownLeft, Lock, Home, Smartphone, Globe } from "lucide-react";
 import ProdutoSearchDialog, { buscarProdutoPorCodigo, IProdutoRow } from "../pedido/ProdutoSearchDialog";
+import { obterProximoNrMovimento } from "@/services/movimentoSequenceService";
 import ClienteSearchDialog, { IClienteRow } from "../pedido/ClienteSearchDialog";
 import VendedorSearchDialog, { IVendedorRow } from "./VendedorSearchDialog";
 import PagamentoDialog from "./PagamentoDialog";
@@ -451,9 +452,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
 
   /** Cria movimento (st_pedido='F') quando for venda direta. */
   const criarMovimentoVendaDireta = async (): Promise<{ movimento_id: number; nr: number; total: number; }> => {
-    const { data: maxNr } = await db.from("movimento")
-      .select("nr_movimento").eq("empresa_id", XEmpresaId).order("nr_movimento", { ascending: false }).limit(1);
-    const nr = ((maxNr && maxNr[0]?.nr_movimento) || 0) + 1;
+    const nr = await obterProximoNrMovimento(XEmpresaId);
     const total = totalReceber;
 
     const mov = {
@@ -474,8 +473,18 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       deposito_id: XParams!.deposito_estoque_caixa,
       excluido: false,
     };
-    const { data: insertedMov, error } = await db.from("movimento").insert(mov).select("movimento_id").single();
-    if (error) throw new Error("Falha ao criar venda: " + error.message);
+    let { data: insertedMov, error } = await db.from("movimento").insert(mov).select("movimento_id").single();
+
+    if (error && (error.message?.includes("movimento_pkey") || error.message?.includes("duplicate key") || error.code === "23505")) {
+      const { data: maxMov } = await db.from("movimento")
+        .select("movimento_id").order("movimento_id", { ascending: false }).limit(1);
+      const nextMovId = ((maxMov && maxMov[0]?.movimento_id) || 0) + 1;
+      const retryRes = await db.from("movimento").insert({ ...mov, movimento_id: nextMovId }).select("movimento_id").single();
+      insertedMov = retryRes.data;
+      error = retryRes.error;
+    }
+
+    if (error || !insertedMov) throw new Error("Falha ao criar venda: " + (error?.message || "Erro desconhecido"));
     const movId = insertedMov.movimento_id;
 
     const itens = XCart.map(c => ({
@@ -492,7 +501,15 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       excluido: false,
     }));
     if (itens.length > 0) {
-      const { error: e2 } = await db.from("movimento_item").insert(itens);
+      let { error: e2 } = await db.from("movimento_item").insert(itens);
+      if (e2 && (e2.message?.includes("movimento_item_pkey") || e2.message?.includes("duplicate key") || e2.code === "23505")) {
+        const { data: maxIt } = await db.from("movimento_item")
+          .select("movimento_item_id").order("movimento_item_id", { ascending: false }).limit(1);
+        let nextItId = ((maxIt && maxIt[0]?.movimento_item_id) || 0) + 1;
+        const itensComId = itens.map(it => ({ ...it, movimento_item_id: nextItId++ }));
+        const retryIt = await db.from("movimento_item").insert(itensComId);
+        e2 = retryIt.error;
+      }
       if (e2) throw new Error("Falha ao criar itens: " + e2.message);
     }
     return { movimento_id: movId, nr, total };
