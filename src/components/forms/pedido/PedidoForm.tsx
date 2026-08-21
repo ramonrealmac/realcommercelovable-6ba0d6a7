@@ -16,10 +16,21 @@ import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 import { ToolbarBtn, ToolbarSeparator } from "@/components/shared/FormToolbar";
 import { obterPrecoUnitarioItem } from "@/services/precoService";
 import { obterProximoNrMovimento } from "@/services/movimentoSequenceService";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const db = supabase as any;
 
 interface ILookup { id: number; label: string; }
+interface ITabelaLookup extends ILookup { tp_pagamento?: string; }
 interface IClienteInfo { id: number; cnpj: string; razao: string; fantasia: string; cd_cadastro?: number | null; tabela_preco_id?: number | null; condicao_id?: number | null; }
 
 const buildGridCols = (
@@ -90,9 +101,9 @@ interface PedidoCadastroFormContentProps {
   handleEditar?: () => void;
   fetchItensCadastro?: (id: number) => Promise<void>;
 
-  tabelasPreco: ILookup[];
+  tabelasPreco: ITabelaLookup[];
   condicoesPagamento: ILookup[];
-  onTabelaPrecoChange?: (tabelaId: number | null) => Promise<void>;
+  onTabelaPrecoChange?: (tabelaId: number | null, oldTabelaId?: number | null, setFieldFunc?: (k: string, v: any) => void) => Promise<void>;
 }
 
 const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
@@ -106,7 +117,6 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
   const clientInputRef = useRef<HTMLInputElement>(null);
   const vendedorSelectRef = useRef<HTMLSelectElement>(null);
   const dtEmissaoInputRef = useRef<HTMLInputElement>(null);
-  const condicaoSelectRef = useRef<HTMLSelectElement>(null);
   const tabelaPrecoSelectRef = useRef<HTMLSelectElement>(null);
 
   // Auto-foco no campo do cliente ao inserir ou alterar
@@ -401,9 +411,9 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
         </div>
       </div>
 
-      {/* Linha do Tipo de Desconto, Condição de Pagamento e Tabela de Preço */}
+      {/* Linha do Tipo de Desconto e Tabela de Preço */}
       <div className="grid grid-cols-12 gap-3 items-end">
-        <div className="col-span-3">
+        <div className="col-span-4">
           <label className="text-xs text-muted-foreground">Tipo de Desconto <span className="text-destructive">*</span></label>
           <select
             disabled={ro}
@@ -413,7 +423,7 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
               if (e.key === "Enter") {
                 e.preventDefault();
                 e.stopPropagation();
-                condicaoSelectRef.current?.focus();
+                tabelaPrecoSelectRef.current?.focus();
               }
             }}
             className="w-full border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
@@ -421,27 +431,7 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
             {Object.entries(TP_DESCONTO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </div>
-        <div className="col-span-4">
-          <label className="text-xs text-muted-foreground">Condição de Pagamento</label>
-          <select
-            ref={condicaoSelectRef}
-            disabled={ro}
-            value={record.condicao_id ?? ""}
-            onChange={e => setField("condicao_id", e.target.value ? Number(e.target.value) : null as any)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                e.stopPropagation();
-                tabelaPrecoSelectRef.current?.focus();
-              }
-            }}
-            className="w-full border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
-          >
-            <option value="">-- Selecione a Condição --</option>
-            {condicoesPagamento.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-          </select>
-        </div>
-        <div className="col-span-5">
+        <div className="col-span-8">
           <label className="text-xs text-muted-foreground">Tabela de Preço</label>
           <select
             ref={tabelaPrecoSelectRef}
@@ -449,8 +439,12 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
             value={record.tabela_preco_id ?? ""}
             onChange={async (e) => {
               const val = e.target.value ? Number(e.target.value) : null;
-              setField("tabela_preco_id", val);
-              if (onTabelaPrecoChange) await onTabelaPrecoChange(val);
+              const oldVal = record.tabela_preco_id ?? null;
+              if (onTabelaPrecoChange) {
+                await onTabelaPrecoChange(val, oldVal, setField);
+              } else {
+                setField("tabela_preco_id", val);
+              }
             }}
             onKeyDown={async (e) => {
               if (e.key === "Enter") {
@@ -520,7 +514,7 @@ const PedidoForm: React.FC = () => {
   const [XTpOperacoes, setXTpOperacoes] = useState<ILookup[]>([]);
   const [XRotas, setXRotas] = useState<ILookup[]>([]);
   const [XCidades, setXCidades] = useState<ILookup[]>([]);
-  const [XTabelasPreco, setXTabelasPreco] = useState<ILookup[]>([]);
+  const [XTabelasPreco, setXTabelasPreco] = useState<ITabelaLookup[]>([]);
   const [XCondicoesPagamento, setXCondicoesPagamento] = useState<ILookup[]>([]);
   const [XClientesCache, setXClientesCache] = useState<Record<number, IClienteInfo>>({});
 
@@ -531,6 +525,15 @@ const PedidoForm: React.FC = () => {
   const [XPedidoTotalCtx, setXPedidoTotalCtx] = useState<{ movimentoId: number | null; total: number; itens: IMovimentoItem[] }>({ movimentoId: null, total: 0, itens: [] });
   const [XOpenPagtoDialog, setXOpenPagtoDialog] = useState(false);
   const [XBuscandoCep, setXBuscandoCep] = useState(false);
+  const [XConfirmTabelaModalOpen, setXConfirmTabelaModalOpen] = useState(false);
+  const [XPendingTabelaInfo, setXPendingTabelaInfo] = useState<{
+    newTabelaId: number | null;
+    oldTabelaId: number | null;
+    oldTp: string;
+    newTp: string;
+    setFieldFunc?: (k: string, v: any) => void;
+  } | null>(null);
+
   const XFetchingItensRef = useRef<Set<number>>(new Set());
   // Ref para acionar refresh do CRUD sem window.location.reload()
   const XCrudRefreshRef = useRef<(() => Promise<void>) | null>(null);
@@ -571,8 +574,8 @@ const PedidoForm: React.FC = () => {
       "cidade",
     );
     load(
-      db.from("tabela_preco").select("tabela_id, descricao").eq("empresa_id", XEmpresaId).eq("excluido", false).order("descricao"),
-      (d) => setXTabelasPreco(d.map((t: any) => ({ id: t.tabela_id, label: t.descricao }))),
+      db.from("tabela_preco").select("tabela_id, descricao, tp_pagamento").eq("empresa_id", XEmpresaId).eq("excluido", false).order("descricao"),
+      (d) => setXTabelasPreco(d.map((t: any) => ({ id: t.tabela_id, label: t.descricao, tp_pagamento: t.tp_pagamento || "V" }))),
       "tabela_preco",
     );
     load(
@@ -856,7 +859,7 @@ const PedidoForm: React.FC = () => {
     setXPedidoTotalCtx({ movimentoId: movimento_id, total, itens });
   }, []);
 
-  const handleTabelaPrecoChange = async (tabelaId: number | null) => {
+  const reprocessarTabelaPreco = useCallback(async (tabelaId: number | null) => {
     const movimento_id = XCurrentRecordRef.current?.movimento_id;
     if (!movimento_id) return;
 
@@ -875,12 +878,11 @@ const PedidoForm: React.FC = () => {
         return;
       }
 
-      // 2. Recalculate price for each item
+      // 2. Recalculate price for each item using new tabelaId
       for (const item of itens) {
         const { preco: newPreco } = await obterPrecoUnitarioItem(item.produto_id, tabelaId);
 
         if (newPreco !== null) {
-          // Calculate new item totals
           const qt = Number(item.qt_movimento || 0);
           const sub = qt * newPreco;
           const pc = Number(item.pc_desconto || 0);
@@ -888,7 +890,6 @@ const PedidoForm: React.FC = () => {
           const out = Number(item.vl_despesa || 0) + Number(item.vl_frete || 0) + Number(item.vl_seguro || 0) + Number(item.vl_outro || 0);
           const newVlMovimento = +(sub - vd + out).toFixed(2);
 
-          // Update item in database
           await db.from("movimento_item")
             .update({
               vl_und_produto: newPreco,
@@ -901,7 +902,6 @@ const PedidoForm: React.FC = () => {
         }
       }
 
-      // 3. Reload items and recalculate totals
       await fetchItensCadastro(movimento_id);
       setXPagamentoRefreshToken(n => n + 1);
       toast.success("Preços dos itens recalculados com sucesso!", { id: "recalc-prices" });
@@ -909,6 +909,53 @@ const PedidoForm: React.FC = () => {
       console.error(e);
       toast.error("Erro ao recalcular preços dos itens: " + e.message, { id: "recalc-prices" });
     }
+  }, [fetchItensCadastro]);
+
+  const handleTabelaPrecoChange = useCallback(async (
+    newTabelaId: number | null,
+    oldTabelaId?: number | null,
+    setFieldFunc?: (k: string, v: any) => void
+  ) => {
+    if (oldTabelaId !== undefined && oldTabelaId !== newTabelaId) {
+      const getTp = (id: number | null) => {
+        if (!id) return "V";
+        const item = XTabelasPreco.find((t: any) => t.id === id);
+        return item?.tp_pagamento || "V";
+      };
+
+      const oldTp = getTp(oldTabelaId);
+      const newTp = getTp(newTabelaId);
+
+      if (oldTp !== newTp) {
+        setXPendingTabelaInfo({ newTabelaId, oldTabelaId, oldTp, newTp, setFieldFunc });
+        setXConfirmTabelaModalOpen(true);
+        return;
+      }
+    }
+
+    if (setFieldFunc) {
+      setFieldFunc("tabela_preco_id", newTabelaId);
+    }
+    await reprocessarTabelaPreco(newTabelaId);
+  }, [XTabelasPreco, reprocessarTabelaPreco]);
+
+  const handleConfirmTabelaModal = async () => {
+    if (!XPendingTabelaInfo) return;
+    const { newTabelaId, setFieldFunc } = XPendingTabelaInfo;
+    setXConfirmTabelaModalOpen(false);
+    if (setFieldFunc) {
+      setFieldFunc("tabela_preco_id", newTabelaId);
+    }
+    setXPendingTabelaInfo(null);
+    await reprocessarTabelaPreco(newTabelaId);
+  };
+
+  const handleCancelTabelaModal = () => {
+    if (XPendingTabelaInfo?.setFieldFunc) {
+      XPendingTabelaInfo.setFieldFunc("tabela_preco_id", XPendingTabelaInfo.oldTabelaId);
+    }
+    setXConfirmTabelaModalOpen(false);
+    setXPendingTabelaInfo(null);
   };
 
   // Reseta o contexto ao entrar em modo de inclusão (novo pedido) para evitar mostrar dados de pedido anterior
@@ -1099,7 +1146,24 @@ const PedidoForm: React.FC = () => {
               await fetchItensCadastro(rec.movimento_id);
             }
           },
-          XSoftDelete: false,
+          XOnDelete: async (rec) => {
+            if (rec.faturado === "S") {
+              throw new Error("Não é possível excluir um pedido já faturado.");
+            }
+            if (rec.movimento_id) {
+              await db.from("movimento_item").update({ excluido: true }).eq("movimento_id", rec.movimento_id);
+              await db.from("movimento_pagamento").update({ excluido: true }).eq("movimento_id", rec.movimento_id);
+              const { error } = await db.from("movimento")
+                .update({ excluido: true, dt_alteracao: new Date().toISOString() })
+                .eq("movimento_id", rec.movimento_id);
+              if (error) {
+                const { error: err2 } = await db.from("movimento")
+                  .update({ excluido: true })
+                  .eq("movimento_id", rec.movimento_id);
+                if (err2) throw err2;
+              }
+            }
+          },
         }}
         XGridCols={gridCols}
         XExportTitle="Pedidos"
@@ -1422,6 +1486,28 @@ const PedidoForm: React.FC = () => {
         empresaId={XEmpresaId}
         onSelect={(c) => XSearchTarget?.(c)}
       />
+      <AlertDialog open={XConfirmTabelaModalOpen} onOpenChange={setXConfirmTabelaModalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Mudança de Tabela de Preço</AlertDialogTitle>
+            <AlertDialogDescription>
+              {XPendingTabelaInfo && (
+                <span>
+                  A alteração da Tabela de Preço modifica o tipo de pagamento de{" "}
+                  <strong>{XPendingTabelaInfo.oldTp === "P" ? "A PRAZO" : "A VISTA"}</strong> para{" "}
+                  <strong>{XPendingTabelaInfo.newTp === "P" ? "A PRAZO" : "A VISTA"}</strong>.
+                  <br /><br />
+                  Deseja reprocessar os valores dos produtos e totais do pedido?
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelTabelaModal}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmTabelaModal}>Confirmar (Reprocessar)</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };

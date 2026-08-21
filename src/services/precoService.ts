@@ -125,42 +125,45 @@ export async function obterPrecoTabela(produtoId: number, tabelaId: number): Pro
 /**
  * 3. Função principal de obtenção do Preço Unitário para o Pedido:
  * Regras:
- * - Se condicao.promocao === 'N' (NÃO) -> Pega o valor unitário da tabela de preço (ou preço padrão do produto).
- * - Se condicao.promocao === 'V' (A VISTA) -> Pega o valor a vista da tabela de promoções (se ativa e não vencida).
- * - Se condicao.promocao === 'P' (A PRAZO) -> Pega o valor a prazo da tabela de promoções (se ativa e não vencida).
+ * a - verifica se está na tabela de promoção
+ * b - verifica se a promoção está ativa e não vencida
+ * c - se estiver, pega o preço de acordo com o campo tp_pagamento da Tabela de Preço:
+ *     - se tp_pagamento for V: pega o preço a vista da tabela de promoções
+ *     - se tp_pagamento for P: pega o preço a prazo da tabela de promoções
+ * d - se o produto não estiver na tabela de promoções ou a promoção estiver vencida/inativa:
+ *     pega o preço unit da tabela de preço (se a tabela estiver ativa e não vencida)
+ * e - se não tiver tabela de preço (ou inativa/vencida), pega o valor na tabela do produto
  */
 export async function obterPrecoUnitarioItem(
   produtoId: number,
   tabelaPrecoId?: number | null,
-  precoVendaPadrao?: number | null,
-  condicaoId?: number | null
+  precoVendaPadrao?: number | null
 ): Promise<{ preco: number; fonte: "promocao" | "tabela" | "padrao" }> {
-  // Descobre o modo de promoção da condição de pagamento selecionada
-  let promocaoModo: "N" | "V" | "P" = "N";
-  if (condicaoId) {
+  // Descobre o modo de pagamento ('V' ou 'P') da Tabela de Preço selecionada
+  let tpPagamento: "V" | "P" = "V";
+  if (tabelaPrecoId) {
     try {
-      const { data: cond } = await db
-        .from("condicao_pagamento")
-        .select("promocao")
-        .eq("condicao_id", condicaoId)
+      const { data: tab } = await db
+        .from("tabela_preco")
+        .select("tp_pagamento")
+        .eq("tabela_id", tabelaPrecoId)
         .maybeSingle();
-      if (cond?.promocao) {
-        promocaoModo = cond.promocao as "N" | "V" | "P";
+
+      if (tab?.tp_pagamento === "P") {
+        tpPagamento = "P";
       }
     } catch (e) {
-      console.warn("Erro ao carregar promocao da condicao_pagamento:", e);
+      console.warn("Erro ao carregar tp_pagamento da tabela_preco:", e);
     }
   }
 
-  // 1. Se promocao !== 'N', tenta buscar na Tabela de Promoções
-  if (promocaoModo === "V" || promocaoModo === "P") {
-    const precoPromo = await obterPrecoPromocional(produtoId, promocaoModo);
-    if (precoPromo !== null) {
-      return { preco: precoPromo, fonte: "promocao" };
-    }
+  // 1. Tenta buscar na Tabela de Promoções
+  const precoPromo = await obterPrecoPromocional(produtoId, tpPagamento);
+  if (precoPromo !== null) {
+    return { preco: precoPromo, fonte: "promocao" };
   }
 
-  // 2. Se promocao === 'N' ou produto não estiver em promoção válida/ativa, tenta Tabela de Preço
+  // 2. Se o produto não estiver em promoção válida/ativa, tenta Tabela de Preço
   if (tabelaPrecoId) {
     const precoTab = await obterPrecoTabela(produtoId, tabelaPrecoId);
     if (precoTab !== null) {
@@ -168,7 +171,7 @@ export async function obterPrecoUnitarioItem(
     }
   }
 
-  // 3. Fallback Preço Padrão do Produto
+  // 3. Fallback: valor na tabela do produto
   if (precoVendaPadrao !== undefined && precoVendaPadrao !== null) {
     return { preco: Number(precoVendaPadrao), fonte: "padrao" };
   }

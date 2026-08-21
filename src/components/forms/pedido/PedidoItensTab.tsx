@@ -212,12 +212,10 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
   };
 
   const aplicarProduto = useCallback(async (p: IProdutoRow, deposito_id?: number) => {
-    const activeCondicaoId = condicaoId ?? pedido?.condicao_id ?? null;
     const { preco, fonte } = await obterPrecoUnitarioItem(
       p.produto_id,
       tabelaPrecoId,
-      Number(p.st_promo && p.preco_promocional > 0 ? p.preco_promocional : p.preco_venda) || 0,
-      activeCondicaoId
+      Number(p.st_promo && p.preco_promocional > 0 ? p.preco_promocional : p.preco_venda) || 0
     );
     
     if (fonte === "promocao") {

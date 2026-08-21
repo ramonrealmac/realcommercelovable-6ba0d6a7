@@ -7898,6 +7898,7 @@ export type Database = {
           empresa_id: number
           excluido: boolean | null
           tabela_id: number
+          tp_pagamento: string | null
         }
         Insert: {
           cd_tabela: number
@@ -7909,6 +7910,7 @@ export type Database = {
           empresa_id: number
           excluido?: boolean | null
           tabela_id?: number
+          tp_pagamento?: string | null
         }
         Update: {
           cd_tabela?: number
@@ -7920,6 +7922,7 @@ export type Database = {
           empresa_id?: number
           excluido?: boolean | null
           tabela_id?: number
+          tp_pagamento?: string | null
         }
         Relationships: []
       }

@@ -27,6 +27,7 @@ interface ITabelaPreco {
   dt_final: string | null;
   ativa?: boolean;
   excluido: boolean;
+  tp_pagamento?: string;
 }
 
 interface ITabelaPrecoItem {
@@ -57,6 +58,7 @@ const parseNum = (v: any): number => {
 const XGridCols: IGridColumn[] = [
   { key: "cd_tabela", label: "Código", width: "90px", align: "right" },
   { key: "descricao", label: "Descrição", width: "2fr" },
+  { key: "tp_pagamento", label: "Tipo Pagamento", width: "120px", align: "center", render: r => r.tp_pagamento === "P" ? "A PRAZO" : "A VISTA" },
   { key: "dt_inicial", label: "Dt. Inicial", width: "110px", align: "center", render: r => r.dt_inicial ?? "" },
   { key: "dt_final", label: "Dt. Final", width: "110px", align: "center", render: r => r.dt_final ?? "" },
   { key: "ativa", label: "Ativa", width: "80px", align: "center", render: r => (r.ativa ?? true) ? "Sim" : "Não" },
@@ -767,9 +769,12 @@ const TabelaPrecoForm: React.FC = () => {
           dt_inicial: null,
           dt_final: null,
           ativa: true,
+          tp_pagamento: "V",
         },
         XOnBeforeSave: async (rec, mode) => {
           if (!rec.descricao?.trim()) throw new Error("A descrição é obrigatória.");
+          if (!rec.dt_inicial || !String(rec.dt_inicial).trim()) throw new Error("Informe a Data Inicial.");
+          if (!rec.dt_final || !String(rec.dt_final).trim()) throw new Error("Informe a Data Final.");
 
           if (mode === "insert") {
             // Auto-increment cd_tabela per empresa
@@ -786,12 +791,13 @@ const TabelaPrecoForm: React.FC = () => {
               cd_tabela: nextCd,
               empresa_id: XEmpresaMatrizId,
               descricao: rec.descricao!.trim(),
+              tp_pagamento: rec.tp_pagamento || "V",
               ativa: rec.ativa ?? true,
               excluido: false,
             };
           }
 
-          return { ...rec, descricao: rec.descricao!.trim(), ativa: rec.ativa ?? true };
+          return { ...rec, descricao: rec.descricao!.trim(), tp_pagamento: rec.tp_pagamento || "V", ativa: rec.ativa ?? true };
         },
       }}
       XGridCols={XGridCols}
@@ -799,34 +805,34 @@ const TabelaPrecoForm: React.FC = () => {
       XAfterInsertTab="cadastro"
       renderCadastro={({ record, setField, mode, isEditing, currentRecord }) => (
         <div className="space-y-4" onKeyDown={handleKeyDown}>
-          {/* Main Row: Código + Empresa + Descrição + Dt. Inicial + Dt. Final + Ativa */}
+          {/* Main Row: Código + Empresa + Descrição + Dt. Inicial + Dt. Final + Tipo Pagamento + Status */}
           <div className="flex flex-wrap items-end gap-3 bg-secondary/10 p-3 rounded-lg border border-border/60">
             {/* Código — sempre visível, desabilitado. Vazio na inclusão, preenchido na alteração/visualização */}
-            <div className="w-24 shrink-0">
+            <div className="w-20 shrink-0">
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Código</label>
               <input
                 type="text"
                 value={record.cd_tabela ?? ""}
                 readOnly
                 disabled
-                className="w-full border border-border rounded px-3 py-1.5 text-sm bg-secondary/50 text-right font-mono text-muted-foreground cursor-not-allowed"
+                className="w-full border border-border rounded px-2.5 py-1.5 text-sm bg-secondary/50 text-right font-mono text-muted-foreground cursor-not-allowed"
               />
             </div>
 
             {/* Empresa — apenas informação, desabilitado */}
-            <div className="w-56 shrink-0">
+            <div className="w-48 shrink-0">
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Empresa</label>
               <input
                 type="text"
                 value={XEmpLabel}
                 readOnly
                 disabled
-                className="w-full border border-border rounded px-3 py-1.5 text-sm bg-secondary/50 text-muted-foreground cursor-not-allowed"
+                className="w-full border border-border rounded px-2.5 py-1.5 text-sm bg-secondary/50 text-muted-foreground cursor-not-allowed"
               />
             </div>
 
             {/* Descrição */}
-            <div className="flex-1 min-w-[280px]">
+            <div className="flex-1 min-w-[180px]">
               <label className="block text-xs font-semibold text-muted-foreground mb-1">
                 Descrição <span className="text-destructive">*</span>
               </label>
@@ -848,23 +854,41 @@ const TabelaPrecoForm: React.FC = () => {
 
             {/* Dt. Inicial */}
             <FormDateField
-              label="Dt. Inicial"
+              label="Dt. Inicial *"
               value={record.dt_inicial ?? ""}
               onChange={v => setField("dt_inicial", (v || null) as any)}
               readOnly={!isEditing}
-              className="w-44 shrink-0"
+              className="w-36 shrink-0"
             />
 
             {/* Dt. Final */}
             <FormDateField
-              label="Dt. Final"
+              label="Dt. Final *"
               value={record.dt_final ?? ""}
               onChange={v => setField("dt_final", (v || null) as any)}
               readOnly={!isEditing}
-              className="w-44 shrink-0"
+              className="w-36 shrink-0"
             />
 
-            {/* Ativa */}
+            {/* Combo Tipo Pagamento (A VISTA / A PRAZO) na mesma linha antes do Status */}
+            <div className="w-32 shrink-0">
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo Pagamento</label>
+              <select
+                disabled={!isEditing}
+                value={record.tp_pagamento || "V"}
+                onChange={e => setField("tp_pagamento", e.target.value as any)}
+                className={`w-full border border-border rounded px-2 py-1.5 text-sm outline-none transition-all h-[34px] ${
+                  isEditing
+                    ? "bg-card focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                    : "bg-secondary/40 text-muted-foreground cursor-not-allowed"
+                }`}
+              >
+                <option value="V">A VISTA</option>
+                <option value="P">A PRAZO</option>
+              </select>
+            </div>
+
+            {/* Ativa / Status */}
             <div className="w-24 shrink-0 flex flex-col justify-end pb-1.5">
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Status</label>
               <label className="flex items-center gap-2 text-sm font-medium cursor-pointer h-[34px]">
