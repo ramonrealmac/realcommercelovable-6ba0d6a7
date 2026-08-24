@@ -20,6 +20,7 @@ interface ICondicao {
 }
 
 const TIPO_PRAZO_OPTIONS = [
+  { v: "U", l: "Único" },
   { v: "F", l: "Fixo" },
   { v: "V", l: "Variável" },
 ];
@@ -74,7 +75,7 @@ const CondicaoPagamentoForm: React.FC = () => {
       key: "tipo_prazo", 
       label: "Tipo Prazo", 
       width: "120px",
-      render: (row) => row.tipo_prazo === "F" ? "Fixo" : row.tipo_prazo === "V" ? "Variável" : ""
+      render: (row) => row.tipo_prazo === "U" ? "Único" : row.tipo_prazo === "F" ? "Fixo" : row.tipo_prazo === "V" ? "Variável" : ""
     },
     { 
       key: "promocao", 
@@ -121,6 +122,17 @@ const CondicaoPagamentoForm: React.FC = () => {
         XOnBeforeSave: async (rec, mode) => {
           if (!rec.descricao?.trim()) throw new Error("A descrição é obrigatória.");
           
+          if (rec.tipo_prazo === "F") {
+            const q = parseInt(String(rec.qtd_parcelas ?? ""));
+            if (!q || isNaN(q) || q <= 0) {
+              throw new Error("Informe o número de Parcelas para a Condição Fixa.");
+            }
+            const it = parseInt(String(rec.intervalo ?? ""));
+            if (!it || isNaN(it) || it <= 0) {
+              throw new Error("Informe o Intervalo (dias) para a Condição Fixa.");
+            }
+          }
+
           let nextCd = rec.cd_condicao_pagamento;
           if (mode === "insert") {
             const { data, error } = await supabase
@@ -144,7 +156,7 @@ const CondicaoPagamentoForm: React.FC = () => {
             meio_pagamento_id: rec.meio_pagamento_id || null,
             tipo_prazo: rec.tipo_prazo || null,
             promocao: rec.promocao || "N",
-            qtd_parcelas: rec.tipo_prazo === "F" ? (parseInt(String(rec.qtd_parcelas)) || null) : null,
+            qtd_parcelas: rec.tipo_prazo === "U" ? 1 : rec.tipo_prazo === "F" ? (parseInt(String(rec.qtd_parcelas)) || null) : null,
             intervalo: rec.tipo_prazo === "F" ? (parseInt(String(rec.intervalo)) || null) : null,
           };
           PRAZO_KEYS.forEach(k => {
@@ -255,7 +267,17 @@ const CondicaoPagamentoForm: React.FC = () => {
                   value={record.tipo_prazo ?? ""}
                   onChange={e => {
                     const val = e.target.value || null;
-                    if (val === "F") {
+                    if (val === "U") {
+                      setRecord({
+                        ...record,
+                        tipo_prazo: "U",
+                        qtd_parcelas: 1,
+                        intervalo: null,
+                        prazo_1: 0, prazo_2: 0, prazo_3: 0, prazo_4: 0,
+                        prazo_5: 0, prazo_6: 0, prazo_7: 0, prazo_8: 0,
+                        prazo_9: 0, prazo_10: 0, prazo_11: 0, prazo_12: 0
+                      });
+                    } else if (val === "F") {
                       setRecord({
                         ...record,
                         tipo_prazo: "F",
@@ -318,7 +340,7 @@ const CondicaoPagamentoForm: React.FC = () => {
               <h3 className="text-sm font-semibold text-foreground mb-2">Prazos em dias (por parcela)</h3>
               <div className="grid grid-cols-2 md:grid-cols-6 gap-x-3 gap-y-5">
                 {PRAZO_KEYS.map((k, i) => {
-                  const isFieldDisabled = !isEditing || record.tipo_prazo === "F";
+                  const isFieldDisabled = !isEditing || record.tipo_prazo !== "V";
                   return (
                     <div key={k}>
                       <label className="block text-xs font-medium text-muted-foreground mb-1">{i + 1}ª Parcela</label>

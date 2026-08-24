@@ -166,6 +166,15 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoNovoTrigger, pedido?.movimento_id, podeEditar]);
 
+  useEffect(() => {
+    if (XEdit && podeEditar && !XEdit.produto_id) {
+      const timer = setTimeout(() => {
+        codigoRef.current?.focus();
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+  }, [XEdit, podeEditar]);
+
   const carregarEstoquePorDeposito = useCallback(async (produto_id: number) => {
     const ids = XGroupEmpresaIds.length > 0 ? XGroupEmpresaIds : [XEmpresaId];
     const { data } = await db.from("estoque")

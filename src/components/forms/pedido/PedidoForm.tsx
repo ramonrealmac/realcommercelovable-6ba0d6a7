@@ -103,7 +103,7 @@ interface PedidoCadastroFormContentProps {
 
   tabelasPreco: ITabelaLookup[];
   condicoesPagamento: ILookup[];
-  onTabelaPrecoChange?: (tabelaId: number | null, oldTabelaId?: number | null, setFieldFunc?: (k: string, v: any) => void) => Promise<void>;
+  onTabelaPrecoChange?: (tabelaId: number | null, oldTabelaId?: number | null, setFieldFunc?: (k: string, v: any) => void, movimentoId?: number | null) => Promise<void>;
 }
 
 const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
@@ -141,12 +141,14 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
         if (cliInfo?.condicao_id) {
           setField("condicao_id", cliInfo.condicao_id as any);
         }
+        const oldTabelaId = record.tabela_preco_id ?? null;
+        const movId = record.movimento_id ?? null;
         if (cliInfo?.tabela_preco_id) {
           setField("tabela_preco_id", cliInfo.tabela_preco_id as any);
-          if (onTabelaPrecoChange) await onTabelaPrecoChange(cliInfo.tabela_preco_id);
+          if (onTabelaPrecoChange) await onTabelaPrecoChange(cliInfo.tabela_preco_id, oldTabelaId, setField, movId);
         } else {
           setField("tabela_preco_id", null);
-          if (onTabelaPrecoChange) await onTabelaPrecoChange(null);
+          if (onTabelaPrecoChange) await onTabelaPrecoChange(null, oldTabelaId, setField, movId);
         }
         // Avança o foco imediatamente para o vendedor
         setTimeout(() => {
@@ -186,12 +188,14 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
       if (c.condicao_id) {
         setField("condicao_id", c.condicao_id as any);
       }
+      const oldTabelaId = record.tabela_preco_id ?? null;
+      const movId = record.movimento_id ?? null;
       if (c.tabela_preco_id) {
         setField("tabela_preco_id", c.tabela_preco_id as any);
-        if (onTabelaPrecoChange) await onTabelaPrecoChange(c.tabela_preco_id);
+        if (onTabelaPrecoChange) await onTabelaPrecoChange(c.tabela_preco_id, oldTabelaId, setField, movId);
       } else {
         setField("tabela_preco_id", null);
-        if (onTabelaPrecoChange) await onTabelaPrecoChange(null);
+        if (onTabelaPrecoChange) await onTabelaPrecoChange(null, oldTabelaId, setField, movId);
       }
       // Ao retornar da pesquisa, poe o foco em vendedor
       setTimeout(() => {
@@ -440,8 +444,9 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
             onChange={async (e) => {
               const val = e.target.value ? Number(e.target.value) : null;
               const oldVal = record.tabela_preco_id ?? null;
+              const movId = record.movimento_id ?? null;
               if (onTabelaPrecoChange) {
-                await onTabelaPrecoChange(val, oldVal, setField);
+                await onTabelaPrecoChange(val, oldVal, setField, movId);
               } else {
                 setField("tabela_preco_id", val);
               }
@@ -453,9 +458,6 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
                 if (onSalvar) {
                   const saved = await onSalvar();
                   if (saved === null) return;
-                }
-                if (handleEditar) {
-                  handleEditar();
                 }
                 setInnerTab("itens");
               }
@@ -859,24 +861,23 @@ const PedidoForm: React.FC = () => {
     setXPedidoTotalCtx({ movimentoId: movimento_id, total, itens });
   }, []);
 
-  const reprocessarTabelaPreco = useCallback(async (tabelaId: number | null) => {
-    const movimento_id = XCurrentRecordRef.current?.movimento_id;
-    if (!movimento_id) return;
+  const reprocessarTabelaPreco = useCallback(async (tabelaId: number | null, movimentoId?: number | null) => {
+    const targetMovId = movimentoId ?? null;
+    if (!targetMovId) return;
 
     try {
-      toast.loading("Recalculando preços dos itens...", { id: "recalc-prices" });
-      
       // 1. Fetch all items for this movement
       const { data: itens, error: errFetch } = await db.from("movimento_item")
         .select("*")
-        .eq("movimento_id", movimento_id)
+        .eq("movimento_id", targetMovId)
         .eq("excluido", false);
       if (errFetch) throw errFetch;
 
       if (!itens || itens.length === 0) {
-        toast.dismiss("recalc-prices");
         return;
       }
+
+      toast.loading("Recalculando preços dos itens...", { id: "recalc-prices" });
 
       // 2. Recalculate price for each item using new tabelaId
       for (const item of itens) {
@@ -902,7 +903,7 @@ const PedidoForm: React.FC = () => {
         }
       }
 
-      await fetchItensCadastro(movimento_id);
+      await fetchItensCadastro(targetMovId);
       setXPagamentoRefreshToken(n => n + 1);
       toast.success("Preços dos itens recalculados com sucesso!", { id: "recalc-prices" });
     } catch (e: any) {
@@ -914,8 +915,29 @@ const PedidoForm: React.FC = () => {
   const handleTabelaPrecoChange = useCallback(async (
     newTabelaId: number | null,
     oldTabelaId?: number | null,
-    setFieldFunc?: (k: string, v: any) => void
+    setFieldFunc?: (k: string, v: any) => void,
+    movimentoId?: number | null
   ) => {
+    // 1. Verifica se existem itens no pedido
+    const targetMovId = movimentoId ?? null;
+    let hasItens = false;
+    if (targetMovId) {
+      const { data: itens } = await db.from("movimento_item")
+        .select("movimento_item_id")
+        .eq("movimento_id", targetMovId)
+        .eq("excluido", false)
+        .limit(1);
+      hasItens = !!(itens && itens.length > 0);
+    }
+
+    // Se NÃO houver itens na grid, define apenas o campo de tabela sem modal e sem avisos de preço
+    if (!hasItens) {
+      if (setFieldFunc) {
+        setFieldFunc("tabela_preco_id", newTabelaId);
+      }
+      return;
+    }
+
     if (oldTabelaId !== undefined && oldTabelaId !== newTabelaId) {
       const getTp = (id: number | null) => {
         if (!id) return "V";
@@ -936,7 +958,7 @@ const PedidoForm: React.FC = () => {
     if (setFieldFunc) {
       setFieldFunc("tabela_preco_id", newTabelaId);
     }
-    await reprocessarTabelaPreco(newTabelaId);
+    await reprocessarTabelaPreco(newTabelaId, targetMovId);
   }, [XTabelasPreco, reprocessarTabelaPreco]);
 
   const handleConfirmTabelaModal = async () => {
