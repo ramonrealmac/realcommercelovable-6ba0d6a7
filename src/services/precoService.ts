@@ -49,39 +49,40 @@ function parseAnyDate(val: string): Date | null {
  */
 /**
  * 1. Verifica se o produto possui preço em uma PROMOÇÃO ativa, não excluída e válida pelas datas inicial/final.
- * promocaoModo: 'V' (A VISTA) | 'P' (A PRAZO)
- */
-export async function obterPrecoPromocional(
+ * promocaoModo: 'V' (A VISTA) | 'P' export async function obterPrecoPromocional(
   produtoId: number,
   promocaoModo: "V" | "P" = "V"
 ): Promise<number | null> {
   try {
     const { data: items, error } = await db
       .from("promocao_item")
-      .select("valor_promocional, valor_promocional_prazo, promocao_id")
-      .eq("produto_id", produtoId)
-      .eq("excluido", false);
+      .select("valor_promocional, valor_promocional_prazo, promocao_id, excluido")
+      .eq("produto_id", produtoId);
 
     if (error || !items || items.length === 0) return null;
 
-    for (const item of items) {
+    const validItems = items.filter((i: any) => i.excluido !== true && i.excluido !== "S");
+    if (validItems.length === 0) return null;
+
+    for (const item of validItems) {
       const { data: promo } = await db
         .from("promocao")
         .select("promocao_id, dt_inicial, dt_final, ativa, excluido")
         .eq("promocao_id", item.promocao_id)
         .maybeSingle();
 
-      if (
-        promo &&
-        !promo.excluido &&
-        (promo.ativa ?? true) &&
-        isPromocaoValida(promo.dt_inicial, promo.dt_final)
-      ) {
+      if (!promo) continue;
+
+      const isPromoExcluido = promo.excluido === true || promo.excluido === "S";
+      const isPromoAtiva = promo.ativa === true || promo.ativa === "S" || promo.ativa === null || promo.ativa === undefined || promo.ativa === 1;
+
+      if (!isPromoExcluido && isPromoAtiva && isPromocaoValida(promo.dt_inicial, promo.dt_final)) {
         if (promocaoModo === "P") {
           const pPrazo = Number(item.valor_promocional_prazo);
-          return pPrazo > 0 ? pPrazo : Number(item.valor_promocional);
+          if (pPrazo && pPrazo > 0) return pPrazo;
         }
-        return Number(item.valor_promocional);
+        const pVista = Number(item.valor_promocional);
+        if (pVista && pVista > 0) return pVista;
       }
     }
     return null;
@@ -102,20 +103,25 @@ export async function obterPrecoTabela(produtoId: number, tabelaId: number): Pro
       .eq("tabela_id", tabelaId)
       .maybeSingle();
 
-    if (!tab || tab.excluido || tab.ativa === false || !isPromocaoValida(tab.dt_inicial, tab.dt_final)) {
+    if (!tab) return null;
+
+    const isTabExcluido = tab.excluido === true || tab.excluido === "S";
+    const isTabAtiva = tab.ativa === true || tab.ativa === "S" || tab.ativa === null || tab.ativa === undefined || tab.ativa === 1;
+
+    if (isTabExcluido || !isTabAtiva || !isPromocaoValida(tab.dt_inicial, tab.dt_final)) {
       return null;
     }
 
-    const { data, error } = await db
+    const { data: items, error } = await db
       .from("tabela_preco_item")
-      .select("preco")
+      .select("preco, excluido")
       .eq("tabela_id", tabelaId)
-      .eq("produto_id", produtoId)
-      .eq("excluido", false)
-      .maybeSingle();
+      .eq("produto_id", produtoId);
 
-    if (error) throw error;
-    return data ? Number(data.preco) : null;
+    if (error || !items || items.length === 0) return null;
+
+    const itemValido = items.find((i: any) => i.excluido !== true && i.excluido !== "S");
+    return itemValido ? Number(itemValido.preco) : null;
   } catch (e) {
     console.warn("Erro ao buscar preço da tabela:", e);
     return null;
@@ -125,14 +131,9 @@ export async function obterPrecoTabela(produtoId: number, tabelaId: number): Pro
 /**
  * 3. Função principal de obtenção do Preço Unitário para o Pedido:
  * Regras:
- * a - verifica se está na tabela de promoção
- * b - verifica se a promoção está ativa e não vencida
- * c - se estiver, pega o preço de acordo com o campo tp_pagamento da Tabela de Preço:
- *     - se tp_pagamento for V: pega o preço a vista da tabela de promoções
- *     - se tp_pagamento for P: pega o preço a prazo da tabela de promoções
- * d - se o produto não estiver na tabela de promoções ou a promoção estiver vencida/inativa:
- *     pega o preço unit da tabela de preço (se a tabela estiver ativa e não vencida)
- * e - se não tiver tabela de preço (ou inativa/vencida), pega o valor na tabela do produto
+ * a - se o produto estiver em tabela de promoções ativa e válida, pega preço de acordo com o tipo pagamento da tabela (V ou P)
+ * b - caso não esteja em tabela de promoções, pega o preço da tabela selecionada (se ativa e não vencida)
+ * c - caso a tabela de preço for Preço Padrão (Sem Tabela), pega o preço vl sug venda na tabela do produto
  */
 export async function obterPrecoUnitarioItem(
   produtoId: number,
@@ -157,22 +158,22 @@ export async function obterPrecoUnitarioItem(
     }
   }
 
-  // 1. Tenta buscar na Tabela de Promoções
+  // 1. Tenta buscar na Tabela de Promoções (ativa e válida)
   const precoPromo = await obterPrecoPromocional(produtoId, tpPagamento);
-  if (precoPromo !== null) {
+  if (precoPromo !== null && precoPromo > 0) {
     return { preco: precoPromo, fonte: "promocao" };
   }
 
-  // 2. Se o produto não estiver em promoção válida/ativa, tenta Tabela de Preço
+  // 2. Se o produto não estiver em promoção válida/ativa, tenta Tabela de Preço selecionada
   if (tabelaPrecoId) {
     const precoTab = await obterPrecoTabela(produtoId, tabelaPrecoId);
-    if (precoTab !== null) {
+    if (precoTab !== null && precoTab > 0) {
       return { preco: precoTab, fonte: "tabela" };
     }
   }
 
-  // 3. Fallback: valor na tabela do produto
-  if (precoVendaPadrao !== undefined && precoVendaPadrao !== null) {
+  // 3. Fallback: Preço Padrão (vl. sug. venda na tabela do produto)
+  if (precoVendaPadrao !== undefined && precoVendaPadrao !== null && Number(precoVendaPadrao) > 0) {
     return { preco: Number(precoVendaPadrao), fonte: "padrao" };
   }
 

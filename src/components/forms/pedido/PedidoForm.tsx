@@ -939,37 +939,27 @@ const PedidoForm: React.FC = () => {
     }
 
     if (oldTabelaId !== undefined && oldTabelaId !== newTabelaId) {
-      const getTp = (id: number | null) => {
-        if (!id) return "V";
-        const item = XTabelasPreco.find((t: any) => t.id === id);
-        return item?.tp_pagamento || "V";
-      };
-
-      const oldTp = getTp(oldTabelaId);
-      const newTp = getTp(newTabelaId);
-
-      if (oldTp !== newTp) {
-        setXPendingTabelaInfo({ newTabelaId, oldTabelaId, oldTp, newTp, setFieldFunc });
-        setXConfirmTabelaModalOpen(true);
-        return;
-      }
+      setXPendingTabelaInfo({ newTabelaId, oldTabelaId, setFieldFunc, movimentoId: targetMovId });
+      setXConfirmTabelaModalOpen(true);
+      return;
     }
 
     if (setFieldFunc) {
       setFieldFunc("tabela_preco_id", newTabelaId);
     }
     await reprocessarTabelaPreco(newTabelaId, targetMovId);
-  }, [XTabelasPreco, reprocessarTabelaPreco]);
+  }, [reprocessarTabelaPreco]);
 
   const handleConfirmTabelaModal = async () => {
     if (!XPendingTabelaInfo) return;
-    const { newTabelaId, setFieldFunc } = XPendingTabelaInfo;
+    const { newTabelaId, setFieldFunc, movimentoId } = XPendingTabelaInfo;
     setXConfirmTabelaModalOpen(false);
     if (setFieldFunc) {
       setFieldFunc("tabela_preco_id", newTabelaId);
     }
+    const targetMovId = movimentoId ?? null;
     setXPendingTabelaInfo(null);
-    await reprocessarTabelaPreco(newTabelaId);
+    await reprocessarTabelaPreco(newTabelaId, targetMovId);
   };
 
   const handleCancelTabelaModal = () => {
@@ -1511,22 +1501,14 @@ const PedidoForm: React.FC = () => {
       <AlertDialog open={XConfirmTabelaModalOpen} onOpenChange={setXConfirmTabelaModalOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Mudança de Tabela de Preço</AlertDialogTitle>
+            <AlertDialogTitle>Atualizar Preços dos Produtos</AlertDialogTitle>
             <AlertDialogDescription>
-              {XPendingTabelaInfo && (
-                <span>
-                  A alteração da Tabela de Preço modifica o tipo de pagamento de{" "}
-                  <strong>{XPendingTabelaInfo.oldTp === "P" ? "A PRAZO" : "A VISTA"}</strong> para{" "}
-                  <strong>{XPendingTabelaInfo.newTp === "P" ? "A PRAZO" : "A VISTA"}</strong>.
-                  <br /><br />
-                  Deseja reprocessar os valores dos produtos e totais do pedido?
-                </span>
-              )}
+              Deseja atualizar os preços dos produtos da grid de acordo com a nova tabela de preços?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleCancelTabelaModal}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmTabelaModal}>Confirmar (Reprocessar)</AlertDialogAction>
+            <AlertDialogCancel onClick={handleCancelTabelaModal}>Não</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmTabelaModal}>Sim (Atualizar)</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -61,8 +61,8 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
   const [XDepEstoque, setXDepEstoque] = useState<Record<number, number>>({});
   const [XValidaEstoque, setXValidaEstoque] = useState(false);
   const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
-  const [XQtDecimais, setXQtDecimais] = useState(2);
-  const [XValDecimais, setXValDecimais] = useState(2);
+  const [XQtDecimais, setXQtDecimais] = useState(2);  const [XValDecimais, setXValDecimais] = useState(2);
+  const [XItemSalvo, setXItemSalvo] = useState(false);
   const codigoRef = useRef<HTMLInputElement>(null);
   const lupaRef = useRef<HTMLButtonElement>(null);
   const precoUnitRef = useRef<HTMLInputElement>(null);
@@ -112,6 +112,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
       setXCodigo("");
       setXDepEstoque({});
       setXSelectedIdx(null);
+      setXItemSalvo(false);
     }
   }, [pedido?.movimento_id]);
 
@@ -140,6 +141,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
   }, [XEmpresaId]);
 
   const novo = useCallback(() => {
+    setXItemSalvo(false);
     setXEditingId(null);
     setXEditEstoque(null);
     setXDepEstoque({});
@@ -190,6 +192,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
   }, [XEmpresaId, XGroupEmpresaIds]);
 
   const editar = (it: IMovimentoItem) => {
+    setXItemSalvo(false);
     let itemEntrega = it.entrega;
     if (pedido?.st_entrega === "S" || pedido?.st_entrega === "N") {
       itemEntrega = pedido.st_entrega;
@@ -212,6 +215,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
   };
 
   const setF = <K extends keyof IMovimentoItem>(k: K, v: any) => {
+    setXItemSalvo(false);
     setXEdit(prev => recalc({ ...prev!, [k]: v }));
   };
 
@@ -221,6 +225,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
   };
 
   const aplicarProduto = useCallback(async (p: IProdutoRow, deposito_id?: number) => {
+    setXItemSalvo(false);
     const { preco, fonte } = await obterPrecoUnitarioItem(
       p.produto_id,
       tabelaPrecoId,
@@ -249,6 +254,8 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
     setTimeout(() => { precoUnitRef.current?.focus(); precoUnitRef.current?.select(); }, 80);
   }, [carregarEstoquePorDeposito, tabelaPrecoId, condicaoId, pedido?.condicao_id]);
 
+  const XSearchingCodeRef = useRef(false);
+
   const onCodigoBlur = async () => {
     const t = XCodigo.trim();
     if (!t) {
@@ -256,16 +263,23 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
       setTimeout(() => lupaRef.current?.focus(), 30);
       return;
     }
+    if (XSearchingCodeRef.current) return;
     if (XEdit?.produto_id && (String(XEdit.produto_id) === t || XEdit.cd_produto === t)) {
       setTimeout(() => { precoUnitRef.current?.focus(); precoUnitRef.current?.select(); }, 30);
       return;
     }
-    const p = await buscarProdutoPorCodigo(t, XEmpresaId, XGroupEmpresaIds);
-    if (!p) { toast.error("Produto não encontrado."); return; }
-    await aplicarProduto(p);
+    XSearchingCodeRef.current = true;
+    try {
+      const p = await buscarProdutoPorCodigo(t, XEmpresaId, XGroupEmpresaIds);
+      if (!p) { toast.error("Produto não encontrado."); return; }
+      await aplicarProduto(p);
+    } finally {
+      XSearchingCodeRef.current = false;
+    }
   };
 
   const limparProduto = () => {
+    setXItemSalvo(false);
     setXEdit(prev => recalc({
       ...(prev || {}),
       produto_id: undefined, cd_produto: undefined, nm_produto: undefined,
@@ -287,60 +301,62 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
 
   // Currency inputs handled by CurrencyInput component
 
+  const XSalvarItemRef = useRef(false);
+
   const salvarItem = async () => {
-    if (!pedido?.movimento_id) { toast.error("Salve o pedido antes."); return; }
-    if (!XEdit?.produto_id) { toast.error("Selecione o produto."); return; }
-    const qt = parseNum(XEdit.qt_movimento);
-    if (qt <= 0) { toast.error("Qtd. inválida."); return; }
-    if (!XEdit.deposito_id) { toast.error("Selecione o depósito."); return; }
+    if (XSalvarItemRef.current || XItemSalvo) return;
+    XSalvarItemRef.current = true;
+    try {
+      if (!pedido?.movimento_id) { toast.error("Salve o pedido antes."); return; }
+      if (!XEdit?.produto_id) { toast.error("Selecione o produto."); return; }
+      const qt = parseNum(XEdit.qt_movimento);
+      if (qt <= 0) { toast.error("Qtd. inválida."); return; }
+      if (!XEdit.deposito_id) { toast.error("Selecione o depósito."); return; }
 
-    if (XValidaEstoque) {
-      const dispDep = XDepEstoque[XEdit.deposito_id] ?? 0;
-      const depNome = XDepositos.find(d => d.deposito_id === XEdit.deposito_id)?.nome || XEdit.deposito_id;
-      if (qt > dispDep) {
-        toast.error(`Quantidade (${fmt(qt, 4)}) excede o estoque disponível (${fmt(dispDep, 4)}) no depósito ${depNome}.`);
-        return;
+      if (XValidaEstoque) {
+        const dispDep = XDepEstoque[XEdit.deposito_id] ?? 0;
+        const depNome = XDepositos.find(d => d.deposito_id === XEdit.deposito_id)?.nome || XEdit.deposito_id;
+        if (qt > dispDep) {
+          toast.error(`Quantidade (${fmt(qt, 4)}) excede o estoque disponível (${fmt(dispDep, 4)}) no depósito ${depNome}.`);
+          return;
+        }
       }
-    }
 
-    const {
-      vl_produto, vl_movimento, movimento_item_id,
-      ...basePayload
-    } = XEdit;
-    
-    const payload = {
-      ...basePayload,
-      vl_desconto: XEdit.vl_desconto || 0,
-      pc_desconto: XEdit.pc_desconto || 0,
-      vl_desc_rs: XEdit.vl_desconto || 0,
-      empresa_id: XEmpresaId,
-      movimento_id: pedido.movimento_id,
-      tp_movimento: pedido.tp_movimento || "PD",
-    };
-    if (XEditingId) {
-      const { error } = await db.from("movimento_item").update(payload).eq("movimento_item_id", XEditingId);
-      if (error) { toast.error(error.message); return; }
-    } else {
-      let { error } = await db.from("movimento_item").insert(payload);
-      if (error && (error.message?.includes("movimento_item_pkey") || error.message?.includes("duplicate key") || error.code === "23505")) {
-        const { data: maxIt } = await db.from("movimento_item")
-          .select("movimento_item_id")
-          .order("movimento_item_id", { ascending: false })
-          .limit(1);
-        const nextId = ((maxIt && maxIt[0]?.movimento_item_id) || 0) + 1;
-        const retryRes = await db.from("movimento_item").insert({ ...payload, movimento_item_id: nextId });
-        error = retryRes.error;
+      const {
+        vl_produto, vl_movimento, movimento_item_id,
+        ...basePayload
+      } = XEdit;
+      
+      const payload = {
+        ...basePayload,
+        vl_desconto: XEdit.vl_desconto || 0,
+        pc_desconto: XEdit.pc_desconto || 0,
+        vl_desc_rs: XEdit.vl_desconto || 0,
+        empresa_id: XEmpresaId,
+        movimento_id: pedido.movimento_id,
+        tp_movimento: pedido.tp_movimento || "PD",
+      };
+      if (XEditingId) {
+        const { error } = await db.from("movimento_item").update(payload).eq("movimento_item_id", XEditingId);
+        if (error) { toast.error(error.message); return; }
+      } else {
+        let { error } = await db.from("movimento_item").insert(payload);
+        if (error && (error.message?.includes("movimento_item_pkey") || error.message?.includes("duplicate key") || error.code === "23505")) {
+          const { data: maxIt } = await db.from("movimento_item")
+            .select("movimento_item_id")
+            .order("movimento_item_id", { ascending: false })
+            .limit(1);
+          const nextId = ((maxIt && maxIt[0]?.movimento_item_id) || 0) + 1;
+          const retryRes = await db.from("movimento_item").insert({ ...payload, movimento_item_id: nextId });
+          error = retryRes.error;
+        }
+        if (error) { toast.error(error.message); return; }
       }
-      if (error) { toast.error(error.message); return; }
-    }
-    toast.success("Item salvo.");
-    const wasInsert = !XEditingId;
-    setXEdit(null); setXEditingId(null); setXEditEstoque(null);
-    setXDepEstoque({}); setXCodigo("");
-    await loadItens();
-    // Após inserir, abrir automaticamente um novo item para inserção contínua
-    if (wasInsert && podeEditar) {
-      setTimeout(() => novo(), 100);
+      toast.success("Item salvo.");
+      setXItemSalvo(true);
+      await loadItens();
+    } finally {
+      XSalvarItemRef.current = false;
     }
   };
 
@@ -598,11 +614,11 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
                 className="w-full border border-border rounded px-2 py-1 text-sm font-semibold text-right" />
             </div>
             <div className="col-span-2 flex items-end gap-1">
-              <button onClick={salvarItem} disabled={ro}
+              <button onClick={salvarItem} disabled={ro || XItemSalvo || !XEdit?.produto_id}
                 className="text-sm px-3 py-1 rounded bg-primary text-primary-foreground disabled:opacity-50">
                 {XEditingId ? "Salvar" : "Inserir"}
               </button>
-              <button type="button" onClick={() => { setXEdit(null); setXEditingId(null); setXEditEstoque(null); setXDepEstoque({}); setXCodigo(""); }}
+              <button type="button" onClick={() => { setXItemSalvo(false); novo(); }}
                 className="text-sm px-3 py-1 rounded border border-border">Cancelar</button>
             </div>
           </div>
