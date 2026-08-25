@@ -226,37 +226,67 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
 
   const aplicarProduto = useCallback(async (p: IProdutoRow, deposito_id?: number) => {
     setXItemSalvo(false);
-    const { preco, fonte } = await obterPrecoUnitarioItem(
-      p.produto_id,
-      tabelaPrecoId,
-      Number(p.st_promo && p.preco_promocional > 0 ? p.preco_promocional : p.preco_venda) || 0
-    );
-    
-    if (fonte === "promocao") {
-      toast.info("Preço promocional aplicado.");
-    } else if (fonte === "padrao" && tabelaPrecoId) {
-      toast.info("Preço não cadastrado na tabela selecionada (ou tabela inativa). Usando preço padrão.");
+    if (!p || !p.produto_id) return;
+
+    const cdProdStr = String(p.cd_produto ?? p.produto_id ?? "");
+    const nmProdStr = p.nome || p.nm_produto || (p as any).descricao || "";
+    let preco = Number(p.st_promo && p.preco_promocional > 0 ? p.preco_promocional : p.preco_venda) || 0;
+
+    // Atualiza imediatamente o código visível
+    setXCodigo(cdProdStr);
+
+    try {
+      const resPreco = await obterPrecoUnitarioItem(
+        p.produto_id,
+        tabelaPrecoId,
+        preco
+      );
+      if (resPreco && typeof resPreco.preco === "number" && resPreco.preco > 0) {
+        preco = resPreco.preco;
+      }
+      if (resPreco?.fonte === "promocao") {
+        toast.info("Preço promocional aplicado.");
+      } else if (resPreco?.fonte === "padrao" && tabelaPrecoId) {
+        toast.info("Preço não cadastrado na tabela selecionada (ou tabela inativa). Usando preço padrão.");
+      }
+    } catch (e) {
+      console.warn("Erro ao carregar preço da tabela/promoção:", e);
     }
 
-    setXEdit(prev => recalc({
-      ...(prev || {}),
-      produto_id: p.produto_id,
-      cd_produto: String(p.cd_produto ?? p.produto_id),
-      nm_produto: p.nome,
-      unidade_id: p.unidade_id,
-      vl_und_produto: preco,
-      ...(deposito_id ? { deposito_id } : {}),
-    }));
-    setXEditEstoque({ disp: p.estoque_disponivel, res: p.estoque_reservado });
-    setXCodigo(String(p.cd_produto ?? p.produto_id));
+    setXEdit(prev => {
+      const base = prev || {};
+      const qt = parseNum(base.qt_movimento) || 1;
+      const depId = deposito_id || base.deposito_id || XDepositos[0]?.deposito_id || 1;
+      const ent = base.entrega || (pedido?.st_entrega === "S" ? "S" : "N");
+
+      return recalc({
+        ...base,
+        produto_id: p.produto_id,
+        cd_produto: cdProdStr,
+        nm_produto: nmProdStr,
+        unidade_id: p.unidade_id,
+        vl_und_produto: preco,
+        qt_movimento: qt,
+        deposito_id: depId,
+        entrega: ent,
+        pc_desconto: base.pc_desconto || 0,
+        vl_desconto: base.vl_desconto || 0,
+        vl_despesa: base.vl_despesa || 0,
+        vl_frete: base.vl_frete || 0,
+        vl_seguro: base.vl_seguro || 0,
+        vl_outro: base.vl_outro || 0,
+      });
+    });
+
+    setXEditEstoque({ disp: p.estoque_disponivel || 0, res: p.estoque_reservado || 0 });
     carregarEstoquePorDeposito(p.produto_id);
-    // foco no preço unitário
     setTimeout(() => { precoUnitRef.current?.focus(); precoUnitRef.current?.select(); }, 80);
-  }, [carregarEstoquePorDeposito, tabelaPrecoId, condicaoId, pedido?.condicao_id]);
+  }, [carregarEstoquePorDeposito, tabelaPrecoId, XDepositos, pedido?.st_entrega]);
 
   const XSearchingCodeRef = useRef(false);
 
   const onCodigoBlur = async () => {
+    if (XSearchOpen) return;
     const t = XCodigo.trim();
     if (!t) {
       // vazio → vai pro botão da lupa
