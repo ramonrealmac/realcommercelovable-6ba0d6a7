@@ -561,7 +561,7 @@ const PedidoForm: React.FC = () => {
     };
 
     load(
-      db.from("funcionario").select("funcionario_id, cd_funcionario, nome").eq("empresa_id", XEmpresaId).order("nome").limit(500),
+      db.from("funcionario").select("funcionario_id, cd_funcionario, nome").eq("empresa_id", XEmpresaId).eq("vendedor", "S").order("nome").limit(500),
       (d) => setXVendedores(d.map((c: any) => ({ id: c.funcionario_id, label: `${c.cd_funcionario ?? c.funcionario_id} - ${c.nome}` }))),
       "funcionario",
     );

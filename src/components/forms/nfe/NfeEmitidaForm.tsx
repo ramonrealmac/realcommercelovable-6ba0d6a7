@@ -260,21 +260,53 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
               onClick={async () => {
                 if (!confirm(`Enviar NF-e #${currentRecord.nfe_cabecalho_id} para a SEFAZ via fiscal-worker?`)) return;
                 const tid = toast.loading("Enviando para fila do fiscal-worker...");
+                const targetEmpresaId = currentRecord.empresa_id || XEmpresaId;
                 try {
                   const res = await fiscalEmissaoService.retransmitirDocumento(
                     currentRecord.nfe_cabecalho_id,
-                    XEmpresaId
+                    targetEmpresaId
                   );
                   toast.dismiss(tid);
-                  if (res.success) {
-                    toast.success(`Evento #${res.fiscal_evento_id} enfileirado. Aguarde o fiscal-worker processar.`);
+                  if (res.success && res.fiscal_evento_id) {
+                    toast.loading("Aguardando resposta da SEFAZ...", { id: tid });
+                    const ret = await fiscalEmissaoService.aguardarEvento(res.fiscal_evento_id, {
+                      empresaId: targetEmpresaId
+                    });
+                    toast.dismiss(tid);
+
                     await refresh();
+
+                    const { data: cabUpdated } = await db.from("fiscal_nfe_cabecalho")
+                      .select("nfe_cabecalho_id, st_nf, empresa_id")
+                      .eq("nfe_cabecalho_id", currentRecord.nfe_cabecalho_id)
+                      .maybeSingle();
+
+                    const stNf = cabUpdated?.st_nf || (ret.success ? "A" : currentRecord.st_nf);
+
+                    if (["A", "1"].includes(String(stNf))) {
+                      toast.success("Nota Fiscal autorizada com sucesso! Gerando DANFE...");
+                      const impRes = await fiscalEmissaoService.imprimirDocumento(
+                        currentRecord.nfe_cabecalho_id,
+                        targetEmpresaId
+                      );
+                      if (impRes.success && impRes.pdf_base64) {
+                        const binaryString = atob(impRes.pdf_base64);
+                        const bytes = new Uint8Array(binaryString.length);
+                        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+                        const blob = new Blob([bytes], { type: "application/pdf" });
+                        const url = URL.createObjectURL(blob);
+                        window.open(url, "_blank");
+                      }
+                    } else {
+                      toast.error("Retorno SEFAZ: " + (ret.mensagem || ret.resposta?.x_motivo || "Não autorizada"));
+                    }
                   } else {
                     toast.error("Falha: " + (res.message || "Erro desconhecido"));
                   }
                 } catch (e: any) {
                   toast.dismiss(tid);
                   toast.error("Erro: " + e.message);
+                  await refresh();
                 }
               }}
               className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-primary text-primary-foreground rounded-md hover:opacity-90 shadow-sm"

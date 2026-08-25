@@ -338,13 +338,49 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
       toast.error(`Esta nota está em status "${row.st_nf}" e não pode ser retransmitida.`);
       return;
     }
+    const targetEmpresaId = row.empresa_id || XEmpresaId;
     toast.info("Enfileirando transmissão...");
-    const res = await fiscalEmissaoService.retransmitirDocumento(row.nfe_cabecalho_id, row.empresa_id || XEmpresaId);
-    if (res.success) {
-      toast.success("Evento de transmissão criado.");
-      loadData();
-    } else {
-      toast.error("Falha: " + (res.message || "erro desconhecido"));
+    try {
+      const res = await fiscalEmissaoService.retransmitirDocumento(row.nfe_cabecalho_id, targetEmpresaId);
+      if (!res.success || !res.fiscal_evento_id) {
+        toast.error("Falha: " + (res.message || "erro desconhecido"));
+        return;
+      }
+
+      const totalSeg = await fiscalEmissaoService.obterTimeoutFiscalSeg(targetEmpresaId);
+      setXProg({ open: true, titulo: "Transmitindo NF-e à SEFAZ...", total: totalSeg });
+
+      const ret = await fiscalEmissaoService.aguardarEvento(res.fiscal_evento_id, {
+        empresaId: targetEmpresaId,
+        timeoutMs: totalSeg * 1000
+      });
+
+      setXProg(p => ({ ...p, open: false }));
+
+      // Atualiza a grade para refletir o novo estado no banco de dados
+      await loadData();
+
+      // Consulta o cabeçalho atualizado no banco de dados para confirmar o status
+      const { data: updatedCab } = await db
+        .from("fiscal_nfe_cabecalho")
+        .select("*")
+        .eq("nfe_cabecalho_id", row.nfe_cabecalho_id)
+        .maybeSingle();
+
+      const itemAtualizado = updatedCab ? { ...row, ...updatedCab } : { ...row, st_nf: ret.success ? "A" : row.st_nf };
+      const stNf = String(itemAtualizado.st_nf);
+
+      if (["A", "1"].includes(stNf)) {
+        toast.success("Nota Fiscal autorizada com sucesso!");
+        await handleImprimir(itemAtualizado);
+      } else {
+        const msg = ret.mensagem || ret.resposta?.x_motivo || "Nota não foi autorizada pela SEFAZ.";
+        toast.error("Retorno SEFAZ: " + msg);
+      }
+    } catch (e: any) {
+      setXProg(p => ({ ...p, open: false }));
+      toast.error("Erro na transmissão: " + e.message);
+      await loadData();
     }
   };
 

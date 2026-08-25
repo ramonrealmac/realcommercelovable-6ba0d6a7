@@ -507,8 +507,13 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave, confi
             } catch (e) { /* ignore */ }
         }
 
+        lib.ConfigGravarValor(handle, "DANFE", "PathPDF", pdfDir);
+        lib.ConfigGravarValor(handle, "DANFENFe", "PathPDF", pdfDir);
+        lib.ConfigGravarValor(handle, "DANFENFCe", "PathPDF", pdfDir);
         lib.ConfigGravarValor(handle, "DANFe", "PathPDF", pdfDir);
         lib.ConfigGravarValor(handle, "NFe", "PathPDF", pdfDir);
+        lib.ConfigGravarValor(handle, "DANFE", "MostraPreview", "0");
+        lib.ConfigGravarValor(handle, "DANFE", "MostraStatus", "0");
         lib.ConfigGravarValor(handle, "DANFe", "MostraPreview", "0");
         lib.ConfigGravarValor(handle, "DANFe", "MostraStatus", "0");
 
@@ -524,17 +529,36 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave, confi
             // Aguarda um curto tempo para o SO liberar o arquivo
             waitSync(500);
 
-            // Busca pelo arquivo exato informado pelo usuário: {chave}-nfe.pdf
+            // Busca pelo arquivo exato ou busca recursiva no diretório de saída
             let finalPdf = null;
             if (chave) {
                 const p = path.join(pdfDir, `${chave}-nfe.pdf`);
                 if (fs.existsSync(p)) {
                     finalPdf = p;
                 } else {
-                    // Fallback para {chave}.pdf se o outro não existir
                     const pAlt = path.join(pdfDir, `${chave}.pdf`);
                     if (fs.existsSync(pAlt)) finalPdf = pAlt;
                 }
+            }
+
+            if (!finalPdf) {
+                const encontrarPdfRecursivo = (dir) => {
+                    if (!fs.existsSync(dir)) return null;
+                    const list = fs.readdirSync(dir, { withFileTypes: true });
+                    for (const item of list) {
+                        const full = path.join(dir, item.name);
+                        if (item.isDirectory()) {
+                            const sub = encontrarPdfRecursivo(full);
+                            if (sub) return sub;
+                        } else if (item.name.toLowerCase().endsWith('.pdf')) {
+                            if (chave && item.name.includes(chave)) return full;
+                            const stat = fs.statSync(full);
+                            if (Date.now() - stat.mtimeMs < 15000) return full;
+                        }
+                    }
+                    return null;
+                };
+                finalPdf = encontrarPdfRecursivo(pdfDir) || encontrarPdfRecursivo(path.join(resolverBaseArquivos(configPayload), "PDF"));
             }
 
             if (!finalPdf) {
@@ -770,10 +794,11 @@ const configurarHandle = (lib, handle, configPayload, prefix = 'NFE') => {
         sslXmlSignLib = "4";
     }
     
-    // Se não for repositório, CryptLib recomendada é cryOpenSSL (1).
-    if (tipoCertificado !== 'REPOSITORIO' && sslCryptLib !== "1") {
-        console.warn(`[FiscalLib] ⚠️ SSLCryptLib=${sslCryptLib} corrigindo para cryOpenSSL (1) em certificados de arquivo.`);
-        sslCryptLib = "1";
+    // Permite cryWinCrypt (3) ou cryOpenSSL (1) para certificados de arquivo A1.
+    // cryWinCrypt (3) é essencial no Windows para arquivos PFX com criptografia legada (3DES/RC2).
+    if (tipoCertificado !== 'REPOSITORIO' && !["1", "3"].includes(sslCryptLib)) {
+        console.warn(`[FiscalLib] ⚠️ SSLCryptLib=${sslCryptLib} ajustado para cryWinCrypt (3).`);
+        sslCryptLib = "3";
     }
 
     // Grava as bibliotecas SSL configuradas no ACBrLib
@@ -938,8 +963,7 @@ const patchIniForThread = (iniContent, configPayload) => {
     if (["2", "3"].includes(sslLib)) sslLib = "4";
     // Apenas xsXmlSec (1) e xsLibXml2 (4) implementam assinatura XML.
     if (!["1", "4"].includes(sslXmlSignLib)) sslXmlSignLib = "4";
-    // A CryptLib recomendada e compatível para hashing é cryOpenSSL (1).
-    if (tipoCertificado !== 'REPOSITORIO' && sslCryptLib !== "1") sslCryptLib = "1";
+    if (tipoCertificado !== 'REPOSITORIO' && !["1", "3"].includes(sslCryptLib)) sslCryptLib = "3";
 
     // Se REPOSITORIO, força WinCrypt, WinCrypt (para hashing/cert) e LibXml2 (para assinatura)
     if (tipoCertificado === 'REPOSITORIO') {
