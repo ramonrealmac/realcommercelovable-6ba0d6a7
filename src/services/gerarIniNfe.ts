@@ -137,7 +137,9 @@ export function gerarIniNfe(params: GerarIniParams): string {
     if (docValido) linhas.push(`CNPJCPF=${docDest}`);
     linhas.push(`xNome=${cadastro.razao_social || (ambiente === '2' ? 'NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL' : '')}`);
     const ie = limparNumeros(cadastro.inscricao_estadual || '');
-    const indIE = cadastro.tp_contribuinte === 'S' && ie ? '1' : (ie ? '2' : '9');
+    const tpContrib = String(cadastro.tp_contribuinte || '').toUpperCase();
+    const isContribuinte = ['S', 'C', '1'].includes(tpContrib) || (Boolean(ie) && !['I', '2'].includes(tpContrib));
+    const indIE = isContribuinte && ie ? '1' : (['I', '2'].includes(tpContrib) ? '2' : '9');
     linhas.push(`indIEDest=${indIE}`);
     if (ie && indIE === '1') linhas.push(`IE=${ie}`);
     if (cadastro.email) linhas.push(`Email=${cadastro.email}`);
