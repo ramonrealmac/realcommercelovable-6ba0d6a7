@@ -11,7 +11,7 @@ import { ST_PEDIDO_LABELS, TP_DESCONTO_LABELS } from "./types";
 import PedidoItensTab from "./PedidoItensTab";
 import PedidoPagamentoTab from "./PedidoPagamentoTab";
 import ClienteSearchDialog, { IClienteRow } from "./ClienteSearchDialog";
-import { Search, Send, Reply, Lock, Unlock, Ban, ArrowLeftRight, Wallet, CircleDollarSign, Package } from "lucide-react";
+import { Search, Send, Reply, Lock, Unlock, Ban, ArrowLeftRight, Wallet, CircleDollarSign, Package, Copy } from "lucide-react";
 import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 import { ToolbarBtn, ToolbarSeparator } from "@/components/shared/FormToolbar";
 import { obterPrecoUnitarioItem } from "@/services/precoService";
@@ -976,6 +976,124 @@ const PedidoForm: React.FC = () => {
     XFetchingItensRef.current.clear();
   }, []);
 
+  const handleClonarPedido = async (
+    orig: IMovimento,
+    refreshFunc?: () => Promise<void>,
+    setTabFunc?: (t: string) => void,
+    selectRecordFunc?: (r: any) => void
+  ) => {
+    if (!orig || !orig.movimento_id) {
+      toast.error("Nenhum pedido selecionado para clonar.");
+      return;
+    }
+
+    const tid = toast.loading(`Clonando Pedido #${orig.nr_movimento || orig.movimento_id}...`);
+    try {
+      // 1. Busca os dados completos do pedido original
+      const { data: movOrig, error: errMovOrig } = await db
+        .from("movimento")
+        .select("*")
+        .eq("movimento_id", orig.movimento_id)
+        .single();
+      if (errMovOrig || !movOrig) throw new Error("Erro ao buscar dados do pedido original: " + (errMovOrig?.message || ""));
+
+      // 2. Busca itens ativos do pedido original
+      const { data: itensOrig, error: errItensOrig } = await db
+        .from("movimento_item")
+        .select("*")
+        .eq("movimento_id", orig.movimento_id)
+        .eq("excluido", false);
+      if (errItensOrig) throw new Error("Erro ao buscar itens do pedido original: " + errItensOrig.message);
+
+      // 3. Obtém o próximo número de movimento (nr_movimento)
+      const proximoNr = await obterProximoNrMovimento(XEmpresaId);
+
+      // 4. Prepara o payload para o novo pedido em modo Orçamento ('O')
+      const {
+        movimento_id,
+        created_at,
+        chave_nfe,
+        nr_nota,
+        nfe_cabecalho_id,
+        xml_nfe,
+        recibo_sefaz,
+        st_nf,
+        protocolo_cancelamento,
+        ...cleanPayload
+      } = movOrig;
+
+      const novoMovPayload: any = {
+        ...cleanPayload,
+        st_pedido: "O", // Status de Orçamento / Aberto
+        faturado: "N",
+        st_bloqueado: "N",
+        nr_movimento: proximoNr,
+        dt_emissao: new Date().toISOString().substring(0, 10),
+        dt_entrega: new Date().toISOString().substring(0, 10),
+        dt_alteracao: new Date().toISOString(),
+        obs_pedido: movOrig.obs_pedido ? `(Cópia de #${movOrig.nr_movimento || movOrig.movimento_id}) ${movOrig.obs_pedido}` : `(Cópia de #${movOrig.nr_movimento || movOrig.movimento_id})`,
+        // Limpa campos fiscais e faturamento físicos da tabela movimento
+        numero_nfe: null,
+        serie: null,
+        modelo_nf: null,
+        dt_pagamento: null,
+        dt_faturamento: null,
+        dt_finalizacao: null,
+        dt_cancelamento: null,
+        motivo_cancelamento: "",
+        mot_cancelamento: "",
+      };
+
+      // Insere o novo pedido
+      const { data: novoMov, error: errInsertMov } = await db
+        .from("movimento")
+        .insert(novoMovPayload)
+        .select("*")
+        .single();
+
+      if (errInsertMov || !novoMov) throw new Error("Erro ao gerar a cópia do pedido: " + (errInsertMov?.message || ""));
+
+      // 5. Duplica todos os itens do pedido original
+      if (itensOrig && itensOrig.length > 0) {
+        const novosItens = itensOrig.map((it: any) => {
+          const { movimento_item_id, created_at, dt_alteracao, ...cleanItem } = it;
+          return {
+            ...cleanItem,
+            movimento_id: novoMov.movimento_id,
+            empresa_id: XEmpresaId,
+            excluido: false
+          };
+        });
+
+        const { error: errInsertItens } = await db.from("movimento_item").insert(novosItens);
+        if (errInsertItens) {
+          console.error("Aviso ao copiar itens do pedido:", errInsertItens);
+        }
+      }
+
+      toast.success(`Pedido #${orig.nr_movimento || orig.movimento_id} clonado como Orçamento #${novoMov.nr_movimento || novoMov.movimento_id}!`, { id: tid });
+
+      // 6. Pergunta ao usuário se deseja ir para o novo pedido
+      const querIr = window.confirm(
+        `Pedido #${orig.nr_movimento || orig.movimento_id} clonado com sucesso!\n\nNovo Pedido (Orçamento): #${novoMov.nr_movimento || novoMov.movimento_id}\n\nDeseja ir para o novo pedido agora?`
+      );
+
+      if (querIr) {
+        if (selectRecordFunc) {
+          selectRecordFunc(novoMov);
+        } else if (refreshFunc) {
+          await refreshFunc();
+        }
+        if (setTabFunc) setTabFunc("cadastro");
+        setXMovimentoParaBuscar(novoMov.movimento_id);
+        await fetchItensCadastro(novoMov.movimento_id);
+        toast.info(`Exibindo novo Pedido #${novoMov.nr_movimento || novoMov.movimento_id}`);
+      }
+    } catch (e: any) {
+      toast.error("Erro ao clonar pedido: " + e.message, { id: tid });
+    }
+  };
+
   // Grid de colunas memoizado — evita recriar array a cada render
   const gridCols = useMemo(
     () => buildGridCols(XVendedores, XClientesCache),
@@ -1007,7 +1125,7 @@ const PedidoForm: React.FC = () => {
   return (
     <>
       <StandardCrudForm<IMovimento>
-        XToolbarExtras={({ currentRecord, refresh, setInnerTab, isEditing }) => {
+        XToolbarExtras={({ currentRecord, refresh, setInnerTab, isEditing, selectRecord }) => {
           XCurrentRecordRef.current = currentRecord;
           XSetInnerTabRef.current = setInnerTab;
           XIsEditingRef.current = isEditing;
@@ -1072,6 +1190,16 @@ const PedidoForm: React.FC = () => {
                   color="success"
                 />
               )}
+
+              <ToolbarSeparator />
+
+              {/* 5. Clonar Pedido */}
+              <ToolbarBtn
+                icon={<Copy size={18} />}
+                label="Clonar Pedido"
+                onClick={() => handleClonarPedido(currentRecord, refresh, setInnerTab, selectRecord)}
+                color="secondary"
+              />
             </>
           );
         }}

@@ -195,14 +195,23 @@ function validarItens(
       e.push({ campo: `${pre} → NCM`, mensagem: `NCM informado ("${ncmRaw || ""}") é inválido. Deve ter exatamente 8 dígitos numéricos.` });
     }
 
-    // Origem da mercadoria
-    const origem = it.origem ?? prod.origem;
+    // Origem da mercadoria (verifica it.origem, it.tb_a_origem, it.origem_produto, prod.tb_a_origem, prod.origem)
+    const origem = it.origem ?? it.tb_a_origem ?? it.origem_produto ?? prod.tb_a_origem ?? prod.origem ?? prod.origem_id;
     if (origem === null || origem === undefined || String(origem).trim() === "") {
       e.push({ campo: `${pre} → Origem`, mensagem: "Origem da mercadoria (0 - Nacional, 1 - Estrangeira, etc.) não configurada." });
     }
 
-    // CST / CSOSN Tributário
-    const cstCsosn = it.cst || it.csosn || prod.cst || prod.csosn;
+    // CST / CSOSN Tributário (verifica CST/CSOSN do item, grupo de ICMS do produto, etc.)
+    const cstCsosn =
+      it.cst ||
+      it.csosn ||
+      it.cst_icms ||
+      prod.cst ||
+      prod.csosn ||
+      prod.tb_b_cst ||
+      prod.grupo_icms_id ||
+      prod.cst_icms ||
+      prod.csosn_icms;
     if (!ok(cstCsosn)) {
       e.push({ campo: `${pre} → Tributação (CST/CSOSN)`, mensagem: "Situação Tributária (CST ou CSOSN) não configurada para o item." });
     }

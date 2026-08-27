@@ -48,6 +48,7 @@ interface StandardCrudFormProps<T extends Record<string, any>> {
     refresh: () => Promise<void>;
     setInnerTab: (tab: string) => void;
     handleIncluir: () => void;
+    selectRecord?: (rec: any) => void;
   }) => React.ReactNode;
   XHiddenTabs?: string[] | ((record: any) => string[]);
   XCadastroLabel?: string;
@@ -263,7 +264,14 @@ function StandardCrudForm<T extends Record<string, any>>({
               setRecord: ctrl.setXEditRecord,
               refresh: ctrl.loadData,
               setInnerTab: setXInnerTab,
-              handleIncluir: () => { ctrl.handleIncluir(); setXInnerTab("cadastro"); }
+              handleIncluir: () => { ctrl.handleIncluir(); setXInnerTab("cadastro"); },
+              selectRecord: (rec: any) => {
+                ctrl.setXData((prev: any[]) => [rec, ...prev.filter((r: any) => String(r[config.XPrimaryKey]) !== String(rec[config.XPrimaryKey]))]);
+                ctrl.setXCurrentIdx(0);
+                ctrl.setXFormMode("view");
+                setXInnerTab("cadastro");
+                if (config.XOnAfterLoad) config.XOnAfterLoad([rec]);
+              }
             })}
             {(() => {
               const activeTab = XTabs.find(t => t.id === XActiveTabId);
