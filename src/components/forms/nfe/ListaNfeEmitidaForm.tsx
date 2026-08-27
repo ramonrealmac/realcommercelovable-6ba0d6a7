@@ -45,6 +45,14 @@ interface IProps {
 
 const db = supabase as any;
 
+const getTodayString = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 const formatarDataEmissao = (dt: any) => {
   if (!dt) return "";
   const s = String(dt);
@@ -160,8 +168,12 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
 
   const [XData, setXData] = useState<any[]>([]);
   const [XLoading, setXLoading] = useState(false);
-  const [XDtIni, setXDtIni] = useState("");
-  const [XDtFim, setXDtFim] = useState("");
+  const [XDtIni, setXDtIni] = useState(getTodayString());
+  const [XDtFim, setXDtFim] = useState(getTodayString());
+  const [XFilterAmbiente, setXFilterAmbiente] = useState("");
+  const [XFilterTipo, setXFilterTipo] = useState("");
+  const [XFilterFinalidade, setXFilterFinalidade] = useState("");
+  const [XFilterStatus, setXFilterStatus] = useState("");
   const [XSearchFilters, setXSearchFilters] = useState<Record<string, string>>({});
   const [XHasFiltered, setXHasFiltered] = useState(false);
   
@@ -208,6 +220,13 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
     }
   }, [initialFilterId]);
 
+  useEffect(() => {
+    if (XEmpresaId) {
+      setXHasFiltered(true);
+      loadData();
+    }
+  }, [XEmpresaId]);
+
 
   const loadData = async () => {
     if (!XEmpresaId) return;
@@ -242,10 +261,25 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
         .in("empresa_id", empresaIds);
 
       if (XDtIni && String(XDtIni).trim() !== "") {
-        query = query.gte("dt_emissao", XDtIni);
+        query = query.gte("dt_emissao", `${XDtIni}T00:00:00`);
       }
       if (XDtFim && String(XDtFim).trim() !== "") {
-        query = query.lte("dt_emissao", XDtFim);
+        query = query.lte("dt_emissao", `${XDtFim}T23:59:59`);
+      }
+      if (XFilterTipo && String(XFilterTipo).trim() !== "") {
+        query = query.eq("tp_nf", Number(XFilterTipo));
+      }
+      if (XFilterFinalidade && String(XFilterFinalidade).trim() !== "") {
+        query = query.eq("fin_nfe", Number(XFilterFinalidade));
+      }
+      if (XFilterStatus && String(XFilterStatus).trim() !== "") {
+        if (XFilterStatus === "A") {
+          query = query.in("st_nf", ["A", "1"]);
+        } else if (XFilterStatus === "D") {
+          query = query.in("st_nf", ["D", "2"]);
+        } else {
+          query = query.eq("st_nf", XFilterStatus);
+        }
       }
 
       const { data, error } = await query.order("nr_nota", { ascending: false, nullsFirst: false });
@@ -274,16 +308,37 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
         }
       }
 
-      const mappedData = (data || []).map((r: any) => {
+      // Busca configurações fiscais para associar o ambiente (Produção/Homologação)
+      const { data: fConfigs } = await db
+        .from("fiscal_config")
+        .select("empresa_id, ambiente_nfe, ambiente_nfce")
+        .in("empresa_id", empresaIds);
+
+      const fConfigMap: Record<number, any> = {};
+      if (fConfigs) {
+        fConfigs.forEach((c: any) => {
+          fConfigMap[c.empresa_id] = c;
+        });
+      }
+
+      let mappedData = (data || []).map((r: any) => {
         const mId = r.movimento_id || r.pedido_id;
         const nrMov = mId ? movMap[mId] : null;
+        const cfg = fConfigMap[r.empresa_id];
+        const tpAmb = String(r.modelo) === "65" ? (cfg?.ambiente_nfce || "2") : (cfg?.ambiente_nfe || "2");
         return {
           ...r,
+          tp_amb: tpAmb,
           nr_pedido: nrMov ? String(nrMov) : (mId ? String(mId) : ""),
           nm_destinatario: r.cadastro?.razao_social || "NÃO INFORMADO",
           cnpj_destinatario: r.cadastro?.cnpj || ""
         };
       });
+
+      // Filtra por Ambiente em memória (pois tp_amb fica no fiscal_config)
+      if (XFilterAmbiente && String(XFilterAmbiente).trim() !== "") {
+        mappedData = mappedData.filter((r: any) => String(r.tp_amb) === String(XFilterAmbiente));
+      }
 
       // Ordenar estritamente decrescente pela coluna Nota (nr_nota)
       mappedData.sort((a: any, b: any) => {
@@ -310,12 +365,16 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
   };
 
   const handleLimparFiltros = () => {
-    setXDtIni("");
-    setXDtFim("");
+    const today = getTodayString();
+    setXDtIni(today);
+    setXDtFim(today);
+    setXFilterAmbiente("");
+    setXFilterTipo("");
+    setXFilterFinalidade("");
+    setXFilterStatus("");
     setXSearchFilters({});
-    setXData([]);
     setXSelectedIds(new Set());
-    setXHasFiltered(false);
+    setXHasFiltered(true);
   };
 
   useEffect(() => {
@@ -685,8 +744,8 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
           }}
           toolbarLeft={
             <>
-            <div className="flex items-center gap-2 bg-secondary/30 p-1 rounded-lg border border-border mr-4">
-               <div className="flex flex-col px-2">
+            <div className="flex flex-wrap items-center gap-2 bg-secondary/30 p-1 rounded-lg border border-border mr-4">
+              <div className="flex flex-col px-2">
                 <span className="text-[9px] text-muted-foreground uppercase font-bold">Início</span>
                 <input 
                   ref={dtIniRef}
@@ -700,7 +759,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
                       dtFimRef.current?.focus();
                     }
                   }}
-                  className="bg-transparent border-none text-xs p-0 focus:ring-0 w-32" 
+                  className="bg-transparent border-none text-xs p-0 focus:ring-0 w-32 font-medium" 
                 />
               </div>
               <div className="h-6 w-px bg-border" />
@@ -718,8 +777,66 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
                       filtrarBtnRef.current?.focus();
                     }
                   }}
-                  className="bg-transparent border-none text-xs p-0 focus:ring-0 w-32" 
+                  className="bg-transparent border-none text-xs p-0 focus:ring-0 w-32 font-medium" 
                 />
+              </div>
+              <div className="h-6 w-px bg-border" />
+              <div className="flex flex-col px-2">
+                <span className="text-[9px] text-muted-foreground uppercase font-bold">Ambiente</span>
+                <select
+                  value={XFilterAmbiente}
+                  onChange={e => setXFilterAmbiente(e.target.value)}
+                  className="bg-transparent border-none text-xs p-0 focus:ring-0 w-24 cursor-pointer font-medium"
+                >
+                  <option value="">(Todos)</option>
+                  <option value="1">Produção</option>
+                  <option value="2">Homologação</option>
+                </select>
+              </div>
+              <div className="h-6 w-px bg-border" />
+              <div className="flex flex-col px-2">
+                <span className="text-[9px] text-muted-foreground uppercase font-bold">Tipo</span>
+                <select
+                  value={XFilterTipo}
+                  onChange={e => setXFilterTipo(e.target.value)}
+                  className="bg-transparent border-none text-xs p-0 focus:ring-0 w-20 cursor-pointer font-medium"
+                >
+                  <option value="">(Todos)</option>
+                  <option value="1">1 - Saída</option>
+                  <option value="0">0 - Entrada</option>
+                </select>
+              </div>
+              <div className="h-6 w-px bg-border" />
+              <div className="flex flex-col px-2">
+                <span className="text-[9px] text-muted-foreground uppercase font-bold">Finalidade</span>
+                <select
+                  value={XFilterFinalidade}
+                  onChange={e => setXFilterFinalidade(e.target.value)}
+                  className="bg-transparent border-none text-xs p-0 focus:ring-0 w-28 cursor-pointer font-medium"
+                >
+                  <option value="">(Todas)</option>
+                  <option value="1">1 - Normal</option>
+                  <option value="2">2 - Complementar</option>
+                  <option value="3">3 - Ajuste</option>
+                  <option value="4">4 - Devolução</option>
+                </select>
+              </div>
+              <div className="h-6 w-px bg-border" />
+              <div className="flex flex-col px-2">
+                <span className="text-[9px] text-muted-foreground uppercase font-bold">Status</span>
+                <select
+                  value={XFilterStatus}
+                  onChange={e => setXFilterStatus(e.target.value)}
+                  className="bg-transparent border-none text-xs p-0 focus:ring-0 w-28 cursor-pointer font-medium"
+                >
+                  <option value="">(Todos)</option>
+                  <option value="A">Autorizada</option>
+                  <option value="P">Pendente</option>
+                  <option value="E">Enviada</option>
+                  <option value="C">Cancelada</option>
+                  <option value="R">Rejeitada</option>
+                  <option value="D">Denegada</option>
+                </select>
               </div>
             </div>
             

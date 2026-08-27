@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Trash2, Key, Calendar, User, FileText, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, Key, Calendar, User, FileText, CheckCircle2, AlertTriangle, Pencil, Check, X } from "lucide-react";
 import { formatCPFCNPJ } from "@/lib/validators";
 
 const db = supabase as any;
@@ -32,6 +32,10 @@ export const NfeDocumentosReferenciadosTab: React.FC<IProps> = ({
   const [XLoading, setXLoading] = useState(false);
   const [XNovaChave, setXNovaChave] = useState("");
   const [XSalvando, setXSalvando] = useState(false);
+
+  // Estado de Edição de Registro Existente
+  const [XEditandoId, setXEditandoId] = useState<number | null>(null);
+  const [XChaveEdicao, setXChaveEdicao] = useState("");
 
   const extrairInfoChave = (chave: string) => {
     const c = String(chave || "").replace(/\D/g, "");
@@ -116,7 +120,7 @@ export const NfeDocumentosReferenciadosTab: React.FC<IProps> = ({
     }
     const limpa = XNovaChave.replace(/\D/g, "");
     if (limpa.length !== 44) {
-      toast.error("A chave de acesso deve conter exatamente 44 dígitos numéricos.");
+      toast.error(`A chave de acesso deve conter exatamente 44 dígitos numéricos (informado: ${limpa.length} dígitos).`);
       return;
     }
     if (XItens.some(it => it.chave_ref === limpa)) {
@@ -142,6 +146,48 @@ export const NfeDocumentosReferenciadosTab: React.FC<IProps> = ({
     }
   };
 
+  const handleIniciarEdicao = (item: IReferenciadaItem) => {
+    setXEditandoId(item.nfe_referenciada_id);
+    setXChaveEdicao(item.chave_ref);
+  };
+
+  const handleCancelarEdicao = () => {
+    setXEditandoId(null);
+    setXChaveEdicao("");
+  };
+
+  const handleSalvarEdicao = async (id: number) => {
+    const limpa = XChaveEdicao.replace(/\D/g, "");
+    if (limpa.length !== 44) {
+      toast.error(`A chave de acesso deve conter exatamente 44 dígitos numéricos (informado: ${limpa.length} dígitos).`);
+      return;
+    }
+
+    if (XItens.some(it => it.nfe_referenciada_id !== id && it.chave_ref === limpa)) {
+      toast.error("Esta chave de acesso já está cadastrada nesta nota.");
+      return;
+    }
+
+    setXSalvando(true);
+    try {
+      const { error } = await db
+        .from("fiscal_nfe_referenciada")
+        .update({ chave_ref: limpa })
+        .eq("nfe_referenciada_id", id);
+
+      if (error) throw error;
+
+      toast.success("Chave referenciada atualizada com sucesso!");
+      setXEditandoId(null);
+      setXChaveEdicao("");
+      await loadData();
+    } catch (e: any) {
+      toast.error("Erro ao atualizar chave referenciada: " + e.message);
+    } finally {
+      setXSalvando(false);
+    }
+  };
+
   const handleRemoverChave = async (id: number) => {
     if (!confirm("Deseja realmente remover esta chave referenciada?")) return;
     try {
@@ -157,6 +203,8 @@ export const NfeDocumentosReferenciadosTab: React.FC<IProps> = ({
       toast.error("Erro ao remover referência: " + e.message);
     }
   };
+
+  const novaLimpaLen = XNovaChave.replace(/\D/g, "").length;
 
   return (
     <div className="space-y-4">
@@ -177,9 +225,20 @@ export const NfeDocumentosReferenciadosTab: React.FC<IProps> = ({
       {podeEditar && (
         <div className="p-4 bg-card border border-border rounded-lg shadow-sm flex flex-col md:flex-row items-end gap-3">
           <div className="flex-1 w-full">
-            <label className="text-xs font-bold text-muted-foreground uppercase mb-1 block">
-              Chave de Acesso da NF-e Referenciada (44 dígitos)
-            </label>
+            <div className="flex justify-between items-center mb-1">
+              <label className="text-xs font-bold text-muted-foreground uppercase block">
+                Chave de Acesso da NF-e Referenciada (44 dígitos)
+              </label>
+              <span className={`text-[11px] font-mono font-bold ${
+                novaLimpaLen === 44
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : novaLimpaLen > 0
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-muted-foreground"
+              }`}>
+                {novaLimpaLen} / 44 dígitos {novaLimpaLen === 44 && "✓"}
+              </span>
+            </div>
             <input
               type="text"
               maxLength={44}
@@ -193,7 +252,7 @@ export const NfeDocumentosReferenciadosTab: React.FC<IProps> = ({
           <button
             type="button"
             onClick={handleAdicionarChave}
-            disabled={XSalvando || !XNovaChave.trim()}
+            disabled={XSalvando || novaLimpaLen !== 44}
             className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 shadow-sm shrink-0"
           >
             <Plus className="w-4 h-4" /> ADICIONAR REFERÊNCIA
@@ -225,45 +284,121 @@ export const NfeDocumentosReferenciadosTab: React.FC<IProps> = ({
           )}
 
           {!XLoading &&
-            XItens.map((it, idx) => (
-              <div
-                key={it.nfe_referenciada_id}
-                className={`grid grid-cols-12 gap-2 px-3 py-2.5 text-xs items-center hover:bg-primary/5 transition-colors ${
-                  idx % 2 ? "bg-muted/20" : ""
-                }`}
-              >
-                <div className="col-span-5 font-mono text-[11px] font-bold text-blue-700 dark:text-blue-300 truncate flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  {it.chave_ref}
+            XItens.map((it, idx) => {
+              const isEditando = XEditandoId === it.nfe_referenciada_id;
+              const editLimpaLen = XChaveEdicao.replace(/\D/g, "").length;
+              const numDigits = String(it.chave_ref || "").replace(/\D/g, "").length;
+              const isChaveValida = numDigits === 44;
+
+              if (isEditando) {
+                return (
+                  <div
+                    key={it.nfe_referenciada_id}
+                    className="grid grid-cols-12 gap-2 px-3 py-2 text-xs items-center bg-amber-50/50 dark:bg-amber-950/20 border-l-4 border-amber-500"
+                  >
+                    <div className="col-span-8 flex items-center gap-2">
+                      <input
+                        type="text"
+                        maxLength={44}
+                        value={XChaveEdicao}
+                        onChange={e => setXChaveEdicao(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") handleSalvarEdicao(it.nfe_referenciada_id);
+                          if (e.key === "Escape") handleCancelarEdicao();
+                        }}
+                        autoFocus
+                        className="flex-1 font-mono text-xs px-2 py-1 border border-amber-400 rounded bg-background focus:ring-1 focus:ring-amber-500 outline-none"
+                      />
+                      <span className={`text-[10px] font-mono font-bold shrink-0 ${
+                        editLimpaLen === 44 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
+                      }`}>
+                        {editLimpaLen}/44 dígs {editLimpaLen === 44 && "✓"}
+                      </span>
+                    </div>
+
+                    <div className="col-span-4 flex items-center justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleSalvarEdicao(it.nfe_referenciada_id)}
+                        disabled={XSalvando || editLimpaLen !== 44}
+                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded disabled:opacity-50 transition-colors shadow-sm"
+                        title="Salvar alterações"
+                      >
+                        <Check className="w-3.5 h-3.5" /> SALVAR
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelarEdicao}
+                        disabled={XSalvando}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded transition-colors"
+                        title="Cancelar edição"
+                      >
+                        <X className="w-3.5 h-3.5" /> CANCELAR
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  key={it.nfe_referenciada_id}
+                  className={`grid grid-cols-12 gap-2 px-3 py-2.5 text-xs items-center hover:bg-primary/5 transition-colors ${
+                    idx % 2 ? "bg-muted/20" : ""
+                  }`}
+                >
+                  <div className={`col-span-5 font-mono text-[11px] font-bold ${isChaveValida ? "text-blue-700 dark:text-blue-300" : "text-red-600 dark:text-red-400"} truncate flex items-center gap-1.5`}>
+                    {isChaveValida ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    ) : (
+                      <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" title={`Chave inválida (${numDigits} dígitos, exige 44)`} />
+                    )}
+                    {it.chave_ref}
+                    {!isChaveValida && (
+                      <span className="text-[10px] bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300 px-1.5 py-0.5 rounded font-sans font-bold">
+                        {numDigits} dígitos (inválida)
+                      </span>
+                    )}
+                  </div>
+                  <div className="col-span-2 text-center font-bold">
+                    {it.nr_nota !== "-" ? `#${it.nr_nota}` : "-"}
+                  </div>
+                  <div className="col-span-3 truncate font-medium">
+                    {it.nm_parceiro}
+                    {it.cnpj_parceiro && (
+                      <span className="text-[10px] text-muted-foreground block font-mono">
+                        {it.cnpj_parceiro}
+                      </span>
+                    )}
+                  </div>
+                  <div className="col-span-1 text-center font-mono text-[11px] text-muted-foreground">
+                    {it.dt_emissao}
+                  </div>
+                  <div className="col-span-1 text-center flex items-center justify-center gap-1">
+                    {podeEditar && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleIniciarEdicao(it)}
+                          className="p-1 text-primary hover:bg-primary/10 rounded transition-colors"
+                          title="Editar chave referenciada"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoverChave(it.nfe_referenciada_id)}
+                          className="p-1 text-destructive hover:bg-destructive/10 rounded transition-colors"
+                          title="Remover chave referenciada"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div className="col-span-2 text-center font-bold">
-                  {it.nr_nota !== "-" ? `#${it.nr_nota}` : "-"}
-                </div>
-                <div className="col-span-3 truncate font-medium">
-                  {it.nm_parceiro}
-                  {it.cnpj_parceiro && (
-                    <span className="text-[10px] text-muted-foreground block font-mono">
-                      {it.cnpj_parceiro}
-                    </span>
-                  )}
-                </div>
-                <div className="col-span-1 text-center font-mono text-[11px] text-muted-foreground">
-                  {it.dt_emissao}
-                </div>
-                <div className="col-span-1 text-center">
-                  {podeEditar && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoverChave(it.nfe_referenciada_id)}
-                      className="p-1 text-destructive hover:bg-destructive/10 rounded transition-colors"
-                      title="Remover chave referenciada"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
         </div>
       </div>
     </div>

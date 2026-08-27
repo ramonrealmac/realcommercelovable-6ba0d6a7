@@ -1024,7 +1024,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
       ? XF.st_transportador === "S"
       : XCurrentRecord?.st_transportador === "S";
 
-    if (showVeiculoTab && isTransportador) {
+    if (showVeiculoTab || isTransportador) {
       XBase.push("veiculos");
       XBase.push("motoristas");
     }
@@ -1037,7 +1037,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
       ? XF.st_transportador === "S"
       : XCurrentRecord?.st_transportador === "S";
 
-    if ((XCadastroInnerTab === "veiculos" || XCadastroInnerTab === "motoristas") && (!showVeiculoTab || !isTransportador)) {
+    if ((XCadastroInnerTab === "veiculos" || XCadastroInnerTab === "motoristas") && (!showVeiculoTab && !isTransportador)) {
       setXCadastroInnerTab("geral");
     }
   }, [XCadastroInnerTab, showVeiculoTab, XIsEditing, XF.st_transportador, XCurrentRecord?.st_transportador]);
@@ -1444,7 +1444,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
             )}
 
             {/* === ABA VEÍCULOS === */}
-            {XCadastroInnerTab === "veiculos" && showVeiculoTab && (
+            {XCadastroInnerTab === "veiculos" && (showVeiculoTab || isTransportador) && (
               XFormMode === "insert" ? (
                 <VeiculoGrid
                   XEmpresaId={XEmpresaMatrizId}
@@ -1466,7 +1466,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
             )}
 
             {/* === ABA MOTORISTAS === */}
-            {XCadastroInnerTab === "motoristas" && showVeiculoTab && (
+            {XCadastroInnerTab === "motoristas" && (showVeiculoTab || isTransportador) && (
               XFormMode === "insert" ? (
                 <MotoristaGrid
                   XEmpresaId={XEmpresaMatrizId}
