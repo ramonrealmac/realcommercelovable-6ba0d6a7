@@ -1250,9 +1250,10 @@ const PedidoForm: React.FC = () => {
             if (cleanRec.vl_desconto !== undefined) cleanRec.vl_desconto = parseIfString(cleanRec.vl_desconto);
             if (cleanRec.vl_desc_rs !== undefined) cleanRec.vl_desc_rs = parseIfString(cleanRec.vl_desc_rs);
 
+            const subtotalProd = XPedidoTotalCtx.itens.reduce((acc, i) => acc + Number(i.vl_produto || 0), 0);
             const subtotalItens = XPedidoTotalCtx.itens.reduce((acc, i) => acc + Number(i.vl_movimento || 0), 0);
+            cleanRec.vl_produto = subtotalProd || cleanRec.vl_produto || 0;
             if (cleanRec.tp_desconto === 'P') {
-              const subtotalProd = XPedidoTotalCtx.itens.reduce((acc, i) => acc + Number(i.vl_produto || 0), 0);
               if (subtotalProd > 0) {
                 if (cleanRec.vl_desconto > 0 && (!cleanRec.pc_desconto || cleanRec.pc_desconto === 0)) {
                   cleanRec.pc_desconto = +(cleanRec.vl_desconto / subtotalProd * 100).toFixed(2);
@@ -1262,8 +1263,9 @@ const PedidoForm: React.FC = () => {
               }
               cleanRec.vl_movimento = Math.max(0, subtotalItens - Number(cleanRec.vl_desconto || 0));
             } else {
-              cleanRec.vl_movimento = subtotalItens;
+              cleanRec.vl_movimento = subtotalItens || cleanRec.vl_movimento || 0;
             }
+            cleanRec.vl_total_nota = cleanRec.vl_movimento;
 
             if (mode === "insert") {
               delete cleanRec.movimento_id;
@@ -1571,6 +1573,7 @@ const PedidoForm: React.FC = () => {
                   pedido={ped?.movimento_id ? ped : null}
                   podeEditar={ped?.st_pedido === "O"}
                   totalPedido={XPedidoTotalCtx.movimentoId === ped?.movimento_id ? XPedidoTotalCtx.total : Number(ped?.vl_movimento || 0)}
+                  subtotalPedido={XPedidoTotalCtx.movimentoId === ped?.movimento_id ? XPedidoTotalCtx.itens.reduce((acc, i) => acc + Number(i.vl_produto || 0), 0) : Number(ped?.vl_produto || 0)}
                   refreshToken={XPagamentoRefreshToken}
                   openDialog={XOpenPagtoDialog}
                   setOpenDialog={setXOpenPagtoDialog}

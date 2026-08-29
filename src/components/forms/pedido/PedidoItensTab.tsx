@@ -385,6 +385,24 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
       toast.success("Item salvo.");
       setXItemSalvo(true);
       await loadItens();
+
+      // Atualiza os totais consolidados no cabeçalho do movimento
+      const { data: allItens } = await db.from("movimento_item")
+        .select("vl_produto, vl_movimento, vl_desconto")
+        .eq("movimento_id", pedido.movimento_id)
+        .eq("excluido", false);
+      if (allItens) {
+        const sumProd = allItens.reduce((acc: number, i: any) => acc + Number(i.vl_produto || 0), 0);
+        const sumDesc = allItens.reduce((acc: number, i: any) => acc + Number(i.vl_desconto || 0), 0);
+        const sumMov = allItens.reduce((acc: number, i: any) => acc + Number(i.vl_movimento || 0), 0);
+        await db.from("movimento").update({
+          vl_produto: sumProd,
+          vl_desconto: sumDesc,
+          vl_movimento: sumMov,
+          vl_total_nota: sumMov,
+          dt_alteracao: new Date().toISOString()
+        }).eq("movimento_id", pedido.movimento_id);
+      }
     } finally {
       XSalvarItemRef.current = false;
     }
@@ -395,6 +413,24 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
     const { error } = await db.from("movimento_item").update({ excluido: true }).eq("movimento_item_id", it.movimento_item_id);
     if (error) { toast.error(error.message); return; }
     await loadItens();
+
+    // Atualiza os totais consolidados no cabeçalho do movimento
+    const { data: allItens } = await db.from("movimento_item")
+      .select("vl_produto, vl_movimento, vl_desconto")
+      .eq("movimento_id", pedido.movimento_id)
+      .eq("excluido", false);
+    if (allItens) {
+      const sumProd = allItens.reduce((acc: number, i: any) => acc + Number(i.vl_produto || 0), 0);
+      const sumDesc = allItens.reduce((acc: number, i: any) => acc + Number(i.vl_desconto || 0), 0);
+      const sumMov = allItens.reduce((acc: number, i: any) => acc + Number(i.vl_movimento || 0), 0);
+      await db.from("movimento").update({
+        vl_produto: sumProd,
+        vl_desconto: sumDesc,
+        vl_movimento: sumMov,
+        vl_total_nota: sumMov,
+        dt_alteracao: new Date().toISOString()
+      }).eq("movimento_id", pedido.movimento_id);
+    }
   };
 
   const itemSelecionado = XSelectedIdx != null ? XItens[XSelectedIdx] : null;

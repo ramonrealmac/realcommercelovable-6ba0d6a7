@@ -154,33 +154,53 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
     setXDeletadosDb([]);
     (async () => {
       try {
-        let dbMov = subtotalPedido;
         let tpTab: "V" | "P" = "V";
         // Fetch current movement for totals and price table ID
         const { data: mov } = await supabase.from("movimento")
           .select("vl_desconto, pc_desconto, vl_movimento, vl_produto, tabela_preco_id")
           .eq("movimento_id", movimentoId).single();
         
-        if (mov) {
-          const dbVlDesc = Number(mov.vl_desconto || 0);
-          const dbPcDesc = Number(mov.pc_desconto || 0);
-          dbMov = Number(mov.vl_movimento || 0);
-          const dbSub = Number(mov.vl_produto || 0);
-          
-          setXDbTotals({ subtotal: dbSub, desconto: dbVlDesc, total: dbMov });
-          setXVlDesconto(dbVlDesc);
-          setXPcDesconto(dbPcDesc);
+        let dbVlDesc = Number(mov?.vl_desconto || 0);
+        let dbPcDesc = Number(mov?.pc_desconto || 0);
+        let dbMov = Number(mov?.vl_movimento || 0);
+        let dbSub = Number(mov?.vl_produto || 0);
 
-          if (mov.tabela_preco_id) {
-            const { data: tab } = await supabase.from("tabela_preco")
-              .select("tp_pagamento")
-              .eq("tabela_id", mov.tabela_preco_id)
-              .maybeSingle();
-            if (tab?.tp_pagamento === "P") {
-              tpTab = "P";
-            }
+        if (mov?.tabela_preco_id) {
+          const { data: tab } = await supabase.from("tabela_preco")
+            .select("tp_pagamento")
+            .eq("tabela_id", mov.tabela_preco_id)
+            .maybeSingle();
+          if (tab?.tp_pagamento === "P") {
+            tpTab = "P";
           }
         }
+
+        // Se dbSub for 0 ou dbMov for 0, busca diretamente a soma dos itens do pedido
+        if (dbSub <= 0 || dbMov <= 0) {
+          const { data: itList } = await supabase.from("movimento_item")
+            .select("vl_produto, vl_movimento, vl_desconto")
+            .eq("movimento_id", movimentoId)
+            .eq("excluido", false);
+          if (itList && itList.length > 0) {
+            const sumP = itList.reduce((acc, it) => acc + Number(it.vl_produto || 0), 0);
+            const sumM = itList.reduce((acc, it) => acc + Number(it.vl_movimento || 0), 0);
+            const sumD = itList.reduce((acc, it) => acc + Number(it.vl_desconto || 0), 0);
+            if (sumP > 0) dbSub = sumP;
+            if (sumM > 0) dbMov = sumM;
+            if (sumD > 0 && dbVlDesc === 0) dbVlDesc = sumD;
+          }
+        }
+
+        if (dbSub <= 0 && subtotalPedido > 0) {
+          dbSub = subtotalPedido;
+        }
+        if (dbMov <= 0 && dbSub > 0) {
+          dbMov = Math.max(0, dbSub - dbVlDesc);
+        }
+
+        setXDbTotals({ subtotal: dbSub, desconto: dbVlDesc, total: dbMov });
+        setXVlDesconto(dbVlDesc);
+        setXPcDesconto(dbPcDesc);
         setXTpPagamentoTabela(tpTab);
 
         // 1. Fetch Portadores
@@ -272,8 +292,8 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
           const restante = Math.max(0, dbMov - totalPagoExistente);
           resetForm(restante);
         } else {
-          // If no existing payments, apply defaults (filter by price table allowed types)
-          const allowedConds = conds.filter(c => tpTab === "V" ? getTipoPrazoCondicao(c) === "U" : (getTipoPrazoCondicao(c) === "F" || getTipoPrazoCondicao(c) === "V"));
+          // If no existing payments, apply defaults (filter by price table allowed types: if 'V' only 'U', if 'P' allows all)
+          const allowedConds = conds.filter(c => tpTab === "V" ? getTipoPrazoCondicao(c) === "U" : true);
           const hasCond = allowedConds.some(c => c.condicao_id === defaultCondId);
           if (hasCond) {
             setXCondicaoId(defaultCondId);
@@ -306,16 +326,11 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
     }
   }, [totalPedido, open, XLinhas.length]);
 
-  // Filter conditions by price table payment type ('V' -> Único 'U', 'P' -> Fixo 'F' ou Variável 'V')
+  // Filter conditions by price table payment type ('V' -> Único 'U', 'P' -> Todas as condições: Único 'U', Fixo 'F' ou Variável 'V')
   const XFilteredCondicoes = useMemo(() => {
     if (!XCondicoes || XCondicoes.length === 0) return [];
     if (XTpPagamentoTabela === "V") {
       return XCondicoes.filter(c => getTipoPrazoCondicao(c) === "U");
-    } else if (XTpPagamentoTabela === "P") {
-      return XCondicoes.filter(c => {
-        const tp = getTipoPrazoCondicao(c);
-        return tp === "F" || tp === "V";
-      });
     }
     return XCondicoes;
   }, [XCondicoes, XTpPagamentoTabela]);
@@ -401,11 +416,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
 
     // Validações de tipo de prazo da condição x tipo de pagamento da tabela de preço
     if (XTpPagamentoTabela === "V" && tpCond !== "U") {
-      toast.error("Para Tabela de Preço À Vista, apenas condições de pagamento Único são permitidas.");
-      return;
-    }
-    if (XTpPagamentoTabela === "P" && tpCond !== "F" && tpCond !== "V") {
-      toast.error("Para Tabela de Preço À Prazo, apenas condições de pagamento Fixo ou Variável são permitidas.");
+      toast.error("Para Tabela de Preço À Vista, apenas condições de pagamento Único (À Vista) são permitidas.");
       return;
     }
 
@@ -446,8 +457,11 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
 
   const finalizar = async (enviarAoCaixa: boolean = false) => {
     if (XLinhas.length === 0) {
-      // Se não há linhas de pagamento, permitimos a finalização (exclusão de todos os pagamentos)
-      // e limpamos XDeletadosDb para evitar que onClose os restaure
+      if (XDeletadosDb.length === 0) {
+        toast.error("Lance ao menos uma forma de pagamento antes de finalizar.");
+        return;
+      }
+      // Se não há linhas de pagamento e havia pagamentos deletados no banco, confirma a exclusão
       setXDeletadosDb([]);
     } else if (totalPago + 0.01 < totalPedido) {
       toast.error("Valor pago é menor que o total do pedido.");
@@ -708,11 +722,15 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
                 <button 
                   ref={finalizarRef} 
                   onClick={() => finalizar(true)} 
-                  disabled={XSalvando || (XLinhas.length > 0 && valorRestante > 0.01)} 
+                  disabled={XSalvando || (XLinhas.length === 0 && XDeletadosDb.length === 0) || (XLinhas.length > 0 && valorRestante > 0.01)} 
                   className="text-xs px-6 py-2 rounded bg-muted/50 border border-border text-emerald-600 font-bold h-10 disabled:opacity-50 hover:bg-accent flex items-center gap-2 transition-all active:scale-95 whitespace-nowrap"
                 >
                   {XLinhas.length > 0 && <Lock size={16} className="fill-emerald-600" />}
-                  {XSalvando ? "Gravando..." : (XLinhas.length === 0 ? "Finalizar Exclusão" : "Finalizar e Enviar p/ Cx.")}
+                  {XSalvando 
+                    ? "Gravando..." 
+                    : (XLinhas.length === 0 && XDeletadosDb.length > 0 
+                        ? "Salvar Exclusão dos Pagamentos" 
+                        : "Finalizar e Enviar p/ Cx.")}
                 </button>
               </div>
             </div>
