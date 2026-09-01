@@ -444,7 +444,7 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
                     </div>
                     <div className="col-span-1 text-center">
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
-                        {r.st_nf === "E" || r.st_nf === "1" ? "Autorizada" : (r.st_nf === "C" ? "Cancelada" : r.st_nf)}
+                        {r.st_nf === "A" ? "Autorizada" : (r.st_nf === "C" ? "Cancelada" : (r.st_nf === "L" ? "Lançada" : (r.st_nf === "E" ? "Enviada" : r.st_nf)))}
                       </span>
                     </div>
                     <div className="col-span-2 text-right font-mono font-bold">

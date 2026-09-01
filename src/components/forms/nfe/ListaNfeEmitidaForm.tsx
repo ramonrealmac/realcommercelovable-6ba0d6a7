@@ -147,16 +147,14 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
           "C": "Cancelada",
           "D": "Denegada",
           "R": "Rejeitada",
-          "1": "Autorizada",
-          "2": "Denegada"
         };
         const label = labels[r.st_nf] || r.st_nf || "Pendente";
         return (
           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-            r.st_nf === "A" || r.st_nf === "1" ? "bg-green-100 text-green-700" :
+            r.st_nf === "A" ? "bg-green-100 text-green-700" :
             r.st_nf === "E" ? "bg-blue-100 text-blue-700" :
             r.st_nf === "C" ? "bg-red-100 text-red-700" :
-            r.st_nf === "D" || r.st_nf === "2" ? "bg-orange-100 text-orange-700" : 
+            r.st_nf === "D" ? "bg-orange-100 text-orange-700" : 
             r.st_nf === "R" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"
           }`}>
             {label}
@@ -273,13 +271,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
         query = query.eq("fin_nfe", Number(XFilterFinalidade));
       }
       if (XFilterStatus && String(XFilterStatus).trim() !== "") {
-        if (XFilterStatus === "A") {
-          query = query.in("st_nf", ["A", "1"]);
-        } else if (XFilterStatus === "D") {
-          query = query.in("st_nf", ["D", "2"]);
-        } else {
-          query = query.eq("st_nf", XFilterStatus);
-        }
+        query = query.eq("st_nf", XFilterStatus);
       }
 
       const { data, error } = await query.order("nr_nota", { ascending: false, nullsFirst: false });
@@ -392,7 +384,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
 
   const handleTransmitir = async (row: any) => {
     if (!XEmpresaId) return;
-    const statusConclusivos = ["A", "C", "D", "1", "2"];
+    const statusConclusivos = ["A", "C", "D"];
     if (statusConclusivos.includes(String(row.st_nf))) {
       toast.error(`Esta nota está em status "${row.st_nf}" e não pode ser retransmitida.`);
       return;
@@ -429,7 +421,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
       const itemAtualizado = updatedCab ? { ...row, ...updatedCab } : { ...row, st_nf: ret.success ? "A" : row.st_nf };
       const stNf = String(itemAtualizado.st_nf);
 
-      if (["A", "1"].includes(stNf)) {
+      if (stNf === "A") {
         toast.success("Nota Fiscal autorizada com sucesso!");
         await handleImprimir(itemAtualizado);
       } else {
@@ -459,7 +451,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
   };
 
   const handleImprimir = async (row: any) => {
-    if (!["A", "1"].includes(String(row.st_nf))) {
+    if (String(row.st_nf) !== "A") {
       toast.error("Somente notas autorizadas podem ser impressas.");
       return;
     }
@@ -574,7 +566,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
       toast.error("Esta nota já está cancelada.");
       return;
     }
-    if (!["A", "1"].includes(String(row.st_nf))) {
+    if (String(row.st_nf) !== "A") {
       toast.error("Apenas notas autorizadas podem ser canceladas.");
       return;
     }
@@ -669,19 +661,19 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onClick={() => handleTransmitir(r)} disabled={["A", "C", "D", "1", "2"].includes(String(r.st_nf))}>
+                      <DropdownMenuItem onClick={() => handleTransmitir(r)} disabled={["A", "C", "D"].includes(String(r.st_nf))}>
                         <Send className="w-4 h-4 mr-2 text-blue-500" /> Transmitir SEFAZ
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleValidar(r)} disabled={["A", "C", "D", "1", "2"].includes(String(r.st_nf))}>
+                      <DropdownMenuItem onClick={() => handleValidar(r)} disabled={["A", "C", "D"].includes(String(r.st_nf))}>
                         <CheckSquare className="w-4 h-4 mr-2 text-emerald-500" /> Validar XML (Schema)
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleImprimir(r)} disabled={!["A", "1"].includes(String(r.st_nf))}>
+                      <DropdownMenuItem onClick={() => handleImprimir(r)} disabled={String(r.st_nf) !== "A"}>
                         <Printer className="w-4 h-4 mr-2 text-gray-500" /> Imprimir DANFE
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleDownloadXml(r)} disabled={!r.xml_nf}>
                         <Download className="w-4 h-4 mr-2 text-blue-400" /> Baixar XML
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleOpenEmailDialog(r)} disabled={!["A", "1"].includes(String(r.st_nf))}>
+                      <DropdownMenuItem onClick={() => handleOpenEmailDialog(r)} disabled={String(r.st_nf) !== "A"}>
                         <Mail className="w-4 h-4 mr-2 text-indigo-400" /> Enviar por E-mail
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => { setXLogNfeId(r.nfe_cabecalho_id); setXLogDialogOpen(true); }}>
@@ -697,7 +689,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
                           component: "devolucao-nfe-saida",
                           params: { nfe_cabecalho_id: r.nfe_cabecalho_id },
                         })}
-                        disabled={String(r.tp_nf) !== "1" || !["A", "1"].includes(String(r.st_nf))}
+                        disabled={String(r.tp_nf) !== "1" || String(r.st_nf) !== "A"}
                       >
                         <ArrowUpFromLine className="w-4 h-4 mr-2 text-orange-500" /> Devolver Nota
                       </DropdownMenuItem>

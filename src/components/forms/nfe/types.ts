@@ -2,7 +2,7 @@
 // Types para o módulo NF-e (Entrada de Notas Fiscais)
 // ============================================================
 
-export type TNfeSt = "A" | "C" | "E" | "D" | "R" | "P"; // Autorizada | Cancelada | Enviada | Denegada | Rejeitada | Pendente
+export type TNfeSt = "A" | "C" | "E" | "D" | "R" | "P" | "L"; // Autorizada | Cancelada | Enviada | Denegada | Rejeitada | Pendente | Lançada
 export type TNfeOrigemInclusao = "M" | "X"; // Manual | XML
 
 export const NFE_ST_LABELS: Record<TNfeSt, string> = {
@@ -12,6 +12,7 @@ export const NFE_ST_LABELS: Record<TNfeSt, string> = {
   C: "Cancelada",
   D: "Denegada",
   R: "Rejeitada",
+  L: "Lançada",
 };
 
 export interface INfeCabecalho {

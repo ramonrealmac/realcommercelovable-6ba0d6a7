@@ -51,8 +51,6 @@ const ListaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialFi
                     "C": { label: "Cancelada", color: "bg-red-100 text-red-700", icon: XCircle },
                     "D": { label: "Denegada", color: "bg-orange-100 text-orange-700", icon: AlertCircle },
                     "R": { label: "Rejeitada", color: "bg-red-100 text-red-700", icon: AlertCircle },
-                    "1": { label: "Autorizada", color: "bg-green-100 text-green-700", icon: CheckCircle2 },
-                    "2": { label: "Denegada", color: "bg-orange-100 text-orange-700", icon: AlertCircle },
                 };
                 const s = statusMap[r.st_nf] || { label: r.st_nf, color: "bg-gray-100 text-gray-600", icon: Clock };
                 const Icon = s.icon;
@@ -162,7 +160,7 @@ const ListaNfeEmitidaForm: React.FC<{ initialFilterId?: number }> = ({ initialFi
                                         </DropdownMenuContent>
                                     </DropdownMenu>
 
-                                    {r.st_nf === "1" && (
+                                    {r.st_nf === "A" && (
                                         <button
                                             onClick={() => { }}
                                             className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors"

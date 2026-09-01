@@ -432,7 +432,7 @@ export const fiscalEmissaoService = {
 
         if (origens && origens.length > 0) {
           for (const o of origens) {
-            if (!["A", "1"].includes(String(o.st_nf))) {
+            if (String(o.st_nf) !== "A") {
               throw new Error(
                 `A NF-e referenciada nº ${o.nr_nota || ""} (Chave: ${o.chave_nfe}) está no status "${o.st_nf === "E" ? "Pendente/Não Autorizada" : o.st_nf}" e NÃO consta como Autorizada no sistema.\n\nA SEFAZ rejeita devoluções de notas fiscais que não estejam devidamente autorizadas no Fisco (Rejeição 321).`
               );

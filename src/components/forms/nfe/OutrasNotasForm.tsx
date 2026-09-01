@@ -40,8 +40,6 @@ const XGridCols: IGridColumn[] = [
         "C": "bg-red-100 text-red-700",
         "D": "bg-orange-100 text-orange-700",
         "R": "bg-red-100 text-red-700",
-        "1": "bg-green-100 text-green-700",
-        "2": "bg-orange-100 text-orange-700",
       };
       return (
         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${colors[r.st_nf] || "bg-gray-100 text-gray-600"}`}>
@@ -197,7 +195,7 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
         XOrderBy: "nfe_cabecalho_id",
         XSoftDelete: false,
         XApplyFilter: (q) => q, 
-        XCanEdit: (rec: any) => !["A", "C", "D", "1", "2"].includes(String(rec.st_nf)),
+        XCanEdit: (rec: any) => !["A", "C", "D"].includes(String(rec.st_nf)),
         XOnAfterLoad: (rows: any[]) => {
           const ids = [...new Set(rows.map(r => r.cadastro_id).filter(Boolean))] as number[];
           if (ids.length) ensureClienteInfo(ids);
@@ -218,8 +216,8 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
       XToolbarExtras={({ currentRecord, isEditing, refresh }) => {
         if (!currentRecord || isEditing) return null;
         const st = String(currentRecord.st_nf || "");
-        const podeEnviar = ["P", "E", "R", "3"].includes(st) && Number(currentRecord.tp_nf) === 1;
-        const foiEmitida = ["A", "1"].includes(st);
+        const podeEnviar = ["P", "E", "R"].includes(st) && Number(currentRecord.tp_nf) === 1;
+        const foiEmitida = st === "A";
 
         if (foiEmitida) {
           return (
@@ -298,7 +296,7 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
             const id = (currentRecord || record)?.nfe_cabecalho_id || null;
             const st = (currentRecord || record)?.st_nf || "A";
             const finNfe = Number((currentRecord || record)?.fin_nfe || 1);
-            const podeEditar = !["E", "C", "D", "1", "2"].includes(String(st));
+            const podeEditar = !["A", "E", "C", "D"].includes(String(st));
             return (
               <NfeItensTab 
                 nfeCabecalhoId={id} 
@@ -315,7 +313,7 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
           render: ({ record, currentRecord }) => {
             const id = (currentRecord || record)?.nfe_cabecalho_id || null;
             const st = (currentRecord || record)?.st_nf || "A";
-            const podeEditar = !["E", "C", "D", "1", "2"].includes(String(st));
+            const podeEditar = !["A", "E", "C", "D"].includes(String(st));
             return <NfePagamentoTab nfeCabecalhoId={id} podeEditar={podeEditar} />;
           },
         },

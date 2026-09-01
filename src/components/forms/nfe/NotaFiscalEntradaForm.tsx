@@ -28,7 +28,7 @@ const db = supabase as any;
 interface IFornecedorInfo { id: number; cnpj: string; razao: string; cd_cadastro?: number | null; }
 
 const getStatusLabel = (st: string) => {
-  if (st === "E") return "Escriturado";
+  if (st === "L") return "Lançada";
   if (st === "P") return "Pendente";
   if (st === "A") return "Aberto";
   return NFE_ST_LABELS[st as TNfeSt] || st;
@@ -467,23 +467,23 @@ const NotaFiscalEntradaForm: React.FC<NotaFiscalEntradaFormProps> = ({ initialMo
     }
 
     await db.from("fiscal_nfe_cabecalho").update({
-      st_nf: "E", updated_at: new Date().toISOString(),
+      st_nf: "L", updated_at: new Date().toISOString(),
     }).eq("nfe_cabecalho_id", cabId);
 
     if (setRecord) {
       setRecord((prev: any) => ({
         ...prev,
-        st_nf: "E"
+        st_nf: "L"
       }));
     }
 
-    toast.success("NF-e escriturada com sucesso! Estoque, custos e Contas a Pagar gerados.");
+    toast.success("NF-e lançada com sucesso! Estoque, custos e Contas a Pagar gerados.");
     if (XRefreshRef.current) await XRefreshRef.current();
   }, [XEmpresaId]);
 
   const estornar = useCallback(async (cabId: number, record: INfeCabecalho, setRecord?: any) => {
-    if (record.st_nf !== "E") {
-      toast.error("Esta nota fiscal não está escriturada.");
+    if (record.st_nf !== "L") {
+      toast.error("Esta nota fiscal não está lançada.");
       return;
     }
     if (!confirm(`Deseja realmente estornar a escrituração da NF-e nº ${record.nr_nota}? Esta ação irá reverter a movimentação de estoque dos produtos.`)) return;
@@ -790,7 +790,7 @@ const NotaFiscalEntradaForm: React.FC<NotaFiscalEntradaFormProps> = ({ initialMo
           XResetModeOnSelect: true,
           XConfirmDiscardOnSelect: true,
           XApplyFilter: (q) => q.eq("tp_nf", 0).eq("empresa_id", XEmpresaId),
-          XCanEdit: (rec) => rec.st_nf !== "E" && rec.st_nf !== "C",
+          XCanEdit: (rec) => rec.st_nf !== "L" && rec.st_nf !== "C",
           XOnDelete: async (rec) => {
             if (rec.st_nf !== "P") {
               throw new Error("Somente notas fiscais com status Pendente podem ser excluídas.");
@@ -847,7 +847,7 @@ const NotaFiscalEntradaForm: React.FC<NotaFiscalEntradaFormProps> = ({ initialMo
             return { 
               ...rec, 
               empresa_id: rec.empresa_id || XEmpresaId,
-              st_nf: rec.st_nf === "E" ? "E" : "P"
+              st_nf: rec.st_nf === "L" ? "L" : "P"
             };
           },
           XOnAfterSave: async (rec: any, mode) => {
@@ -1092,10 +1092,10 @@ const NotaFiscalEntradaForm: React.FC<NotaFiscalEntradaFormProps> = ({ initialMo
                       onClick={() => escriturar(cabId, record.deposito_id || null, record as INfeCabecalho, setRecord)}
                       className="flex items-center gap-2 px-3 py-1.5 text-sm rounded bg-green-600 hover:bg-green-700 text-white font-semibold transition-colors"
                     >
-                      <ClipboardCheck className="w-4 h-4" /> Escriturar
+                      <ClipboardCheck className="w-4 h-4" /> Lançar NF-e
                     </button>
                   )}
-                  {cabId && stAtual === "E" && !isEditing && (
+                  {cabId && stAtual === "L" && !isEditing && (
                     <button
                       type="button"
                       onClick={() => estornar(cabId, record as INfeCabecalho, setRecord)}
