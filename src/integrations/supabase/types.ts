@@ -5677,6 +5677,7 @@ export type Database = {
           tp_movimento: string | null
           tp_operacao_id: number | null
           tp_origem: string | null
+          tp_preco_padrao?: string | null
           transportadora_id: number | null
           url_pagamento: string
           usuario_id: string | null
@@ -5783,6 +5784,7 @@ export type Database = {
           tp_movimento?: string | null
           tp_operacao_id?: number | null
           tp_origem?: string | null
+          tp_preco_padrao?: string | null
           transportadora_id?: number | null
           url_pagamento?: string
           usuario_id?: string | null
@@ -5889,6 +5891,7 @@ export type Database = {
           tp_movimento?: string | null
           tp_operacao_id?: number | null
           tp_origem?: string | null
+          tp_preco_padrao?: string | null
           transportadora_id?: number | null
           url_pagamento?: string
           usuario_id?: string | null

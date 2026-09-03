@@ -24,6 +24,7 @@ export interface IMovimento {
   vl_seguro: number;
   vl_outro: number;
   tabela_preco_id: number | null;
+  tp_preco_padrao?: string | null;
   rota_id: number | null;
   cidade_id: number | null;
   cep_entrega: string | null;

@@ -22,6 +22,7 @@ interface IProps {
   onTotalsChanged?: (total: number, itens: IMovimentoItem[]) => void;
   autoNovoTrigger?: number;
   tabelaPrecoId?: number | null;
+  tipoPrecoPadrao?: "V" | "P";
   condicaoId?: number | null;
 }
 
@@ -48,7 +49,15 @@ const parseNum = (v: any) => {
   return isNaN(n) ? 0 : n;
 };
 
-const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged, autoNovoTrigger, tabelaPrecoId, condicaoId }) => {
+const PedidoItensTab: React.FC<IProps> = ({
+  pedido,
+  podeEditar,
+  onTotalsChanged,
+  autoNovoTrigger,
+  tabelaPrecoId,
+  condicaoId,
+  tipoPrecoPadrao = "V",
+}) => {
   const { XEmpresaId, XEmpresaMatrizId, XEmpresas } = useAppContext();
   const { handleKeyDown } = useEnterTraversal();
   const [XItens, setXItens] = useState<IMovimentoItem[]>([]);
@@ -230,7 +239,13 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
 
     const cdProdStr = String(p.cd_produto ?? p.produto_id ?? "");
     const nmProdStr = p.nome || p.nm_produto || (p as any).descricao || "";
-    let preco = Number(p.st_promo && p.preco_promocional > 0 ? p.preco_promocional : p.preco_venda) || 0;
+    let initialPreco = 0;
+    if (tipoPrecoPadrao === "P") {
+      initialPreco = Number(p.st_promo && p.preco_promocional_fat > 0 ? p.preco_promocional_fat : (p.preco_venda_faturado || p.preco_venda)) || 0;
+    } else {
+      initialPreco = Number(p.st_promo && p.preco_promocional > 0 ? p.preco_promocional : p.preco_venda) || 0;
+    }
+    let preco = initialPreco;
 
     // Atualiza imediatamente o código visível
     setXCodigo(cdProdStr);
@@ -239,9 +254,10 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
       const resPreco = await obterPrecoUnitarioItem(
         p.produto_id,
         tabelaPrecoId,
-        preco
+        preco,
+        tipoPrecoPadrao
       );
-      if (resPreco && typeof resPreco.preco === "number" && resPreco.preco > 0) {
+      if (resPreco && typeof resPreco.preco === "number" && resPreco.preco >= 0) {
         preco = resPreco.preco;
       }
       if (resPreco?.fonte === "promocao") {
@@ -281,7 +297,7 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
     setXEditEstoque({ disp: p.estoque_disponivel || 0, res: p.estoque_reservado || 0 });
     carregarEstoquePorDeposito(p.produto_id);
     setTimeout(() => { precoUnitRef.current?.focus(); precoUnitRef.current?.select(); }, 80);
-  }, [carregarEstoquePorDeposito, tabelaPrecoId, XDepositos, pedido?.st_entrega]);
+  }, [carregarEstoquePorDeposito, tabelaPrecoId, tipoPrecoPadrao, XDepositos, pedido?.st_entrega]);
 
   const XSearchingCodeRef = useRef(false);
 
@@ -730,6 +746,8 @@ const PedidoItensTab: React.FC<IProps> = ({ pedido, podeEditar, onTotalsChanged,
         open={XSearchOpen}
         onClose={() => setXSearchOpen(false)}
         onSelect={aplicarProduto}
+        tabelaPrecoId={tabelaPrecoId}
+        tipoPrecoPadrao={tipoPrecoPadrao}
       />
     </div>
   );
