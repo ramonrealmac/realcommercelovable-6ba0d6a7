@@ -153,7 +153,9 @@ export const fiscalService = {
     const uf_origem = empresa.endereco_cidade_id ? (await db.from("cidade").select("estado_id").eq("cidade_id", empresa.endereco_cidade_id).maybeSingle()).data?.estado_id : "";
     
     const interestadual = uf_origem && uf_destino && uf_origem !== uf_destino;
-    const contribuinte = cliente?.tp_contribuinte === "S";
+    const tpContrib = String(cliente?.tp_contribuinte || '').toUpperCase();
+    const ieCliente = String(cliente?.inscricao_estadual || '').replace(/\D/g, '');
+    const contribuinte = ['S', 'C', '1'].includes(tpContrib) || (Boolean(ieCliente) && !['I', '2'].includes(tpContrib));
     const consumidorFinal = !contribuinte; // Simplificação padrão
 
     // 2. Localizar a Regra Fiscal (Header)

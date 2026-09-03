@@ -74,7 +74,9 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
   
   // Determina IE e Indicador do IE do Destinatário
   const ieDest = limparNumeros(cadastro?.inscricao_estadual || '');
-  const indIEDest = cadastro?.tp_contribuinte === 'S' && ieDest ? '1' : (ieDest ? '2' : '9');
+  const tpContrib = String(cadastro?.tp_contribuinte || '').toUpperCase();
+  const isContribuinte = ['S', 'C', '1'].includes(tpContrib) || (Boolean(ieDest) && !['I', '2'].includes(tpContrib));
+  const indIEDest = isContribuinte && ieDest ? '1' : (['I', '2'].includes(tpContrib) ? '2' : '9');
   
   // Se for NFC-e OU se for não contribuinte (indIEDest = 9) OU for Pessoa Física (tp_contribuinte = 'F'),
   // obrigatoriamente a operação é com Consumidor Final (indFinal = 1)

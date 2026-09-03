@@ -116,6 +116,18 @@ export const fiscalEmissaoService = {
         throw new Error(`Item de configuração fiscal ${configItemId} não localizado.`);
       }
 
+      // Busca chaves referenciadas prévias (se houver cabeçalho vinculado)
+      let chavesRefVal: string[] = [];
+      if (movimento.nfe_cabecalho_id) {
+        const { data: nfeRefs } = await db
+          .from("fiscal_nfe_referenciada")
+          .select("chave_ref")
+          .eq("nfe_cabecalho_id", movimento.nfe_cabecalho_id);
+        if (nfeRefs) {
+          chavesRefVal = nfeRefs.map((r: any) => r.chave_ref).filter(Boolean);
+        }
+      }
+
       // PRÉ-VALIDAÇÃO — verifica dados obrigatórios antes de consumir sequência ou acionar o worker
       const preVal = validarDadosFiscais({
         empresa,
@@ -125,6 +137,7 @@ export const fiscalEmissaoService = {
         fConfig,
         fConfigItem,
         tipo,
+        chavesRef: chavesRefVal,
       });
 
       if (!preVal.valido) {
@@ -406,6 +419,27 @@ export const fiscalEmissaoService = {
 
       const versaoMetodo = tipo === "NFE" ? fConfig?.nfe_versao_metodo : fConfig?.nfce_versao_metodo;
       const isV2 = versaoMetodo === '2.0';
+
+      // Validação de Devolução (Finalidade 4) em retransmitirDocumento
+      if (Number(cab.fin_nfe) === 4) {
+        if (chavesRef.length === 0) {
+          throw new Error("NF-e de Devolução (Finalidade 4) exige ao menos uma Chave de Acesso referenciada (44 dígitos) cadastrada.");
+        }
+        const { data: origens } = await db
+          .from("fiscal_nfe_cabecalho")
+          .select("chave_nfe, st_nf, nr_nota")
+          .in("chave_nfe", chavesRef);
+
+        if (origens && origens.length > 0) {
+          for (const o of origens) {
+            if (String(o.st_nf) !== "A") {
+              throw new Error(
+                `A NF-e referenciada nº ${o.nr_nota || ""} (Chave: ${o.chave_nfe}) está no status "${o.st_nf === "E" ? "Pendente/Não Autorizada" : o.st_nf}" e NÃO consta como Autorizada no sistema.\n\nA SEFAZ rejeita devoluções de notas fiscais que não estejam devidamente autorizadas no Fisco (Rejeição 321).`
+              );
+            }
+          }
+        }
+      }
 
       // Se a nota não possuir número de nota (nr_nota), atribui o próximo sequencial disponível
       if (!cab.nr_nota || String(cab.nr_nota).trim() === "" || String(cab.nr_nota).trim() === "0") {

@@ -989,10 +989,33 @@ const ProdutoSearchDialog: React.FC<IProps> = ({
             </div>
           )}
 
-          <p className="text-xs text-muted-foreground shrink-0">
-            Clique para selecionar e ver estoque por depósito. <strong>Duplo clique</strong> seleciona o produto;
-            duplo clique na grade de estoque seleciona produto + depósito.
-          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 shrink-0 pt-2 border-t border-border">
+            <p className="text-xs text-muted-foreground">
+              Clique para ver estoque por depósito. <strong>Duplo clique</strong> ou <strong>Enter</strong> seleciona o produto.
+            </p>
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-1.5 text-xs font-bold bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded transition-colors"
+              >
+                CANCELAR
+              </button>
+              <button
+                type="button"
+                disabled={XSelectedIdx === null || !sortedRows[XSelectedIdx]}
+                onClick={() => {
+                  if (XSelectedIdx !== null && sortedRows[XSelectedIdx]) {
+                    onSelect(sortedRows[XSelectedIdx]);
+                    onClose();
+                  }
+                }}
+                className="px-4 py-1.5 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 rounded disabled:opacity-50 transition-colors shadow-sm"
+              >
+                SELECIONAR
+              </button>
+            </div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

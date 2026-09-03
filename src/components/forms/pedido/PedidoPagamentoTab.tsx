@@ -47,6 +47,7 @@ interface IProps {
   pedido: IMovimento | null;
   podeEditar: boolean;
   totalPedido?: number;
+  subtotalPedido?: number;
   refreshToken?: number;
   openDialog?: boolean;
   setOpenDialog?: (v: boolean) => void;
@@ -69,7 +70,7 @@ const parseNum = (v: string | number | null | undefined) => {
   return isNaN(n) ? 0 : n;
 };
 
-const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido: totalPedidoProp, refreshToken, onMudarStatus, onRetornar, openDialog, setOpenDialog }) => {
+const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido: totalPedidoProp, subtotalPedido: subtotalPedidoProp, refreshToken, onMudarStatus, onRetornar, openDialog, setOpenDialog }) => {
   const { XEmpresaId, XEmpresaMatrizId } = useAppContext();
   const [XPagtos, setXPagtos] = useState<IMovimentoPagamento[]>([]);
   const [XCondicoes, setXCondicoes] = useState<ICondicao[]>([]);
@@ -78,6 +79,8 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
   const [XEdit, setXEdit] = useState<Partial<IMovimentoPagamento> | null>(null);
   const [XEditingId, setXEditingId] = useState<number | null>(null);
   const [XSelected, setXSelected] = useState<IMovimentoPagamento | null>(null);
+  const [XSubtotalDb, setXSubtotalDb] = useState<number>(0);
+  const [XVlDescontoDb, setXVlDescontoDb] = useState<number>(0);
   const XShowPagamento = !!(openDialog && setOpenDialog);
   const setXShowPagamento = (v: boolean) => setOpenDialog?.(v);
 
@@ -89,6 +92,31 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
       .order("movimento_pagamento_id");
     if (error) { toast.error(error.message); return; }
     setXPagtos(data || []);
+
+    // Sincroniza totais reais do movimento e seus itens
+    const { data: mov } = await supabase.from("movimento")
+      .select("vl_produto, vl_desconto, vl_movimento")
+      .eq("movimento_id", pedido.movimento_id)
+      .single();
+
+    let sub = Number(mov?.vl_produto || 0);
+    let desc = Number(mov?.vl_desconto || 0);
+
+    if (sub <= 0) {
+      const { data: itList } = await supabase.from("movimento_item")
+        .select("vl_produto, vl_movimento, vl_desconto")
+        .eq("movimento_id", pedido.movimento_id)
+        .eq("excluido", false);
+      if (itList && itList.length > 0) {
+        sub = itList.reduce((acc, it) => acc + Number(it.vl_produto || 0), 0);
+        if (desc === 0) {
+          desc = itList.reduce((acc, it) => acc + Number(it.vl_desconto || 0), 0);
+        }
+      }
+    }
+
+    setXSubtotalDb(sub);
+    setXVlDescontoDb(desc);
   }, [pedido?.movimento_id]);
 
   useEffect(() => { load(); }, [load, refreshToken, pedido?.st_pedido]);
@@ -99,6 +127,8 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
       setXEdit(null);
       setXEditingId(null);
       setXSelected(null);
+      setXSubtotalDb(0);
+      setXVlDescontoDb(0);
     }
   }, [pedido?.movimento_id]);
 
@@ -153,9 +183,9 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
     })();
   }, [XEmpresaId, XEmpresaMatrizId]);
 
-  const vlDesconto = Number(pedido?.vl_desconto || 0);
-  const subtotal = Number(pedido?.vl_produto || 0);
-  const totalPedido = Math.max(0, subtotal - vlDesconto);
+  const vlDesconto = XVlDescontoDb || Number(pedido?.vl_desconto || 0);
+  const subtotal = subtotalPedidoProp || XSubtotalDb || Number(pedido?.vl_produto || 0) || totalPedidoProp || 0;
+  const totalPedido = totalPedidoProp || Math.max(0, subtotal - vlDesconto);
   const totalPago = XPagtos.reduce((a, p) => a + Number(p.vl_pagamento || 0), 0);
 
 

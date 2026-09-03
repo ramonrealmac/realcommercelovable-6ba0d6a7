@@ -15,11 +15,11 @@ export interface IFiscalValidacaoResult {
   erros: IFiscalValidacaoErro[];
 }
 
-/** Verifica se uma string está preenchida */
+/** Verifica se uma string ou valor está preenchido */
 const ok = (v: any) => v !== null && v !== undefined && String(v).trim() !== "";
 
-/** Verifica se CNPJ/CPF tem tamanho plausível */
-const okDoc = (v: any) => ok(v) && String(v).replace(/\D/g, "").length >= 11;
+/** Limpa caracteres não numéricos */
+const onlyDigits = (v: any) => (v ? String(v).replace(/\D/g, "") : "");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EMITENTE (Empresa)
@@ -28,32 +28,45 @@ function validarEmitente(empresa: any): IFiscalValidacaoErro[] {
   const e: IFiscalValidacaoErro[] = [];
   const pre = "Emitente";
 
-  if (!okDoc(empresa?.cnpj))
-    e.push({ campo: `${pre} → CNPJ`, mensagem: "CNPJ do emitente não informado." });
-  if (!ok(empresa?.razao_social))
+  if (!empresa) {
+    e.push({ campo: `${pre}`, mensagem: "Dados da empresa emitente não foram carregados." });
+    return e;
+  }
+
+  const cnpjClean = onlyDigits(empresa?.cnpj);
+  if (cnpjClean.length !== 14) {
+    e.push({ campo: `${pre} → CNPJ`, mensagem: "CNPJ do emitente inválido ou não informado (deve ter 14 dígitos)." });
+  }
+
+  if (!ok(empresa?.razao_social)) {
     e.push({ campo: `${pre} → Razão Social`, mensagem: "Razão Social do emitente não informada." });
-  if (!ok(empresa?.ie))
-    e.push({ campo: `${pre} → Inscrição Estadual`, mensagem: "IE do emitente não informada." });
+  }
 
-  // Endereço
-  const end = empresa;
-  if (!ok(end?.endereco_logradouro))
+  if (!ok(empresa?.ie)) {
+    e.push({ campo: `${pre} → Inscrição Estadual`, mensagem: "Inscrição Estadual (IE) do emitente não informada." });
+  }
+
+  // Endereço do Emitente
+  if (!ok(empresa?.endereco_logradouro))
     e.push({ campo: `${pre} → Logradouro`, mensagem: "Logradouro do emitente não informado." });
-  if (!ok(end?.endereco_numero))
+  if (!ok(empresa?.endereco_numero))
     e.push({ campo: `${pre} → Número`, mensagem: "Número do endereço do emitente não informado." });
-  if (!ok(end?.endereco_bairro))
+  if (!ok(empresa?.endereco_bairro))
     e.push({ campo: `${pre} → Bairro`, mensagem: "Bairro do emitente não informado." });
-  if (!ok(end?.endereco_cep))
-    e.push({ campo: `${pre} → CEP`, mensagem: "CEP do emitente não informado." });
-  if (!ok(end?.cidade?.estado_id))
-    e.push({ campo: `${pre} → UF`, mensagem: "UF do emitente não informada." });
 
-  // Município (cidade vinculada)
-  const cidade = end?.cidade;
-  if (!ok(cidade?.cd_ibge))
-    e.push({ campo: `${pre} → Código IBGE`, mensagem: "Código IBGE do município do emitente não localizado. Verifique o cadastro de cidade." });
-  if (!ok(cidade?.descricao || cidade?.nome))
-    e.push({ campo: `${pre} → Município`, mensagem: "Município do emitente não localizado." });
+  const cepClean = onlyDigits(empresa?.endereco_cep);
+  if (cepClean.length !== 8)
+    e.push({ campo: `${pre} → CEP`, mensagem: "CEP do emitente inválido ou não informado (deve ter 8 dígitos)." });
+
+  const uf = empresa?.cidade?.estado_id || empresa?.uf;
+  if (!ok(uf) || String(uf).length !== 2)
+    e.push({ campo: `${pre} → UF`, mensagem: "UF do emitente não informada ou inválida." });
+
+  // Município / IBGE
+  const cidade = empresa?.cidade;
+  const ibgeClean = onlyDigits(cidade?.cd_ibge || empresa?.cd_ibge);
+  if (ibgeClean.length < 7)
+    e.push({ campo: `${pre} → Código IBGE`, mensagem: "Código IBGE do município do emitente não localizado (deve ter 7 dígitos)." });
 
   return e;
 }
@@ -61,76 +74,163 @@ function validarEmitente(empresa: any): IFiscalValidacaoErro[] {
 // ─────────────────────────────────────────────────────────────────────────────
 // DESTINATÁRIO (Parceiro/Cadastro)
 // ─────────────────────────────────────────────────────────────────────────────
-function validarDestinatario(parceiro: any, tipo: "NFE" | "NFCE", indPres?: string): IFiscalValidacaoErro[] {
+function validarDestinatario(
+  parceiro: any,
+  tipo: "NFE" | "NFCE",
+  indPres?: string,
+  emitenteUf?: string
+): IFiscalValidacaoErro[] {
   const e: IFiscalValidacaoErro[] = [];
   const pre = "Destinatário";
 
-  // NFC-e permite consumidor final sem identificação, exceto se for entrega em domicílio (indPres = 4)
-  if (tipo === "NFCE" && indPres !== "4") return e;
+  // Em NFC-e presencial sem entrega (indPres != '4'), parceiro é opcional se não houver CPF/CNPJ
+  if (tipo === "NFCE" && indPres !== "4" && !parceiro) {
+    return e;
+  }
 
   if (!parceiro) {
     const msg = tipo === "NFCE"
       ? "Destinatário (cliente) não informado para entrega em domicílio."
-      : "Destinatário (cliente) não informado para NF-e.";
+      : "Destinatário (cliente) é obrigatório para emissão de NF-e.";
     e.push({ campo: `${pre}`, mensagem: msg });
     return e;
   }
 
-  if (!okDoc(parceiro?.cnpj) && !okDoc(parceiro?.cpf))
-    e.push({ campo: `${pre} → CNPJ/CPF`, mensagem: "CNPJ ou CPF do destinatário não informado." });
-  if (!ok(parceiro?.razao_social) && !ok(parceiro?.nome_fantasia))
+  // Documento CPF/CNPJ
+  const doc = onlyDigits(parceiro?.cnpj || parceiro?.cpf);
+  if (doc.length !== 11 && doc.length !== 14) {
+    e.push({ campo: `${pre} → CNPJ/CPF`, mensagem: "CNPJ/CPF do destinatário é inválido ou não foi informado (CPF: 11 dígitos, CNPJ: 14 dígitos)." });
+  }
+
+  // Razão Social / Nome
+  if (!ok(parceiro?.razao_social) && !ok(parceiro?.nome_fantasia)) {
     e.push({ campo: `${pre} → Nome/Razão Social`, mensagem: "Nome ou Razão Social do destinatário não informada." });
+  }
 
-  // Endereço
-  if (!ok(parceiro?.endereco_logradouro))
-    e.push({ campo: `${pre} → Logradouro`, mensagem: "Logradouro do destinatário não informado." });
-  if (!ok(parceiro?.endereco_numero))
-    e.push({ campo: `${pre} → Número`, mensagem: "Número do endereço do destinatário não informado." });
-  if (!ok(parceiro?.endereco_bairro))
-    e.push({ campo: `${pre} → Bairro`, mensagem: "Bairro do destinatário não informado." });
-  if (!ok(parceiro?.endereco_cep))
-    e.push({ campo: `${pre} → CEP`, mensagem: "CEP do destinatário não informado." });
-  if (!ok(parceiro?.cidade?.estado_id))
-    e.push({ campo: `${pre} → UF`, mensagem: "UF do destinatário não informada." });
+  // Inscrição Estadual para PJ Contribuinte
+  if (parceiro?.tp_pessoa === "J" && parceiro?.tp_contribuinte === "C" && !ok(parceiro?.inscricao_estadual)) {
+    e.push({ campo: `${pre} → Inscrição Estadual`, mensagem: "Inscrição Estadual obrigatória para destinatário PJ Contribuinte de ICMS." });
+  }
 
-  const cidade = parceiro?.cidade;
-  if (!ok(cidade?.cd_ibge))
-    e.push({ campo: `${pre} → Código IBGE`, mensagem: "Código IBGE do município do destinatário não localizado." });
+  // Validação de Endereço (Obrigatório para NF-e ou para NFC-e com entrega)
+  const exigirEndereco = tipo === "NFE" || indPres === "4";
+  if (exigirEndereco) {
+    if (!ok(parceiro?.endereco_logradouro))
+      e.push({ campo: `${pre} → Logradouro`, mensagem: "Logradouro do destinatário não informado." });
+    if (!ok(parceiro?.endereco_numero))
+      e.push({ campo: `${pre} → Número`, mensagem: "Número do endereço do destinatário não informado." });
+    if (!ok(parceiro?.endereco_bairro))
+      e.push({ campo: `${pre} → Bairro`, mensagem: "Bairro do destinatário não informado." });
+
+    const cepClean = onlyDigits(parceiro?.endereco_cep);
+    if (cepClean.length !== 8)
+      e.push({ campo: `${pre} → CEP`, mensagem: "CEP do destinatário inválido ou não informado (deve conter 8 dígitos)." });
+
+    const destUf = parceiro?.cidade?.estado_id || parceiro?.uf || parceiro?.estado_id;
+    if (!ok(destUf) || String(destUf).length !== 2)
+      e.push({ campo: `${pre} → UF`, mensagem: "UF do destinatário não informada." });
+
+    const cidade = parceiro?.cidade;
+    const ibgeClean = onlyDigits(cidade?.cd_ibge || parceiro?.cd_ibge);
+    if (ibgeClean.length < 7)
+      e.push({ campo: `${pre} → Código IBGE`, mensagem: "Código IBGE do município do destinatário não localizado (deve conter 7 dígitos)." });
+  }
 
   return e;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ITENS do movimento
+// ITENS DO MOVIMENTO
 // ─────────────────────────────────────────────────────────────────────────────
-function validarItens(itens: any[]): IFiscalValidacaoErro[] {
+function validarItens(
+  itens: any[],
+  emitenteUf?: string,
+  destinatarioUf?: string
+): IFiscalValidacaoErro[] {
   const e: IFiscalValidacaoErro[] = [];
+
   if (!itens || itens.length === 0) {
-    e.push({ campo: "Itens", mensagem: "O movimento não possui itens." });
+    e.push({ campo: "Itens", mensagem: "O movimento de venda/nota não possui nenhum item." });
     return e;
   }
 
+  const eUf = emitenteUf ? String(emitenteUf).trim().toUpperCase() : "";
+  const dUf = destinatarioUf ? String(destinatarioUf).trim().toUpperCase() : eUf;
+  const isOperacaoInterestadual = eUf && dUf && eUf !== dUf;
+
   itens.forEach((it: any, idx: number) => {
     const n = idx + 1;
-    const pre = `Item ${n} (${it.nm_produto || it.produto_id || "?"})`;
+    const prod = it.produto || {};
+    const nomeProd = it.nm_produto || prod.nome || prod.descricao || prod.nm_produto || `Item #${n}`;
+    const pre = `Item ${n} (${nomeProd})`;
 
-    if (!ok(it.produto_id))
-      e.push({ campo: `${pre} → Produto`, mensagem: "Produto não identificado." });
-    if (!ok(it.qt_movimento) || Number(it.qt_movimento) <= 0)
-      e.push({ campo: `${pre} → Quantidade`, mensagem: "Quantidade inválida ou zero." });
-    if (!ok(it.vl_und_produto) && !ok(it.vl_movimento))
-      e.push({ campo: `${pre} → Valor`, mensagem: "Valor unitário não informado." });
+    // Identificação básica do produto
+    if (!ok(it.produto_id) && !ok(prod.produto_id) && !ok(it.cd_produto) && !ok(prod.cd_produto)) {
+      e.push({ campo: `${pre} → Código`, mensagem: "Código do produto não identificado." });
+    }
 
-    // Produto e sua ficha fiscal
-    const prod = it.produto;
-    if (prod) {
-      if (!ok(prod.ncm))
-        e.push({ campo: `${pre} → NCM`, mensagem: "NCM do produto não informado." });
-      // CFOP é opcional na pré-validação (fallback para 5102 no INI)
-      if (!ok(prod.unidade_id))
-        e.push({ campo: `${pre} → Unidade`, mensagem: "Unidade de medida do produto não informada." });
-    } else {
-      e.push({ campo: `${pre} → Dados Fiscais`, mensagem: "Dados do produto não localizados no banco." });
+    // Quantidade
+    const qtd = Number(it.qt_movimento ?? it.quantidade ?? 0);
+    if (isNaN(qtd) || qtd <= 0) {
+      e.push({ campo: `${pre} → Quantidade`, mensagem: "Quantidade do item deve ser maior que zero." });
+    }
+
+    // Valor Unitário / Movimento
+    const valUnd = Number(it.vl_und_produto ?? it.vl_unitario ?? 0);
+    const valMov = Number(it.vl_movimento ?? it.vl_total ?? 0);
+    if ((isNaN(valUnd) || valUnd <= 0) && (isNaN(valMov) || valMov <= 0)) {
+      e.push({ campo: `${pre} → Preço Unitário`, mensagem: "Preço unitário ou valor do item não informado." });
+    }
+
+    // Unidade de Medida
+    const unidade = it.sg_unidade || prod.sg_unidade || prod.unidade_id || it.unidade_id;
+    if (!ok(unidade)) {
+      e.push({ campo: `${pre} → Unidade`, mensagem: "Unidade de medida (ex: UN, KG, CX) não informada no produto." });
+    }
+
+    // NCM (obrigatório 8 dígitos numéricos)
+    const ncmRaw = it.ncm || prod.ncm;
+    const ncmClean = onlyDigits(ncmRaw);
+    if (ncmClean.length !== 8) {
+      e.push({ campo: `${pre} → NCM`, mensagem: `NCM informado ("${ncmRaw || ""}") é inválido. Deve ter exatamente 8 dígitos numéricos.` });
+    }
+
+    // Origem da mercadoria (verifica it.origem, it.tb_a_origem, it.origem_produto, prod.tb_a_origem, prod.origem)
+    const origem = it.origem ?? it.tb_a_origem ?? it.origem_produto ?? prod.tb_a_origem ?? prod.origem ?? prod.origem_id;
+    if (origem === null || origem === undefined || String(origem).trim() === "") {
+      e.push({ campo: `${pre} → Origem`, mensagem: "Origem da mercadoria (0 - Nacional, 1 - Estrangeira, etc.) não configurada." });
+    }
+
+    // CST / CSOSN Tributário (verifica CST/CSOSN do item, grupo de ICMS do produto, etc.)
+    const cstCsosn =
+      it.cst ||
+      it.csosn ||
+      it.cst_icms ||
+      prod.cst ||
+      prod.csosn ||
+      prod.tb_b_cst ||
+      prod.grupo_icms_id ||
+      prod.cst_icms ||
+      prod.csosn_icms;
+    if (!ok(cstCsosn)) {
+      e.push({ campo: `${pre} → Tributação (CST/CSOSN)`, mensagem: "Situação Tributária (CST ou CSOSN) não configurada para o item." });
+    }
+
+    // CFOP (4 dígitos) e coerência UF (Estadual = 5.xxx / Interestadual = 6.xxx)
+    const cfopRaw = onlyDigits(it.cfop || prod.cfop);
+    if (cfopRaw.length === 4) {
+      const primeiroDigito = cfopRaw.charAt(0);
+      if (isOperacaoInterestadual && primeiroDigito !== "6" && primeiroDigito !== "7") {
+        e.push({
+          campo: `${pre} → CFOP`,
+          mensagem: `Operação interestadual (${eUf} -> ${dUf}) exige CFOP iniciado por '6' (informado: ${cfopRaw}).`
+        });
+      } else if (!isOperacaoInterestadual && primeiroDigito !== "5" && primeiroDigito !== "1") {
+        e.push({
+          campo: `${pre} → CFOP`,
+          mensagem: `Operação interna (${eUf}) exige CFOP iniciado por '5' (informado: ${cfopRaw}).`
+        });
+      }
     }
   });
 
@@ -138,33 +238,38 @@ function validarItens(itens: any[]): IFiscalValidacaoErro[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CONFIGURAÇÃO FISCAL
+// CONFIGURAÇÃO FISCAL DO SISTEMA / EMITENTE
 // ─────────────────────────────────────────────────────────────────────────────
-function validarConfigFiscal(fConfig: any, fConfigItem: any): IFiscalValidacaoErro[] {
+function validarConfigFiscal(fConfig: any, fConfigItem: any, tipo: "NFE" | "NFCE"): IFiscalValidacaoErro[] {
   const e: IFiscalValidacaoErro[] = [];
 
-  if (!fConfig)
+  if (!fConfig) {
     e.push({ campo: "Configuração Fiscal", mensagem: "Nenhuma configuração fiscal encontrada para a empresa." });
-  else {
-    if (!ok(fConfig.certificado))
-      e.push({ campo: "Config → Certificado Digital", mensagem: "Caminho do certificado digital não informado." });
-    // Senha opcional na pré-validação
-    if (!ok(fConfig.ambiente_nfe))
-      e.push({ campo: "Config → Ambiente", mensagem: "Ambiente NF-e (produção/homologação) não configurado." });
+  } else {
+    if (!ok(fConfig.certificado)) {
+      e.push({ campo: "Config → Certificado Digital", mensagem: "Caminho do arquivo do certificado digital (A1) não informado nas configurações da empresa." });
+    }
+    if (!ok(fConfig.ambiente_nfe)) {
+      e.push({ campo: "Config → Ambiente", mensagem: "Ambiente de emissão (1 - Produção / 2 - Homologação) não selecionado." });
+    }
   }
 
-  if (!fConfigItem)
-    e.push({ campo: "Config → Item (série/sequência)", mensagem: "Configuração de série/sequência não encontrada para o funcionário." });
-  else {
-    if (!ok(fConfigItem.serie))
-      e.push({ campo: "Config → Série", mensagem: "Série da NF-e não configurada." });
+  if (!fConfigItem) {
+    e.push({ campo: `Config → ${tipo}`, mensagem: `Série e sequência fiscal do funcionário/PDV não configuradas para ${tipo}.` });
+  } else {
+    if (!ok(fConfigItem.serie)) {
+      e.push({ campo: `Config → Série ${tipo}`, mensagem: "Série fiscal não configurada." });
+    }
+    if (!ok(fConfigItem.sequencia) || Number(fConfigItem.sequencia) <= 0) {
+      e.push({ campo: `Config → Sequencial ${tipo}`, mensagem: "Número sequencial da nota fiscal inválido ou menor que 1." });
+    }
   }
 
   return e;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PONTO DE ENTRADA PÚBLICO
+// PONTO DE ENTRADA PÚBLICO DE VALIDAÇÃO
 // ─────────────────────────────────────────────────────────────────────────────
 export function validarDadosFiscais(params: {
   empresa: any;
@@ -174,28 +279,58 @@ export function validarDadosFiscais(params: {
   fConfig: any;
   fConfigItem: any;
   tipo: "NFE" | "NFCE";
+  chavesRef?: string[];
 }): IFiscalValidacaoResult {
-  const { empresa, parceiro, movimento, itens, fConfig, fConfigItem, tipo } = params;
+  const { empresa, parceiro, movimento, itens, fConfig, fConfigItem, tipo, chavesRef } = params;
 
-  // Movimento em si
   if (!movimento) {
-    return { valido: false, erros: [{ campo: "Movimento", mensagem: "Dados do movimento não localizados." }] };
+    return { valido: false, erros: [{ campo: "Movimento", mensagem: "Dados do movimento/venda não localizados no banco." }] };
   }
 
   // Determinar indPres para NFC-e
-  const isEntrega = movimento.ind_pres === '4' || 
+  const isEntrega =
+    movimento.ind_pres === "4" ||
     (Number(movimento.vl_frete || 0) > 0 && (ok(movimento.logradouro_entrega) || ok(movimento.cep_entrega)));
-  const indPres = isEntrega ? '4' : '1';
+  const indPres = isEntrega ? "4" : movimento.ind_pres || "1";
+
+  const emitenteUf = empresa?.cidade?.estado_id || empresa?.uf;
+  const destinatarioUf = parceiro?.cidade?.estado_id || parceiro?.uf || parceiro?.estado_id;
 
   const erros: IFiscalValidacaoErro[] = [
     ...validarEmitente(empresa),
-    ...validarDestinatario(parceiro, tipo, indPres),
-    ...validarItens(itens),
-    ...validarConfigFiscal(fConfig, fConfigItem),
+    ...validarDestinatario(parceiro, tipo, indPres, emitenteUf),
+    ...validarItens(itens, emitenteUf, destinatarioUf),
+    ...validarConfigFiscal(fConfig, fConfigItem, tipo),
   ];
 
   if (tipo === "NFCE" && indPres === "1" && Number(movimento.vl_frete || 0) > 0) {
-    erros.push({ campo: "NFC-e Presencial", mensagem: "Venda presencial nao pode informar frete" });
+    erros.push({ campo: "NFC-e Presencial", mensagem: "Venda presencial sem entrega não pode conter valor de frete informado." });
+  }
+
+  // Validação de NF-e de Devolução (Finalidade 4)
+  const isDevolucao =
+    movimento.fin_nfe === 4 ||
+    String(movimento.fin_nfe) === "4" ||
+    String(movimento.finalidade) === "4";
+
+  if (isDevolucao) {
+    const refs = chavesRef || [];
+    if (refs.length === 0) {
+      erros.push({
+        campo: "Documento Referenciado (Devolução / finNFe 4)",
+        mensagem: "NF-e de Devolução exige ao menos uma Chave de Acesso de 44 dígitos da NF-e original vinculada nos Documentos Referenciados."
+      });
+    } else {
+      refs.forEach((c, idx) => {
+        const limpa = String(c || "").replace(/\D/g, "");
+        if (limpa.length !== 44) {
+          erros.push({
+            campo: `Chave Referenciada #${idx + 1}`,
+            mensagem: `A chave informada ("${c}") possui ${limpa.length} dígitos. A chave de acesso da NF-e DEVE possuir exatamente 44 dígitos numéricos.`
+          });
+        }
+      });
+    }
   }
 
   return { valido: erros.length === 0, erros };

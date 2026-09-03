@@ -43,8 +43,6 @@ const XGridCols: IGridColumn[] = [
         "C": "bg-red-100 text-red-700",
         "D": "bg-orange-100 text-orange-700",
         "R": "bg-red-100 text-red-700",
-        "1": "bg-green-100 text-green-700",
-        "2": "bg-orange-100 text-orange-700",
       };
       return (
         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${colors[r.st_nf] || "bg-gray-100 text-gray-600"}`}>
@@ -190,7 +188,7 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
         XOrderBy: "nfe_cabecalho_id",
         XSoftDelete: false,
         XApplyFilter: (q) => q, // Remove filter to show both Entry/Exit or allow user to filter
-        XCanEdit: (rec: any) => !["A", "C", "D", "1", "2"].includes(String(rec.st_nf)),
+        XCanEdit: (rec: any) => !["A", "C", "D"].includes(String(rec.st_nf)),
         XOnAfterLoad: (rows: any[]) => {
           const ids = [...new Set(rows.map(r => r.cadastro_id).filter(Boolean))] as number[];
           if (ids.length) ensureClienteInfo(ids);
@@ -213,7 +211,7 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
       XToolbarExtras={({ currentRecord, isEditing, refresh }) => {
         if (!currentRecord || isEditing) return null;
         const st = String(currentRecord.st_nf || "");
-        const foiAutorizada = ["A", "1"].includes(st);
+        const foiAutorizada = st === "A";
         const foiEnviada = st === "E";
         const podeEnviar = ["P", "R"].includes(st);
 
@@ -260,21 +258,53 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
               onClick={async () => {
                 if (!confirm(`Enviar NF-e #${currentRecord.nfe_cabecalho_id} para a SEFAZ via fiscal-worker?`)) return;
                 const tid = toast.loading("Enviando para fila do fiscal-worker...");
+                const targetEmpresaId = currentRecord.empresa_id || XEmpresaId;
                 try {
                   const res = await fiscalEmissaoService.retransmitirDocumento(
                     currentRecord.nfe_cabecalho_id,
-                    XEmpresaId
+                    targetEmpresaId
                   );
                   toast.dismiss(tid);
-                  if (res.success) {
-                    toast.success(`Evento #${res.fiscal_evento_id} enfileirado. Aguarde o fiscal-worker processar.`);
+                  if (res.success && res.fiscal_evento_id) {
+                    toast.loading("Aguardando resposta da SEFAZ...", { id: tid });
+                    const ret = await fiscalEmissaoService.aguardarEvento(res.fiscal_evento_id, {
+                      empresaId: targetEmpresaId
+                    });
+                    toast.dismiss(tid);
+
                     await refresh();
+
+                    const { data: cabUpdated } = await db.from("fiscal_nfe_cabecalho")
+                      .select("nfe_cabecalho_id, st_nf, empresa_id")
+                      .eq("nfe_cabecalho_id", currentRecord.nfe_cabecalho_id)
+                      .maybeSingle();
+
+                    const stNf = cabUpdated?.st_nf || (ret.success ? "A" : currentRecord.st_nf);
+
+                    if (stNf === "A") {
+                      toast.success("Nota Fiscal autorizada com sucesso! Gerando DANFE...");
+                      const impRes = await fiscalEmissaoService.imprimirDocumento(
+                        currentRecord.nfe_cabecalho_id,
+                        targetEmpresaId
+                      );
+                      if (impRes.success && impRes.pdf_base64) {
+                        const binaryString = atob(impRes.pdf_base64);
+                        const bytes = new Uint8Array(binaryString.length);
+                        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+                        const blob = new Blob([bytes], { type: "application/pdf" });
+                        const url = URL.createObjectURL(blob);
+                        window.open(url, "_blank");
+                      }
+                    } else {
+                      toast.error("Retorno SEFAZ: " + (ret.mensagem || ret.resposta?.x_motivo || "Não autorizada"));
+                    }
                   } else {
                     toast.error("Falha: " + (res.message || "Erro desconhecido"));
                   }
                 } catch (e: any) {
                   toast.dismiss(tid);
                   toast.error("Erro: " + e.message);
+                  await refresh();
                 }
               }}
               className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-primary text-primary-foreground rounded-md hover:opacity-90 shadow-sm"
@@ -335,7 +365,7 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                   const xMotivoFinal = cabUpdated?.x_motivo || respObj?.x_motivo || respObj?.xMotivo || lastEv?.mensagem_erro || "Consulta finalizada.";
                   const nrProtFinal = cabUpdated?.nr_protocolo || respObj?.nr_protocolo || respObj?.nProt;
                   const chaveFinal = cabUpdated?.chave_nfe || respObj?.chave_nfe;
-                  const sucessoFinal = ["A", "1"].includes(String(stFinal)) || ["100", "150"].includes(String(cStatFinal));
+                  const sucessoFinal = stFinal === "A" || ["100", "150"].includes(String(cStatFinal));
 
                   setXConsultaModal({
                     open: true,
@@ -374,7 +404,7 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
           render: ({ record, currentRecord }) => {
             const id = (currentRecord || record)?.nfe_cabecalho_id || null;
             const st = (currentRecord || record)?.st_nf || "A";
-            const podeEditar = !["A", "E", "C", "D", "1", "2"].includes(String(st));
+            const podeEditar = !["A", "E", "C", "D"].includes(String(st));
             return (
               <NfeItensTab 
                 nfeCabecalhoId={id} 
@@ -391,7 +421,7 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
           render: ({ record, currentRecord }) => {
             const id = (currentRecord || record)?.nfe_cabecalho_id || null;
             const st = (currentRecord || record)?.st_nf || "A";
-            const podeEditar = !["A", "E", "C", "D", "1", "2"].includes(String(st));
+            const podeEditar = !["A", "E", "C", "D"].includes(String(st));
             return <NfePagamentoTab nfeCabecalhoId={id} podeEditar={podeEditar} />;
           },
         },
@@ -404,7 +434,7 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
           render: ({ record, currentRecord }) => {
             const id = (currentRecord || record)?.nfe_cabecalho_id || null;
             const st = (currentRecord || record)?.st_nf || "A";
-            const podeEditar = !["A", "E", "C", "D", "1", "2"].includes(String(st));
+            const podeEditar = !["A", "E", "C", "D"].includes(String(st));
             return (
               <NfeDocumentosReferenciadosTab
                 nfeCabecalhoId={id}
@@ -696,13 +726,13 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground font-bold uppercase">Status Atual</span>
                 <Badge className={`font-bold text-xs uppercase ${
-                  XConsultaModal.sucesso || ["A", "1"].includes(String(XConsultaModal.stNf))
+                  XConsultaModal.sucesso || XConsultaModal.stNf === "A"
                     ? "bg-green-100 text-green-700 border-none"
                     : XConsultaModal.stNf === "E"
                     ? "bg-blue-100 text-blue-700 border-none"
                     : "bg-red-100 text-red-700 border-none"
                 }`}>
-                  {["A", "1"].includes(String(XConsultaModal.stNf)) ? "AUTORIZADA" : (XConsultaModal.stNf === "E" ? "ENVIADA / AGUARDANDO" : "FALHA / REJEITADA")}
+                  {XConsultaModal.stNf === "A" ? "AUTORIZADA" : (XConsultaModal.stNf === "E" ? "ENVIADA / AGUARDANDO" : "FALHA / REJEITADA")}
                 </Badge>
               </div>
 

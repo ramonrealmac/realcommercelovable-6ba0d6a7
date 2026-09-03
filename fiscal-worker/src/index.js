@@ -296,8 +296,12 @@ const processarEvento = async (evento) => {
                         logger.info(`Config de impressão: tp_imp=${payload.print_config.tp_imp} impressora=${payload.print_config.nm_impressora}`);
                     }
                 }
+                if (!payload.print_config) {
+                    payload.print_config = { tp_imp: 'PDF', nm_impressora: '' };
+                }
             } catch (e) {
                 logger.warn(`Falha ao buscar config de impressão: ${e.message}`);
+                if (!payload.print_config) payload.print_config = { tp_imp: 'PDF', nm_impressora: '' };
             }
         } else if (isEmissaoMdfe && evento.mdf_manifesto_id && !payload.print_config) {
             // Default printing fallback to PDF
@@ -517,6 +521,7 @@ const processarEvento = async (evento) => {
         if (nfeCabecalhoId) {
             if (isEmissao) {
                 const isDenegada = ['110', '301', '302', '303'].includes(String(resultado.c_stat));
+                const isDuplicidade = ['204', '539'].includes(String(resultado.c_stat));
 
                 let chaveNfeEncontrada = resultado.chave_nfe;
                 if (!chaveNfeEncontrada) {
@@ -525,25 +530,39 @@ const processarEvento = async (evento) => {
                     if (mChave) chaveNfeEncontrada = mChave[1];
                 }
 
+                // Busca o status atual da nota no banco para proteger notas já autorizadas
+                const { data: nfeAtual } = await supabase
+                    .from('fiscal_nfe_cabecalho')
+                    .select('st_nf, nr_protocolo, chave_nfe')
+                    .eq('nfe_cabecalho_id', nfeCabecalhoId)
+                    .maybeSingle();
+
+                const jaEstavaAutorizada = nfeAtual && (nfeAtual.st_nf === 'A' || nfeAtual.nr_protocolo);
+
+                // Se deu sucesso OU se foi duplicidade (mas a nota já estava autorizada ou tem protocolo), mantém Autorizada 'A'
+                const statusFinalNfe = (resultado.sucesso || (isDuplicidade && jaEstavaAutorizada)) 
+                    ? 'A' 
+                    : (isDenegada ? 'D' : 'R');
+
                 const updateNfe = {
-                    c_stat: resultado.c_stat ? parseInt(String(resultado.c_stat)) : null,
-                    x_motivo: resultado.x_motivo || (resultado.sucesso ? 'Autorizado' : 'Rejeitado'),
-                    st_nf: resultado.sucesso ? 'A' : (isDenegada ? 'D' : 'R'), // A=Autorizada, D=Denegado, R=Rejeitado
+                    c_stat: (isDuplicidade && jaEstavaAutorizada) ? 100 : (resultado.c_stat ? parseInt(String(resultado.c_stat)) : null),
+                    x_motivo: (isDuplicidade && jaEstavaAutorizada) ? 'Autorizado o uso da NF-e (Duplicidade tratada)' : (resultado.x_motivo || (resultado.sucesso ? 'Autorizado' : 'Rejeitado')),
+                    st_nf: statusFinalNfe, // A=Autorizada, D=Denegado, R=Rejeitado
                     updated_at: new Date().toISOString()
                 };
 
-                if (chaveNfeEncontrada) updateNfe.chave_nfe = chaveNfeEncontrada;
+                if (chaveNfeEncontrada && (!nfeAtual?.chave_nfe || resultado.sucesso)) updateNfe.chave_nfe = chaveNfeEncontrada;
                 if (resultado.nr_protocolo) updateNfe.nr_protocolo = resultado.nr_protocolo;
                 if (resultado.recibo_sefaz) updateNfe.recibo_sefaz = resultado.recibo_sefaz;
 
                 const xmlParaSalvar = resultado.xml_nfe || resultado.xml_retorno;
-                if (xmlParaSalvar) updateNfe.xml_nf = xmlParaSalvar;
+                if (xmlParaSalvar && (resultado.sucesso || !nfeAtual?.xml_nf)) updateNfe.xml_nf = xmlParaSalvar;
 
                 const { error: errUpd } = await supabase.from('fiscal_nfe_cabecalho').update(updateNfe).eq('nfe_cabecalho_id', nfeCabecalhoId);
                 if (errUpd) {
                     logger.error(`Erro ao atualizar fiscal_nfe_cabecalho #${nfeCabecalhoId} (Emissão): ${errUpd.message}`);
                 } else {
-                    logger.info(`NF-e #${nfeCabecalhoId} atualizada (Emissão)`);
+                    logger.info(`NF-e #${nfeCabecalhoId} atualizada (Emissão - st_nf=${statusFinalNfe})`);
                 }
             } else if (isCancelamento && resultado.sucesso) {
                 const updateCancel = {
