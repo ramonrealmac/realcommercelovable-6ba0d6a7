@@ -190,6 +190,7 @@ export const MENU_CONFIG: MenuItem[] = [
         icon: Settings2,
         children: [
           { id: "ajuste-estoque", title: "Ajuste de Estoque", icon: FilePen },
+          { id: "transferencia-estoque", title: "Transferência entre Filiais", icon: ArrowRightLeft },
           { id: "inventario", title: "Inventário (próxima etapa)", icon: ClipboardList },
         ],
       },
