@@ -101,9 +101,9 @@ BEGIN
               AND empresa_id = v_trans.empresa_destino_id
         ) THEN
             INSERT INTO public.estoque (
-                empresa_id, produto_id, deposito_id, estoque_fisico, estoque_reservado, estoque_disponivel, dt_alteracao
+                empresa_id, produto_id, deposito_id, estoque_fisico, estoque_reservado, dt_alteracao
             ) VALUES (
-                v_trans.empresa_destino_id, v_item.produto_id, v_trans.deposito_destino_id, 0, 0, 0, now()
+                v_trans.empresa_destino_id, v_item.produto_id, v_trans.deposito_destino_id, 0, 0, now()
             );
         END IF;
 
@@ -214,8 +214,8 @@ BEGIN
               AND deposito_id = v_item.deposito_id
               AND empresa_id = v_mov.empresa_id
         ) THEN
-            INSERT INTO estoque (empresa_id, produto_id, deposito_id, estoque_fisico, estoque_reservado, estoque_disponivel, dt_alteracao)
-            VALUES (v_mov.empresa_id, v_item.produto_id, v_item.deposito_id, 0, 0, 0, now());
+            INSERT INTO estoque (empresa_id, produto_id, deposito_id, estoque_fisico, estoque_reservado, dt_alteracao)
+            VALUES (v_mov.empresa_id, v_item.produto_id, v_item.deposito_id, 0, 0, now());
         END IF;
 
         SELECT COALESCE(estoque_fisico, 0) INTO v_estoque_atual
