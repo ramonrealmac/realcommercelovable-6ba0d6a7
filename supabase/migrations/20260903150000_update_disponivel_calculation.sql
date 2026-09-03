@@ -1,5 +1,5 @@
 -- Migration: 20260903150000_update_disponivel_calculation.sql
--- Descrição: Atualiza fn_processa_estoque_log e fu_finalizar_transferencia_estoque para manter estoque_disponivel estritamente como (estoque_fisico - estoque_reservado)
+-- Descrição: Atualiza fn_processa_estoque_log e fu_finalizar_transferencia_estoque mantendo estoque_disponivel como coluna gerada (estoque_fisico - estoque_reservado) sem tentar inseri-la/atualizá-la diretamente
 
 CREATE OR REPLACE FUNCTION public.fn_processa_estoque_log()
 RETURNS trigger AS $$
@@ -26,11 +26,10 @@ BEGIN
             NEW.produto_id, NEW.deposito_id, NEW.empresa_id;
     END IF;
 
-    -- Atualiza o mestre estoque somando a movimentação e recalculando estoque_disponivel = estoque_fisico - estoque_reservado
+    -- Atualiza o mestre estoque somando a movimentação. estoque_disponivel é calculado automaticamente por ser GENERATED STORED
     IF NEW.qt_movimento > 0 THEN
         UPDATE public.estoque 
         SET estoque_fisico = COALESCE(estoque_fisico, 0) + NEW.qt_movimento,
-            estoque_disponivel = (COALESCE(estoque_fisico, 0) + NEW.qt_movimento) - COALESCE(estoque_reservado, 0),
             dt_ult_entrada = now(),
             dt_alteracao = now()
         WHERE empresa_id = NEW.empresa_id 
@@ -40,7 +39,6 @@ BEGIN
     ELSE
         UPDATE public.estoque 
         SET estoque_fisico = COALESCE(estoque_fisico, 0) + NEW.qt_movimento,
-            estoque_disponivel = (COALESCE(estoque_fisico, 0) + NEW.qt_movimento) - COALESCE(estoque_reservado, 0),
             dt_ult_saida = now(),
             dt_alteracao = now()
         WHERE empresa_id = NEW.empresa_id 
@@ -174,9 +172,9 @@ BEGIN
               AND empresa_id = v_trans.empresa_destino_id
         ) THEN
             INSERT INTO public.estoque (
-                empresa_id, produto_id, deposito_id, estoque_fisico, estoque_reservado, estoque_disponivel, dt_alteracao
+                empresa_id, produto_id, deposito_id, estoque_fisico, estoque_reservado, dt_alteracao
             ) VALUES (
-                v_trans.empresa_destino_id, v_item.produto_id, v_trans.deposito_destino_id, 0, 0, 0, now()
+                v_trans.empresa_destino_id, v_item.produto_id, v_trans.deposito_destino_id, 0, 0, now()
             );
         END IF;
 
