@@ -314,7 +314,7 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
         setXF({
           ...ef,
           nome:          pending.nm_produto,
-          nome_reduzido: pending.nm_produto.substring(0, 30),
+          nome_reduzido: pending.nm_produto.substring(0, 100),
           ncm:           pending.ncm,
           gtin:          pending.gtin,
         });
@@ -797,7 +797,7 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
     </div>
   );
 
-  const renderEditField = (label: string, key: string, opts?: { required?: boolean; className?: string; readOnly?: boolean; onChange?: (key: string, val: string) => void; align?: string }) => (
+  const renderEditField = (label: string, key: string, opts?: { required?: boolean; className?: string; readOnly?: boolean; onChange?: (key: string, val: string) => void; align?: string; maxLength?: number }) => (
     <div className={opts?.className}>
       <label className="block text-xs font-medium text-muted-foreground mb-1">
         {label} {opts?.required && <span className="text-destructive">*</span>}
@@ -807,12 +807,13 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
         value={XF[key] || ""}
         onChange={(e) => opts?.onChange ? opts.onChange(key, e.target.value.toUpperCase()) : set(key, e.target.value.toUpperCase())}
         readOnly={opts?.readOnly}
+        maxLength={opts?.maxLength}
         className={`w-full border border-border rounded px-3 py-1.5 text-sm ${opts?.readOnly ? XBgRead : XBgEdit} focus:ring-2 focus:ring-ring outline-none ${opts?.align === "right" ? "text-right" : ""}`}
       />
     </div>
   );
 
-  const renderField = (label: string, key: string, opts?: { required?: boolean; className?: string; readOnly?: boolean; onChange?: (key: string, val: string) => void; align?: string }) => {
+  const renderField = (label: string, key: string, opts?: { required?: boolean; className?: string; readOnly?: boolean; onChange?: (key: string, val: string) => void; align?: string; maxLength?: number }) => {
     if (XIsEditing) return renderEditField(label, key, opts);
     const val = XCurrentRecord ? (XCurrentRecord as any)[key] : "";
     return renderReadField(label, val, opts?.className);
@@ -967,7 +968,7 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Emp. Matriz</label>
                 <input type="text" value={(() => { const em = XEmpresas.find(e => e.empresa_id === XEmpresaMatrizId); return em ? `${em.empresa_id} - ${em.identificacao}` : String(XEmpresaMatrizId); })()} readOnly className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XBgRead}`} />
               </div>
-              <div className="flex-1">{renderField("Descrição", "nome", { required: true })}</div>
+              <div className="flex-1">{renderField("Descrição", "nome", { required: true, maxLength: 100 })}</div>
               <div className="w-full md:w-40">
                 {renderSelect("Tipo do Item", "tp_produto", [
                   { v: "PA", l: "Produto" }, { v: "MP", l: "Matéria Prima" }, { v: "ME", l: "Mercadoria" },
@@ -1015,7 +1016,7 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
                   {renderLookup("Unidade (Padrão)", "unidade_id", XUnidades, "unidade_id", "descricao")}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {renderField("Nome Reduzido", "nome_reduzido")}
+                  {renderField("Nome Reduzido", "nome_reduzido", { maxLength: 100 })}
                   {renderField("GTIN", "gtin")}
                   {renderField("Referência", "referencia")}
                 </div>
@@ -1027,7 +1028,7 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
               <div className="space-y-3">
                 {/* E-commerce fields transferred */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {renderField("Nome E-commerce", "nm_ecommerce")}
+                  {renderField("Nome E-commerce", "nm_ecommerce", { maxLength: 100 })}
                   <div>
                     <label className="block text-xs font-medium text-muted-foreground mb-1">URL Foto</label>
                     <div className="flex gap-2">

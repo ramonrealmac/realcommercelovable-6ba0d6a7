@@ -63,6 +63,7 @@ const UsuarioForm = lazy(() => import("@/components/forms/config/UsuarioForm"));
 const TrocaSenhaForm = lazy(() => import("@/components/forms/config/TrocaSenhaForm"));
 const ConsultaEstoqueForm = lazy(() => import("@/components/forms/estoques/ConsultaEstoqueForm"));
 const AjusteEstoqueForm = lazy(() => import("@/components/forms/ajuste/AjusteEstoqueForm"));
+const TransferenciaEstoqueForm = lazy(() => import("@/components/forms/estoques/TransferenciaEstoqueForm"));
 const InventarioEmBreve = lazy(() => import("@/components/forms/ajuste/InventarioEmBreve"));
 const ImportacaoForm = lazy(() => import("@/components/forms/config/ImportacaoForm"));
 const SistemaVersoesForm = lazy(() => import("@/components/forms/config/SistemaVersoesForm"));
@@ -161,6 +162,7 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "rpb-relatorios": return <RpbManager />;
       case "consulta-estoque": return <ConsultaEstoqueForm />;
       case "ajuste-estoque": return <AjusteEstoqueForm />;
+      case "transferencia-estoque": return <TransferenciaEstoqueForm />;
       case "inventario": return <InventarioEmBreve />;
       // PDV
       case "abertura-caixa": return <AberturaCaixaForm />;

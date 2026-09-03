@@ -109,6 +109,15 @@
     opacity: 1 !important; /* prevent browser gray-out on disabled */
   }
 
+  /* Override rule for explicit white background requirement */
+  .force-bg-white,
+  input.force-bg-white,
+  input[readonly].force-bg-white,
+  input:disabled.force-bg-white,
+  div.force-bg-white {
+    background-color: #ffffff !important;
+  }
+
   /* Force selects to use custom rendering (prevents OS/browser override on disabled) */
   select {
     -webkit-appearance: none;

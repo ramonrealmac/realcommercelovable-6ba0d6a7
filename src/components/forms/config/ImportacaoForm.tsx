@@ -90,8 +90,8 @@ const TABLE_FIELD_LIMITS: Record<string, Record<string, number>> = {
     st_transportador: 1,
   },
   produto: {
-    nome: 80,
-    nome_reduzido: 80,
+    nome: 100,
+    nome_reduzido: 100,
     referencia: 20,
     gtin: 14,
     unidade_id: 5,
@@ -1293,6 +1293,31 @@ const ImportacaoForm: React.FC = () => {
         delete record.cd_produto;
       }
 
+      // Sanitize cd_* and numeric *_id columns to avoid sending empty string "" to PostgreSQL bigint/integer fields
+      Object.keys(record).forEach(key => {
+        const val = record[key];
+        if (key.startsWith("cd_")) {
+          if (val === null || val === undefined || (typeof val === "string" && val.trim() === "")) {
+            delete record[key];
+          } else {
+            const cleanStr = String(val).trim();
+            const num = parseInt(cleanStr, 10);
+            if (!isNaN(num)) {
+              record[key] = num;
+            } else if (cleanStr === "") {
+              delete record[key];
+            }
+          }
+        } else if (key.endsWith("_id") && key !== "unidade_id") {
+          if (val === null || val === undefined || (typeof val === "string" && val.trim() === "")) {
+            record[key] = null;
+          } else if (typeof val === "string") {
+            const num = parseInt(val.trim(), 10);
+            record[key] = isNaN(num) ? null : num;
+          }
+        }
+      });
+
       return { record, rowIndex: rowIndex + 2 };
     });
 
@@ -1407,6 +1432,47 @@ const ImportacaoForm: React.FC = () => {
       }
     }
 
+    // Pre-assign sequential codes (cd_*) to batch items missing code to avoid multi-row trigger collisions on unique constraints
+    if (!isAborted && validPayloadRows.length > 0) {
+      const codeColumnMap: Record<string, string> = {
+        cadastro: "cd_cadastro",
+        fornecedor: "cd_cadastro",
+        transportador: "cd_cadastro",
+        produto: "cd_produto",
+        produto_grupo: "cd_produto_grupo",
+        produto_subgrupo: "cd_produto_subgrupo",
+        linha_produto: "cd_linha",
+      };
+
+      const targetCodeCol = codeColumnMap[selectedTableId];
+      if (targetCodeCol) {
+        const rowsMissingCode = validPayloadRows.filter(r => r.record[targetCodeCol] === undefined || r.record[targetCodeCol] === null || r.record[targetCodeCol] === "");
+        if (rowsMissingCode.length > 0) {
+          try {
+            const dbTable = activeTable.name;
+            const { data: maxRes } = await supabase
+              .from(dbTable)
+              .select(targetCodeCol)
+              .eq("empresa_id", targetCompanyId)
+              .order(targetCodeCol, { ascending: false })
+              .limit(1);
+
+            let nextCode = 1;
+            if (maxRes && maxRes.length > 0 && maxRes[0][targetCodeCol] != null) {
+              const currentMax = Number(maxRes[0][targetCodeCol]);
+              if (!isNaN(currentMax)) nextCode = currentMax + 1;
+            }
+
+            rowsMissingCode.forEach(rowItem => {
+              rowItem.record[targetCodeCol] = nextCode++;
+            });
+          } catch (errCode) {
+            console.error("Erro ao sequenciar códigos para lote de importação:", errCode);
+          }
+        }
+      }
+    }
+
     // Split validPayloadRows into chunks of batchSize
     const chunks: typeof payloadRows[] = [];
     if (!isAborted) {
@@ -1427,9 +1493,19 @@ const ImportacaoForm: React.FC = () => {
 
         const recordsToInsert = chunk.map(c => c.record);
         
+        const getUpsertOptions = () => {
+          if (activeTable.name === "cadastro") return { onConflict: "empresa_id,cd_cadastro" };
+          if (activeTable.name === "produto") return { onConflict: "empresa_id,cd_produto" };
+          if (activeTable.name === "produto_grupo") return { onConflict: "empresa_id,cd_produto_grupo" };
+          if (activeTable.name === "produto_subgrupo") return { onConflict: "empresa_id,cd_produto_subgrupo" };
+          if (activeTable.name === "linha_produto") return { onConflict: "empresa_id,cd_linha" };
+          return undefined;
+        };
+
         try {
+          const upsertOpts = getUpsertOptions();
           const query = avoidDuplicates
-            ? supabase.from(activeTable.name).upsert(recordsToInsert)
+            ? (upsertOpts ? supabase.from(activeTable.name).upsert(recordsToInsert, upsertOpts) : supabase.from(activeTable.name).upsert(recordsToInsert))
             : supabase.from(activeTable.name).insert(recordsToInsert);
 
           const { error } = await query;
@@ -1451,7 +1527,7 @@ const ImportacaoForm: React.FC = () => {
             // Fallback row-by-row if continue is selected
             for (const item of chunk) {
               const singleQuery = avoidDuplicates
-                ? supabase.from(activeTable.name).upsert(item.record)
+                ? (upsertOpts ? supabase.from(activeTable.name).upsert(item.record, upsertOpts) : supabase.from(activeTable.name).upsert(item.record))
                 : supabase.from(activeTable.name).insert(item.record);
               const { error: singleError } = await singleQuery;
 
