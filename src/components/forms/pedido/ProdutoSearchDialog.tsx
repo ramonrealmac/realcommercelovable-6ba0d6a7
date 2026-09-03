@@ -14,6 +14,8 @@ export interface IProdutoRow {
   unidade_id: string | null;
   preco_venda: number;
   preco_promocional: number;
+  preco_venda_faturado: number;
+  preco_promocional_fat: number;
   st_promo: boolean;
   estoque_disponivel: number;
   estoque_reservado: number;
@@ -40,13 +42,15 @@ interface IProps {
   hideStockPromoFilters?: boolean;
   hideDepositGrid?: boolean;
   customFields?: CampoKey[];
+  tabelaPrecoId?: number | null;
+  tipoPrecoPadrao?: "V" | "P";
 }
 
 const fmtNum = (v: number, dec = 2) =>
   (v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
 
 // ── Configuração de campos ────────────────────────────────────
-type CampoKey = "codigo" | "referencia" | "gtin" | "nome" | "unidade" | "preco" | "preco_promo" | "estoque_disp" | "estoque_emp" | "reservado";
+type CampoKey = "codigo" | "referencia" | "gtin" | "nome" | "unidade" | "preco" | "preco_prazo" | "preco_promo" | "estoque_disp" | "estoque_emp" | "reservado";
 
 const CAMPOS_DISPONIVEIS: { key: CampoKey; label: string; obrigatorio?: boolean }[] = [
   { key: "codigo", label: "Código" },
@@ -54,8 +58,8 @@ const CAMPOS_DISPONIVEIS: { key: CampoKey; label: string; obrigatorio?: boolean 
   { key: "referencia", label: "Referência" },
   { key: "gtin", label: "GTIN" },
   { key: "unidade", label: "Unidade" },
-  { key: "preco", label: "Preço" },
-  { key: "preco_promo", label: "Preço promocional" },
+  { key: "preco", label: "À Vista" },
+  { key: "preco_prazo", label: "A Prazo" },
   { key: "estoque_disp", label: "Estoque disponível" },
   { key: "estoque_emp", label: "Estoque na empresa" },
   { key: "reservado", label: "Reservado" },
@@ -67,19 +71,27 @@ const COLUMNS_CONFIG: Record<CampoKey, { label: string; width: string; align?: "
   gtin: { label: "GTIN", width: "115px" },
   nome: { label: "Nome", width: "1fr" },
   unidade: { label: "Unid.", width: "55px", align: "center" },
-  preco: { label: "Preço", width: "120px", align: "right" },
+  preco: { label: "À Vista", width: "135px", align: "right" },
+  preco_prazo: { label: "A Prazo", width: "135px", align: "right" },
   preco_promo: { label: "Promoção", width: "120px", align: "right" },
   estoque_disp: { label: "Est. Disp.", width: "95px", align: "right" },
   estoque_emp: { label: "Est. Emp.", width: "95px", align: "right" },
   reservado: { label: "Reserv.", width: "90px", align: "right" },
 };
 
-const CAMPOS_DEFAULT: CampoKey[] = ["codigo", "nome", "unidade", "preco", "estoque_disp", "reservado"];
+const CAMPOS_DEFAULT: CampoKey[] = ["codigo", "nome", "unidade", "preco", "preco_prazo", "estoque_disp", "reservado"];
 
 const parseCampos = (raw: any): CampoKey[] => {
   try {
     const arr = typeof raw === "string" ? JSON.parse(raw) : raw;
-    if (Array.isArray(arr) && arr.length) return arr as CampoKey[];
+    if (Array.isArray(arr) && arr.length) {
+      const list = ([...arr] as CampoKey[]).filter(c => c !== "preco_promo");
+      if (list.includes("preco") && !list.includes("preco_prazo")) {
+        const idx = list.indexOf("preco");
+        list.splice(idx + 1, 0, "preco_prazo");
+      }
+      return list;
+    }
   } catch { /* ignore */ }
   return CAMPOS_DEFAULT;
 };
@@ -103,7 +115,7 @@ export async function buscarProdutoPorCodigo(
     .maybeSingle();
 
   let q = db.from("produto")
-    .select("produto_id, cd_produto, nome, unidade_id, preco_venda, preco_promocional, st_promo, referencia, gtin")
+    .select("produto_id, cd_produto, nome, unidade_id, preco_venda, preco_venda_faturado, preco_promocional, preco_promocional_fat, st_promo, referencia, gtin")
     .in("empresa_id", ids).eq("excluido", false).limit(5);
     
   if (codBarraData?.produto_id) {
@@ -150,6 +162,8 @@ export async function buscarProdutoPorCodigo(
     unidade_id: p.unidade_id,
     preco_venda: Number(p.preco_venda || 0),
     preco_promocional: Number(p.preco_promocional || 0),
+    preco_venda_faturado: Number(p.preco_venda_faturado || 0),
+    preco_promocional_fat: Number(p.preco_promocional_fat || 0),
     st_promo: isPromo,
     estoque_disponivel: disp,
     estoque_reservado: res,
@@ -165,7 +179,9 @@ const ProdutoSearchDialog: React.FC<IProps> = ({
   onSelect,
   hideStockPromoFilters = false,
   hideDepositGrid = false,
-  customFields
+  customFields,
+  tabelaPrecoId,
+  tipoPrecoPadrao = "V"
 }) => {
   const { XEmpresaId, XEmpresaMatrizId, XEmpresas } = useAppContext();
   const [XTermo, setXTermo] = useState("");
@@ -191,7 +207,16 @@ const ProdutoSearchDialog: React.FC<IProps> = ({
       let valB: any = b[XSortBy.key as keyof IProdutoRow];
       
       if (XSortBy.key === "codigo") { valA = a.cd_produto ?? a.produto_id; valB = b.cd_produto ?? b.produto_id; }
-      else if (XSortBy.key === "preco") { valA = a.preco_venda; valB = b.preco_venda; }
+      else if (XSortBy.key === "preco") {
+        valA = a.st_promo && a.preco_promocional > 0 ? a.preco_promocional : a.preco_venda;
+        valB = b.st_promo && b.preco_promocional > 0 ? b.preco_promocional : b.preco_venda;
+      }
+      else if (XSortBy.key === "preco_prazo") {
+        const pA = a.st_promo && (a.preco_promocional_fat > 0 ? a.preco_promocional_fat : a.preco_promocional);
+        const pB = b.st_promo && (b.preco_promocional_fat > 0 ? b.preco_promocional_fat : b.preco_promocional);
+        valA = pA > 0 ? pA : (a.preco_venda_faturado > 0 ? a.preco_venda_faturado : a.preco_venda);
+        valB = pB > 0 ? pB : (b.preco_venda_faturado > 0 ? b.preco_venda_faturado : b.preco_venda);
+      }
       else if (XSortBy.key === "preco_promo") { valA = a.preco_promocional; valB = b.preco_promocional; }
       else if (XSortBy.key === "estoque_disp") { valA = a.estoque_disponivel; valB = b.estoque_disponivel; }
       else if (XSortBy.key === "estoque_emp") { valA = a.estoque_na_empresa; valB = b.estoque_na_empresa; }
@@ -224,7 +249,8 @@ const ProdutoSearchDialog: React.FC<IProps> = ({
     gtin: 115,
     nome: 300,
     unidade: 55,
-    preco: 120,
+    preco: 135,
+    preco_prazo: 135,
     preco_promo: 120,
     estoque_disp: 95,
     estoque_emp: 95,
@@ -264,7 +290,8 @@ const ProdutoSearchDialog: React.FC<IProps> = ({
           gtin: parsed.gtin ?? DEFAULT_WIDTHS.gtin,
           nome: parsed.nome ?? DEFAULT_WIDTHS.nome,
           unidade: parsed.unidade ?? DEFAULT_WIDTHS.unidade,
-          preco: Math.max(parsed.preco ?? DEFAULT_WIDTHS.preco, 120),
+          preco: Math.max(parsed.preco ?? DEFAULT_WIDTHS.preco, 130),
+          preco_prazo: Math.max(parsed.preco_prazo ?? DEFAULT_WIDTHS.preco_prazo, 130),
           preco_promo: Math.max(parsed.preco_promo ?? DEFAULT_WIDTHS.preco_promo, 120),
           estoque_disp: parsed.estoque_disp ?? DEFAULT_WIDTHS.estoque_disp,
           estoque_emp: parsed.estoque_emp ?? DEFAULT_WIDTHS.estoque_emp,
@@ -426,7 +453,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({
 
     // 3. Monta query de produtos
     let q = db.from("produto")
-      .select("produto_id, cd_produto, nome, unidade_id, preco_venda, preco_promocional, st_promo, referencia, gtin")
+      .select("produto_id, cd_produto, nome, unidade_id, preco_venda, preco_venda_faturado, preco_promocional, preco_promocional_fat, st_promo, referencia, gtin")
       .in("empresa_id", ids).eq("excluido", false);
 
     // Se temos filtro de IDs por estoque na busca vazia
@@ -468,7 +495,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({
     if (t && /^\d+$/.test(t)) {
       try {
         const { data: exactData } = await db.from("produto")
-          .select("produto_id, cd_produto, nome, unidade_id, preco_venda, preco_promocional, st_promo, referencia, gtin")
+          .select("produto_id, cd_produto, nome, unidade_id, preco_venda, preco_venda_faturado, preco_promocional, preco_promocional_fat, st_promo, referencia, gtin")
           .in("empresa_id", ids)
           .eq("cd_produto", Number(t))
           .eq("excluido", false)
@@ -541,6 +568,8 @@ const ProdutoSearchDialog: React.FC<IProps> = ({
       unidade_id: p.unidade_id,
       preco_venda: Number(p.preco_venda || 0),
       preco_promocional: Number(p.preco_promocional || 0),
+      preco_venda_faturado: Number(p.preco_venda_faturado || 0),
+      preco_promocional_fat: Number(p.preco_promocional_fat || 0),
       st_promo: String(p.st_promo || "").toUpperCase() === "S",
       estoque_disponivel: estMap[p.produto_id]?.disp || 0,
       estoque_reservado: estMap[p.produto_id]?.res || 0,
@@ -626,6 +655,27 @@ const ProdutoSearchDialog: React.FC<IProps> = ({
     setXSelectedIdx(idx);
   };
 
+  const confirmarSelecao = (r: IProdutoRow, depId?: number) => {
+    let selectedPreco = r.preco_venda;
+    let selectedPromo = r.preco_promocional;
+
+    if (tipoPrecoPadrao === "P") {
+      const vFat = r.preco_venda_faturado > 0 ? r.preco_venda_faturado : r.preco_venda;
+      const pPromoFat = r.preco_promocional_fat > 0 ? r.preco_promocional_fat : r.preco_promocional;
+      selectedPreco = vFat;
+      selectedPromo = pPromoFat;
+    }
+
+    const rowComPrecoAjustado: IProdutoRow = {
+      ...r,
+      preco_venda: selectedPreco,
+      preco_promocional: selectedPromo,
+    };
+
+    onSelect(rowComPrecoAjustado, depId);
+    onClose();
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (sortedRows.length === 0 || XLoading) return;
 
@@ -653,8 +703,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({
       const selected = XSelectedIdx !== null ? XSelectedIdx : 0;
       if (sortedRows[selected]) {
         e.preventDefault();
-        onSelect(sortedRows[selected]);
-        onClose();
+        confirmarSelecao(sortedRows[selected]);
       }
     }
   };
@@ -683,14 +732,28 @@ const ProdutoSearchDialog: React.FC<IProps> = ({
 
     const showPromo = r.st_promo && r.preco_promocional > 0;
     push("preco",
-      showPromo
-        ? <span className="line-through text-muted-foreground font-mono">R$ {fmtNum(r.preco_venda, XDecVal)}</span>
-        : <span className="text-black dark:text-white font-mono">R$ {fmtNum(r.preco_venda, XDecVal)}</span>
+      showPromo ? (
+        <span className="font-mono">
+          <span className="text-muted-foreground/80 line-through text-[11px] mr-1">R$ {fmtNum(r.preco_venda, XDecVal)}</span>
+          <span className="text-green-600 dark:text-green-400 font-semibold">R$ {fmtNum(r.preco_promocional, XDecVal)}</span>
+        </span>
+      ) : (
+        <span className="text-black dark:text-white font-mono">R$ {fmtNum(r.preco_venda, XDecVal)}</span>
+      )
     );
-    push("preco_promo",
-      showPromo
-        ? <span className="text-green-600 dark:text-green-400 font-semibold font-mono">R$ {fmtNum(r.preco_promocional, XDecVal)}</span>
-        : null
+
+    const vFatChip = r.preco_venda_faturado > 0 ? r.preco_venda_faturado : r.preco_venda;
+    const pPromoFatChip = r.preco_promocional_fat > 0 ? r.preco_promocional_fat : r.preco_promocional;
+    const showPromoFat = r.st_promo && pPromoFatChip > 0;
+    push("preco_prazo",
+      showPromoFat ? (
+        <span className="font-mono">
+          <span className="text-muted-foreground/80 line-through text-[11px] mr-1">R$ {fmtNum(vFatChip, XDecVal)}</span>
+          <span className="text-green-600 dark:text-green-400 font-semibold">R$ {fmtNum(pPromoFatChip, XDecVal)}</span>
+        </span>
+      ) : (
+        <span className="text-black dark:text-white font-mono">R$ {fmtNum(vFatChip, XDecVal)}</span>
+      )
     );
 
     const corEst = (v: number) =>
@@ -726,10 +789,40 @@ const ProdutoSearchDialog: React.FC<IProps> = ({
         return <span className="text-blue-800 dark:text-blue-300 font-medium break-all">{r.nome}</span>;
       case "unidade":
         return r.unidade_id ? <span className="text-muted-foreground">{r.unidade_id}</span> : <span className="text-muted-foreground/30">-</span>;
-      case "preco":
-        return showPromo
-          ? <span className="line-through text-muted-foreground font-mono">R$ {fmtNum(r.preco_venda, XDecVal)}</span>
-          : <span className="text-black dark:text-white font-mono font-medium">R$ {fmtNum(r.preco_venda, XDecVal)}</span>;
+      case "preco": {
+        const hasPromo = r.st_promo && r.preco_promocional > 0;
+        if (hasPromo) {
+          return (
+            <div className="flex items-center justify-end gap-1.5 font-mono">
+              <span className="text-[11px] text-muted-foreground line-through opacity-75">
+                R$ {fmtNum(r.preco_venda, XDecVal)}
+              </span>
+              <span className="text-green-600 dark:text-green-400 font-bold">
+                R$ {fmtNum(r.preco_promocional, XDecVal)}
+              </span>
+            </div>
+          );
+        }
+        return <span className="text-black dark:text-white font-mono font-medium">R$ {fmtNum(r.preco_venda, XDecVal)}</span>;
+      }
+      case "preco_prazo": {
+        const vFat = r.preco_venda_faturado > 0 ? r.preco_venda_faturado : r.preco_venda;
+        const pPromoFat = r.preco_promocional_fat > 0 ? r.preco_promocional_fat : r.preco_promocional;
+        const hasPromo = r.st_promo && pPromoFat > 0;
+        if (hasPromo) {
+          return (
+            <div className="flex items-center justify-end gap-1.5 font-mono">
+              <span className="text-[11px] text-muted-foreground line-through opacity-75">
+                R$ {fmtNum(vFat, XDecVal)}
+              </span>
+              <span className="text-green-600 dark:text-green-400 font-bold">
+                R$ {fmtNum(pPromoFat, XDecVal)}
+              </span>
+            </div>
+          );
+        }
+        return <span className="text-black dark:text-white font-mono font-medium">R$ {fmtNum(vFat, XDecVal)}</span>;
+      }
       case "preco_promo":
         return showPromo
           ? <span className="text-green-600 dark:text-green-400 font-semibold font-mono">R$ {fmtNum(r.preco_promocional, XDecVal)}</span>
@@ -748,7 +841,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent 
-        className="max-w-[1150px] w-[95vw] h-[90vh] flex flex-col p-0 overflow-hidden [&>button[class*='absolute']]:text-white/80 [&>button[class*='absolute']]:hover:text-white [&>button[class*='absolute']]:top-4 [&>button[class*='absolute']]:right-4 border border-border"
+        className="max-w-[1450px] w-[98vw] h-[92vh] flex flex-col p-0 overflow-hidden [&>button[class*='absolute']]:text-white/80 [&>button[class*='absolute']]:hover:text-white [&>button[class*='absolute']]:top-4 [&>button[class*='absolute']]:right-4 border border-border"
         onOpenAutoFocus={(e) => {
           e.preventDefault();
           inputRef.current?.focus();
@@ -895,7 +988,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({
                       key={r.produto_id}
                       data-index={idx}
                       onClick={() => selecionarLinha(idx, r)}
-                      onDoubleClick={() => { onSelect(r); onClose(); }}
+                      onDoubleClick={() => confirmarSelecao(r)}
                       className={`text-sm border-t border-border cursor-pointer shrink-0 break-words ${
                         sel ? "bg-primary/15" : `${zebra} hover:bg-accent/50`
                       }`}
@@ -969,8 +1062,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({
                       key={d.deposito_id}
                       onDoubleClick={() => {
                         const p = sortedRows[XSelectedIdx!];
-                        onSelect(p, d.deposito_id);
-                        onClose();
+                        confirmarSelecao(p, d.deposito_id);
                       }}
                       className={`grid gap-2 px-3 py-0.5 text-[11px] border-t border-border cursor-pointer shrink-0 hover:bg-accent/50 ${zebra}`}
                       style={{ gridTemplateColumns: "1fr 120px 120px 120px" }}
@@ -1006,8 +1098,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({
                 disabled={XSelectedIdx === null || !sortedRows[XSelectedIdx]}
                 onClick={() => {
                   if (XSelectedIdx !== null && sortedRows[XSelectedIdx]) {
-                    onSelect(sortedRows[XSelectedIdx]);
-                    onClose();
+                    confirmarSelecao(sortedRows[XSelectedIdx]);
                   }
                 }}
                 className="px-4 py-1.5 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 rounded disabled:opacity-50 transition-colors shadow-sm"

@@ -68,6 +68,7 @@ const XDefaultRecord: Partial<IMovimento> = {
   vl_seguro: 0,
   vl_outro: 0,
   tabela_preco_id: null,
+  tp_preco_padrao: "V",
   condicao_id: null,
   obs_pedido: "",
   dt_emissao: new Date().toISOString().substring(0, 10),
@@ -103,7 +104,14 @@ interface PedidoCadastroFormContentProps {
 
   tabelasPreco: ITabelaLookup[];
   condicoesPagamento: ILookup[];
-  onTabelaPrecoChange?: (tabelaId: number | null, oldTabelaId?: number | null, setFieldFunc?: (k: string, v: any) => void, movimentoId?: number | null) => Promise<void>;
+  onTabelaPrecoChange?: (
+    newTabelaId: number | null,
+    oldTabelaId?: number | null,
+    setFieldFunc?: (k: string, v: any) => void,
+    movimentoId?: number | null,
+    newTp?: "V" | "P",
+    oldTp?: "V" | "P"
+  ) => Promise<void>;
 }
 
 const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
@@ -440,15 +448,32 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
           <select
             ref={tabelaPrecoSelectRef}
             disabled={ro}
-            value={record.tabela_preco_id ?? ""}
+            value={record.tabela_preco_id ? String(record.tabela_preco_id) : (record.tp_preco_padrao === "P" ? "PADRAO_P" : "PADRAO_V")}
             onChange={async (e) => {
-              const val = e.target.value ? Number(e.target.value) : null;
+              const rawVal = e.target.value;
               const oldVal = record.tabela_preco_id ?? null;
+              const oldTp: "V" | "P" = (record.tp_preco_padrao || "V") as "V" | "P";
               const movId = record.movimento_id ?? null;
-              if (onTabelaPrecoChange) {
-                await onTabelaPrecoChange(val, oldVal, setField, movId);
+
+              let newTabelaId: number | null = null;
+              let newTp: "V" | "P" = "V";
+
+              if (rawVal === "PADRAO_P") {
+                newTabelaId = null;
+                newTp = "P";
+              } else if (rawVal === "PADRAO_V" || !rawVal) {
+                newTabelaId = null;
+                newTp = "V";
               } else {
-                setField("tabela_preco_id", val);
+                newTabelaId = Number(rawVal);
+                newTp = "V";
+              }
+
+              if (onTabelaPrecoChange) {
+                await onTabelaPrecoChange(newTabelaId, oldVal, setField, movId, newTp, oldTp);
+              } else {
+                setField("tabela_preco_id", newTabelaId);
+                setField("tp_preco_padrao", newTp);
               }
             }}
             onKeyDown={async (e) => {
@@ -464,8 +489,9 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
             }}
             className="w-full border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
           >
-            <option value="">Preço Padrão (Sem Tabela)</option>
-            {tabelasPreco.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+            <option value="PADRAO_V">Padrão A Vista</option>
+            <option value="PADRAO_P">Padrão A Prazo</option>
+            {tabelasPreco.map(t => <option key={t.id} value={String(t.id)}>{t.label}</option>)}
           </select>
         </div>
       </div>
@@ -531,9 +557,10 @@ const PedidoForm: React.FC = () => {
   const [XPendingTabelaInfo, setXPendingTabelaInfo] = useState<{
     newTabelaId: number | null;
     oldTabelaId: number | null;
-    oldTp: string;
-    newTp: string;
+    oldTp: "V" | "P";
+    newTp: "V" | "P";
     setFieldFunc?: (k: string, v: any) => void;
+    movimentoId?: number | null;
   } | null>(null);
 
   const XFetchingItensRef = useRef<Set<number>>(new Set());
@@ -861,7 +888,11 @@ const PedidoForm: React.FC = () => {
     setXPedidoTotalCtx({ movimentoId: movimento_id, total, itens });
   }, []);
 
-  const reprocessarTabelaPreco = useCallback(async (tabelaId: number | null, movimentoId?: number | null) => {
+  const reprocessarTabelaPreco = useCallback(async (
+    tabelaId: number | null,
+    movimentoId?: number | null,
+    tipoPrecoPadrao: "V" | "P" = "V"
+  ) => {
     const targetMovId = movimentoId ?? null;
     if (!targetMovId) return;
 
@@ -879,11 +910,11 @@ const PedidoForm: React.FC = () => {
 
       toast.loading("Recalculando preços dos itens...", { id: "recalc-prices" });
 
-      // 2. Recalculate price for each item using new tabelaId
+      // 2. Recalculate price for each item using new tabelaId & tipoPrecoPadrao
       for (const item of itens) {
-        const { preco: newPreco } = await obterPrecoUnitarioItem(item.produto_id, tabelaId);
+        const { preco: newPreco } = await obterPrecoUnitarioItem(item.produto_id, tabelaId, null, tipoPrecoPadrao);
 
-        if (newPreco !== null) {
+        if (newPreco !== null && newPreco >= 0) {
           const qt = Number(item.qt_movimento || 0);
           const sub = qt * newPreco;
           const pc = Number(item.pc_desconto || 0);
@@ -916,7 +947,9 @@ const PedidoForm: React.FC = () => {
     newTabelaId: number | null,
     oldTabelaId?: number | null,
     setFieldFunc?: (k: string, v: any) => void,
-    movimentoId?: number | null
+    movimentoId?: number | null,
+    newTp: "V" | "P" = "V",
+    oldTp: "V" | "P" = "V"
   ) => {
     // 1. Verifica se existem itens no pedido
     const targetMovId = movimentoId ?? null;
@@ -930,41 +963,55 @@ const PedidoForm: React.FC = () => {
       hasItens = !!(itens && itens.length > 0);
     }
 
-    // Se NÃO houver itens na grid, define apenas o campo de tabela sem modal e sem avisos de preço
+    // Se NÃO houver itens na grid, define apenas os campos sem modal
     if (!hasItens) {
       if (setFieldFunc) {
         setFieldFunc("tabela_preco_id", newTabelaId);
+        setFieldFunc("tp_preco_padrao", newTp);
       }
       return;
     }
 
-    if (oldTabelaId !== undefined && oldTabelaId !== newTabelaId) {
-      setXPendingTabelaInfo({ newTabelaId, oldTabelaId, setFieldFunc, movimentoId: targetMovId });
+    const isDifferent = (oldTabelaId !== undefined && oldTabelaId !== newTabelaId) ||
+      (oldTabelaId === null && newTabelaId === null && oldTp !== newTp);
+
+    if (isDifferent) {
+      setXPendingTabelaInfo({
+        newTabelaId,
+        oldTabelaId: oldTabelaId ?? null,
+        oldTp,
+        newTp,
+        setFieldFunc,
+        movimentoId: targetMovId
+      });
       setXConfirmTabelaModalOpen(true);
       return;
     }
 
     if (setFieldFunc) {
       setFieldFunc("tabela_preco_id", newTabelaId);
+      setFieldFunc("tp_preco_padrao", newTp);
     }
-    await reprocessarTabelaPreco(newTabelaId, targetMovId);
+    await reprocessarTabelaPreco(newTabelaId, targetMovId, newTp);
   }, [reprocessarTabelaPreco]);
 
   const handleConfirmTabelaModal = async () => {
     if (!XPendingTabelaInfo) return;
-    const { newTabelaId, setFieldFunc, movimentoId } = XPendingTabelaInfo;
+    const { newTabelaId, newTp, setFieldFunc, movimentoId } = XPendingTabelaInfo;
     setXConfirmTabelaModalOpen(false);
     if (setFieldFunc) {
       setFieldFunc("tabela_preco_id", newTabelaId);
+      setFieldFunc("tp_preco_padrao", newTp);
     }
     const targetMovId = movimentoId ?? null;
     setXPendingTabelaInfo(null);
-    await reprocessarTabelaPreco(newTabelaId, targetMovId);
+    await reprocessarTabelaPreco(newTabelaId, targetMovId, newTp);
   };
 
   const handleCancelTabelaModal = () => {
     if (XPendingTabelaInfo?.setFieldFunc) {
       XPendingTabelaInfo.setFieldFunc("tabela_preco_id", XPendingTabelaInfo.oldTabelaId);
+      XPendingTabelaInfo.setFieldFunc("tp_preco_padrao", XPendingTabelaInfo.oldTp);
     }
     setXConfirmTabelaModalOpen(false);
     setXPendingTabelaInfo(null);
@@ -1321,6 +1368,7 @@ const PedidoForm: React.FC = () => {
                   pedido={ped?.movimento_id ? ped : null}
                   podeEditar={ped?.st_pedido === "O"}
                   tabelaPrecoId={ped?.tabela_preco_id || null}
+                  tipoPrecoPadrao={(ped?.tp_preco_padrao as any) || "V"}
                   autoNovoTrigger={XAutoNovoItem}
                   onTotalsChanged={(total, itens) => {
                     setXPedidoTotalCtx({ movimentoId: ped.movimento_id, total, itens });
