@@ -368,6 +368,8 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
           cadastroId={pedido.cadastro_id}
           subtotalPedido={subtotal}
           tpDesconto={pedido.tp_desconto || "N"}
+          tabelaPrecoId={pedido.tabela_preco_id}
+          tipoPrecoPadrao={pedido.tp_preco_padrao}
           onClose={() => setXShowPagamento(false)}
           onConfirmar={handleConfirmarPagamento}
         />

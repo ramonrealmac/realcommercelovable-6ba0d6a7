@@ -45,6 +45,8 @@ interface ICondicao {
   intervalo: number | null;
   plano_conta_id: number | null;
   meio_pagamento_id: number | null;
+  promocao?: string | null;
+  st_avista?: string | null;
   prazo_1?: number | null;
   prazo_2?: number | null;
   prazo_3?: number | null;
@@ -65,9 +67,36 @@ interface IProps {
   cadastroId: number | null;
   subtotalPedido: number; // vl_movimento + vl_desconto
   tpDesconto: string;
+  tabelaPrecoId?: number | null;
+  tipoPrecoPadrao?: string | null;
   onClose: () => void;
   onConfirmar: (pagtos: IPagamentoLinha[], vlDesconto: number, pcDesconto: number, enviarAoCaixa?: boolean) => Promise<void>;
 }
+
+const isCondicaoAVista = (c: ICondicao | null | undefined): boolean => {
+  if (!c) return false;
+  // 1. Prioridade absoluta para o campo explícito st_avista
+  if (c.st_avista === "S") return true;
+  if (c.st_avista === "N") return false;
+
+  // 2. Fallback de compatibilidade
+  if (c.promocao === "V") return true;
+  if (c.promocao === "P") return false;
+  if (c.tipo_prazo === "U") return true;
+  if (c.tipo_prazo === "V") return false;
+  if (c.qtd_parcelas && Number(c.qtd_parcelas) > 1) return false;
+  // Meios comuns à vista (Dinheiro, Débito, PIX) com no máximo 1 parcela
+  if ([1, 4, 17, 20].includes(c.meio_pagamento_id || 0) && (Number(c.qtd_parcelas) || 1) <= 1) {
+    return true;
+  }
+  for (let i = 1; i <= 12; i++) {
+    const key = `prazo_${i}` as keyof ICondicao;
+    if (c[key] !== null && c[key] !== undefined && Number(c[key]) > 0) return false;
+  }
+  if (c.tipo_prazo === "01" || c.tipo_prazo === "20" || c.tipo_prazo === "04") return true;
+  if (c.tipo_prazo === "F" && (Number(c.qtd_parcelas) || 1) <= 1) return true;
+  return getTipoPrazoCondicao(c) === "U";
+};
 
 const getTipoPrazoCondicao = (c: ICondicao | null | undefined): "U" | "F" | "V" => {
   if (!c) return "U";
@@ -101,7 +130,7 @@ const getQtdParcelasCondicao = (c: ICondicao | null | undefined): number => {
   return 1;
 };
 
-const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId, subtotalPedido, tpDesconto, onClose, onConfirmar }) => {
+const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId, subtotalPedido, tpDesconto, tabelaPrecoId, tipoPrecoPadrao, onClose, onConfirmar }) => {
   const { XEmpresaId, XEmpresaMatrizId } = useAppContext();
   const [XCondicoes, setXCondicoes] = useState<ICondicao[]>([]);
   const [XLinhas, setXLinhas] = useState<IPagamentoLinha[]>([]);
@@ -155,9 +184,9 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
     (async () => {
       try {
         let tpTab: "V" | "P" = "V";
-        // Fetch current movement for totals and price table ID
+        // Fetch current movement for totals and price table ID / default table type
         const { data: mov } = await supabase.from("movimento")
-          .select("vl_desconto, pc_desconto, vl_movimento, vl_produto, tabela_preco_id")
+          .select("vl_desconto, pc_desconto, vl_movimento, vl_produto, tabela_preco_id, tp_preco_padrao")
           .eq("movimento_id", movimentoId).single();
         
         let dbVlDesc = Number(mov?.vl_desconto || 0);
@@ -165,14 +194,21 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
         let dbMov = Number(mov?.vl_movimento || 0);
         let dbSub = Number(mov?.vl_produto || 0);
 
-        if (mov?.tabela_preco_id) {
+        const currentTabelaId = tabelaPrecoId !== undefined ? tabelaPrecoId : (mov?.tabela_preco_id ?? null);
+        const currentTpPadrao = tipoPrecoPadrao || mov?.tp_preco_padrao || "V";
+
+        if (currentTabelaId) {
           const { data: tab } = await supabase.from("tabela_preco")
             .select("tp_pagamento")
-            .eq("tabela_id", mov.tabela_preco_id)
+            .eq("tabela_id", currentTabelaId)
             .maybeSingle();
           if (tab?.tp_pagamento === "P") {
             tpTab = "P";
+          } else {
+            tpTab = "V";
           }
+        } else {
+          tpTab = currentTpPadrao === "P" ? "P" : "V";
         }
 
         // Se dbSub for 0 ou dbMov for 0, busca diretamente a soma dos itens do pedido
@@ -226,16 +262,33 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
           }
         }
 
-        // 3. Fetch Conditions for logged in company
-        const condQuery = supabase.from("condicao_pagamento")
+        // 3. Fetch Conditions for logged in company (com suporte a st_avista)
+        let condData: any[] | null = null;
+        let condErr: any = null;
+
+        const condQueryWithAvista = await supabase.from("condicao_pagamento")
           .select(`
-            condicao_id, descricao, tipo_prazo, qtd_parcelas, intervalo, plano_conta_id, meio_pagamento_id, empresa_id,
+            condicao_id, descricao, tipo_prazo, qtd_parcelas, intervalo, plano_conta_id, meio_pagamento_id, empresa_id, promocao, st_avista,
             prazo_1, prazo_2, prazo_3, prazo_4, prazo_5, prazo_6, prazo_7, prazo_8, prazo_9, prazo_10, prazo_11, prazo_12
           `)
           .eq("empresa_id", XEmpresaId)
           .eq("excluido", false);
 
-        const { data: condData, error: condErr } = await condQuery;
+        if (condQueryWithAvista.error && condQueryWithAvista.error.message?.includes("st_avista")) {
+          const fallbackQuery = await supabase.from("condicao_pagamento")
+            .select(`
+              condicao_id, descricao, tipo_prazo, qtd_parcelas, intervalo, plano_conta_id, meio_pagamento_id, empresa_id, promocao,
+              prazo_1, prazo_2, prazo_3, prazo_4, prazo_5, prazo_6, prazo_7, prazo_8, prazo_9, prazo_10, prazo_11, prazo_12
+            `)
+            .eq("empresa_id", XEmpresaId)
+            .eq("excluido", false);
+          condData = fallbackQuery.data;
+          condErr = fallbackQuery.error;
+        } else {
+          condData = condQueryWithAvista.data;
+          condErr = condQueryWithAvista.error;
+        }
+
         if (condErr) {
           toast.error("Erro ao carregar condições de pagamento: " + condErr.message);
         }
@@ -292,8 +345,8 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
           const restante = Math.max(0, dbMov - totalPagoExistente);
           resetForm(restante);
         } else {
-          // If no existing payments, apply defaults (filter by price table allowed types: if 'V' only 'U', if 'P' allows all)
-          const allowedConds = conds.filter(c => tpTab === "V" ? getTipoPrazoCondicao(c) === "U" : true);
+          // If no existing payments, apply defaults (filter by price table allowed types: if 'V' only À Vista, if 'P' allows all)
+          const allowedConds = conds.filter(c => tpTab === "V" ? isCondicaoAVista(c) : true);
           const hasCond = allowedConds.some(c => c.condicao_id === defaultCondId);
           if (hasCond) {
             setXCondicaoId(defaultCondId);
@@ -316,7 +369,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
         toast.error("Erro ao carregar dados: " + errMsg);
       }
     })();
-  }, [open, movimentoId, cadastroId, subtotalPedido, XEmpresaId, XEmpresaMatrizId]);
+  }, [open, movimentoId, cadastroId, subtotalPedido, tabelaPrecoId, tipoPrecoPadrao, XEmpresaId, XEmpresaMatrizId]);
 
   // Sincroniza o valor a pagar inicial apenas quando o totalPedido (calculado) mudar significativamente
   // ou quando o formulário for resetado
@@ -326,11 +379,11 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
     }
   }, [totalPedido, open, XLinhas.length]);
 
-  // Filter conditions by price table payment type ('V' -> Único 'U', 'P' -> Todas as condições: Único 'U', Fixo 'F' ou Variável 'V')
+  // Filter conditions by price table payment type ('V' -> Somente À Vista, 'P' -> Todas as condições)
   const XFilteredCondicoes = useMemo(() => {
     if (!XCondicoes || XCondicoes.length === 0) return [];
     if (XTpPagamentoTabela === "V") {
-      return XCondicoes.filter(c => getTipoPrazoCondicao(c) === "U");
+      return XCondicoes.filter(c => isCondicaoAVista(c));
     }
     return XCondicoes;
   }, [XCondicoes, XTpPagamentoTabela]);
@@ -415,8 +468,8 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
     const tpCond = getTipoPrazoCondicao(cond);
 
     // Validações de tipo de prazo da condição x tipo de pagamento da tabela de preço
-    if (XTpPagamentoTabela === "V" && tpCond !== "U") {
-      toast.error("Para Tabela de Preço À Vista, apenas condições de pagamento Único (À Vista) são permitidas.");
+    if (XTpPagamentoTabela === "V" && !isCondicaoAVista(cond)) {
+      toast.error("Para Tabela de Preço À Vista, apenas condições de pagamento À Vista são permitidas.");
       return;
     }
 

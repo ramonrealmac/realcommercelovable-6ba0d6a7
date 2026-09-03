@@ -17,6 +17,7 @@ interface ICondicao {
   prazo_9: number; prazo_10: number; prazo_11: number; prazo_12: number;
   empresa_id: number;
   promocao: string | null;
+  st_avista: string | null;
 }
 
 const TIPO_PRAZO_OPTIONS = [
@@ -31,11 +32,17 @@ const PROMOCAO_OPTIONS = [
   { v: "P", l: "A PRAZO" },
 ];
 
+const ST_AVISTA_OPTIONS = [
+  { v: "S", l: "SIM" },
+  { v: "N", l: "NÃO" },
+];
+
 const PRAZO_KEYS = ["prazo_1","prazo_2","prazo_3","prazo_4","prazo_5","prazo_6","prazo_7","prazo_8","prazo_9","prazo_10","prazo_11","prazo_12"] as const;
 
 const XDefault: Partial<ICondicao> = {
   descricao: "", tipo_prazo: "F", meio_pagamento_id: null, cd_condicao_pagamento: null, qtd_parcelas: null, intervalo: null,
   promocao: "N",
+  st_avista: "N",
   prazo_1: 0, prazo_2: 0, prazo_3: 0, prazo_4: 0, prazo_5: 0, prazo_6: 0,
   prazo_7: 0, prazo_8: 0, prazo_9: 0, prazo_10: 0, prazo_11: 0, prazo_12: 0,
 };
@@ -62,6 +69,17 @@ const CondicaoPagamentoForm: React.FC = () => {
   const XGridCols = React.useMemo<IGridColumn[]>(() => [
     { key: "cd_condicao_pagamento", label: "Código", width: "80px", align: "right" },
     { key: "descricao", label: "Descrição", width: "200px" },
+    { 
+      key: "st_avista", 
+      label: "À Vista", 
+      width: "90px", 
+      align: "center",
+      render: (row: ICondicao) => row.st_avista === "S" ? (
+        <span className="font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 text-xs">SIM</span>
+      ) : (
+        <span className="text-muted-foreground text-xs">NÃO</span>
+      )
+    },
     { 
       key: "meio_pagamento_id", 
       label: "Meio de Pagamento", 
@@ -243,11 +261,36 @@ const CondicaoPagamentoForm: React.FC = () => {
                 </select>
               </div>
 
+              <div className="w-full md:w-32">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">À Vista?</label>
+                <select
+                  value={record.st_avista ?? "N"}
+                  onChange={e => setField("st_avista", e.target.value)}
+                  disabled={!isEditing}
+                  className={`w-full border border-border rounded px-3 py-1.5 text-sm h-[34px] ${
+                    isEditing ? "bg-card focus:ring-2 focus:ring-ring outline-none cursor-pointer" : "bg-secondary text-muted-foreground appearance-none disabled:opacity-100"
+                  }`}
+                >
+                  {ST_AVISTA_OPTIONS.map(o => (
+                    <option key={o.v} value={o.v}>
+                      {o.l}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="w-full md:w-36">
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Promoção</label>
                 <select
                   value={record.promocao ?? "N"}
-                  onChange={e => setField("promocao", e.target.value)}
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val === "V") {
+                      setRecord({ ...record, promocao: "V", st_avista: "S" });
+                    } else {
+                      setField("promocao", val);
+                    }
+                  }}
                   disabled={!isEditing}
                   className={`w-full border border-border rounded px-3 py-1.5 text-sm h-[34px] ${
                     isEditing ? "bg-card focus:ring-2 focus:ring-ring outline-none cursor-pointer" : "bg-secondary text-muted-foreground appearance-none disabled:opacity-100"
@@ -271,6 +314,7 @@ const CondicaoPagamentoForm: React.FC = () => {
                       setRecord({
                         ...record,
                         tipo_prazo: "U",
+                        st_avista: "S",
                         qtd_parcelas: 1,
                         intervalo: null,
                         prazo_1: 0, prazo_2: 0, prazo_3: 0, prazo_4: 0,

@@ -158,6 +158,13 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
         ins = retryIns.data;
         error = retryIns.error;
       }
+      if (error && error.message?.includes("st_avista")) {
+        const insertNoAvista = { ...insertPayload };
+        delete (insertNoAvista as any).st_avista;
+        const retryIns = await db.from(config.XTableName).insert(insertNoAvista).select().single();
+        ins = retryIns.data;
+        error = retryIns.error;
+      }
       if (error) { toast.error("Erro: " + error.message); return null; }
       savedRec = (ins || payload) as Partial<T>;
       toast.success("Registro incluído com sucesso.");
@@ -190,6 +197,17 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
         delete (updateNoPromo as any).promocao;
         const retryUpd = await db.from(config.XTableName)
           .update(updateNoPromo)
+          .eq(config.XPrimaryKey, XCurrentRecord[config.XPrimaryKey])
+          .select().maybeSingle();
+        upd = retryUpd.data;
+        error = retryUpd.error;
+      }
+
+      if (error && error.message?.includes("st_avista")) {
+        const updateNoAvista = { ...updatePayload };
+        delete (updateNoAvista as any).st_avista;
+        const retryUpd = await db.from(config.XTableName)
+          .update(updateNoAvista)
           .eq(config.XPrimaryKey, XCurrentRecord[config.XPrimaryKey])
           .select().maybeSingle();
         upd = retryUpd.data;

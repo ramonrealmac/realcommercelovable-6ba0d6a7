@@ -1890,6 +1890,7 @@ export type Database = {
           qtd_parcelas: number | null
           tipo_prazo: string | null
           promocao: string | null
+          st_avista: string | null
         }
         Insert: {
           cd_condicao_pagamento?: number | null
@@ -1917,6 +1918,7 @@ export type Database = {
           qtd_parcelas?: number | null
           tipo_prazo?: string | null
           promocao?: string | null
+          st_avista?: string | null
         }
         Update: {
           cd_condicao_pagamento?: number | null
@@ -1944,6 +1946,7 @@ export type Database = {
           qtd_parcelas?: number | null
           tipo_prazo?: string | null
           promocao?: string | null
+          st_avista?: string | null
         }
         Relationships: [
           {
