@@ -159,10 +159,15 @@ export default function TransferenciaEstoqueItensGrid({
     setTimeout(() => qtdInputRef.current?.focus(), 100);
   };
 
-  // Adicionar ou Atualizar Item na lista
-  const handleAdicionarItem = () => {
+  // Adicionar ou Atualizar Item na lista e no banco
+  const handleAdicionarItem = async () => {
     if (!podeEditar) {
       toast.error("A alteração de itens não é permitida para transferências finalizadas.");
+      return;
+    }
+
+    if (!transferenciaId) {
+      toast.error("Salve a transferência antes de adicionar produtos.");
       return;
     }
 
@@ -199,6 +204,17 @@ export default function TransferenciaEstoqueItensGrid({
         return;
       }
 
+      if (itemExistente.transferencia_item_id) {
+        const { error } = await db.from("transferencia_item")
+          .update({ qt_transferir: novaQtd })
+          .eq("transferencia_item_id", itemExistente.transferencia_item_id);
+
+        if (error) {
+          toast.error("Erro ao atualizar item no banco: " + error.message);
+          return;
+        }
+      }
+
       const novosItens = [...items];
       novosItens[indexExistente] = {
         ...itemExistente,
@@ -207,7 +223,25 @@ export default function TransferenciaEstoqueItensGrid({
       setItems(novosItens);
       toast.success(`Quantidade do produto ${selectedProduto.nome} atualizada.`);
     } else {
+      // Inserir diretamente no banco de dados
+      const { data: insertedItem, error } = await db.from("transferencia_item")
+        .insert({
+          transferencia_id: transferenciaId,
+          produto_id: selectedProduto.produto_id,
+          qt_transferir: qtd,
+          excluido: false,
+        })
+        .select("transferencia_item_id")
+        .single();
+
+      if (error) {
+        toast.error("Erro ao salvar produto na transferência: " + error.message);
+        return;
+      }
+
       const novoItem: ITransferenciaItemRow = {
+        transferencia_item_id: insertedItem?.transferencia_item_id,
+        transferencia_id: transferenciaId,
         produto_id: selectedProduto.produto_id,
         cd_produto: selectedProduto.cd_produto || selectedProduto.produto_id,
         nm_produto: selectedProduto.nome,
@@ -226,11 +260,24 @@ export default function TransferenciaEstoqueItensGrid({
     setTimeout(() => codigoInputRef.current?.focus(), 100);
   };
 
-  const handleRemoverItem = (index: number) => {
+  const handleRemoverItem = async (index: number) => {
     if (!podeEditar) {
       toast.error("Não é possível remover itens de uma transferência finalizada.");
       return;
     }
+
+    const itemParaRemover = items[index];
+    if (itemParaRemover?.transferencia_item_id) {
+      const { error } = await db.from("transferencia_item")
+        .delete()
+        .eq("transferencia_item_id", itemParaRemover.transferencia_item_id);
+
+      if (error) {
+        toast.error("Erro ao remover item do banco: " + error.message);
+        return;
+      }
+    }
+
     const novosItens = items.filter((_, i) => i !== index);
     setItems(novosItens);
     onItemsChanged?.();
