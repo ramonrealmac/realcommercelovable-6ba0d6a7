@@ -264,8 +264,8 @@ export const MENU_CONFIG: MenuItem[] = [
         title: "MDFe",
         icon: TruckIcon,
         children: [
-          { id: "mdfe-lista", title: "Gerenciador Fiscal", icon: FileText },
-          { id: "mdfe-form", title: "Cadastramento", icon: FilePen },
+          { id: "mdfe-lista", title: "Gerenciador de MDF-e", icon: FileText },
+          { id: "mdfe-form", title: "Emissão de MDF-e", icon: FilePen },
         ]
       },
       { id: "cte", title: "CTe", icon: FileText },
