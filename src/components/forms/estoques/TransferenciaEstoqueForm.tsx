@@ -185,13 +185,11 @@ function TransferenciaFormContent({
             className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
           >
             <option value="">-- Selecione a Filial de Destino --</option>
-            {empresasLookup
-              .filter(emp => emp.empresa_id !== record?.empresa_origem_id)
-              .map((emp) => (
-                <option key={emp.empresa_id} value={emp.empresa_id}>
-                  {emp.empresa_id} - {emp.nome_fantasia || emp.razao_social}
-                </option>
-              ))}
+            {empresasLookup.map((emp) => (
+              <option key={emp.empresa_id} value={emp.empresa_id}>
+                {emp.empresa_id} - {emp.nome_fantasia || emp.razao_social}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -260,11 +258,13 @@ function TransferenciaFormContent({
             className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
           >
             <option value="">-- Selecione o Depósito de Destino --</option>
-            {depositosDestinoLookup.map((dep) => (
-              <option key={dep.deposito_id} value={dep.deposito_id}>
-                {dep.deposito_id} - {dep.nome}
-              </option>
-            ))}
+            {depositosDestinoLookup
+              .filter(dep => !(record?.empresa_origem_id === record?.empresa_destino_id && dep.deposito_id === record?.deposito_origem_id))
+              .map((dep) => (
+                <option key={dep.deposito_id} value={dep.deposito_id}>
+                  {dep.deposito_id} - {dep.nome}
+                </option>
+              ))}
           </select>
         </div>
 
@@ -582,11 +582,11 @@ export default function TransferenciaEstoqueForm() {
         XOnBeforeSave: async (rec, mode) => {
           if (!rec.empresa_origem_id) throw new Error("Selecione a filial de origem.");
           if (!rec.empresa_destino_id) throw new Error("Selecione a filial de destino.");
-          if (rec.empresa_origem_id === rec.empresa_destino_id) {
-            throw new Error("A filial de origem deve ser diferente da filial de destino.");
-          }
           if (!rec.deposito_origem_id) throw new Error("Selecione o estoque de origem.");
           if (!rec.deposito_destino_id) throw new Error("Selecione o estoque de destino.");
+          if (rec.deposito_origem_id === rec.deposito_destino_id) {
+            throw new Error("O depósito de origem deve ser diferente do depósito de destino.");
+          }
 
           if (mode === "edit" && rec.st_transferencia === "FINALIZADA") {
             throw new Error("A transferência já foi finalizada e não permite alterações.");
