@@ -656,23 +656,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({
   };
 
   const confirmarSelecao = (r: IProdutoRow, depId?: number) => {
-    let selectedPreco = r.preco_venda;
-    let selectedPromo = r.preco_promocional;
-
-    if (tipoPrecoPadrao === "P") {
-      const vFat = r.preco_venda_faturado > 0 ? r.preco_venda_faturado : r.preco_venda;
-      const pPromoFat = r.preco_promocional_fat > 0 ? r.preco_promocional_fat : r.preco_promocional;
-      selectedPreco = vFat;
-      selectedPromo = pPromoFat;
-    }
-
-    const rowComPrecoAjustado: IProdutoRow = {
-      ...r,
-      preco_venda: selectedPreco,
-      preco_promocional: selectedPromo,
-    };
-
-    onSelect(rowComPrecoAjustado, depId);
+    onSelect(r, depId);
     onClose();
   };
 

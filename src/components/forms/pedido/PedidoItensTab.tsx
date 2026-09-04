@@ -8,7 +8,7 @@ import { Search } from "lucide-react";
 import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 import type { IMovimento, IMovimentoItem } from "./types";
 import ProdutoSearchDialog, { IProdutoRow, buscarProdutoPorCodigo } from "./ProdutoSearchDialog";
-import { obterPrecoUnitarioItem } from "@/services/precoService";
+import { obterPrecoUnitarioItem, calcularPrecoPadraoProduto } from "@/services/precoService";
 
 import { CurrencyInput } from "@/components/shared/CurrencyInput";
 
@@ -239,34 +239,40 @@ const PedidoItensTab: React.FC<IProps> = ({
 
     const cdProdStr = String(p.cd_produto ?? p.produto_id ?? "");
     const nmProdStr = p.nome || p.nm_produto || (p as any).descricao || "";
-    let initialPreco = 0;
-    if (tipoPrecoPadrao === "P") {
-      initialPreco = Number(p.st_promo && p.preco_promocional_fat > 0 ? p.preco_promocional_fat : (p.preco_venda_faturado || p.preco_venda)) || 0;
-    } else {
-      initialPreco = Number(p.st_promo && p.preco_promocional > 0 ? p.preco_promocional : p.preco_venda) || 0;
-    }
-    let preco = initialPreco;
 
     // Atualiza imediatamente o código visível
     setXCodigo(cdProdStr);
 
-    try {
-      const resPreco = await obterPrecoUnitarioItem(
-        p.produto_id,
-        tabelaPrecoId,
-        preco,
-        tipoPrecoPadrao
-      );
-      if (resPreco && typeof resPreco.preco === "number" && resPreco.preco >= 0) {
-        preco = resPreco.preco;
-      }
-      if (resPreco?.fonte === "promocao") {
+    let preco = 0;
+    if (!tabelaPrecoId) {
+      // Regra Tabela Padrão (À Vista ou A Prazo): estritamente do cadastro de produtos
+      const calc = calcularPrecoPadraoProduto(p, tipoPrecoPadrao);
+      preco = calc.preco;
+      if (calc.isPromocao) {
         toast.info("Preço promocional aplicado.");
-      } else if (resPreco?.fonte === "padrao" && tabelaPrecoId) {
-        toast.info("Preço não cadastrado na tabela selecionada (ou tabela inativa). Usando preço padrão.");
       }
-    } catch (e) {
-      console.warn("Erro ao carregar preço da tabela/promoção:", e);
+    } else {
+      // Tabela customizada: busca na tabela com fallback para o preço padrão
+      const calcPadrao = calcularPrecoPadraoProduto(p, tipoPrecoPadrao);
+      preco = calcPadrao.preco;
+      try {
+        const resPreco = await obterPrecoUnitarioItem(
+          p.produto_id,
+          tabelaPrecoId,
+          preco,
+          tipoPrecoPadrao
+        );
+        if (resPreco && typeof resPreco.preco === "number" && resPreco.preco >= 0) {
+          preco = resPreco.preco;
+        }
+        if (resPreco?.fonte === "promocao") {
+          toast.info("Preço promocional aplicado.");
+        } else if (resPreco?.fonte === "padrao") {
+          toast.info("Preço não cadastrado na tabela selecionada (ou tabela inativa). Usando preço padrão.");
+        }
+      } catch (e) {
+        console.warn("Erro ao carregar preço da tabela/promoção:", e);
+      }
     }
 
     setXEdit(prev => {
