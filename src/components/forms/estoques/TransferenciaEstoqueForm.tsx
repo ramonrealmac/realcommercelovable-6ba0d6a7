@@ -435,7 +435,32 @@ export default function TransferenciaEstoqueForm() {
       return;
     }
 
-    if (itens.length === 0) {
+    // 1. Sincroniza itens com o banco se necessário antes de chamar a RPC
+    const { data: itensDoBanco, error: errFetch } = await db.from("transferencia_item")
+      .select("transferencia_item_id, produto_id, qt_transferir")
+      .eq("transferencia_id", transferenciaId)
+      .eq("excluido", false);
+
+    if (errFetch) {
+      toast.error("Erro ao verificar itens da transferência: " + errFetch.message);
+      return;
+    }
+
+    // Se no banco não houver itens mas houver itens no state React, grava-os agora
+    if ((!itensDoBanco || itensDoBanco.length === 0) && itens.length > 0) {
+      const toInsert = itens.map(it => ({
+        transferencia_id: transferenciaId,
+        produto_id: it.produto_id,
+        qt_transferir: it.qt_transferir,
+        excluido: false,
+      }));
+
+      const { error: errInsert } = await db.from("transferencia_item").insert(toInsert);
+      if (errInsert) {
+        toast.error("Erro ao gravar itens da transferência: " + errInsert.message);
+        return;
+      }
+    } else if ((!itensDoBanco || itensDoBanco.length === 0) && itens.length === 0) {
       toast.error("Informe pelo menos um produto.");
       return;
     }
@@ -470,10 +495,11 @@ export default function TransferenciaEstoqueForm() {
       if (refreshCrudRef.current) {
         await refreshCrudRef.current();
       }
+      await carregarItensTransferencia(transferenciaId);
     } catch (err: any) {
       toast.error("Erro inesperado ao finalizar transferência: " + err.message, { id: "finalizar-transf" });
     }
-  }, [itens.length, XUsuario?.email]);
+  }, [itens, XUsuario?.email, carregarItensTransferencia]);
 
   // Colunas do DataGrid de pesquisa/listagem
   const buildGridCols = useMemo((): IGridColumn[] => [
@@ -608,13 +634,10 @@ export default function TransferenciaEstoqueForm() {
           const transfId = rec.transferencia_id;
           if (!transfId) return;
 
-          // Salvar/Sincronizar itens na tabela transferencia_item
-          await db.from("transferencia_item")
-            .delete()
-            .eq("transferencia_id", transfId);
-
-          if (itens.length > 0) {
-            const toInsert = itens.map(it => ({
+          // Se houver itens em memória ainda sem id de banco, persiste-os
+          const itensSemId = itens.filter(it => !it.transferencia_item_id);
+          if (itensSemId.length > 0) {
+            const toInsert = itensSemId.map(it => ({
               transferencia_id: transfId,
               produto_id: it.produto_id,
               qt_transferir: it.qt_transferir,
@@ -649,6 +672,11 @@ export default function TransferenciaEstoqueForm() {
                 depositoOrigemId={transf?.deposito_origem_id}
                 items={itens}
                 setItems={setItens}
+                onItemsChanged={() => {
+                  if (transf?.transferencia_id) {
+                    carregarItensTransferencia(transf.transferencia_id);
+                  }
+                }}
               />
             );
           },

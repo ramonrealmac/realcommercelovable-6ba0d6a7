@@ -969,6 +969,13 @@ const PedidoForm: React.FC = () => {
         setFieldFunc("tabela_preco_id", newTabelaId);
         setFieldFunc("tp_preco_padrao", newTp);
       }
+      if (targetMovId) {
+        await db.from("movimento").update({
+          tabela_preco_id: newTabelaId,
+          tp_preco_padrao: newTp,
+          dt_alteracao: new Date().toISOString()
+        }).eq("movimento_id", targetMovId);
+      }
       return;
     }
 
@@ -992,6 +999,13 @@ const PedidoForm: React.FC = () => {
       setFieldFunc("tabela_preco_id", newTabelaId);
       setFieldFunc("tp_preco_padrao", newTp);
     }
+    if (targetMovId) {
+      await db.from("movimento").update({
+        tabela_preco_id: newTabelaId,
+        tp_preco_padrao: newTp,
+        dt_alteracao: new Date().toISOString()
+      }).eq("movimento_id", targetMovId);
+    }
     await reprocessarTabelaPreco(newTabelaId, targetMovId, newTp);
   }, [reprocessarTabelaPreco]);
 
@@ -1004,6 +1018,13 @@ const PedidoForm: React.FC = () => {
       setFieldFunc("tp_preco_padrao", newTp);
     }
     const targetMovId = movimentoId ?? null;
+    if (targetMovId) {
+      await db.from("movimento").update({
+        tabela_preco_id: newTabelaId,
+        tp_preco_padrao: newTp,
+        dt_alteracao: new Date().toISOString()
+      }).eq("movimento_id", targetMovId);
+    }
     setXPendingTabelaInfo(null);
     await reprocessarTabelaPreco(newTabelaId, targetMovId, newTp);
   };

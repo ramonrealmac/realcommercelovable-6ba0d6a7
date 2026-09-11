@@ -131,11 +131,60 @@ export async function obterPrecoTabela(produtoId: number, tabelaId: number): Pro
 }
 
 /**
+ * Calcula o preço unitário padrão diretamente a partir do cadastro do produto.
+ * 
+ * Regra:
+ * Padrão À Vista:
+ *   - Sem promoção: produto.preco_venda
+ *   - Em promoção: produto.preco_promocional (se preenchido, senão preco_venda)
+ * Padrão A Prazo:
+ *   - Sem promoção: produto.preco_venda_faturado (se preenchido, senão preco_venda)
+ *   - Em promoção: produto.preco_promocional_fat (se preenchido, senão preco_promocional ou preco_venda_faturado ou preco_venda)
+ */
+export function calcularPrecoPadraoProduto(
+  prod: {
+    preco_venda?: number | null;
+    preco_venda_faturado?: number | null;
+    preco_promocional?: number | null;
+    preco_promocional_fat?: number | null;
+    st_promo?: boolean | string | null;
+  },
+  tipoPrecoPadrao: "V" | "P" = "V"
+): { preco: number; isPromocao: boolean } {
+  const isPromo = prod.st_promo === true || String(prod.st_promo || "").toUpperCase() === "S";
+
+  const pVenda = Number(prod.preco_venda || 0);
+  const pVendaFat = Number(prod.preco_venda_faturado || 0);
+  const pPromo = Number(prod.preco_promocional || 0);
+  const pPromoFat = Number(prod.preco_promocional_fat || 0);
+
+  if (tipoPrecoPadrao === "P") {
+    // Padrão A Prazo
+    if (isPromo) {
+      const precoFatPromo = pPromoFat > 0 ? pPromoFat : (pPromo > 0 ? pPromo : 0);
+      if (precoFatPromo > 0) {
+        return { preco: precoFatPromo, isPromocao: true };
+      }
+    }
+    const precoFatNormal = pVendaFat > 0 ? pVendaFat : pVenda;
+    return { preco: precoFatNormal, isPromocao: false };
+  } else {
+    // Padrão À Vista
+    if (isPromo) {
+      const precoVistaPromo = pPromo > 0 ? pPromo : 0;
+      if (precoVistaPromo > 0) {
+        return { preco: precoVistaPromo, isPromocao: true };
+      }
+    }
+    return { preco: pVenda, isPromocao: false };
+  }
+}
+
+/**
  * 3. Função principal de obtenção do Preço Unitário para o Pedido:
  * Regras:
- * a - se o produto estiver em tabela de promoções ativa e válida, pega preço de acordo com o tipo pagamento da tabela (V ou P)
- * b - caso não esteja em tabela de promoções, pega o preço da tabela selecionada (se ativa e não vencida)
- * c - caso a tabela de preço for Preço Padrão (Sem Tabela), pega o preço vl sug venda na tabela do produto
+ * a - se a tabela de preço for Padrão (Sem tabela / À Vista ou A Prazo), pega estritamente do cadastro de produtos
+ * b - se for tabela customizada, busca na promoção ativa ou na tabela_preco_item (com fallback para o padrão)
  */
 export async function obterPrecoUnitarioItem(
   produtoId: number,
@@ -143,24 +192,49 @@ export async function obterPrecoUnitarioItem(
   precoVendaPadrao?: number | null,
   tipoPrecoPadrao: "V" | "P" = "V"
 ): Promise<{ preco: number; fonte: "promocao" | "tabela" | "padrao" }> {
-  // Descobre o modo de pagamento ('V' ou 'P') da Tabela de Preço selecionada (se for tabela customizada)
-  let tpPagamento: "V" | "P" = tipoPrecoPadrao;
-  if (tabelaPrecoId) {
+  // Se for Tabela Padrão (À Vista ou A Prazo), o preço vem estritamente do cadastro de produtos
+  if (!tabelaPrecoId) {
     try {
-      const { data: tab } = await db
-        .from("tabela_preco")
-        .select("tp_pagamento")
-        .eq("tabela_id", tabelaPrecoId)
-        .maybeSingle();
+      let qProd = db
+        .from("produto")
+        .select("preco_venda, preco_venda_faturado, preco_promocional, preco_promocional_fat, st_promo")
+        .eq("produto_id", produtoId);
+      const { data: prod } = typeof qProd.maybeSingle === "function"
+        ? await qProd.maybeSingle()
+        : (await qProd.limit(1)).data?.[0] || { data: null };
 
-      if (tab?.tp_pagamento === "P") {
-        tpPagamento = "P";
-      } else {
-        tpPagamento = "V";
+      if (prod) {
+        const { preco, isPromocao } = calcularPrecoPadraoProduto(prod, tipoPrecoPadrao);
+        return { preco, fonte: isPromocao ? "promocao" : "padrao" };
       }
     } catch (e) {
-      console.warn("Erro ao carregar tp_pagamento da tabela_preco:", e);
+      console.warn("Erro ao buscar dados de preço padrão do produto:", e);
     }
+
+    if (precoVendaPadrao !== undefined && precoVendaPadrao !== null && Number(precoVendaPadrao) > 0) {
+      return { preco: Number(precoVendaPadrao), fonte: "padrao" };
+    }
+
+    return { preco: 0, fonte: "padrao" };
+  }
+
+  // Tabela Customizada (com ID):
+  // Descobre o modo de pagamento ('V' ou 'P') da Tabela de Preço selecionada
+  let tpPagamento: "V" | "P" = tipoPrecoPadrao;
+  try {
+    const { data: tab } = await db
+      .from("tabela_preco")
+      .select("tp_pagamento")
+      .eq("tabela_id", tabelaPrecoId)
+      .maybeSingle();
+
+    if (tab?.tp_pagamento === "P") {
+      tpPagamento = "P";
+    } else {
+      tpPagamento = "V";
+    }
+  } catch (e) {
+    console.warn("Erro ao carregar tp_pagamento da tabela_preco:", e);
   }
 
   // 1. Tenta buscar na Tabela de Promoções (ativa e válida)
@@ -169,15 +243,13 @@ export async function obterPrecoUnitarioItem(
     return { preco: precoPromoTabela, fonte: "promocao" };
   }
 
-  // 2. Se for tabela customizada, busca na tabela_preco_item
-  if (tabelaPrecoId) {
-    const precoTab = await obterPrecoTabela(produtoId, tabelaPrecoId);
-    if (precoTab !== null && precoTab > 0) {
-      return { preco: precoTab, fonte: "tabela" };
-    }
+  // 2. Busca na tabela_preco_item
+  const precoTab = await obterPrecoTabela(produtoId, tabelaPrecoId);
+  if (precoTab !== null && precoTab > 0) {
+    return { preco: precoTab, fonte: "tabela" };
   }
 
-  // 3. Fallback: Preço Padrão (direto na tabela do produto, À Vista ou A Prazo)
+  // 3. Fallback: Preço Padrão (direto no produto, usando o modo da tabela)
   try {
     let qProd = db
       .from("produto")
@@ -188,34 +260,8 @@ export async function obterPrecoUnitarioItem(
       : (await qProd.limit(1)).data?.[0] || { data: null };
 
     if (prod) {
-      const isPromo = String(prod.st_promo || "").toUpperCase() === "S";
-
-      if (tpPagamento === "P") {
-        // Padrão A Prazo
-        if (isPromo) {
-          const promoFat = Number(prod.preco_promocional_fat || 0);
-          const promoVista = Number(prod.preco_promocional || 0);
-          const precoFinalPromo = promoFat > 0 ? promoFat : promoVista;
-          if (precoFinalPromo > 0) {
-            return { preco: precoFinalPromo, fonte: "promocao" };
-          }
-        }
-        const vFat = Number(prod.preco_venda_faturado || 0);
-        const vNorm = Number(prod.preco_venda || 0);
-        const finalPrice = vFat > 0 ? vFat : (vNorm > 0 ? vNorm : Number(precoVendaPadrao || 0));
-        return { preco: finalPrice, fonte: "padrao" };
-      } else {
-        // Padrão À Vista
-        if (isPromo) {
-          const promoVista = Number(prod.preco_promocional || 0);
-          if (promoVista > 0) {
-            return { preco: promoVista, fonte: "promocao" };
-          }
-        }
-        const vNorm = Number(prod.preco_venda || 0);
-        const finalPrice = vNorm > 0 ? vNorm : Number(precoVendaPadrao || 0);
-        return { preco: finalPrice, fonte: "padrao" };
-      }
+      const { preco, isPromocao } = calcularPrecoPadraoProduto(prod, tpPagamento);
+      return { preco, fonte: isPromocao ? "promocao" : "padrao" };
     }
   } catch (e) {
     console.warn("Erro ao buscar dados de preço padrão do produto:", e);
