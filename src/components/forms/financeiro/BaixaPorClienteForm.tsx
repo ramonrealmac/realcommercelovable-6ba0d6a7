@@ -215,8 +215,8 @@ const BaixaPorClienteForm: React.FC = () => {
       const titles = (data ?? []) as IOpenTitle[];
       setXOpenTitles(titles);
       
-      // Pré-seleciona todos por padrão
-      setXSelectedIds(titles.map(t => t.financeiro_id!).filter(Boolean));
+      // Inicia sem nenhum título selecionado por padrão para permitir baixa automática
+      setXSelectedIds([]);
     } catch (e: any) {
       toast.error("Erro ao buscar títulos: " + (e?.message || String(e)));
     } finally {
@@ -345,6 +345,17 @@ const BaixaPorClienteForm: React.FC = () => {
   const selectedCount = selectedTitles.length;
   const selectedSum = selectedTitles.reduce((acc, t) => acc + (t.vl_a_pagar ?? 0), 0);
 
+  // Soma total de todos os títulos em aberto do cliente
+  const totalDevedorCliente = useMemo(() => 
+    Number(XOpenTitles.reduce((acc, t) => acc + (t.vl_a_pagar ?? 0), 0).toFixed(2))
+  , [XOpenTitles]);
+
+  // Se nada foi marcado, o teto é o valor total devedor do cliente (baixa automática do mais antigo ao mais recente)
+  const isAutoAllocating = selectedCount === 0;
+  const effectiveMaxBalance = useMemo(() => 
+    isAutoAllocating ? totalDevedorCliente : Number(selectedSum.toFixed(2))
+  , [isAutoAllocating, totalDevedorCliente, selectedSum]);
+
   // Total acumulado nas linhas de pagamento
   const totalPagoLinhas = useMemo(() => 
     Number(XLinhasPagamento.reduce((acc, l) => acc + l.vl_recebido, 0).toFixed(2))
@@ -352,8 +363,8 @@ const BaixaPorClienteForm: React.FC = () => {
 
   // Saldo restante sugerido para pagamento
   const valorRestanteSugerido = useMemo(() => 
-    Math.max(0, Number((selectedSum - totalPagoLinhas).toFixed(2)))
-  , [selectedSum, totalPagoLinhas]);
+    Math.max(0, Number((effectiveMaxBalance - totalPagoLinhas).toFixed(2)))
+  , [effectiveMaxBalance, totalPagoLinhas]);
 
   // Efeito para sugerir valor restante sempre que recalcular
   useEffect(() => {
@@ -379,8 +390,12 @@ const BaixaPorClienteForm: React.FC = () => {
       return;
     }
 
-    if (totalPagoLinhas + valor > selectedSum + 0.0001) {
-      toast.error("O valor pago total não pode ultrapassar o saldo total dos títulos selecionados");
+    if (totalPagoLinhas + valor > effectiveMaxBalance + 0.0001) {
+      toast.error(
+        isAutoAllocating
+          ? "O valor pago total não pode ultrapassar o saldo total em aberto do cliente"
+          : "O valor pago total não pode ultrapassar o saldo total dos títulos selecionados"
+      );
       valorRef.current?.focus();
       return;
     }
@@ -402,7 +417,7 @@ const BaixaPorClienteForm: React.FC = () => {
     };
 
     setXLinhasPagamento(prev => [...prev, novaLinha]);
-    resetFormPagamento(Math.max(0, Number((selectedSum - (totalPagoLinhas + valor)).toFixed(2))));
+    resetFormPagamento(Math.max(0, Number((effectiveMaxBalance - (totalPagoLinhas + valor)).toFixed(2))));
     
     // Feedback e Refoco
     toast.success("Pagamento adicionado!");
@@ -431,8 +446,8 @@ const BaixaPorClienteForm: React.FC = () => {
       toast.error("Selecione um Cliente");
       return;
     }
-    if (selectedCount === 0) {
-      toast.error("Selecione pelo menos um título da grade");
+    if (XOpenTitles.length === 0) {
+      toast.error("Este cliente não possui títulos em aberto para baixar");
       return;
     }
     if (XLinhasPagamento.length === 0) {
@@ -446,21 +461,27 @@ const BaixaPorClienteForm: React.FC = () => {
       return;
     }
 
-    if (!window.confirm(`Confirma o processamento da baixa de ${selectedCount} título(s) no valor total de R$ ${fmtMoney(totalAmortizar)}?`)) {
+    // Se houver títulos selecionados, baixa neles. Se não houver, baixa na ordem dos mais antigos para os mais recentes.
+    const targetTitles = selectedCount > 0 ? selectedTitles : XOpenTitles;
+    const modeDesc = selectedCount > 0 
+      ? `${selectedCount} título(s) selecionado(s)` 
+      : `${targetTitles.length} título(s) (baixa automática do mais antigo ao mais recente)`;
+
+    if (!window.confirm(`Confirma o processamento da baixa de ${modeDesc} no valor total de R$ ${fmtMoney(totalAmortizar)}?`)) {
       return;
     }
 
     setXLoading(true);
     try {
-      // Ordena os títulos selecionados por data de vencimento ascendente (mais antigos primeiro)
-      const sortedSelected = [...selectedTitles].sort((a, b) => {
+      // Ordena os títulos alvo por data de vencimento ascendente (mais antigos primeiro)
+      const sortedTargetTitles = [...targetTitles].sort((a, b) => {
         const dateA = a.dt_vencto ? new Date(a.dt_vencto).getTime() : 0;
         const dateB = b.dt_vencto ? new Date(b.dt_vencto).getTime() : 0;
         return dateA - dateB;
       });
 
       // Mapear títulos e saldos devedores atuais
-      const titlesBalances = sortedSelected.map(t => ({
+      const titlesBalances = sortedTargetTitles.map(t => ({
         title: t,
         remaining: t.vl_a_pagar ?? 0,
         baixasToInsert: [] as { 
@@ -960,14 +981,26 @@ const BaixaPorClienteForm: React.FC = () => {
           {XOpenTitles.length > 0 && (
             <div className="p-4 border-t border-border bg-secondary/20 grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
               <div>
-                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider font-medium">Títulos Selecionados</p>
+                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider font-medium">
+                  {selectedCount > 0 ? "Títulos Selecionados" : "Modo de Baixa"}
+                </p>
                 <p className="text-lg font-bold text-card-foreground">
-                  {selectedCount} <span className="text-xs font-normal text-muted-foreground font-medium">de {XOpenTitles.length}</span>
+                  {selectedCount > 0 ? (
+                    <>{selectedCount} <span className="text-xs font-normal text-muted-foreground font-medium">de {XOpenTitles.length}</span></>
+                  ) : (
+                    <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
+                      Automática (Do + antigo ao + recente)
+                    </span>
+                  )}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider font-medium">Saldo Total Selecionado</p>
-                <p className="text-lg font-bold text-card-foreground">R$ {fmtMoney(selectedSum)}</p>
+                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider font-medium">
+                  {selectedCount > 0 ? "Saldo Total Selecionado" : "Saldo Devedor Total"}
+                </p>
+                <p className="text-lg font-bold text-card-foreground">
+                  R$ {fmtMoney(effectiveMaxBalance)}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider font-medium">Total Pago Informado</p>
@@ -975,11 +1008,11 @@ const BaixaPorClienteForm: React.FC = () => {
                   <p className="text-lg font-bold text-card-foreground">R$ {fmtMoney(totalPagoLinhas)}</p>
                   {totalPagoLinhas > 0 && (
                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                      totalPagoLinhas >= selectedSum - 0.0001 
+                      totalPagoLinhas >= effectiveMaxBalance - 0.0001 
                         ? "bg-emerald-100 text-emerald-800" 
                         : "bg-amber-100 text-amber-800"
                     }`}>
-                      {totalPagoLinhas >= selectedSum - 0.0001 ? "Total" : "Parcial"}
+                      {totalPagoLinhas >= effectiveMaxBalance - 0.0001 ? "Quitação Total" : "Amortização Parcial"}
                     </span>
                   )}
                 </div>

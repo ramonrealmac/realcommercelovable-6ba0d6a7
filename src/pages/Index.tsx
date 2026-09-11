@@ -5,80 +5,98 @@ import TabBar from "@/components/layout/TabBar";
 import SidebarMenu from "@/components/layout/SidebarMenu";
 import { Palette, Loader2 } from "lucide-react";
 
-// --- Lazy Loaded Forms ---
-const CadastroCompletoForm = lazy(() => import("@/components/forms/parceiros/CadastroCompletoForm"));
-const CartaCorrecaoForm = lazy(() => import("@/components/forms/nfe/CartaCorrecaoForm"));
-const FornecedorTransportadorForm = lazy(() => import("@/components/forms/parceiros/FornecedorTransportadorForm"));
-const FuncionarioForm = lazy(() => import("@/components/forms/parceiros/FuncionarioForm"));
-const CadastroGrupoForm = lazy(() => import("@/components/forms/parceiros/CadastroGrupoForm"));
-const ProdutoForm = lazy(() => import("@/components/forms/produtos/ProdutoForm"));
-const LinhaProdutoForm = lazy(() => import("@/components/forms/produtos/LinhaProdutoForm"));
-const GrupoProdutosForm = lazy(() => import("@/components/forms/produtos/GrupoProdutosForm"));
-const SubgrupoProdutosForm = lazy(() => import("@/components/forms/produtos/SubgrupoProdutosForm"));
-const UnidadeForm = lazy(() => import("@/components/forms/produtos/UnidadeForm"));
-const TabelaPrecoForm = lazy(() => import("@/components/forms/produtos/TabelaPrecoForm"));
-const PromocaoForm = lazy(() => import("@/components/forms/produtos/PromocaoForm"));
-const EstoqueForm = lazy(() => import("@/components/forms/estoques/EstoqueForm"));
-const DepositoForm = lazy(() => import("@/components/forms/estoques/DepositoForm"));
-const EstadoForm = lazy(() => import("@/components/forms/enderecos/EstadoForm"));
-const CidadeForm = lazy(() => import("@/components/forms/enderecos/CidadeForm"));
-const RotaForm = lazy(() => import("@/components/forms/enderecos/RotaForm"));
-const BancoForm = lazy(() => import("@/components/forms/financeiro/BancoForm"));
-const ContaForm = lazy(() => import("@/components/forms/financeiro/ContaForm"));
-const CondicaoPagamentoForm = lazy(() => import("@/components/forms/financeiro/CondicaoPagamentoForm"));
-const PlanoContaForm = lazy(() => import("@/components/forms/financeiro/PlanoContaForm"));
-const PortadorForm = lazy(() => import("@/components/forms/financeiro/PortadorForm"));
-const OperadoraForm = lazy(() => import("@/components/forms/financeiro/OperadoraForm"));
-const BandeiraForm = lazy(() => import("@/components/forms/financeiro/BandeiraForm"));
-const TpOperacaoForm = lazy(() => import("@/components/forms/fiscal/TpOperacaoForm"));
-const CfopForm = lazy(() => import("@/components/forms/fiscal/CfopForm"));
-const FiscalGrupoProdutoForm = lazy(() => import("@/components/forms/fiscal/FiscalGrupoProdutoForm"));
-const FiscalRegraForm = lazy(() => import("@/components/forms/fiscal/FiscalRegraForm"));
-const PedidoForm = lazy(() => import("@/components/forms/pedido/PedidoForm"));
-const NotaFiscalEntradaForm = lazy(() => import("@/components/forms/nfe/NotaFiscalEntradaForm"));
-const NfeRecebidasForm = lazy(() => import("@/components/forms/nfe/NfeRecebidasForm"));
-const DevolucaoNfeEntradaForm = lazy(() => import("@/components/forms/nfe/DevolucaoNfeEntradaForm"));
-const DevolucaoNfeSaidaForm = lazy(() => import("@/components/forms/nfe/DevolucaoNfeSaidaForm"));
-const ListaNfeEmitidaForm = lazy(() => import("@/components/forms/nfe/ListaNfeEmitidaForm"));
-const NfeEmitidaForm = lazy(() => import("@/components/forms/nfe/NfeEmitidaForm"));
-const OutrasNotasForm = lazy(() => import("@/components/forms/nfe/OutrasNotasForm"));
-const ConsultaTitulosReceberForm = lazy(() => import("@/components/forms/financeiro/ConsultaTitulosReceberForm"));
-const BaixaPorClienteForm = lazy(() => import("@/components/forms/financeiro/BaixaPorClienteForm"));
-const BaixaCartaoForm = lazy(() => import("@/components/forms/financeiro/BaixaCartaoForm"));
-const GerarContasReceberForm = lazy(() => import("@/components/forms/financeiro/GerarContasReceberForm"));
-const ConsultaTitulosPagarForm = lazy(() => import("@/components/forms/financeiro/ConsultaTitulosPagarForm"));
-const GerarContasPagarForm = lazy(() => import("@/components/forms/financeiro/GerarContasPagarForm"));
-const BaixaPorFornecedorForm = lazy(() => import("@/components/forms/financeiro/BaixaPorFornecedorForm"));
-const LiberacaoPedidosForm = lazy(() => import("@/components/forms/financeiro/LiberacaoPedidosForm"));
-const MovimentacaoFinanceiraForm = lazy(() => import("@/components/forms/financeiro/MovimentacaoFinanceiraForm"));
-const MontagemRotaForm = lazy(() => import("@/components/forms/entrega/MontagemRotaForm"));
-const RotasMontadasForm = lazy(() => import("@/components/forms/entrega/RotasMontadasForm"));
-const FiscalConfigForm = lazy(() => import("@/components/forms/fiscal/FiscalConfigForm"));
-const MdfeForm = lazy(() => import("@/modules/mdfe/components/MdfeForm"));
-const ListaMdfeForm = lazy(() => import("@/modules/mdfe/components/ListaMdfeForm"));
-const EmpresaForm = lazy(() => import("@/components/forms/config/EmpresaForm"));
-const PerfilForm = lazy(() => import("@/components/forms/config/PerfilForm"));
-const ControleAcessoForm = lazy(() => import("@/components/forms/config/ControleAcessoForm"));
-const UsuarioForm = lazy(() => import("@/components/forms/config/UsuarioForm"));
-const TrocaSenhaForm = lazy(() => import("@/components/forms/config/TrocaSenhaForm"));
-const ConsultaEstoqueForm = lazy(() => import("@/components/forms/estoques/ConsultaEstoqueForm"));
-const AjusteEstoqueForm = lazy(() => import("@/components/forms/ajuste/AjusteEstoqueForm"));
-const TransferenciaEstoqueForm = lazy(() => import("@/components/forms/estoques/TransferenciaEstoqueForm"));
-const InventarioEmBreve = lazy(() => import("@/components/forms/ajuste/InventarioEmBreve"));
-const ImportacaoForm = lazy(() => import("@/components/forms/config/ImportacaoForm"));
-const SistemaVersoesForm = lazy(() => import("@/components/forms/config/SistemaVersoesForm"));
-const BackupForm = lazy(() => import("@/components/forms/config/BackupForm"));
-const NfeInutilizacaoForm = lazy(() => import("@/components/forms/nfe/NfeInutilizacaoForm"));
-const RbReportExecutor = lazy(() => import("@/rbuilder/components/rb_ReportExecutor"));
+// --- Lazy Loaded Forms with Automatic Retry on Vite dynamic import failure ---
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const safeLazy = (importFn: () => Promise<any>) =>
+  lazy(async () => {
+    try {
+      return await importFn();
+    } catch (error) {
+      console.error("Dynamic import error, attempting refresh:", error);
+      const isRetried = window.sessionStorage.getItem("vite_import_retry");
+      if (!isRetried) {
+        window.sessionStorage.setItem("vite_import_retry", "true");
+        window.location.reload();
+        return new Promise(() => {});
+      }
+      window.sessionStorage.removeItem("vite_import_retry");
+      throw error;
+    }
+  });
+
+const CadastroCompletoForm = safeLazy(() => import("@/components/forms/parceiros/CadastroCompletoForm"));
+const CartaCorrecaoForm = safeLazy(() => import("@/components/forms/nfe/CartaCorrecaoForm"));
+const FornecedorTransportadorForm = safeLazy(() => import("@/components/forms/parceiros/FornecedorTransportadorForm"));
+const FuncionarioForm = safeLazy(() => import("@/components/forms/parceiros/FuncionarioForm"));
+const CadastroGrupoForm = safeLazy(() => import("@/components/forms/parceiros/CadastroGrupoForm"));
+const ProdutoForm = safeLazy(() => import("@/components/forms/produtos/ProdutoForm"));
+const LinhaProdutoForm = safeLazy(() => import("@/components/forms/produtos/LinhaProdutoForm"));
+const GrupoProdutosForm = safeLazy(() => import("@/components/forms/produtos/GrupoProdutosForm"));
+const SubgrupoProdutosForm = safeLazy(() => import("@/components/forms/produtos/SubgrupoProdutosForm"));
+const UnidadeForm = safeLazy(() => import("@/components/forms/produtos/UnidadeForm"));
+const TabelaPrecoForm = safeLazy(() => import("@/components/forms/produtos/TabelaPrecoForm"));
+const PromocaoForm = safeLazy(() => import("@/components/forms/produtos/PromocaoForm"));
+const EstoqueForm = safeLazy(() => import("@/components/forms/estoques/EstoqueForm"));
+const DepositoForm = safeLazy(() => import("@/components/forms/estoques/DepositoForm"));
+const EstadoForm = safeLazy(() => import("@/components/forms/enderecos/EstadoForm"));
+const CidadeForm = safeLazy(() => import("@/components/forms/enderecos/CidadeForm"));
+const RotaForm = safeLazy(() => import("@/components/forms/enderecos/RotaForm"));
+const BancoForm = safeLazy(() => import("@/components/forms/financeiro/BancoForm"));
+const ContaForm = safeLazy(() => import("@/components/forms/financeiro/ContaForm"));
+const CondicaoPagamentoForm = safeLazy(() => import("@/components/forms/financeiro/CondicaoPagamentoForm"));
+const PlanoContaForm = safeLazy(() => import("@/components/forms/financeiro/PlanoContaForm"));
+const PortadorForm = safeLazy(() => import("@/components/forms/financeiro/PortadorForm"));
+const OperadoraForm = safeLazy(() => import("@/components/forms/financeiro/OperadoraForm"));
+const BandeiraForm = safeLazy(() => import("@/components/forms/financeiro/BandeiraForm"));
+const TpOperacaoForm = safeLazy(() => import("@/components/forms/fiscal/TpOperacaoForm"));
+const CfopForm = safeLazy(() => import("@/components/forms/fiscal/CfopForm"));
+const FiscalGrupoProdutoForm = safeLazy(() => import("@/components/forms/fiscal/FiscalGrupoProdutoForm"));
+const FiscalRegraForm = safeLazy(() => import("@/components/forms/fiscal/FiscalRegraForm"));
+const PedidoForm = safeLazy(() => import("@/components/forms/pedido/PedidoForm"));
+const NotaFiscalEntradaForm = safeLazy(() => import("@/components/forms/nfe/NotaFiscalEntradaForm"));
+const NfeRecebidasForm = safeLazy(() => import("@/components/forms/nfe/NfeRecebidasForm"));
+const DevolucaoNfeEntradaForm = safeLazy(() => import("@/components/forms/nfe/DevolucaoNfeEntradaForm"));
+const DevolucaoNfeSaidaForm = safeLazy(() => import("@/components/forms/nfe/DevolucaoNfeSaidaForm"));
+const ListaNfeEmitidaForm = safeLazy(() => import("@/components/forms/nfe/ListaNfeEmitidaForm"));
+const NfeEmitidaForm = safeLazy(() => import("@/components/forms/nfe/NfeEmitidaForm"));
+const OutrasNotasForm = safeLazy(() => import("@/components/forms/nfe/OutrasNotasForm"));
+const ConsultaTitulosReceberForm = safeLazy(() => import("@/components/forms/financeiro/ConsultaTitulosReceberForm"));
+const BaixaPorClienteForm = safeLazy(() => import("@/components/forms/financeiro/BaixaPorClienteForm"));
+const BaixaCartaoForm = safeLazy(() => import("@/components/forms/financeiro/BaixaCartaoForm"));
+const GerarContasReceberForm = safeLazy(() => import("@/components/forms/financeiro/GerarContasReceberForm"));
+const ConsultaTitulosPagarForm = safeLazy(() => import("@/components/forms/financeiro/ConsultaTitulosPagarForm"));
+const GerarContasPagarForm = safeLazy(() => import("@/components/forms/financeiro/GerarContasPagarForm"));
+const BaixaPorFornecedorForm = safeLazy(() => import("@/components/forms/financeiro/BaixaPorFornecedorForm"));
+const LiberacaoPedidosForm = safeLazy(() => import("@/components/forms/financeiro/LiberacaoPedidosForm"));
+const MovimentacaoFinanceiraForm = safeLazy(() => import("@/components/forms/financeiro/MovimentacaoFinanceiraForm"));
+const MontagemRotaForm = safeLazy(() => import("@/components/forms/entrega/MontagemRotaForm"));
+const RotasMontadasForm = safeLazy(() => import("@/components/forms/entrega/RotasMontadasForm"));
+const FiscalConfigForm = safeLazy(() => import("@/components/forms/fiscal/FiscalConfigForm"));
+const MdfeForm = safeLazy(() => import("@/modules/mdfe/components/MdfeForm"));
+const ListaMdfeForm = safeLazy(() => import("@/modules/mdfe/components/ListaMdfeForm"));
+const EmpresaForm = safeLazy(() => import("@/components/forms/config/EmpresaForm"));
+const PerfilForm = safeLazy(() => import("@/components/forms/config/PerfilForm"));
+const ControleAcessoForm = safeLazy(() => import("@/components/forms/config/ControleAcessoForm"));
+const UsuarioForm = safeLazy(() => import("@/components/forms/config/UsuarioForm"));
+const TrocaSenhaForm = safeLazy(() => import("@/components/forms/config/TrocaSenhaForm"));
+const ConsultaEstoqueForm = safeLazy(() => import("@/components/forms/estoques/ConsultaEstoqueForm"));
+const AjusteEstoqueForm = safeLazy(() => import("@/components/forms/ajuste/AjusteEstoqueForm"));
+const TransferenciaEstoqueForm = safeLazy(() => import("@/components/forms/estoques/TransferenciaEstoqueForm"));
+const InventarioEmBreve = safeLazy(() => import("@/components/forms/ajuste/InventarioEmBreve"));
+const ImportacaoForm = safeLazy(() => import("@/components/forms/config/ImportacaoForm"));
+const SistemaVersoesForm = safeLazy(() => import("@/components/forms/config/SistemaVersoesForm"));
+const BackupForm = safeLazy(() => import("@/components/forms/config/BackupForm"));
+const NfeInutilizacaoForm = safeLazy(() => import("@/components/forms/nfe/NfeInutilizacaoForm"));
+const RbReportExecutor = safeLazy(() => import("@/rbuilder/components/rb_ReportExecutor"));
 import RpbManager from "@/report-builder/components/manager/RpbManager";
 import RpbStandaloneExecutor from "@/report-builder/components/executor/RpbStandaloneExecutor";
 
 // --- PDV Lazy Imports ---
-const PdvTela = lazy(() => import("@/components/forms/pdv/PdvTela"));
-const AberturaCaixaForm = lazy(() => import("@/components/forms/pdv/AberturaCaixaForm"));
-const PdvCaixaForm = lazy(() => import("@/components/forms/pdv/PdvCaixaForm"));
-const FechamentoCaixaForm = lazy(() => import("@/components/forms/pdv/FechamentoCaixaForm"));
-const SuprimentoSangriaForm = lazy(() => import("@/components/forms/pdv/SuprimentoSangriaForm"));
+const PdvTela = safeLazy(() => import("@/components/forms/pdv/PdvTela"));
+const AberturaCaixaForm = safeLazy(() => import("@/components/forms/pdv/AberturaCaixaForm"));
+const PdvCaixaForm = safeLazy(() => import("@/components/forms/pdv/PdvCaixaForm"));
+const FechamentoCaixaForm = safeLazy(() => import("@/components/forms/pdv/FechamentoCaixaForm"));
+const SuprimentoSangriaForm = safeLazy(() => import("@/components/forms/pdv/SuprimentoSangriaForm"));
 
 // --- Core Eager Imports ---
 import AuthGate from "@/components/auth/AuthGate";

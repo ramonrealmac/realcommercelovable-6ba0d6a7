@@ -16,6 +16,7 @@ import MdfPagamentoTab from "./tabs/MdfPagamentoTab";
 import MdfComponenteTab from "./tabs/MdfComponenteTab";
 import MdfParcelasTab from "./tabs/MdfParcelasTab";
 import MdfHistoricoTab from "./tabs/MdfHistoricoTab";
+import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 
 type TMdfSt = "D" | "A" | "E" | "C" | "R" | "G";
 
@@ -237,7 +238,7 @@ const XDefault = {
   dt_emissao: new Date().toISOString().substring(0, 10),
   dt_viagem:  new Date().toISOString().substring(0, 10),
   hr_viagem: "00:00:00",
-  modalidade: "1", tp_emitente: "1", tp_transportador: "",
+  modalidade: "1", tp_emitente: "", tp_transportador: "",
   rntrc: "",
   ufini: "", uffim: "", unidade: "KG",
   peso_total: 0, valor_total: 0, qtd_nfe: 0, status: "D",
@@ -259,6 +260,7 @@ interface IProps {
 
 const MdfeForm: React.FC<IProps> = ({ initialId }) => {
   const { XEmpresaId } = useAppContext();
+  const { handleKeyDown } = useEnterTraversal();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const XRefreshRef = useRef<any>(null);
   const [selectedCadastroId, setSelectedCadastroId] = useState<number | null>(null);
@@ -493,6 +495,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
           if (!rec.dt_emissao)   throw new Error("Data de Emissão é obrigatória.");
           if (!rec.dt_viagem)    throw new Error("Data da Viagem é obrigatória.");
           if (!rec.hr_viagem)    throw new Error("Hora da Viagem é obrigatória.");
+          if (!rec.tp_emitente)  throw new Error("Tipo de Emitente é obrigatório.");
           
           // Transportador: Buscar a partir do cadastro do transportador selecionado
           if (rec.transportador_id) {
@@ -711,62 +714,67 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
         const st = (record.status || "D") as TMdfSt;
         const mdfId = currentRecord?.mdf_manifesto_id ?? null;
         const podeTransmitir = mdfId && (!st || st === "D" || st === "R") && !isEditing;
-        const podeEncerrar   = mdfId && st === "A" && !isEditing;
-        const podeCancelar   = mdfId && (st === "A" || st === "E") && !isEditing;
 
         return (
-          <div className="space-y-4">
+          <div className="space-y-4" onKeyDown={handleKeyDown}>
 
-            {/* ── Linha 1: Identificação + Status + Ações ── */}
-            <div className="grid grid-cols-12 gap-3 items-end">
-              <div className="col-span-1">
-                <label className="text-xs text-muted-foreground">Cód.</label>
-                <input readOnly
-                  value={mdfId ?? (mode === "insert" ? "(Novo)" : "")}
-                  className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right" />
-              </div>
-              <div className="col-span-1">
-                <label className="text-xs text-muted-foreground">Modelo</label>
-                <input readOnly={ro} value={record.modelo ?? "58"}
-                  onChange={e => setField("modelo", e.target.value)}
-                  className="w-full border border-border rounded px-2 py-1 text-sm text-center" />
+            {/* ── Linha 1: Modelo (2), Número (2), Série (1), Dt. Emissão (2), Dt. Viagem (2), Hora Viagem (2), Status (2), Transmitir (2) ── */}
+            <div className="grid grid-cols-[repeat(15,minmax(0,1fr))] gap-3 items-end">
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground block mb-1">Modelo</label>
+                <input readOnly disabled value={record.modelo ?? "58"}
+                  className="w-full border border-border rounded px-2 py-1 text-sm text-center bg-secondary cursor-not-allowed text-muted-foreground" />
               </div>
               <div className="col-span-2">
-                <label className="text-xs text-muted-foreground">Número</label>
+                <label className="text-xs text-muted-foreground block mb-1">Número</label>
                 <input readOnly
                   value={record.numero ?? ""}
-                  placeholder="Automático"
-                  className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary font-bold text-primary" />
+                  placeholder="Auto"
+                  className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary font-bold text-primary text-center" />
               </div>
               <div className="col-span-1">
-                <label className="text-xs text-muted-foreground">Série</label>
+                <label className="text-xs text-muted-foreground block mb-1">Série</label>
                 <input readOnly
                   value={record.serie ?? ""}
                   placeholder="Auto"
                   className="w-full border border-border rounded px-2 py-1 text-sm text-center bg-secondary" />
               </div>
               <div className="col-span-2">
-                <label className="text-xs text-muted-foreground">Dt. Emissão <span className="text-destructive">*</span></label>
+                <label className="text-xs text-muted-foreground block mb-1">Dt. Emissão <span className="text-destructive">*</span></label>
                 <input type="date" readOnly={ro}
                   value={String(record.dt_emissao || "").substring(0, 10)}
                   onChange={e => setField("dt_emissao", e.target.value)}
                   className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
               <div className="col-span-2">
-                <label className="text-xs text-muted-foreground">Status</label>
-                <div className={`w-full border border-border rounded px-2 py-[5px] text-sm font-semibold bg-secondary ${ST_COLORS[st] || ""}`}>
+                <label className="text-xs text-muted-foreground block mb-1">Dt. Viagem <span className="text-destructive">*</span></label>
+                <input type="date" readOnly={ro}
+                  value={String(record.dt_viagem || "").substring(0, 10)}
+                  onChange={e => setField("dt_viagem", e.target.value)}
+                  className="w-full border border-border rounded px-2 py-1 text-sm" />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground block mb-1">Hora Viagem <span className="text-destructive">*</span></label>
+                <input type="time" readOnly={ro}
+                  value={record.hr_viagem ?? "00:00:00"}
+                  onChange={e => setField("hr_viagem", e.target.value)}
+                  className="w-full border border-border rounded px-2 py-1 text-sm" />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground block mb-1">Status</label>
+                <div className={`w-full border border-border rounded px-2 py-[5px] text-sm font-semibold text-center bg-secondary ${ST_COLORS[st] || ""}`}>
                   {ST_LABELS[st] || st}
                 </div>
               </div>
-              <div className="col-span-3">
-                <label className="text-xs text-muted-foreground">&nbsp;</label>
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground block mb-1">&nbsp;</label>
                 {podeTransmitir ? (
                   <button
                     type="button"
                     onClick={() => handleTransmitir(record.mdf_manifesto_id)}
-                    className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-sm shadow transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-xs shadow transition-all hover:scale-[1.02] active:scale-[0.98]"
                   >
-                    <Send className="w-3.5 h-3.5" /> Transmitir MDF-e
+                    <Send className="w-3.5 h-3.5" /> Transmitir
                   </button>
                 ) : (
                   <div className="h-[30px]" />
@@ -774,23 +782,9 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
               </div>
             </div>
 
-            {/* ── Linha 2: Viagem + Modalidade ── */}
-            <div className="grid grid-cols-12 gap-3 items-end">
-              <div className="col-span-3">
-                <label className="text-xs text-muted-foreground">Dt. Viagem <span className="text-destructive">*</span></label>
-                <input type="date" readOnly={ro}
-                  value={String(record.dt_viagem || "").substring(0, 10)}
-                  onChange={e => setField("dt_viagem", e.target.value)}
-                  className="w-full border border-border rounded px-2 py-1 text-sm" />
-              </div>
-              <div className="col-span-3">
-                <label className="text-xs text-muted-foreground">Hora Viagem <span className="text-destructive">*</span></label>
-                <input type="time" readOnly={ro}
-                  value={record.hr_viagem ?? "00:00:00"}
-                  onChange={e => setField("hr_viagem", e.target.value)}
-                  className="w-full border border-border rounded px-2 py-1 text-sm" />
-              </div>
-              <div className="col-span-3">
+            {/* ── Linha 2: Modalidade, Unidade Medida, Tipo Emitente, Transportador, Tipo de Transportador Abreviado ── */}
+            <div className="grid grid-cols-12 gap-2 items-end">
+              <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Modalidade</label>
                 <select disabled={ro} value={record.modalidade ?? "1"}
                   onChange={e => setField("modalidade", e.target.value)}
@@ -801,8 +795,8 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
                   <option value="4">4 - Ferroviário</option>
                 </select>
               </div>
-              <div className="col-span-3">
-                <label className="text-xs text-muted-foreground">Unidade Medida</label>
+              <div className="col-span-1">
+                <label className="text-xs text-muted-foreground">Unidade</label>
                 <select disabled={ro} value={record.unidade ?? "KG"}
                   onChange={e => setField("unidade", e.target.value)}
                   className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
@@ -810,15 +804,12 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
                   <option value="TON">TON</option>
                 </select>
               </div>
-            </div>
-
-            {/* ── Linha 3: Tipo Emitente / Transportador / Tipo Transportador ── */}
-            <div className="grid grid-cols-12 gap-3 items-end">
-              <div className="col-span-4">
+              <div className="col-span-3">
                 <label className="text-xs text-muted-foreground">Tipo Emitente <span className="text-destructive">*</span></label>
-                <select disabled={ro} value={record.tp_emitente ?? "1"}
+                <select disabled={ro} value={record.tp_emitente ?? ""}
                   onChange={e => setField("tp_emitente", e.target.value)}
                   className="w-full border border-border rounded px-2 py-1 text-sm bg-card">
+                  <option value="">— Selecione o Tipo de Emitente —</option>
                   <option value="1">1 - Prestador de serviço de transporte</option>
                   <option value="2">2 - Transportador de carga própria</option>
                   <option value="3">3 - Prestador de serviço de transporte (Carga própria)</option>
@@ -841,8 +832,6 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
                           const cleanRntrc = t.rntrc ? String(t.rntrc).replace(/\D/g, "").substring(0, 8) : null;
                           setField("rntrc", cleanRntrc);
                           
-                          // Map tp_proprietario to tp_transportador
-                          // tp_proprietario: 0 -> 1 (TAC Agregado), 1 -> 2 (TAC Independente), 2 -> 3 (TAC Equiparado/Outros)
                           let tpTranspVal = "";
                           if (t.tp_proprietario === "0") tpTranspVal = "1";
                           else if (t.tp_proprietario === "1") tpTranspVal = "2";
@@ -855,7 +844,6 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
                         setField("tp_transportador", null);
                       }
 
-                      // Limpar as grids de veículos e motoristas se o manifesto já estiver salvo
                       if (record.mdf_manifesto_id) {
                         Promise.all([
                           supabase
@@ -882,18 +870,18 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
                   ))}
                 </select>
               </div>
-              <div className="col-span-4">
-                <label className="text-xs text-muted-foreground">Tipo de Transportador (TAC)</label>
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground">Tp. Transp. (TAC)</label>
                 <input 
                   type="text" 
                   disabled 
                   value={
                     record.tp_transportador === "1" ? "0 - TAC Agregado" :
-                    record.tp_transportador === "2" ? "1 - TAC Independente" :
+                    record.tp_transportador === "2" ? "1 - TAC Indep." :
                     record.tp_transportador === "3" ? "2 - Outros" :
-                    "(Não Informado / Carga Própria)"
+                    "(Carga Própria)"
                   }
-                  className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary"
+                  className="w-full border border-border rounded px-2 py-1 text-xs bg-secondary font-medium"
                 />
               </div>
             </div>
@@ -952,31 +940,49 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
               </div>
             )}
 
-
-
             {/* ── Totais ── */}
-            <div className="border border-border rounded p-3 bg-card">
-              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Totais do Manifesto</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div>
-                  <label className="text-xs text-muted-foreground">Qtd. NF-e <span className="text-destructive">*</span></label>
-                  <input type="number" readOnly={ro} value={record.qtd_nfe ?? 0}
+            <div className="border border-border rounded-lg p-4 bg-card/40 shadow-sm space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Totais do Manifesto
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <div className="p-3 border border-border/80 rounded-md bg-background shadow-xs space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground block">
+                    Qtd. NF-e <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    readOnly={ro}
+                    value={record.qtd_nfe ?? 0}
                     onChange={e => setField("qtd_nfe", Number(e.target.value))}
-                    className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
+                    className="w-full border border-border rounded px-3 py-1.5 text-sm font-semibold text-right bg-card focus:ring-1 focus:ring-primary"
+                  />
                 </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Peso Total (KG) <span className="text-destructive">*</span></label>
-                  <input type="number" readOnly={ro} value={record.peso_total ?? 0}
+                <div className="p-3 border border-border/80 rounded-md bg-background shadow-xs space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground block">
+                    Peso Total (KG) <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    readOnly={ro}
+                    value={record.peso_total ?? 0}
                     onChange={e => setField("peso_total", e.target.value)}
                     step="0.001"
-                    className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
+                    className="w-full border border-border rounded px-3 py-1.5 text-sm font-semibold text-right bg-card focus:ring-1 focus:ring-primary"
+                  />
                 </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Valor Total (R$) <span className="text-destructive">*</span></label>
-                  <input type="number" readOnly={ro} value={record.valor_total ?? 0}
+                <div className="p-3 border border-border/80 rounded-md bg-background shadow-xs space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground block">
+                    Valor Total (R$) <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    readOnly={ro}
+                    value={record.valor_total ?? 0}
                     onChange={e => setField("valor_total", e.target.value)}
                     step="0.01"
-                    className="w-full border border-border rounded px-2 py-1 text-sm text-right" />
+                    className="w-full border border-border rounded px-3 py-1.5 text-sm font-semibold text-right bg-card focus:ring-1 focus:ring-primary"
+                  />
                 </div>
               </div>
             </div>

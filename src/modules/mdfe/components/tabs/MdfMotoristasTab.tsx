@@ -40,25 +40,37 @@ const MdfMotoristasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
   }, [mdfManifestoId]);
 
   const loadMotoristasList = useCallback(async () => {
-    if (!veiculoCadastroId) {
-      setMotoristasList([]);
-      setSelectedMotoristaId("");
-      return;
-    }
     try {
-      const { data, error } = await supabase
+      const { data: allData, error } = await supabase
         .from("cadastro_motorista")
-        .select("motorista_id, cpf, nome, telefone, chave_pix")
-        .eq("cadastro_id", veiculoCadastroId)
+        .select("motorista_id, cpf, nome, telefone, chave_pix, cadastro_id, cadastro(razao_social)")
         .eq("empresa_id", empresaId)
-        .eq("excluido", false)
-        .eq("ativo", true)
+        .or("excluido.is.null,excluido.eq.false")
+        .or("ativo.is.null,ativo.eq.true")
         .order("nome");
+
       if (error) {
         console.error("Erro ao carregar motoristas do cadastro:", error);
         return;
       }
-      setMotoristasList(data || []);
+
+      if (!allData || allData.length === 0) {
+        setMotoristasList([]);
+        return;
+      }
+
+      // Se houver veiculoCadastroId, ordena os motoristas do transportador selecionado no topo
+      if (veiculoCadastroId) {
+        const sorted = [...allData].sort((a, b) => {
+          const aMatch = a.cadastro_id === veiculoCadastroId ? -1 : 1;
+          const bMatch = b.cadastro_id === veiculoCadastroId ? -1 : 1;
+          if (aMatch !== bMatch) return aMatch - bMatch;
+          return a.nome.localeCompare(b.nome);
+        });
+        setMotoristasList(sorted);
+      } else {
+        setMotoristasList(allData);
+      }
     } catch (err) {
       console.error("Exceção ao carregar motoristas do cadastro:", err);
     }
@@ -123,13 +135,9 @@ const MdfMotoristasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
         <div className="grid grid-cols-12 gap-3 items-end border border-border rounded p-3 bg-card">
           <div className="col-span-8">
             <label className="text-xs text-muted-foreground">Selecionar Motorista <span className="text-destructive">*</span></label>
-            {!veiculoCadastroId ? (
-              <div className="w-full border border-dashed border-border rounded px-2 py-1.5 text-xs text-muted-foreground bg-accent/20">
-                Selecione primeiro um veículo de Tração no manifesto
-              </div>
-            ) : motoristasList.length === 0 ? (
+            {motoristasList.length === 0 ? (
               <div className="w-full border border-dashed border-destructive/30 rounded px-2 py-1.5 text-xs text-destructive bg-destructive/5 font-medium">
-                Nenhum motorista cadastrado para este transportador
+                Nenhum motorista cadastrado no sistema para esta empresa. Cadastre em Cadastros ➔ Fornecedores/Transportadores ➔ Aba Motoristas.
               </div>
             ) : (
               <select
@@ -138,18 +146,22 @@ const MdfMotoristasTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
                 className="w-full border border-border rounded px-2 py-1 text-sm bg-card"
               >
                 <option value="">— Selecione um motorista —</option>
-                {motoristasList.map(m => (
-                  <option key={m.motorista_id} value={String(m.motorista_id)}>
-                    {formatCPF(m.cpf)} - {m.nome}
-                  </option>
-                ))}
+                {motoristasList.map(m => {
+                  const transpName = m.cadastro?.razao_social ? ` (${m.cadastro.razao_social})` : "";
+                  const isTarget = veiculoCadastroId && m.cadastro_id === veiculoCadastroId;
+                  return (
+                    <option key={m.motorista_id} value={String(m.motorista_id)}>
+                      {isTarget ? "★ " : ""}{formatCPF(m.cpf)} - {m.nome}{transpName}
+                    </option>
+                  );
+                })}
               </select>
             )}
           </div>
           <div className="col-span-4">
             <button
               onClick={handleAdd}
-              disabled={!veiculoCadastroId || !selectedMotoristaId}
+              disabled={!selectedMotoristaId}
               className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm w-full justify-center hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="w-4 h-4" /> Vincular Motorista

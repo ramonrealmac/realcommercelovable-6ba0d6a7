@@ -683,7 +683,13 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
         return;
       }
     }
-    const XCpfCnpj = XF.cnpj.replace(/\D/g, "");
+    const XCpfCnpj = (XF.cnpj || "").replace(/\D/g, "");
+    if (XF.st_fornecedor === "S" || XF.st_transportador === "S") {
+      if (!XCpfCnpj) {
+        toast.error("O CPF/CNPJ é obrigatório para Fornecedores e Transportadores.");
+        return;
+      }
+    }
     if (XCpfCnpj && !validateCPFOrCNPJ(XCpfCnpj)) {
       toast.error("CPF/CNPJ inválido.");
       return;
@@ -693,7 +699,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
     if (XCpfCnpj) {
       let XDupQuery = db
         .from("cadastro")
-        .select("cadastro_id, cd_cadastro, razao_social")
+        .select("cadastro_id, cd_cadastro, razao_social, st_cliente, st_fornecedor, st_transportador")
         .eq("empresa_id", XEmpresaMatrizId)
         .eq("cnpj", XCpfCnpj)
         .eq("excluido", false);
@@ -702,7 +708,9 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
       }
       const { data: XDup } = await XDupQuery.limit(1);
       if (XDup && XDup.length > 0) {
-        toast.error(`CPF/CNPJ já cadastrado para "${XDup[0].razao_social}" (Cód. ${XDup[0].cd_cadastro ?? XDup[0].cadastro_id}). Não é permitido duplicidade.`);
+        const dup = XDup[0];
+        const cod = dup.cd_cadastro ?? dup.cadastro_id;
+        toast.error(`CPF/CNPJ já cadastrado para "${dup.razao_social}" (Cód. ${cod}). Não crie um novo cadastro: abra o cadastro existente Cód. ${cod} e marque Fornecedor = Sim / Transportador = Sim.`);
         return;
       }
     }
@@ -1126,6 +1134,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
               <div className="w-full md:w-52">
                 <label className="block text-xs font-medium text-muted-foreground mb-1">
                   {(XIsEditing ? XF.tp_pessoa : XCurrentRecord?.tp_pessoa) === "J" ? "CNPJ" : (XIsEditing ? XF.tp_pessoa : XCurrentRecord?.tp_pessoa) === "F" ? "CPF" : "CPF/CNPJ"}
+                  {(XIsEditing ? (XF.st_fornecedor === "S" || XF.st_transportador === "S") : (XCurrentRecord?.st_fornecedor === "S" || XCurrentRecord?.st_transportador === "S")) && <span className="text-destructive"> *</span>}
                 </label>
                 <div className="flex gap-1">
                   {XIsEditing ? (
