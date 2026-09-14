@@ -89,6 +89,8 @@ export const ST_PEDIDO_LABELS: Record<string, string> = {
   V: "ORCAMENTO (RESERVADO)",
   C: "CANCELADO",
   R: "VENDA (RECEBIDA)",
+  E: "ESTORNADO",
+  EP: "ESTORNADO PARCIAL",
 };
 
 export const TP_DESCONTO_LABELS: Record<string, string> = {

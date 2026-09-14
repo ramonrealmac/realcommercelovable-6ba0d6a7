@@ -43,6 +43,7 @@ import {
   ShoppingCart,
   Package2,
   Settings2,
+  RotateCcw,
   Tag,
   Database,
   FolderOpen,
@@ -163,6 +164,7 @@ export const MENU_CONFIG: MenuItem[] = [
         icon: ArrowUpFromLine,
         children: [
           { id: "pedidos", title: "Pedidos", icon: ClipboardList },
+          { id: "devolucao-pedido-sem-nfe", title: "Estorno de Pedido", icon: RotateCcw },
           {
             id: "mov-entregas",
             title: "Entregas",
@@ -226,6 +228,7 @@ export const MENU_CONFIG: MenuItem[] = [
       },
       { id: "emissao-boletos", title: "Emissão de Boletos", icon: FileText },
       { id: "liberacao-pedidos", title: "Liberação de Pedidos", icon: ClipboardCheck },
+      { id: "gestao-creditos", title: "Gestão de Créditos", icon: CreditCard },
     ],
   },
   {

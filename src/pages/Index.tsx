@@ -57,6 +57,7 @@ const NotaFiscalEntradaForm = safeLazy(() => import("@/components/forms/nfe/Nota
 const NfeRecebidasForm = safeLazy(() => import("@/components/forms/nfe/NfeRecebidasForm"));
 const DevolucaoNfeEntradaForm = safeLazy(() => import("@/components/forms/nfe/DevolucaoNfeEntradaForm"));
 const DevolucaoNfeSaidaForm = safeLazy(() => import("@/components/forms/nfe/DevolucaoNfeSaidaForm"));
+const DevolucaoPedidoSemNfeForm = safeLazy(() => import("@/components/forms/pedido/DevolucaoPedidoSemNfeForm"));
 const ListaNfeEmitidaForm = safeLazy(() => import("@/components/forms/nfe/ListaNfeEmitidaForm"));
 const NfeEmitidaForm = safeLazy(() => import("@/components/forms/nfe/NfeEmitidaForm"));
 const OutrasNotasForm = safeLazy(() => import("@/components/forms/nfe/OutrasNotasForm"));
@@ -69,6 +70,7 @@ const GerarContasPagarForm = safeLazy(() => import("@/components/forms/financeir
 const BaixaPorFornecedorForm = safeLazy(() => import("@/components/forms/financeiro/BaixaPorFornecedorForm"));
 const LiberacaoPedidosForm = safeLazy(() => import("@/components/forms/financeiro/LiberacaoPedidosForm"));
 const MovimentacaoFinanceiraForm = safeLazy(() => import("@/components/forms/financeiro/MovimentacaoFinanceiraForm"));
+const GestaoCreditosForm = safeLazy(() => import("@/components/forms/financeiro/GestaoCreditosForm"));
 const MontagemRotaForm = safeLazy(() => import("@/components/forms/entrega/MontagemRotaForm"));
 const RotasMontadasForm = safeLazy(() => import("@/components/forms/entrega/RotasMontadasForm"));
 const FiscalConfigForm = safeLazy(() => import("@/components/forms/fiscal/FiscalConfigForm"));
@@ -149,6 +151,7 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "devolucao-nfe-entrada": return <DevolucaoNfeEntradaForm initialNfeId={params?.nfe_cabecalho_id} />;
       case "devolucao-nfe-saida":
       case "devolucao-nfe-saida-fiscal": return <DevolucaoNfeSaidaForm initialNfeId={params?.nfe_cabecalho_id} />;
+      case "devolucao-pedido-sem-nfe": return <DevolucaoPedidoSemNfeForm />;
       case "nfe-emitidas": return <ListaNfeEmitidaForm initialFilterId={params?.nfe_cabecalho_id} />;
       case "nfe-form": return <NfeEmitidaForm initialId={params?.nfe_cabecalho_id} />;
       case "outras-notas": return <OutrasNotasForm initialId={params?.nfe_cabecalho_id} />;
@@ -156,6 +159,7 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "gerar-contas-receber": return <GerarContasReceberForm initialId={params?.financeiro_id} />;
       case "baixa-por-cliente": return <BaixaPorClienteForm />;
       case "baixa-cartao": return <BaixaCartaoForm />;
+      case "gestao-creditos": return <GestaoCreditosForm />;
       case "consulta-titulos-pagar": return <ConsultaTitulosPagarForm />;
       case "gerar-contas-pagar": return <GerarContasPagarForm initialId={params?.financeiro_id} />;
       case "baixa-por-fornecedor": return <BaixaPorFornecedorForm />;

@@ -1360,6 +1360,9 @@ const PedidoForm: React.FC = () => {
             if (rec.faturado === "S") {
               throw new Error("Não é possível excluir um pedido já faturado.");
             }
+            if (rec.st_pedido === "EP" || rec.st_pedido === "E" || rec.st_pedido === "C") {
+              throw new Error(`Não é possível excluir um pedido com status ${ST_PEDIDO_LABELS[rec.st_pedido] || rec.st_pedido}.`);
+            }
             if (rec.movimento_id) {
               await db.from("movimento_item").update({ excluido: true }).eq("movimento_id", rec.movimento_id);
               await db.from("movimento_pagamento").update({ excluido: true }).eq("movimento_id", rec.movimento_id);
