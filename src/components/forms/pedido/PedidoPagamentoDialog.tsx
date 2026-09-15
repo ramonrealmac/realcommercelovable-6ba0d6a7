@@ -4,7 +4,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import { useAppContext } from "@/contexts/AppContext";
-import { CreditCard, ShoppingCart, Wallet, ArrowRightLeft, Calculator, Delete, Trash2, Percent, Lock } from "lucide-react";
+import { CreditCard, ShoppingCart, Wallet, ArrowRightLeft, Calculator, Delete, Trash2, Percent, Lock, Coins } from "lucide-react";
 import { CurrencyInput } from "@/components/shared/CurrencyInput";
 
 const fmt = (v: number) => (v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -158,6 +158,9 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
   // Price Table Type state ('V' | 'P')
   const [XTpPagamentoTabela, setXTpPagamentoTabela] = useState<"V" | "P">("V");
 
+  // Saldo de crédito disponível do cliente
+  const [XSaldoCreditoCliente, setXSaldoCreditoCliente] = useState<number>(0);
+
   // Calculator State
   const [XCalcDisplay, setXCalcDisplay] = useState("0");
   const [XCalcReset, setXCalcReset] = useState(false);
@@ -248,7 +251,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
           .order("nome");
         if (portadorData) setXPortadores(portadorData);
 
-        // 2. Fetch Client defaults
+        // 2. Fetch Client defaults & Credit Balance
         let defaultCondId = 0;
         let defaultPortadorId = 0;
         if (cadastroId) {
@@ -260,6 +263,18 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
             defaultCondId = cli.condicao_id || 0;
             defaultPortadorId = cli.portador_id || 0;
           }
+
+          const { data: saldoData } = await supabase.from("cadastro_credito_saldo")
+            .select("vl_saldo_atual")
+            .eq("empresa_id", XEmpresaId)
+            .eq("cadastro_id", cadastroId)
+            .eq("tp_parceiro", "CLIENTE")
+            .eq("excluido", false)
+            .maybeSingle();
+
+          setXSaldoCreditoCliente(Number(saldoData?.vl_saldo_atual || 0));
+        } else {
+          setXSaldoCreditoCliente(0);
         }
 
         // 3. Fetch Conditions for logged in company (com suporte a st_avista)
@@ -394,11 +409,14 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
     const cond = XCondicoes.find(c => c.condicao_id === XCondicaoId);
     if (!cond) return XPortadores;
 
+    const descLower = (cond.descricao || "").toLowerCase();
+    const isCredito = descLower.includes("crédito") || descLower.includes("credito");
+
     const mpId = cond.meio_pagamento_id || 0;
-    if ([1, 5, 14, 91].includes(mpId)) {
-      // Dinheiro / Crediário / Duplicata / Posterior -> banco_id is null or 0
+    if ([1, 5, 14, 91].includes(mpId) || isCredito) {
+      // Dinheiro (1) / Crediário / Duplicata / Posterior / Crédito do Cliente -> mesmo portador de Dinheiro (banco_id is null or 0)
       return XPortadores.filter(p => p.banco_id === null || p.banco_id === 0);
-    } else if ([3, 4, 15, 16, 17, 20].includes(mpId)) {
+    } else if ([3, 4, 15, 16, 17, 20, 21].includes(mpId)) {
       // Banks / Cards / Boletos / Pix -> banco_id is NOT null and NOT 0
       return XPortadores.filter(p => p.banco_id !== null && p.banco_id !== 0);
     }
@@ -465,7 +483,21 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
     if (vPagar <= 0) { toast.error("Informe um valor maior que zero."); return; }
     
     const cond = XCondicoes.find(c => c.condicao_id === XCondicaoId);
-    const tpCond = getTipoPrazoCondicao(cond);
+    const descCond = (cond?.descricao || "").toLowerCase();
+
+    // Valida o limite do saldo de crédito do cliente
+    if (descCond.includes("utilizar crédito") || descCond.includes("utilizar credito") || descCond.includes("crédito de cliente") || descCond.includes("credito de cliente")) {
+      const creditUsadoOutras = XLinhas
+        .filter(l => l.uid !== XEditUid && (l.condicao_descricao.toLowerCase().includes("crédito") || l.condicao_descricao.toLowerCase().includes("credito")))
+        .reduce((a, l) => a + Number(l.vl_pagamento || 0), 0);
+      
+      const saldoCreditoDisponivel = Number(Math.max(0, XSaldoCreditoCliente - creditUsadoOutras).toFixed(2));
+
+      if (vPagar > saldoCreditoDisponivel + 0.001) {
+        toast.error(`O valor informado (R$ ${fmt(vPagar)}) excede o saldo de crédito disponível do cliente (R$ ${fmt(saldoCreditoDisponivel)}).`);
+        return;
+      }
+    }
 
     // Validações de tipo de prazo da condição x tipo de pagamento da tabela de preço
     if (XTpPagamentoTabela === "V" && !isCondicaoAVista(cond)) {
@@ -678,6 +710,19 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
                 </div>
                 <span className="font-black text-xl text-blue-700">{fmt(valorRestante)}</span>
               </div>
+              {XSaldoCreditoCliente > 0 && (
+                <div className="col-span-2 border border-indigo-200 dark:border-indigo-800 rounded p-3 bg-indigo-50 dark:bg-indigo-950/20 flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <Coins size={20} className="text-indigo-600 dark:text-indigo-400" />
+                    <span className="text-base font-black uppercase tracking-wider text-indigo-900 dark:text-indigo-200">
+                      CRÉDITOS DO CLIENTE:
+                    </span>
+                  </div>
+                  <span className="font-bold text-lg text-indigo-700 dark:text-indigo-300">
+                    R$ {fmt(XSaldoCreditoCliente)}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="border border-border rounded p-3 bg-muted/20 space-y-3">
@@ -692,7 +737,18 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
                       const cid = Number(e.target.value);
                       setXCondicaoId(cid);
                       const c = XCondicoes.find(x => x.condicao_id === cid);
-                      if (c) setXQtParcela(getQtdParcelasCondicao(c));
+                      if (c) {
+                        setXQtParcela(getQtdParcelasCondicao(c));
+                        const descLower = (c.descricao || "").toLowerCase();
+                        if (descLower.includes("utilizar crédito") || descLower.includes("utilizar credito") || descLower.includes("crédito de cliente") || descLower.includes("credito de cliente")) {
+                          const creditUsadoOutras = XLinhas
+                            .filter(l => l.uid !== XEditUid && (l.condicao_descricao.toLowerCase().includes("crédito") || l.condicao_descricao.toLowerCase().includes("credito")))
+                            .reduce((a, l) => a + Number(l.vl_pagamento || 0), 0);
+                          const saldoCreditoDisponivel = Number(Math.max(0, XSaldoCreditoCliente - creditUsadoOutras).toFixed(2));
+                          const valorSugerido = Math.min(valorRestante, saldoCreditoDisponivel);
+                          setXVlPagar(valorSugerido);
+                        }
+                      }
                     }} 
                     onKeyDown={e => {
                       if (e.key === "Enter") {
@@ -701,10 +757,10 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
                         portadorRef.current?.focus();
                       }
                     }}
-                    className="w-full border border-border rounded px-2 py-1 text-sm h-9 bg-white disabled:opacity-50 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                    className="w-full border border-border rounded px-2 py-1 text-sm h-9 bg-white disabled:opacity-50 disabled:bg-slate-100 disabled:cursor-not-allowed uppercase"
                   >
-                    <option value={0}>-- Selecione --</option>
-                    {XFilteredCondicoes.map(c => <option key={c.condicao_id} value={c.condicao_id}>{c.descricao}</option>)}
+                    <option value={0}>-- SELECIONE --</option>
+                    {XFilteredCondicoes.map(c => <option key={c.condicao_id} value={c.condicao_id}>{(c.descricao || "").toUpperCase()}</option>)}
                   </select>
                 </div>
                 <div className="col-span-3">

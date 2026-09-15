@@ -193,6 +193,37 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
   const handleConfirmarPagamento = async (linhas: IPagamentoLinha[], vlDesc: number, pcDesc: number, enviarAoCaixa?: boolean) => {
     if (!pedido?.movimento_id) return;
 
+    // 0. Verifica se havia utilização de Crédito do Cliente nos pagamentos anteriores deste pedido para efetuar o estorno/reversão se necessário
+    const { data: oldCreditPagtos } = await supabase.from("movimento_pagamento")
+      .select("movimento_pagamento_id, vl_pagamento, condicao_id, condicao_pagamento(descricao)")
+      .eq("movimento_id", pedido.movimento_id)
+      .eq("excluido", false);
+
+    if (oldCreditPagtos && oldCreditPagtos.length > 0 && pedido.cadastro_id) {
+      const creditLines = oldCreditPagtos.filter((p: any) => {
+        const desc = (p.condicao_pagamento?.descricao || "").toLowerCase();
+        return desc.includes("crédito") || desc.includes("credito");
+      });
+
+      const totalCreditoAnt = creditLines.reduce((acc: number, p: any) => acc + Number(p.vl_pagamento || 0), 0);
+
+      if (totalCreditoAnt > 0) {
+        const { data: userData } = await supabase.auth.getUser();
+        const userId = userData.user?.id;
+        await (supabase as any).rpc("fu_registrar_movimento_credito", {
+          _empresa_id: Number(XEmpresaId),
+          _cadastro_id: Number(pedido.cadastro_id),
+          _tp_parceiro: "CLIENTE",
+          _tp_movimento: "C",
+          _vl_movimento: totalCreditoAnt,
+          _origem_movimento: "ESTORNO_ABATE_PEDIDO",
+          _historico: `[PEDIDO ${pedido.nr_movimento || pedido.movimento_id}] Reversão de Utilização de Crédito por alteração/exclusão de pagamento`,
+          _usuario_id: userId,
+          _movimento_id: pedido.movimento_id
+        });
+      }
+    }
+
     if (linhas.length === 0) {
       // CASO: Excluindo todos os pagamentos
       
@@ -269,6 +300,35 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
       await load();
       if (onMudarStatus) onMudarStatus("REFRESH");
       return;
+    }
+
+    // Processa débito de crédito caso alguma nova linha utilize Crédito do Cliente
+    const creditLinhas = linhas.filter(l => {
+      const desc = (l.condicao_descricao || "").toLowerCase();
+      return desc.includes("crédito") || desc.includes("credito");
+    });
+
+    const totalNovoCredito = creditLinhas.reduce((acc, l) => acc + Number(l.vl_pagamento || 0), 0);
+
+    if (totalNovoCredito > 0 && pedido.cadastro_id) {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+      const { data: rpcRes, error: rpcErr } = await (supabase as any).rpc("fu_registrar_movimento_credito", {
+        _empresa_id: Number(XEmpresaId),
+        _cadastro_id: Number(pedido.cadastro_id),
+        _tp_parceiro: "CLIENTE",
+        _tp_movimento: "D",
+        _vl_movimento: totalNovoCredito,
+        _origem_movimento: "ABATE_PEDIDO",
+        _historico: `[PEDIDO ${pedido.nr_movimento || pedido.movimento_id}] Utilização de Crédito do Cliente`,
+        _usuario_id: userId,
+        _movimento_id: pedido.movimento_id
+      });
+
+      if (rpcErr || rpcRes?.error) {
+        toast.error("Erro ao debitar crédito do cliente: " + (rpcErr?.message || rpcRes?.error));
+        return;
+      }
     }
 
     // Atualiza o desconto e o valor total no cabeçalho do pedido

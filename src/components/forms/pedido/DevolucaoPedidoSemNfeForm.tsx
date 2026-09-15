@@ -14,8 +14,11 @@ import {
   AlertTriangle, 
   Send,
   Edit,
-  Trash2
+  Trash2,
+  Wallet,
+  X
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatCPFCNPJ } from "@/lib/validators";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -122,6 +125,18 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
   const [XOpcaoDinheiro, setXOpcaoDinheiro] = useState<"ESPECIE" | "CREDITO" | "">("");
   const [XEstornando, setXEstornando] = useState(false);
   const [XEstornoConcluido, setXEstornoConcluido] = useState(false);
+
+  // Seleção de Caixa Aberto para Estorno
+  const [XCaixasAbertos, setXCaixasAbertos] = useState<{
+    caixa_abertura_id: number;
+    funcionario_id: number;
+    funcionario_nome: string;
+    dt_abertura: string;
+    vl_abertura: number;
+  }[]>([]);
+  const [XCaixaAberturaSel, setXCaixaAberturaSel] = useState<number | null>(null);
+  const [XOpenCaixaModal, setXOpenCaixaModal] = useState(false);
+  const [XVerificandoCaixa, setXVerificandoCaixa] = useState(false);
 
   // Carregar depósitos da empresa
   useEffect(() => {
@@ -444,14 +459,86 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
   };
 
   // --------------------------------------------------
-  // ETAPA 3: EXECUTAR ESTORNO
+  // ETAPA 3: VERIFICAR CAIXA ABERTO E EXECUTAR ESTORNO
   // --------------------------------------------------
-  const executarEstorno = async () => {
+  const iniciarProcessoEstorno = async () => {
     if (!XPedidoSel) return;
+
+    const itensComQt = XItens.filter(it => it.qt_devolver > 0);
+    if (itensComQt.length === 0) {
+      toast.error("Informe a quantidade a devolver de pelo menos 1 item.");
+      return;
+    }
+    if (totalDevolucao <= 0) {
+      toast.error("O valor da devolução deve ser maior que zero.");
+      return;
+    }
     if (XIsDinheiro && !XOpcaoDinheiro) {
       toast.error("Para recebimento em dinheiro, selecione DEVOLVER EM ESPÉCIE ou GERAR CRÉDITO PARA O CLIENTE.");
       return;
     }
+
+    setXVerificandoCaixa(true);
+    try {
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+      // 1. Busca todos os caixas abertos da empresa na data de hoje
+      const { data: aberts, error } = await db.from("caixa_abertura")
+        .select("caixa_abertura_id, funcionario_id, dt_abertura, vl_abertura, status")
+        .eq("empresa_id", XEmpresaId)
+        .eq("status", "A")
+        .eq("dt_abertura", todayStr)
+        .order("caixa_abertura_id", { ascending: false });
+
+      if (error) throw error;
+
+      if (!aberts || aberts.length === 0) {
+        toast.error(`Não existe nenhum caixa aberto na data de hoje (${formatDateBR(todayStr)}) para realizar o processo de estorno. Por favor, abra um caixa para prosseguir.`);
+        return;
+      }
+
+      // 2. Busca nomes dos funcionários/operadores dos caixas abertos
+      const funcIds = Array.from(new Set(aberts.map((a: any) => a.funcionario_id).filter(Boolean)));
+      const funcMap: Record<number, string> = {};
+      if (funcIds.length > 0) {
+        const { data: funcs } = await db.from("funcionario")
+          .select("funcionario_id, nome")
+          .in("funcionario_id", funcIds);
+        (funcs || []).forEach((f: any) => {
+          funcMap[f.funcionario_id] = f.nome;
+        });
+      }
+
+      const caixasFormatados = aberts.map((a: any) => ({
+        caixa_abertura_id: a.caixa_abertura_id,
+        funcionario_id: a.funcionario_id,
+        funcionario_nome: funcMap[a.funcionario_id] || `Funcionário #${a.funcionario_id}`,
+        dt_abertura: a.dt_abertura,
+        vl_abertura: Number(a.vl_abertura || 0),
+      }));
+
+      setXCaixasAbertos(caixasFormatados);
+      setXCaixaAberturaSel(caixasFormatados[0].caixa_abertura_id);
+      setXOpenCaixaModal(true);
+    } catch (err: any) {
+      toast.error("Erro ao verificar caixas abertos: " + (err.message || String(err)));
+    } finally {
+      setXVerificandoCaixa(false);
+    }
+  };
+
+  const confirmarEEfetuarEstornoComCaixa = async () => {
+    if (!XCaixaAberturaSel) {
+      toast.error("Selecione qual caixa aberto será utilizado.");
+      return;
+    }
+    setXOpenCaixaModal(false);
+    await efetuarEstorno(XCaixaAberturaSel);
+  };
+
+  const efetuarEstorno = async (caixaAberturaId: number) => {
+    if (!XPedidoSel) return;
 
     const itensFiltrados = XItens.filter(it => it.qt_devolver > 0).map(it => ({
       movimento_item_id: it.movimento_item_id,
@@ -460,8 +547,6 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
       deposito_id: it.deposito_id,
       vl_devolucao: it.qt_devolver * it.vl_unit_liquido,
     }));
-
-    if (!confirm(`Confirma o estorno de R$ ${fmt(totalDevolucao)} para ${itensFiltrados.length} item(ns)?`)) return;
 
     setXEstornando(true);
     try {
@@ -474,6 +559,7 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
         _usuario_id: userId,
         _opcao_dinheiro: XIsDinheiro ? XOpcaoDinheiro : null,
         _itens: itensFiltrados,
+        _caixa_abertura_id: caixaAberturaId,
       });
 
       if (error) throw error;
@@ -934,12 +1020,12 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
 
               {!XEstornoConcluido ? (
                 <button
-                  onClick={executarEstorno}
-                  disabled={XEstornando || (XIsDinheiro && !XOpcaoDinheiro)}
+                  onClick={iniciarProcessoEstorno}
+                  disabled={XEstornando || XVerificandoCaixa || (XIsDinheiro && !XOpcaoDinheiro)}
                   className="flex items-center gap-2 px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-md disabled:opacity-50 shadow-md transition-all active:scale-95"
                 >
                   <RotateCcw className="w-4 h-4" />
-                  {XEstornando ? "PROCESSANDO ESTORNO..." : "CONFIRMAR E EFETIVAR ESTORNO"}
+                  {XVerificandoCaixa ? "VERIFICANDO CAIXA..." : XEstornando ? "PROCESSANDO ESTORNO..." : "CONFIRMAR E EFETIVAR ESTORNO"}
                 </button>
               ) : XFinanceiros.length > 0 ? (
                 <button
@@ -959,6 +1045,87 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* ================================================== */}
+        {/* MODAL DE SELEÇÃO DE CAIXA ABERTO PARA O ESTORNO */}
+        {/* ================================================== */}
+        <Dialog open={XOpenCaixaModal} onOpenChange={(o) => !o && !XEstornando && setXOpenCaixaModal(false)}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader className="bg-topbar p-4 rounded-t-lg -mx-6 -mt-6 mb-2">
+              <DialogTitle className="text-topbar-foreground font-bold text-base flex items-center gap-2">
+                <Wallet className="w-5 h-5" /> Selecionar Caixa para o Processo de Estorno
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 p-3 rounded-lg text-xs text-amber-900 dark:text-amber-200 space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-sm">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  Selecione o caixa que registrará a operação de estorno
+                </div>
+                <div>
+                  Valor da Devolução: <strong className="font-mono text-sm">R$ {fmt(totalDevolucao)}</strong>
+                  {XIsDinheiro && XOpcaoDinheiro === "ESPECIE" && " (Devolução em Espécie - Débito no Caixa)"}
+                  {XIsDinheiro && XOpcaoDinheiro === "CREDITO" && " (Gerar Crédito para o Cliente)"}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-foreground">Caixas Abertos Disponíveis:</label>
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {XCaixasAbertos.map((c) => {
+                    const isSelected = XCaixaAberturaSel === c.caixa_abertura_id;
+                    return (
+                      <div
+                        key={c.caixa_abertura_id}
+                        onClick={() => setXCaixaAberturaSel(c.caixa_abertura_id)}
+                        className={`p-3 rounded-lg border-2 cursor-pointer transition-all flex items-center justify-between text-xs ${
+                          isSelected
+                            ? "bg-primary/10 border-primary ring-1 ring-primary/30"
+                            : "bg-card border-border hover:bg-accent/40"
+                        }`}
+                      >
+                        <div className="space-y-1">
+                          <div className="font-bold text-sm flex items-center gap-2">
+                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-primary bg-primary" : "border-muted-foreground"}`}>
+                              {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </div>
+                            <span>Caixa Abertura #{c.caixa_abertura_id}</span>
+                          </div>
+                          <div className="text-muted-foreground pl-6">
+                            Operador/Funcionário: <strong>{c.funcionario_nome}</strong>
+                          </div>
+                          <div className="text-muted-foreground font-mono text-[11px] pl-6">
+                            Abertura: {formatDateBR(c.dt_abertura)} · Saldo Abertura: R$ {fmt(c.vl_abertura)}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setXOpenCaixaModal(false)}
+                  disabled={XEstornando}
+                  className="px-4 py-2 text-xs font-semibold rounded border border-border hover:bg-accent flex items-center gap-1"
+                >
+                  <X className="w-3.5 h-3.5 text-rose-500" /> Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmarEEfetuarEstornoComCaixa}
+                  disabled={XEstornando || !XCaixaAberturaSel}
+                  className="px-5 py-2 text-xs font-bold rounded bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1.5 shadow-md disabled:opacity-50"
+                >
+                  <RotateCcw className="w-4 h-4" /> {XEstornando ? "ESTORNANDO..." : "CONFIRMAR E EFETIVAR ESTORNO"}
+                </button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* ================================================== */}
         {/* ETAPA 4: AJUSTE FINANCEIRO */}

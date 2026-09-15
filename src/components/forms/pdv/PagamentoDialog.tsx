@@ -184,19 +184,37 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
     const c = XCondicoes.find(x => x.condicao_id === condicaoId);
     if (!c) return false;
 
-    // Check by ID (3=Crédito, 4=Débito are defaults, but let's be more flexible)
-    if ([3, 4, 10, 11].includes(c.meio_pagamento_id || 0)) return true;
+    const cDesc = (c.descricao || "").toLowerCase();
+    // Se for Crédito do Cliente / Utilizar Crédito, JAMAIS exige dados de cartão!
+    if (
+      cDesc.includes("utilizar crédito") || 
+      cDesc.includes("utilizar credito") || 
+      cDesc.includes("crédito de cliente") || 
+      cDesc.includes("credito de cliente") ||
+      cDesc === "credito" ||
+      cDesc === "crédito"
+    ) {
+      return false;
+    }
+
+    const mp = XMeiosPagamento.find(m => m.meio_pagamento_id === c.meio_pagamento_id);
+    const mpDesc = (mp?.descricao || "").toLowerCase();
+    if (mpDesc.includes("cliente")) return false;
+
+    // Check by ID (3=Cartão Crédito, 4=Cartão Débito)
+    if ([3, 4, 10, 11].includes(c.meio_pagamento_id || 0)) {
+      return true;
+    }
     
     // Check by description in MeioPagamento if available
-    const mp = XMeiosPagamento.find(m => m.meio_pagamento_id === c.meio_pagamento_id);
-    if (mp) {
-      const desc = mp.descricao.toLowerCase();
-      if (desc.includes("cartão") || desc.includes("cartao") || desc.includes("card") || desc.includes("débito") || desc.includes("debito") || desc.includes("crédito") || desc.includes("credito")) return true;
+    if (mpDesc.includes("cartão") || mpDesc.includes("cartao") || mpDesc.includes("card")) {
+      return true;
     }
     
     // Check by condition description as last resort
-    const cDesc = c.descricao.toLowerCase();
-    if (cDesc.includes("cartão") || cDesc.includes("cartao") || cDesc.includes("débito") || cDesc.includes("debito")) return true;
+    if (cDesc.includes("cartão") || cDesc.includes("cartao") || cDesc.includes("card")) {
+      return true;
+    }
     
     return false;
   }, [XCondicoes, XMeiosPagamento]);
@@ -212,9 +230,12 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
     const cond = XCondicoes.find(c => c.condicao_id === XCondicaoId);
     if (!cond) return XPortadores;
 
+    const descLower = (cond.descricao || "").toLowerCase();
+    const isCredito = descLower.includes("crédito") || descLower.includes("credito");
+
     const mpId = Number(cond.meio_pagamento_id || 0);
-    // Se for Dinheiro/Crediário/Duplicata/Posterior (1, 5, 14, 91)
-    if ([1, 5, 14, 91].includes(mpId)) {
+    // Se for Dinheiro/Crediário/Duplicata/Posterior/Crédito do Cliente (1, 5, 14, 91 ou isCredito)
+    if ([1, 5, 14, 91].includes(mpId) || isCredito) {
       return XPortadores.filter(p => p.banco_id === null || p.banco_id === 0);
     }
     // Se for Banco/Cartão/Pix (3, 4, 15, 16, 17, 20)

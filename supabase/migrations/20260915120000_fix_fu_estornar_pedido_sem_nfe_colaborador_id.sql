@@ -1,7 +1,6 @@
--- Migration: 20260914190000_update_estorno_status_and_pdv_lock.sql
--- Description: Atualiza fu_estornar_pedido_sem_nfe para definir status 'EP' (ESTORNADO PARCIAL) ou 'E' (ESTORNADO TOTAL) e bloqueia o estorno no caixa via fu_pdv_estornar_venda se houver devolução prévia de itens.
+-- Migration: 20260915120000_fix_fu_estornar_pedido_sem_nfe_colaborador_id.sql
+-- Description: Fix NOT NULL constraint violation on colaborador_id and funcionario_id when creating caixa_movimento in fu_estornar_pedido_sem_nfe.
 
--- 1. Atualização da RPC fu_estornar_pedido_sem_nfe
 CREATE OR REPLACE FUNCTION public.fu_estornar_pedido_sem_nfe(
   _movimento_id bigint,
   _empresa_id bigint,
@@ -33,6 +32,7 @@ DECLARE
   v_new_cm_id bigint;
   v_pendente_qtd numeric := 0;
   v_novo_st_pedido text;
+  v_funcionario_id integer := 0;
 BEGIN
   -- 1. Verifica existência do movimento
   SELECT * INTO v_mov 
@@ -166,9 +166,26 @@ BEGIN
         LIMIT 1;
 
         IF _caixa_abertura_id IS NULL THEN
-          RETURN jsonb_build_object('error', 'Não há caixa aberto na data de hoje para registrar a saída em espécie.');
+          -- Fallback: busca qualquer caixa aberto se não houver um hoje
+          SELECT caixa_abertura_id INTO _caixa_abertura_id
+          FROM public.caixa_abertura
+          WHERE empresa_id = _empresa_id
+            AND status = 'A'
+          ORDER BY caixa_abertura_id DESC
+          LIMIT 1;
+        END IF;
+
+        IF _caixa_abertura_id IS NULL THEN
+          RETURN jsonb_build_object('error', 'Não há caixa aberto disponível para registrar a saída em espécie.');
         END IF;
       END IF;
+
+      -- Obter funcionario_id / colaborador_id do caixa_abertura ou do movimento
+      SELECT funcionario_id INTO v_funcionario_id
+      FROM public.caixa_abertura
+      WHERE caixa_abertura_id = _caixa_abertura_id;
+
+      v_funcionario_id := COALESCE(v_funcionario_id, v_mov.funcionario_id, 0);
 
       -- Gera DÉBITO/SAÍDA no caixa SOMENTE para v_vl_dinheiro_estorno
       INSERT INTO public.caixa_movimento (
@@ -178,9 +195,9 @@ BEGIN
         movimento_id, caixa_abertura_id,
         excluido, dt_cadastro, dt_alteracao
       ) VALUES (
-        _empresa_id, NULL, NULL,
+        _empresa_id, v_funcionario_id, v_funcionario_id,
         CURRENT_DATE, 'S', 'S',
-        'DEVOLUÇÃO EM ESPÉCIE - PEDIDO N° ' || COALESCE(v_mov.nr_movimento::text, _movimento_id::text),
+        'DEVOLUÇÃO EM ESPÉCIE - PEDIDO ' || COALESCE(v_mov.nr_movimento::text, _movimento_id::text),
         -v_vl_dinheiro_estorno,
         _movimento_id::integer, _caixa_abertura_id,
         false, now(), now()
@@ -211,7 +228,7 @@ BEGIN
           _tp_movimento          := 'C',
           _vl_movimento          := v_vl_dinheiro_estorno,
           _origem_movimento      := 'ESTORNO_PEDIDO_SEM_NFE',
-          _historico             := 'CRÉDITO DO CLIENTE GERADO POR ESTORNO SEM NF-E (PARCELA DINHEIRO R$ ' || to_char(v_vl_dinheiro_estorno, 'FM999G999G990D00') || ') DO PEDIDO N° ' || COALESCE(v_mov.nr_movimento::text, _movimento_id::text),
+          _historico             := 'CRÉDITO DO CLIENTE GERADO POR ESTORNO SEM NF-E (PARCELA DINHEIRO R$ ' || to_char(v_vl_dinheiro_estorno, 'FM999G999G990D00') || ') DO PEDIDO ' || COALESCE(v_mov.nr_movimento::text, _movimento_id::text),
           _usuario_id            := _usuario_id,
           _movimento_id          := _movimento_id
         );
@@ -248,7 +265,7 @@ BEGIN
       'vl_total_devolucao', v_total_devolucao,
       'vl_dinheiro_estorno', v_vl_dinheiro_estorno,
       'meio_dinheiro', v_meio_dinheiro,
-      'novo_st_pedido', v_novo_st_pedido
+      'estorno_total', (v_pendente_qtd <= 0)
     ), 
     _usuario_id
   );
@@ -266,133 +283,5 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
-
--- 2. Atualização da RPC fu_pdv_estornar_venda (Bloqueia estorno de recebimento no caixa se já houver devolução de itens parcial/total)
-CREATE OR REPLACE FUNCTION public.fu_pdv_estornar_venda(
-  _movimento_id bigint, 
-  _usuario_id uuid DEFAULT NULL::uuid
-) 
-RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $$
-DECLARE
-  v_mov RECORD;
-  v_item RECORD;
-  v_valor_deduzir_caixa numeric := 0;
-  v_caixa_abertura_id bigint;
-  v_soma_caixa boolean;
-  v_deposito_id bigint;
-BEGIN
-  -- 1. Verifica movimento
-  SELECT * INTO v_mov FROM public.movimento WHERE movimento_id = _movimento_id AND excluido = false;
-  IF NOT FOUND THEN
-    RETURN jsonb_build_object('error', 'Movimento não encontrado.');
-  END IF;
-
-  -- Bloqueio estrito: Se o pedido já possui status EP (Estornado Parcial), E (Estornado Total) ou C (Cancelado)
-  -- ou se qualquer item já possui qt_devolvido > 0
-  IF v_mov.st_pedido IN ('EP', 'E', 'C') OR EXISTS (
-    SELECT 1 FROM public.movimento_item 
-    WHERE movimento_id = _movimento_id AND COALESCE(qt_devolvido, 0) > 0 AND excluido = false
-  ) THEN
-    RETURN jsonb_build_object('error', 'Este pedido possui estorno parcial ou total de produtos realizado e não pode ser estornado no caixa.');
-  END IF;
-
-  IF v_mov.st_pedido <> 'R' THEN
-    RETURN jsonb_build_object('error', 'Apenas vendas finalizadas (status R) podem ser estornadas no caixa.');
-  END IF;
-
-  -- 2. Restaura estoque
-  FOR v_item IN SELECT * FROM public.movimento_item WHERE movimento_id = _movimento_id AND excluido = false LOOP
-    v_deposito_id := COALESCE(v_item.deposito_id, v_mov.deposito_id, 1);
-
-    IF NOT EXISTS (SELECT 1 FROM public.estoque WHERE produto_id = v_item.produto_id AND empresa_id = v_mov.empresa_id AND deposito_id = v_deposito_id) THEN
-        INSERT INTO public.estoque (produto_id, empresa_id, deposito_id, estoque_fisico, estoque_reservado)
-        VALUES (v_item.produto_id, v_mov.empresa_id, v_deposito_id, 0, 0);
-    END IF;
-
-    IF UPPER(COALESCE(v_item.entrega, 'N')) = 'S' THEN
-      NULL;
-    ELSE
-      UPDATE public.estoque 
-      SET estoque_reservado = estoque_reservado + v_item.qt_movimento
-      WHERE produto_id = v_item.produto_id AND empresa_id = v_mov.empresa_id AND deposito_id = v_deposito_id;
-
-      INSERT INTO public.estoque_log (
-          empresa_id, produto_id, deposito_id,
-          qt_movimento, operacao, origem,
-          nr_doc, usuario, dt_hs_log
-      ) VALUES (
-          v_mov.empresa_id, v_item.produto_id, v_deposito_id,
-          v_item.qt_movimento,
-          'ESTORNO_VENDA', 'CAIXA',
-          _movimento_id::varchar, COALESCE(_usuario_id::varchar, 'SISTEMA'), now()
-      );
-    END IF;
-  END LOOP;
-
-  -- 3. Dedução de caixa
-  FOR v_item IN 
-    SELECT cmi.vl_recebido, cmi.meio_pagamento_id 
-    FROM public.caixa_movimento_item cmi
-    JOIN public.caixa_movimento cm ON cm.caixa_movimento_id = cmi.caixa_movimento_id
-    WHERE cm.movimento_id = _movimento_id AND cm.excluido = false
-  LOOP
-    IF v_item.meio_pagamento_id IS NOT NULL THEN
-      SELECT UPPER(soma_vl_caixa) = 'S' INTO v_soma_caixa FROM public.meio_pagamento WHERE meio_pagamento_id = v_item.meio_pagamento_id;
-      IF v_soma_caixa THEN
-        v_valor_deduzir_caixa := v_valor_deduzir_caixa + v_item.vl_recebido;
-      END IF;
-    END IF;
-  END LOOP;
-
-  IF v_valor_deduzir_caixa > 0 THEN
-    SELECT DISTINCT caixa_abertura_id INTO v_caixa_abertura_id
-    FROM public.caixa_movimento
-    WHERE movimento_id = _movimento_id AND excluido = false;
-    
-    IF v_caixa_abertura_id IS NOT NULL THEN
-      UPDATE public.caixa_abertura
-      SET vl_fechamento = GREATEST(0, COALESCE(vl_fechamento, 0) - v_valor_deduzir_caixa)
-      WHERE caixa_abertura_id = v_caixa_abertura_id;
-    END IF;
-  END IF;
-
-  -- 4. Exclui lançamentos de caixa
-  DELETE FROM public.caixa_movimento_item WHERE caixa_movimento_id IN (
-    SELECT caixa_movimento_id FROM public.caixa_movimento WHERE movimento_id = _movimento_id
-  );
-  DELETE FROM public.caixa_movimento WHERE movimento_id = _movimento_id;
-
-  -- 5. Exclui as baixas de financeiro_baixa vinculadas aos títulos do movimento
-  DELETE FROM public.financeiro_baixa 
-  WHERE financeiro_id IN (
-    SELECT financeiro_id FROM public.financeiro WHERE movimento_id = _movimento_id
-  );
-
-  -- Retorna os títulos do financeiro para o status 'A' (ABERTO) com valor pago 0 e despesa 0
-  UPDATE public.financeiro 
-  SET status = 'A',
-      vl_pago = 0,
-      vl_despesa = 0,
-      dt_alteracao = now()
-  WHERE movimento_id = _movimento_id;
-
-  -- 6. Atualiza o status do movimento para 'C' (CANCELADO NO CAIXA)
-  UPDATE public.movimento 
-  SET st_pedido = 'C',
-      dt_cancelamento = now(),
-      dt_alteracao = now()
-  WHERE movimento_id = _movimento_id;
-
-  RETURN jsonb_build_object('success', true);
-
-EXCEPTION WHEN OTHERS THEN
-  RETURN jsonb_build_object('error', SQLERRM);
-END;
-$$;
-
--- Recarrega esquema no PostgREST
+-- Recarrega esquema
 NOTIFY pgrst, 'reload schema';

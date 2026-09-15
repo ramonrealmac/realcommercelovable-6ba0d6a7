@@ -99,7 +99,7 @@ BEGIN
       SELECT caixa_abertura_id INTO _caixa_abertura_id
       FROM public.caixa_abertura
       WHERE empresa_id = _empresa_id
-        AND st_caixa = 'A'
+        AND status = 'A'
         AND excluido = false
       ORDER BY caixa_abertura_id DESC
       LIMIT 1;
