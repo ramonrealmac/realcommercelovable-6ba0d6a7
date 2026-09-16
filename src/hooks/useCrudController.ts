@@ -27,6 +27,7 @@ export interface ICrudConfig<T extends Record<string, any>> {
   XSoftDelete?: boolean;             // default true (uses excluido = true)
   XNmForm?: string;                  // Nome do formulário para busca de relatórios vinculados
   XCanEdit?: (rec: T) => boolean;     // Função para validar se o registro atual pode ser editado
+  XCanDelete?: (rec: T) => boolean;   // Função para validar se o registro atual pode ser excluído
   XUsePagination?: boolean;           // Ativa carregamento paginado via range
   XPageSize?: number;                 // Tamanho da página (default 50)
   XKeepEditAfterInsert?: boolean;
@@ -258,6 +259,14 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
 
   const handleExcluir = useCallback(async () => {
     if (!XCurrentRecord) return;
+    if (config.XCanDelete && !config.XCanDelete(XCurrentRecord)) {
+      toast.warning("Este registro não pode ser excluído.");
+      return;
+    }
+    if (config.XCanEdit && !config.XCanEdit(XCurrentRecord)) {
+      toast.warning("Este registro não pode ser excluído.");
+      return;
+    }
     if (!confirm("Deseja realmente excluir este registro?")) return;
 
     const pkVal = XCurrentRecord[config.XPrimaryKey];

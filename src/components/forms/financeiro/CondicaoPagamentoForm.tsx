@@ -18,6 +18,7 @@ interface ICondicao {
   empresa_id: number;
   promocao: string | null;
   st_avista: string | null;
+  tp_financeiro: string | null;
 }
 
 const TIPO_PRAZO_OPTIONS = [
@@ -37,12 +38,19 @@ const ST_AVISTA_OPTIONS = [
   { v: "N", l: "NÃO" },
 ];
 
+const TP_FINANCEIRO_OPTIONS = [
+  { v: "N", l: "NÃO GERA FINANCEIRO" },
+  { v: "B", l: "FINANCEIRO BAIXADO" },
+  { v: "V", l: "FINANCEIRO A VENCER" },
+];
+
 const PRAZO_KEYS = ["prazo_1","prazo_2","prazo_3","prazo_4","prazo_5","prazo_6","prazo_7","prazo_8","prazo_9","prazo_10","prazo_11","prazo_12"] as const;
 
 const XDefault: Partial<ICondicao> = {
   descricao: "", tipo_prazo: "F", meio_pagamento_id: null, cd_condicao_pagamento: null, qtd_parcelas: null, intervalo: null,
   promocao: "N",
   st_avista: "N",
+  tp_financeiro: "V",
   prazo_1: 0, prazo_2: 0, prazo_3: 0, prazo_4: 0, prazo_5: 0, prazo_6: 0,
   prazo_7: 0, prazo_8: 0, prazo_9: 0, prazo_10: 0, prazo_11: 0, prazo_12: 0,
 };
@@ -68,7 +76,7 @@ const CondicaoPagamentoForm: React.FC = () => {
 
   const XGridCols = React.useMemo<IGridColumn[]>(() => [
     { key: "cd_condicao_pagamento", label: "Código", width: "80px", align: "right" },
-    { key: "descricao", label: "Descrição", width: "200px" },
+    { key: "descricao", label: "Descrição", width: "320px" },
     { 
       key: "st_avista", 
       label: "À Vista", 
@@ -81,9 +89,25 @@ const CondicaoPagamentoForm: React.FC = () => {
       )
     },
     { 
+      key: "tp_financeiro", 
+      label: "Financeiro", 
+      width: "180px",
+      align: "center",
+      render: (row: ICondicao) => {
+        const val = row.tp_financeiro;
+        if (val === "N") {
+          return <span className="font-semibold text-rose-600 bg-rose-50 dark:bg-rose-950/30 px-2 py-0.5 rounded border border-rose-200 dark:border-rose-800 text-xs">NÃO GERA FINANCEIRO</span>;
+        }
+        if (val === "B") {
+          return <span className="font-semibold text-blue-600 bg-blue-50 dark:bg-blue-950/30 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 text-xs">FINANCEIRO BAIXADO</span>;
+        }
+        return <span className="font-semibold text-amber-600 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800 text-xs">FINANCEIRO A VENCER</span>;
+      }
+    },
+    { 
       key: "meio_pagamento_id", 
       label: "Meio de Pagamento", 
-      width: "200px",
+      width: "280px",
       render: (row) => {
         const found = XMeiosPagamento.find(m => m.meio_pagamento_id === row.meio_pagamento_id);
         return found ? found.descricao : (row.meio_pagamento_id ?? "");
@@ -174,6 +198,8 @@ const CondicaoPagamentoForm: React.FC = () => {
             meio_pagamento_id: rec.meio_pagamento_id || null,
             tipo_prazo: rec.tipo_prazo || null,
             promocao: rec.promocao || "N",
+            st_avista: rec.st_avista || "N",
+            tp_financeiro: rec.tp_financeiro || "V",
             qtd_parcelas: rec.tipo_prazo === "U" ? 1 : rec.tipo_prazo === "F" ? (parseInt(String(rec.qtd_parcelas)) || null) : null,
             intervalo: rec.tipo_prazo === "F" ? (parseInt(String(rec.intervalo)) || null) : null,
           };
@@ -206,6 +232,7 @@ const CondicaoPagamentoForm: React.FC = () => {
 
         return (
           <div className="space-y-4 pt-3 md:pt-0" onKeyDown={handleKeyDown}>
+            {/* Linha 1: Código, Empresa, Descrição, Meio de Pagamento, À Vista?, Financeiro */}
             <div className="grid grid-cols-1 md:flex md:flex-wrap md:gap-4 gap-5">
               <div className="w-full md:w-32">
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Código</label>
@@ -230,7 +257,7 @@ const CondicaoPagamentoForm: React.FC = () => {
                 />
               </div>
               
-              <div className="flex-1 min-w-[200px]">
+              <div className="flex-1 min-w-[280px]">
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Descrição <span className="text-destructive">*</span></label>
                 <input
                   type="text"
@@ -242,7 +269,7 @@ const CondicaoPagamentoForm: React.FC = () => {
                 />
               </div>
 
-              <div className="w-full md:w-64">
+              <div className="w-full md:w-80">
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Meio de Pagamento</label>
                 <select
                   value={record.meio_pagamento_id ?? ""}
@@ -279,6 +306,27 @@ const CondicaoPagamentoForm: React.FC = () => {
                 </select>
               </div>
 
+              <div className="w-full md:w-56">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Financeiro</label>
+                <select
+                  value={record.tp_financeiro ?? "V"}
+                  onChange={e => setField("tp_financeiro", e.target.value)}
+                  disabled={!isEditing}
+                  className={`w-full border border-border rounded px-3 py-1.5 text-sm h-[34px] ${
+                    isEditing ? "bg-card focus:ring-2 focus:ring-ring outline-none cursor-pointer" : "bg-secondary text-muted-foreground appearance-none disabled:opacity-100"
+                  }`}
+                >
+                  {TP_FINANCEIRO_OPTIONS.map(o => (
+                    <option key={o.v} value={o.v}>
+                      {o.l}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Linha 2: Promoção, Tipo de Prazo, Parcelas, Intervalo (dias) */}
+            <div className="grid grid-cols-1 md:flex md:flex-wrap md:gap-4 gap-5">
               <div className="w-full md:w-36">
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Promoção</label>
                 <select

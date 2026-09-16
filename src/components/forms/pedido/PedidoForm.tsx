@@ -1291,6 +1291,14 @@ const PedidoForm: React.FC = () => {
           XOrderBy: "movimento_id",
           XKeepEditAfterInsert: true,
           XApplyFilter: (q) => q.in("tp_movimento", ["PD", "SV", "OR"]),
+          XCanEdit: (rec) => {
+            if (!rec || !rec.st_pedido) return true;
+            return rec.st_pedido === "O";
+          },
+          XCanDelete: (rec) => {
+            if (!rec || !rec.st_pedido) return true;
+            return rec.st_pedido === "O";
+          },
           XOnAfterLoad: (rows: any[]) => {
             const ids = Array.from(new Set(rows.map(r => r.cadastro_id).filter(Boolean))) as number[];
             if (ids.length) ensureClienteInfo(ids);
@@ -1366,7 +1374,7 @@ const PedidoForm: React.FC = () => {
             if (rec.faturado === "S") {
               throw new Error("Não é possível excluir um pedido já faturado.");
             }
-            if (rec.st_pedido === "EP" || rec.st_pedido === "E" || rec.st_pedido === "C") {
+            if (rec.st_pedido && rec.st_pedido !== "O") {
               throw new Error(`Não é possível excluir um pedido com status ${ST_PEDIDO_LABELS[rec.st_pedido] || rec.st_pedido}.`);
             }
             if (rec.movimento_id) {
