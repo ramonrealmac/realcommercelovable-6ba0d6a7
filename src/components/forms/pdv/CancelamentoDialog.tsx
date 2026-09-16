@@ -93,17 +93,32 @@ const CancelamentoDialog: React.FC<IProps> = ({ open, caixaNome, onClose, onCanc
     if (!confirm("Confirma o cancelamento desta venda?")) return;
     setXSalvando(true);
     try {
-      const { error } = await db.from("movimento").update({
-        st_pedido: "C",
-        dt_cancelamento: new Date().toISOString(),
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+
+      // 1. Chama a RPC do banco para apagar financeiro, devolver estoque e atualizar status para 'C'
+      const { data, error: rpcErr } = await db.rpc("fu_mudar_status_pedido_pdv", {
+        _movimento_id: XSelId,
+        _novo_status: "C",
+        _usuario_id: userId,
+      });
+
+      if (rpcErr) { toast.error(rpcErr.message); return; }
+      if (data?.error) { toast.error(data.error); return; }
+
+      // 2. Grava o motivo do cancelamento
+      await db.from("movimento").update({
         mot_cancelamento: XMotivo.trim(),
       }).eq("movimento_id", XSelId);
-      if (error) { toast.error(error.message); return; }
+
       const ped = XPedidos.find(p => p.movimento_id === XSelId)!;
       imprimirComprovante(ped, XMotivo.trim());
-      toast.success("Venda cancelada.");
+      toast.success("Venda cancelada com sucesso. Financeiro removido e estoque atualizado.");
       onCancelado();
       onClose();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error("Erro ao cancelar venda: " + msg);
     } finally { setXSalvando(false); }
   };
 

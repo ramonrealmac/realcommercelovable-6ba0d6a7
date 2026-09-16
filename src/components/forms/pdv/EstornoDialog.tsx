@@ -66,7 +66,7 @@ const EstornoDialog: React.FC<IProps> = ({ open, onClose, onEstornado }) => {
 
   const estornar = async () => {
     if (!XSelId) { toast.error("Selecione um pedido."); return; }
-    if (!confirm("Confirma o estorno desta venda? O pedido voltará para o caixa no estado de pré-venda (digitação).")) return;
+    if (!confirm("Confirma o estorno desta venda? O financeiro será apagado, o estoque devolvido e o pedido voltará para o status Em Aberto para poder ser alterado.")) return;
     setXSalvando(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -80,7 +80,7 @@ const EstornoDialog: React.FC<IProps> = ({ open, onClose, onEstornado }) => {
       if (error) { toast.error(error.message); return; }
       if (data?.error) { toast.error(data.error); return; }
 
-      toast.success("Venda estornada com sucesso.");
+      toast.success("Venda estornada com sucesso. Financeiro apagado, estoque devolvido e pedido em aberto.");
       onEstornado();
       onClose();
     } catch (err: unknown) {

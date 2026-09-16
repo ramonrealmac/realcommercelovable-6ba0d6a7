@@ -296,20 +296,20 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
       cmiItems.forEach((it: any) => {
         const mpId = it.meio_pagamento_id || 1;
         const mpInfo = mpMap[mpId] || { descricao: mpId === 1 ? "Dinheiro" : `Meio #${mpId}`, soma_vl_caixa: "N" };
-        const desc = mpInfo.descricao;
-        if (mpId === 1 || String(mpInfo.soma_vl_caixa).toUpperCase() === "S") temDinheiro = true;
+        const desc = mpInfo.descricao.toLowerCase();
+        if (mpId === 1 || String(mpInfo.soma_vl_caixa).toUpperCase() === "S" || desc.includes("crédito") || desc.includes("credito")) temDinheiro = true;
 
         const idx = formas.findIndex(f => f.id === mpId);
         if (idx >= 0) {
           formas[idx].valor += Number(it.vl_recebido || 0);
         } else {
-          formas.push({ id: mpId, descricao: desc, valor: Number(it.vl_recebido || 0) });
+          formas.push({ id: mpId, descricao: mpInfo.descricao, valor: Number(it.vl_recebido || 0) });
         }
       });
 
       if (formas.length === 0) {
         const { data: mpRows } = await db.from("movimento_pagamento")
-          .select("meio_pagamento_id, vl_parcela")
+          .select("meio_pagamento_id, vl_parcela, condicao_pagamento(descricao)")
           .eq("movimento_id", movId)
           .eq("excluido", false);
 
@@ -332,7 +332,8 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
         (mpRows || []).forEach((r: any) => {
           const mpId = r.meio_pagamento_id || 1;
           const info = pagMpMap[mpId] || { descricao: mpId === 1 ? "Dinheiro" : `Meio #${mpId}`, soma_vl_caixa: "N" };
-          if (mpId === 1 || String(info.soma_vl_caixa).toUpperCase() === "S") temDinheiro = true;
+          const cDesc = (r.condicao_pagamento?.descricao || "").toLowerCase();
+          if (mpId === 1 || String(info.soma_vl_caixa).toUpperCase() === "S" || cDesc.includes("crédito") || cDesc.includes("credito")) temDinheiro = true;
           formas.push({ id: mpId, descricao: info.descricao, valor: Number(r.vl_parcela || 0) });
         });
       }
