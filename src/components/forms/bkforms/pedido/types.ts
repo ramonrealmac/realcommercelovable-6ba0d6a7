@@ -76,6 +76,8 @@ export const ST_PEDIDO_LABELS: Record<string, string> = {
   P: "Pedido",
   V: "Venda",
   C: "Cancelado",
+  E: "ESTORNADO",
+  EP: "ESTORNO PARCIAL",
 };
 
 export const TP_DESCONTO_LABELS: Record<string, string> = {

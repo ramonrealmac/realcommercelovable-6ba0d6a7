@@ -100,6 +100,7 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
   const [XChaveNfe, setXChaveNfe] = useState<string>("");
   const [XFormasRecebimento, setXFormasRecebimento] = useState<{ id: number; descricao: string; valor: number }[]>([]);
   const [XIsDinheiro, setXIsDinheiro] = useState(false);
+  const [XTemSemFinanceiro, setXTemSemFinanceiro] = useState(false);
   const [XFinanceiros, setXFinanceiros] = useState<IFinanceiroItem[]>([]);
 
   // Etapa 2 - Itens & Depósitos
@@ -123,6 +124,7 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
 
   // Etapa 3 - Conferência e Estorno
   const [XOpcaoDinheiro, setXOpcaoDinheiro] = useState<"ESPECIE" | "CREDITO" | "">("");
+  const [XOpcoesFinBaixadoMap, setXOpcoesFinBaixadoMap] = useState<Record<number, "ESPECIE" | "CREDITO">>({});
   const [XEstornando, setXEstornando] = useState(false);
   const [XEstornoConcluido, setXEstornoConcluido] = useState(false);
 
@@ -297,7 +299,7 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
         const mpId = it.meio_pagamento_id || 1;
         const mpInfo = mpMap[mpId] || { descricao: mpId === 1 ? "Dinheiro" : `Meio #${mpId}`, soma_vl_caixa: "N" };
         const desc = mpInfo.descricao.toLowerCase();
-        if (mpId === 1 || String(mpInfo.soma_vl_caixa).toUpperCase() === "S" || desc.includes("crédito") || desc.includes("credito")) temDinheiro = true;
+        if (mpId === 1 || desc.includes("dinheiro") || desc.includes("espécie")) temDinheiro = true;
 
         const idx = formas.findIndex(f => f.id === mpId);
         if (idx >= 0) {
@@ -307,11 +309,19 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
         }
       });
 
-      if (formas.length === 0) {
-        const { data: mpRows } = await db.from("movimento_pagamento")
-          .select("meio_pagamento_id, vl_parcela, condicao_pagamento(descricao)")
-          .eq("movimento_id", movId)
-          .eq("excluido", false);
+      let temSemFinanceiro = false;
+
+      // 2. Buscar pagamentos e verificar tp_financeiro em condicao_pagamento
+      const { data: mpRows } = await db.from("movimento_pagamento")
+        .select("meio_pagamento_id, vl_parcela, condicao_id, condicao_pagamento(condicao_id, descricao, tp_financeiro)")
+        .eq("movimento_id", movId)
+        .eq("excluido", false);
+
+      if (mpRows && mpRows.length > 0) {
+        temSemFinanceiro = mpRows.some((r: any) => {
+          const tpFin = r.condicao_pagamento?.tp_financeiro;
+          return tpFin === "N" || !r.condicao_id;
+        });
 
         const pagMpIds = Array.from(new Set((mpRows || []).map((r: any) => r.meio_pagamento_id).filter(Boolean)));
         let pagMpMap: Record<number, { descricao: string; soma_vl_caixa: string }> = {};
@@ -332,11 +342,20 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
         (mpRows || []).forEach((r: any) => {
           const mpId = r.meio_pagamento_id || 1;
           const info = pagMpMap[mpId] || { descricao: mpId === 1 ? "Dinheiro" : `Meio #${mpId}`, soma_vl_caixa: "N" };
-          const cDesc = (r.condicao_pagamento?.descricao || "").toLowerCase();
-          if (mpId === 1 || String(info.soma_vl_caixa).toUpperCase() === "S" || cDesc.includes("crédito") || cDesc.includes("credito")) temDinheiro = true;
           formas.push({ id: mpId, descricao: info.descricao, valor: Number(r.vl_parcela || 0) });
         });
+      } else if (cmiItems && cmiItems.length > 0) {
+        temSemFinanceiro = cmiItems.some((it: any) => {
+          const mpId = it.meio_pagamento_id || 1;
+          const mpInfo = mpMap[mpId] || { soma_vl_caixa: "N" };
+          return mpId === 1 || String(mpInfo.soma_vl_caixa).toUpperCase() === "S";
+        });
+      } else {
+        temSemFinanceiro = true;
       }
+
+      setXTemSemFinanceiro(temSemFinanceiro);
+      setXIsDinheiro(temSemFinanceiro);
 
       // 3. Carregar financeiro vinculado
       const { data: finData } = await db.from("financeiro")
@@ -389,6 +408,15 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
         return;
       }
 
+      const initialFinMap: Record<number, "ESPECIE" | "CREDITO"> = {};
+      (finData || []).forEach((f: any) => {
+        const st = String(f.status || "").toUpperCase();
+        if (st === "B" || st === "BAIXADO" || Number(f.vl_pago || 0) > 0) {
+          initialFinMap[f.financeiro_id] = "ESPECIE";
+        }
+      });
+      setXOpcoesFinBaixadoMap(initialFinMap);
+
       setXPedidoSel(mov);
       setXFormasRecebimento(formas);
       setXIsDinheiro(temDinheiro);
@@ -437,10 +465,13 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
   }, [XItens]);
 
   const vlDinheiroOriginal = useMemo(() => {
-    return XFormasRecebimento
-      .filter(f => f.id === 1 || f.descricao?.toLowerCase().includes("dinheiro"))
+    if (!XTemSemFinanceiro) return 0;
+    const totalCaixaDirect = XFormasRecebimento
+      .filter(f => f.id === 1 || f.descricao?.toLowerCase().includes("dinheiro") || f.descricao?.toLowerCase().includes("espécie"))
       .reduce((acc, f) => acc + (f.valor || 0), 0);
-  }, [XFormasRecebimento]);
+
+    return totalCaixaDirect > 0 ? totalCaixaDirect : totalDevolucao;
+  }, [XTemSemFinanceiro, XFormasRecebimento, totalDevolucao]);
 
   const vlDinheiroEstorno = useMemo(() => {
     return Math.min(totalDevolucao, vlDinheiroOriginal);
@@ -456,7 +487,11 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
       toast.error("O valor da devolução deve ser maior que zero.");
       return;
     }
-    setXStep(3);
+    if (!XTemSemFinanceiro && XFinanceiros.length > 0) {
+      setXStep(4);
+    } else {
+      setXStep(3);
+    }
   };
 
   // --------------------------------------------------
@@ -475,7 +510,7 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
       return;
     }
     if (XIsDinheiro && !XOpcaoDinheiro) {
-      toast.error("Para recebimento em dinheiro, selecione DEVOLVER EM ESPÉCIE ou GERAR CRÉDITO PARA O CLIENTE.");
+      toast.error("Para recebimento em dinheiro ou títulos baixados, selecione DEVOLVER EM ESPÉCIE ou GERAR CRÉDITO PARA O CLIENTE.");
       return;
     }
 
@@ -558,7 +593,7 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
         _movimento_id: XPedidoSel.movimento_id,
         _empresa_id: XEmpresaId,
         _usuario_id: userId,
-        _opcao_dinheiro: XIsDinheiro ? XOpcaoDinheiro : null,
+        _opcao_dinheiro: XOpcaoDinheiro || Object.values(XOpcoesFinBaixadoMap)[0] || "ESPECIE",
         _itens: itensFiltrados,
         _caixa_abertura_id: caixaAberturaId,
       });
@@ -568,6 +603,12 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
         toast.error(data.error);
         return;
       }
+
+      const novoSt = data?.st_pedido || "E";
+      setXPedidoSel((prev: any) => prev ? { ...prev, st_pedido: novoSt } : null);
+      setXResultados((prev: any[]) => prev.map((r: any) => 
+        r.movimento_id === XPedidoSel.movimento_id ? { ...r, st_pedido: novoSt } : r
+      ));
 
       toast.success(`Estorno realizado com sucesso! Valor: R$ ${fmt(data.vl_devolucao || totalDevolucao)}`);
       setXEstornoConcluido(true);
@@ -943,15 +984,15 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
                 </div>
               </div>
 
-              {/* Opção para recebimento em dinheiro */}
+              {/* Opção para recebimento em dinheiro direto */}
               {XIsDinheiro && (
                 <div className="bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-400 dark:border-amber-700 rounded-lg p-4 space-y-3">
                   <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-bold text-sm">
                     <DollarSign className="w-5 h-5 text-amber-600" />
-                    DESTINO DO VALOR RECEBIDO EM DINHEIRO (OBRIGATÓRIO PARA DINHEIRO)
+                    DESTINO DO VALOR EM ESPÉCIE / DINHEIRO (OBRIGATÓRIO)
                   </div>
                   <p className="text-xs text-amber-800 dark:text-amber-300">
-                    Escolha como tratar o valor estornado em dinheiro (<strong className="font-mono text-sm">R$ {fmt(vlDinheiroEstorno)}</strong>):
+                    Escolha como tratar o valor estornado referente ao recebimento em dinheiro (<strong className="font-mono text-sm">R$ {fmt(vlDinheiroEstorno)}</strong>):
                   </p>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
@@ -1013,34 +1054,34 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
               )}
             </div>
 
-            {/* Rodapé Fixo Sempre Visível */}
+            {/* Rodapé Fixo do Passo 3 */}
             <div className="flex justify-between pt-3 mt-2 border-t border-border items-center bg-card shrink-0 px-1">
               <button onClick={() => setXStep(2)} disabled={XEstornando} className="flex items-center gap-1 px-3 py-2 text-xs font-bold bg-secondary rounded-md hover:bg-secondary/80 disabled:opacity-50">
                 <ArrowLeft className="w-3.5 h-3.5" /> VOLTAR
               </button>
 
-              {!XEstornoConcluido ? (
+              {XFinanceiros.length > 0 ? (
+                <button
+                  onClick={() => setXStep(4)}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground font-bold text-xs rounded-md hover:opacity-90 shadow-md transition-all active:scale-95"
+                >
+                  AVANÇAR PARA TÍTULOS FINANCEIROS (PASSO 4) <ArrowRight className="w-4 h-4" />
+                </button>
+              ) : !XEstornoConcluido ? (
                 <button
                   onClick={iniciarProcessoEstorno}
                   disabled={XEstornando || XVerificandoCaixa || (XIsDinheiro && !XOpcaoDinheiro)}
                   className="flex items-center gap-2 px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-md disabled:opacity-50 shadow-md transition-all active:scale-95"
                 >
                   <RotateCcw className="w-4 h-4" />
-                  {XVerificandoCaixa ? "VERIFICANDO CAIXA..." : XEstornando ? "PROCESSANDO ESTORNO..." : "CONFIRMAR E EFETIVAR ESTORNO"}
-                </button>
-              ) : XFinanceiros.length > 0 ? (
-                <button
-                  onClick={() => setXStep(4)}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground font-bold text-xs rounded-md hover:opacity-90 shadow-md transition-all active:scale-95"
-                >
-                  AVANÇAR PARA AJUSTE FINANCEIRO (PASSO 4) <ArrowRight className="w-4 h-4" />
+                  {XVerificandoCaixa ? "VERIFICANDO CAIXA..." : XEstornando ? "PROCESSANDO ESTORNO..." : "FINALIZAR ESTORNO (SELECIONAR CAIXA)"}
                 </button>
               ) : (
                 <button
                   onClick={reiniciar}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-md shadow-md transition-all active:scale-95"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-md shadow-md transition-all active:scale-95"
                 >
-                  <Check className="w-4 h-4" /> CONCLUIR OPERAÇÃO
+                  <Check className="w-4 h-4" /> NOVO ESTORNO
                 </button>
               )}
             </div>
@@ -1066,8 +1107,6 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
                 </div>
                 <div>
                   Valor da Devolução: <strong className="font-mono text-sm">R$ {fmt(totalDevolucao)}</strong>
-                  {XIsDinheiro && XOpcaoDinheiro === "ESPECIE" && " (Devolução em Espécie - Débito no Caixa)"}
-                  {XIsDinheiro && XOpcaoDinheiro === "CREDITO" && " (Gerar Crédito para o Cliente)"}
                 </div>
               </div>
 
@@ -1129,55 +1168,126 @@ const DevolucaoPedidoSemNfeForm: React.FC = () => {
         </Dialog>
 
         {/* ================================================== */}
-        {/* ETAPA 4: AJUSTE FINANCEIRO */}
+        {/* ETAPA 4: TRATAMENTO DOS TÍTULOS FINANCEIROS */}
         {/* ================================================== */}
         {XStep === 4 && (
           <div className="flex flex-col gap-4 h-full text-xs">
-            <div className="border-b border-border pb-2">
-              <span className="text-xs text-muted-foreground font-semibold uppercase">Etapa 4</span>
-              <h3 className="text-base font-bold">Ajuste dos Lançamentos Financeiros do Pedido</h3>
-              <p className="text-xs text-muted-foreground">
-                Estorno concluído! Escolha a ação para cada título financeiro vinculado a este pedido.
-              </p>
-            </div>
-
-            <div className="divide-y divide-border border border-border rounded-lg overflow-hidden">
-              {XFinanceiros.map(fin => (
-                <div key={fin.financeiro_id} className="p-4 flex items-center justify-between bg-card hover:bg-accent/30">
-                  <div className="space-y-1">
-                    <div className="font-bold text-sm flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-primary" />
-                      Documento: {fin.documento} {fin.parcela ? `(Parc. ${fin.parcela})` : ""}
-                    </div>
-                    <div className="text-muted-foreground font-mono">
-                      Vencimento: {formatDateBR(fin.dt_vencto)} · Valor Título: R$ {fmt(fin.vl_titulo)} · Pago: R$ {fmt(fin.vl_pago)}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => alterarFinanceiro(fin)}
-                      className="px-3 py-1.5 text-xs font-semibold bg-primary/10 text-primary hover:bg-primary/20 rounded border border-primary/20 flex items-center gap-1"
-                    >
-                      <Edit className="w-3.5 h-3.5" /> ALTERAR
-                    </button>
-                    <button
-                      onClick={() => excluirFinanceiro(fin)}
-                      className="px-3 py-1.5 text-xs font-semibold bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 rounded border border-rose-500/20 flex items-center gap-1"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" /> EXCLUIR
-                    </button>
-                  </div>
+            <div className="border-b border-border pb-2 flex items-center justify-between">
+              <div>
+                <span className="text-xs text-muted-foreground font-semibold uppercase">Etapa 4</span>
+                <h3 className="text-base font-bold">Ajuste dos Títulos Financeiros do Pedido</h3>
+                <p className="text-xs text-muted-foreground">
+                  Para títulos <strong>BAIXADOS</strong>, defina se o valor fará Débito do Caixa ou Gerará Crédito. Para títulos <strong>EM ABERTO</strong>, altere ou exclua a parcela.
+                </p>
+              </div>
+              {XEstornoConcluido && (
+                <div className="px-3 py-1 bg-green-100 dark:bg-green-950/60 text-green-700 dark:text-green-300 font-bold rounded-full text-xs flex items-center gap-1.5 border border-green-300">
+                  <Check className="w-4 h-4 stroke-[3]" /> ESTORNO CONCLUÍDO
                 </div>
-              ))}
+              )}
             </div>
 
-            <div className="flex justify-end pt-3 mt-auto border-t border-border">
-              <button
-                onClick={reiniciar}
-                className="px-5 py-2.5 bg-primary text-primary-foreground font-bold text-xs rounded-md hover:opacity-90 flex items-center gap-2 shadow-sm"
-              >
-                <Check className="w-4 h-4" /> CONCLUIR OPERAÇÃO
+            <div className="divide-y divide-border border border-border rounded-lg overflow-hidden bg-card">
+              {XFinanceiros.map(fin => {
+                const st = String(fin.status || "").toUpperCase();
+                const isBaixado = st === "B" || st === "BAIXADO" || Number(fin.vl_pago || 0) > 0;
+                const opcaoBaixado = XOpcoesFinBaixadoMap[fin.financeiro_id] || "ESPECIE";
+
+                return (
+                  <div key={fin.financeiro_id} className="p-4 flex items-center justify-between gap-4 hover:bg-accent/30">
+                    <div className="space-y-1">
+                      <div className="font-bold text-sm flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-primary" />
+                        <span>Documento: {fin.documento} {fin.parcela ? `(Parc. ${fin.parcela})` : ""}</span>
+                        {isBaixado ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300">
+                            BAIXADO (QUITADO)
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300">
+                            EM ABERTO
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-muted-foreground font-mono text-xs">
+                        Vencimento: {formatDateBR(fin.dt_vencto)} · Valor Título: R$ {fmt(fin.vl_titulo)} · Pago: R$ {fmt(fin.vl_pago)}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {isBaixado ? (
+                        <div className="flex items-center gap-1 bg-muted p-1 rounded-lg border border-border">
+                          <button
+                            type="button"
+                            disabled={XEstornoConcluido}
+                            onClick={() => setXOpcoesFinBaixadoMap(prev => ({ ...prev, [fin.financeiro_id]: "ESPECIE" }))}
+                            className={`px-3 py-1.5 rounded text-xs font-bold transition-all ${
+                              opcaoBaixado === "ESPECIE"
+                                ? "bg-emerald-600 text-white shadow-sm"
+                                : "bg-background text-muted-foreground hover:text-foreground"
+                            } ${XEstornoConcluido ? "opacity-75 cursor-not-allowed" : ""}`}
+                          >
+                            DÉBITO DO CAIXA
+                          </button>
+                          <button
+                            type="button"
+                            disabled={XEstornoConcluido}
+                            onClick={() => setXOpcoesFinBaixadoMap(prev => ({ ...prev, [fin.financeiro_id]: "CREDITO" }))}
+                            className={`px-3 py-1.5 rounded text-xs font-bold transition-all ${
+                              opcaoBaixado === "CREDITO"
+                                ? "bg-blue-600 text-white shadow-sm"
+                                : "bg-background text-muted-foreground hover:text-foreground"
+                            } ${XEstornoConcluido ? "opacity-75 cursor-not-allowed" : ""}`}
+                          >
+                            GERAR CRÉDITO
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => alterarFinanceiro(fin)}
+                            className="px-3 py-1.5 text-xs font-semibold bg-primary/10 text-primary hover:bg-primary/20 rounded border border-primary/20 flex items-center gap-1"
+                          >
+                            <Edit className="w-3.5 h-3.5" /> ALTERAR
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => excluirFinanceiro(fin)}
+                            className="px-3 py-1.5 text-xs font-semibold bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 rounded border border-rose-500/20 flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> EXCLUIR
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-between pt-3 mt-auto border-t border-border items-center">
+              <button onClick={() => setXStep(XTemSemFinanceiro ? 3 : 2)} disabled={XEstornando} className="flex items-center gap-1 px-3 py-2 text-xs font-bold bg-secondary rounded-md hover:bg-secondary/80 disabled:opacity-50">
+                <ArrowLeft className="w-3.5 h-3.5" /> VOLTAR
               </button>
+
+              {!XEstornoConcluido ? (
+                <button
+                  onClick={iniciarProcessoEstorno}
+                  disabled={XEstornando || XVerificandoCaixa}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-md disabled:opacity-50 shadow-md transition-all active:scale-95"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  {XVerificandoCaixa ? "VERIFICANDO CAIXA..." : XEstornando ? "PROCESSANDO ESTORNO..." : "FINALIZAR ESTORNO (SELECIONAR CAIXA)"}
+                </button>
+              ) : (
+                <button
+                  onClick={reiniciar}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-md shadow-md transition-all active:scale-95"
+                >
+                  <Check className="w-4 h-4" /> NOVO ESTORNO
+                </button>
+              )}
             </div>
           </div>
         )}

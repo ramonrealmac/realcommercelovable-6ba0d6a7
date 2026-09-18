@@ -193,11 +193,11 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "suprimento-caixa": return <SuprimentoSangriaForm tipo="SUP" />;
       case "sangria-caixa": return <SuprimentoSangriaForm tipo="SAN" />;
       default: {
-        if (component.startsWith("rpb-exec-")) {
+        if (component && typeof component === "string" && component.startsWith("rpb-exec-")) {
           const XRelId = parseInt(component.replace("rpb-exec-", ""));
           if (!isNaN(XRelId)) return <RpbStandaloneExecutor rpbRelatorioId={XRelId} initialParams={params} />;
         }
-        if (component.startsWith("rb-exec-")) {
+        if (component && typeof component === "string" && component.startsWith("rb-exec-")) {
           const XReportId = parseInt(component.replace("rb-exec-", ""));
           if (!isNaN(XReportId)) return <RbReportExecutor XReportId={XReportId} />;
         }
@@ -208,7 +208,7 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
             </div>
             <div>
               <p className="font-semibold">Componente não implementado ou em desenvolvimento.</p>
-              <p className="text-xs">ID: {component}</p>
+              <p className="text-xs">ID: {component || "N/A"}</p>
             </div>
           </div>
         );
