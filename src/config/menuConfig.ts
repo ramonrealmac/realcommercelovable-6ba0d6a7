@@ -61,6 +61,7 @@ import {
   Unlock,
   Calculator,
   FileX,
+  Briefcase,
 } from "lucide-react";
 
 export interface MenuItem {
@@ -88,6 +89,7 @@ export const MENU_CONFIG: MenuItem[] = [
           { id: "cadastro-completo", title: "Clientes", icon: Contact },
           { id: "fornecedores-transportadores", title: "Fornecedores/Transportadores", icon: Truck },
           { id: "funcionarios", title: "Funcionários", icon: Contact },
+          { id: "cargos", title: "Cargos", icon: Briefcase },
           { id: "grupo-cadastros", title: "Grupos de Parceiros", icon: UsersRound },
         ],
       },

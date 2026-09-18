@@ -3,6 +3,7 @@ import { useAppContext } from "@/contexts/AppContext";
 import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import type { IGridColumn } from "@/components/grid/DataGrid";
 import { supabase } from "@/integrations/supabase/client";
+import { CurrencyInput } from "@/components/shared/CurrencyInput";
 
 interface ICondicao {
   condicao_id: number;
@@ -19,6 +20,7 @@ interface ICondicao {
   promocao: string | null;
   st_avista: string | null;
   tp_financeiro: string | null;
+  pc_desc_maximo: number | null;
 }
 
 const TIPO_PRAZO_OPTIONS = [
@@ -51,6 +53,7 @@ const XDefault: Partial<ICondicao> = {
   promocao: "N",
   st_avista: "N",
   tp_financeiro: "V",
+  pc_desc_maximo: 0,
   prazo_1: 0, prazo_2: 0, prazo_3: 0, prazo_4: 0, prazo_5: 0, prazo_6: 0,
   prazo_7: 0, prazo_8: 0, prazo_9: 0, prazo_10: 0, prazo_11: 0, prazo_12: 0,
 };
@@ -124,6 +127,13 @@ const CondicaoPagamentoForm: React.FC = () => {
       label: "Promoção", 
       width: "100px",
       render: (row: ICondicao) => row.promocao === "V" ? "A VISTA" : row.promocao === "P" ? "A PRAZO" : "NÃO"
+    },
+    { 
+      key: "pc_desc_maximo", 
+      label: "Desc. Maximo(%)", 
+      width: "120px", 
+      align: "right",
+      render: (row: ICondicao) => (row.pc_desc_maximo ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     },
     { 
       key: "qtd_parcelas", 
@@ -200,6 +210,7 @@ const CondicaoPagamentoForm: React.FC = () => {
             promocao: rec.promocao || "N",
             st_avista: rec.st_avista || "N",
             tp_financeiro: rec.tp_financeiro || "V",
+            pc_desc_maximo: typeof rec.pc_desc_maximo === "number" ? rec.pc_desc_maximo : parseFloat(String(rec.pc_desc_maximo || 0).replace(",", ".")) || 0,
             qtd_parcelas: rec.tipo_prazo === "U" ? 1 : rec.tipo_prazo === "F" ? (parseInt(String(rec.qtd_parcelas)) || null) : null,
             intervalo: rec.tipo_prazo === "F" ? (parseInt(String(rec.intervalo)) || null) : null,
           };
@@ -325,7 +336,7 @@ const CondicaoPagamentoForm: React.FC = () => {
               </div>
             </div>
 
-            {/* Linha 2: Promoção, Tipo de Prazo, Parcelas, Intervalo (dias) */}
+            {/* Linha 2: Promoção, Desc. Maximo(%), Tipo de Prazo, Parcelas, Intervalo (dias) */}
             <div className="grid grid-cols-1 md:flex md:flex-wrap md:gap-4 gap-5">
               <div className="w-full md:w-36">
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Promoção</label>
@@ -350,6 +361,18 @@ const CondicaoPagamentoForm: React.FC = () => {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="w-full md:w-36">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Desc. Maximo(%)</label>
+                <CurrencyInput
+                  value={record.pc_desc_maximo ?? 0}
+                  onChange={v => setField("pc_desc_maximo", v)}
+                  disabled={!isEditing}
+                  className={`w-full border border-border rounded px-3 py-1.5 text-sm text-right h-[34px] ${
+                    isEditing ? "bg-card focus:ring-2 focus:ring-ring outline-none cursor-pointer" : "bg-secondary text-muted-foreground appearance-none disabled:opacity-100"
+                  }`}
+                />
               </div>
 
               <div className="w-full md:w-40">

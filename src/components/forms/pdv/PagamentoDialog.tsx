@@ -60,25 +60,73 @@ interface ICondicao {
   tp_documento?: number | null; 
   plano_conta_id?: number | null; 
   meio_pagamento_id?: number | null; 
+  promocao?: string | null;
+  st_avista?: string | null;
 }
 interface IBandeira { bandeira_id: number; descricao: string; }
 interface IOperadora { operadora_id: number; razao: string; }
 interface IPortador { portador_id: number; cd_portador: number; nome: string; banco_id: number | null; }
 
-const getQtdParcelasCondicaoPDV = (c: ICondicao | null | undefined): number => {
-  if (!c) return 1;
-  if (c.qtd_parcelas && c.qtd_parcelas > 0) return c.qtd_parcelas;
-  let count = 0;
+const getTipoPrazoCondicaoPDV = (c: ICondicao | null | undefined): "U" | "F" | "V" => {
+  if (!c) return "U";
+  if (c.tipo_prazo === "U" || c.tipo_prazo === "F" || c.tipo_prazo === "V") {
+    return c.tipo_prazo;
+  }
+  if (c.qtd_parcelas && Number(c.qtd_parcelas) > 1) return "F";
   for (let i = 1; i <= 12; i++) {
     const key = `prazo_${i}` as keyof ICondicao;
-    if (c[key] && Number(c[key]) > 0) count++;
+    if (c[key] !== null && c[key] !== undefined && Number(c[key]) > 0) return "V";
   }
-  return count > 0 ? count : 1;
+  return "U";
+};
+
+const isCondicaoAVistaPDV = (c: ICondicao | null | undefined): boolean => {
+  if (!c) return false;
+  if (c.st_avista === "S") return true;
+  if (c.st_avista === "N") return false;
+
+  if (c.promocao === "V") return true;
+  if (c.promocao === "P") return false;
+  if (c.tipo_prazo === "U") return true;
+  if (c.tipo_prazo === "V") return false;
+  if (c.qtd_parcelas && Number(c.qtd_parcelas) > 1) return false;
+  if ([1, 4, 17, 20].includes(c.meio_pagamento_id || 0) && (Number(c.qtd_parcelas) || 1) <= 1) {
+    return true;
+  }
+  for (let i = 1; i <= 12; i++) {
+    const key = `prazo_${i}` as keyof ICondicao;
+    if (c[key] !== null && c[key] !== undefined && Number(c[key]) > 0) return false;
+  }
+  if (c.tipo_prazo === "01" || c.tipo_prazo === "20" || c.tipo_prazo === "04") return true;
+  if (c.tipo_prazo === "F" && (Number(c.qtd_parcelas) || 1) <= 1) return true;
+  return getTipoPrazoCondicaoPDV(c) === "U";
+};
+
+const getQtdParcelasCondicaoPDV = (c: ICondicao | null | undefined): number => {
+  if (!c) return 1;
+  const tp = getTipoPrazoCondicaoPDV(c);
+  if (tp === "U") return 1;
+  if (tp === "F") {
+    const q = Number(c.qtd_parcelas);
+    return q > 0 ? q : 1;
+  }
+  if (tp === "V") {
+    let count = 0;
+    for (let i = 1; i <= 12; i++) {
+      const key = `prazo_${i}` as keyof ICondicao;
+      if (c[key] !== null && c[key] !== undefined && Number(c[key]) > 0) count++;
+    }
+    return count > 0 ? count : 1;
+  }
+  return 1;
 };
 
 interface IProps {
   open: boolean;
   totalPedido: number;
+  cadastroId?: number | null;
+  tabelaPrecoId?: number | null;
+  tipoPrecoPadrao?: string | null;
   /** Pagamentos previamente cadastrados em movimento_pagamento (preenche automaticamente). */
   pagtosPreCarregados?: IMovimentoPagamento[];
   onClose: () => void;
@@ -86,7 +134,7 @@ interface IProps {
   onConfirmar: (linhas: IPdvPagamentoLinha[]) => Promise<void>;
 }
 
-const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarregados, onClose, onConfirmar }) => {
+const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, cadastroId, tabelaPrecoId, tipoPrecoPadrao, pagtosPreCarregados, onClose, onConfirmar }) => {
   const { XEmpresaId } = useAppContext();
   const isMobile = useIsMobile();
   const [XCondicoes, setXCondicoes] = useState<ICondicao[]>([]);
@@ -96,6 +144,8 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
   const [XLinhas, setXLinhas] = useState<IPdvPagamentoLinha[]>([]);
   const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
   const [XSalvando, setXSalvando] = useState(false);
+  const [XTpPagamentoTabela, setXTpPagamentoTabela] = useState<"V" | "P">("V");
+  const [XSaldoCreditoCliente, setXSaldoCreditoCliente] = useState<number>(0);
 
 
   // Form fields
@@ -245,6 +295,15 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
     return XPortadores;
   }, [XCondicaoId, XCondicoes, XPortadores]);
 
+  // Filter conditions by price table payment type ('V' -> Somente À Vista, 'P' -> Todas as condições)
+  const XFilteredCondicoes = useMemo(() => {
+    if (!XCondicoes || XCondicoes.length === 0) return [];
+    if (XTpPagamentoTabela === "V") {
+      return XCondicoes.filter(c => isCondicaoAVistaPDV(c));
+    }
+    return XCondicoes;
+  }, [XCondicoes, XTpPagamentoTabela]);
+
   // Sync selected portador with filtered options
   useEffect(() => {
     if (XFilteredPortadores.length > 0) {
@@ -263,6 +322,46 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
       try {
         console.log("PagamentoDialog: Iniciando carga de dados. Empresa:", XEmpresaId);
         
+        let tpTab: "V" | "P" = "V";
+        if (tabelaPrecoId) {
+          const { data: tabData } = await db.from("tabela_preco")
+            .select("tp_pagamento")
+            .eq("tabela_preco_id", tabelaPrecoId)
+            .maybeSingle();
+          if (tabData?.tp_pagamento === "P") {
+            tpTab = "P";
+          }
+        } else if (tipoPrecoPadrao === "P") {
+          tpTab = "P";
+        }
+        setXTpPagamentoTabela(tpTab);
+
+        // Fetch Client defaults & Credit Balance if cadastroId is provided
+        let defaultCondId = 0;
+        let defaultPortadorId = 0;
+        if (cadastroId) {
+          const { data: cli } = await db.from("cadastro")
+            .select("condicao_id, portador_id")
+            .eq("cadastro_id", cadastroId)
+            .maybeSingle();
+          if (cli) {
+            defaultCondId = cli.condicao_id || 0;
+            defaultPortadorId = cli.portador_id || 0;
+          }
+
+          const { data: saldoData } = await db.from("cadastro_credito_saldo")
+            .select("vl_saldo_atual")
+            .eq("empresa_id", XEmpresaId)
+            .eq("cadastro_id", cadastroId)
+            .eq("tp_parceiro", "CLIENTE")
+            .eq("excluido", false)
+            .maybeSingle();
+
+          setXSaldoCreditoCliente(Number(saldoData?.vl_saldo_atual || 0));
+        } else {
+          setXSaldoCreditoCliente(0);
+        }
+
         // Fetch Meios de Pagamento (sem filtros para garantir)
         const mpRes = await db.from("meio_pagamento").select("meio_pagamento_id, descricao");
         if (mpRes.data) {
@@ -274,13 +373,14 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
 
         // Fetch Condições filtradas pela empresa logada
         let condRes = await db.from("condicao_pagamento")
-          .select("condicao_id, descricao, qtd_parcelas, tipo_prazo, prazo_1, prazo_2, prazo_3, prazo_4, prazo_5, prazo_6, prazo_7, prazo_8, prazo_9, prazo_10, prazo_11, prazo_12, plano_conta_id, meio_pagamento_id")
+          .select("condicao_id, descricao, qtd_parcelas, tipo_prazo, prazo_1, prazo_2, prazo_3, prazo_4, prazo_5, prazo_6, prazo_7, prazo_8, prazo_9, prazo_10, prazo_11, prazo_12, plano_conta_id, meio_pagamento_id, promocao, st_avista")
           .eq("empresa_id", XEmpresaId)
           .eq("excluido", false);
-        if (condRes.error || !condRes.data || condRes.data.length === 0) {
-           condRes = await db.from("condicao")
-             .select("condicao_id, descricao, qtd_parcelas:qt_parcelas, tp_documento, plano_conta_id, meio_pagamento_id")
-             .eq("empresa_id", XEmpresaId);
+        if (condRes.error) {
+           condRes = await db.from("condicao_pagamento")
+             .select("condicao_id, descricao, qtd_parcelas, tipo_prazo, prazo_1, prazo_2, prazo_3, prazo_4, prazo_5, prazo_6, prazo_7, prazo_8, prazo_9, prazo_10, prazo_11, prazo_12, plano_conta_id, meio_pagamento_id, promocao")
+             .eq("empresa_id", XEmpresaId)
+             .eq("excluido", false);
         }
         
         const condList = (condRes.data || []).map((r: any) => ({ ...r, tp_documento: r.tp_documento || null }));
@@ -411,6 +511,30 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
     const vPagar = parseNum(XVlPagar);
     if (vPagar <= 0) { toast.error("Informe um valor maior que zero."); return; }
     if (XQtParcela <= 0) { toast.error("Informe quantidade de parcelas."); return; }
+
+    const cond = XCondicoes.find(c => Number(c.condicao_id) === Number(XCondicaoId));
+    if (!cond) { toast.error("Selecione uma condição de pagamento válida."); return; }
+
+    if (XTpPagamentoTabela === "V" && !isCondicaoAVistaPDV(cond)) {
+      toast.error("Para Tabela de Preço À Vista, apenas condições de pagamento À Vista são permitidas.");
+      return;
+    }
+
+    const descCond = (cond.descricao || "").toLowerCase();
+
+    // Valida o limite do saldo de crédito do cliente
+    if (descCond.includes("utilizar crédito") || descCond.includes("utilizar credito") || descCond.includes("crédito de cliente") || descCond.includes("credito de cliente")) {
+      const creditUsadoOutras = XLinhas
+        .filter(l => l.uid !== XEditUid && (l.condicao_descricao.toLowerCase().includes("crédito") || l.condicao_descricao.toLowerCase().includes("credito")))
+        .reduce((a, l) => a + Number(l.vl_recebido || 0), 0);
+      
+      const saldoCreditoDisponivel = Number(Math.max(0, XSaldoCreditoCliente - creditUsadoOutras).toFixed(2));
+
+      if (vPagar > saldoCreditoDisponivel + 0.001) {
+        toast.error(`O valor informado (R$ ${fmt(vPagar)}) excede o saldo de crédito disponível do cliente (R$ ${fmt(saldoCreditoDisponivel)}).`);
+        return;
+      }
+    }
     
     if (camposCartaoEditaveis) {
       if (!XBandeiraId) { toast.error("Selecione a bandeira do cartão."); return; }
@@ -632,7 +756,7 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, pagtosPreCarrega
                 onKeyDown={e => handleSelectKeyDown(e, camposCartaoEditaveis ? bandeiraRef : portadorRef)}
                 className={`w-full border border-border rounded px-2 py-1 text-sm h-9 ${brancoCls}`}>
                 <option value={0}>--</option>
-                {XCondicoes.map(c => <option key={c.condicao_id} value={c.condicao_id}>{c.descricao}</option>)}
+                {XFilteredCondicoes.map(c => <option key={c.condicao_id} value={c.condicao_id}>{c.descricao}</option>)}
               </select>
             </div>
             <div className="col-span-5 max-md:col-span-1 max-md:col-start-2 max-md:snap-start max-md:px-3 max-md:pt-4">

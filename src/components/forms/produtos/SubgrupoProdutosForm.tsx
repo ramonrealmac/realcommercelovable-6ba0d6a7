@@ -4,6 +4,7 @@ import { useAppContext } from "@/contexts/AppContext";
 import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import type { IGridColumn } from "@/components/grid/DataGrid";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CurrencyInput } from "@/components/shared/CurrencyInput";
 
 interface ISubgrupo {
   produto_subgrupo_id: number;
@@ -13,6 +14,8 @@ interface ISubgrupo {
   empresa_id: number;
   excluido: boolean;
   grupo_nome?: string;
+  pc_desc_maximo_av?: number | null;
+  pc_desc_maximo_prz?: number | null;
   produto_grupo?: {
     nome: string;
   } | null;
@@ -23,10 +26,14 @@ interface IGrupoOption {
   nome: string;
 }
 
+const fmt2 = (v: number | null | undefined) => Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 const XGridCols: IGridColumn[] = [
   { key: "cd_produto_subgrupo", label: "Código", width: "100px", align: "right" },
   { key: "nome", label: "Nome", width: "1fr" },
   { key: "grupo_nome", label: "Grupo de Produtos", width: "1fr" },
+  { key: "pc_desc_maximo_av", label: "Desc. Máx. À Vista (%)", width: "160px", align: "right", render: (r: ISubgrupo) => fmt2(r.pc_desc_maximo_av) },
+  { key: "pc_desc_maximo_prz", label: "Desc. Máx. À Prazo (%)", width: "160px", align: "right", render: (r: ISubgrupo) => fmt2(r.pc_desc_maximo_prz) },
 ];
 
 const SubgrupoProdutosForm: React.FC = () => {
@@ -65,15 +72,19 @@ const SubgrupoProdutosForm: React.FC = () => {
     XPrimaryKey: "produto_subgrupo_id" as const,
     XTitle: "Subgrupos de Produtos",
     XEmpresaId: XEmpresaMatrizId,
-    XDefaultRecord: { nome: "", produto_grupo_id: null },
-    XSelectCols: "produto_subgrupo_id,cd_produto_subgrupo,nome,produto_grupo_id,empresa_id,excluido",
+    XDefaultRecord: { nome: "", produto_grupo_id: null, pc_desc_maximo_av: 0, pc_desc_maximo_prz: 0 },
+    XSelectCols: "produto_subgrupo_id,cd_produto_subgrupo,nome,produto_grupo_id,empresa_id,excluido,pc_desc_maximo_av,pc_desc_maximo_prz",
     XOnBeforeSave: (rec: Partial<ISubgrupo>) => {
       if (!rec.nome?.trim()) throw new Error("O nome do subgrupo é obrigatório.");
       if (!rec.produto_grupo_id) throw new Error("O grupo de produtos é obrigatório.");
+      const pc_desc_maximo_av = typeof rec.pc_desc_maximo_av === "number" ? rec.pc_desc_maximo_av : parseFloat(String(rec.pc_desc_maximo_av || 0).replace(",", ".")) || 0;
+      const pc_desc_maximo_prz = typeof rec.pc_desc_maximo_prz === "number" ? rec.pc_desc_maximo_prz : parseFloat(String(rec.pc_desc_maximo_prz || 0).replace(",", ".")) || 0;
       return { 
         ...rec, 
         nome: rec.nome.trim(),
-        produto_grupo_id: Number(rec.produto_grupo_id)
+        produto_grupo_id: Number(rec.produto_grupo_id),
+        pc_desc_maximo_av,
+        pc_desc_maximo_prz,
       };
     },
     XOnAfterLoad: (data: ISubgrupo[]) => {
@@ -89,7 +100,7 @@ const SubgrupoProdutosForm: React.FC = () => {
       config={XConfig}
       XGridCols={XGridCols}
       XExportTitle="Subgrupos de Produtos"
-      renderCadastro={({ record, setField, mode, isEditing, currentRecord }) => (
+      renderCadastro={({ record, setField, mode, isEditing }) => (
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:flex md:gap-4 gap-3">
             <div className="w-full md:w-32">
@@ -122,7 +133,6 @@ const SubgrupoProdutosForm: React.FC = () => {
                   onValueChange={v => {
                     const groupVal = v ? Number(v) : null;
                     setField("produto_grupo_id", groupVal);
-                    // Atualiza grupo_nome para que exiba na UI
                     const grp = XGrupos.find(g => g.produto_grupo_id === groupVal);
                     setField("grupo_nome", grp ? grp.nome : "");
                   }}
@@ -160,6 +170,31 @@ const SubgrupoProdutosForm: React.FC = () => {
                 autoFocus={isEditing}
                 className={`w-full border border-border rounded px-3 py-1.5 text-sm ${
                   isEditing ? "bg-card focus:ring-2 focus:ring-ring outline-none" : "bg-secondary"
+                }`}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl">
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Desc. Máximo À Vista (%)</label>
+              <CurrencyInput
+                value={record.pc_desc_maximo_av ?? 0}
+                onChange={v => setField("pc_desc_maximo_av", v)}
+                disabled={!isEditing}
+                className={`w-full border border-border rounded px-3 py-1.5 text-sm text-right h-[34px] ${
+                  isEditing ? "bg-card focus:ring-2 focus:ring-ring outline-none cursor-pointer" : "bg-secondary text-muted-foreground appearance-none disabled:opacity-100"
+                }`}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Desc. Máximo À Prazo (%)</label>
+              <CurrencyInput
+                value={record.pc_desc_maximo_prz ?? 0}
+                onChange={v => setField("pc_desc_maximo_prz", v)}
+                disabled={!isEditing}
+                className={`w-full border border-border rounded px-3 py-1.5 text-sm text-right h-[34px] ${
+                  isEditing ? "bg-card focus:ring-2 focus:ring-ring outline-none cursor-pointer" : "bg-secondary text-muted-foreground appearance-none disabled:opacity-100"
                 }`}
               />
             </div>

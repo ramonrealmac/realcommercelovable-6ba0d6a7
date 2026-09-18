@@ -1120,6 +1120,9 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       <PagamentoDialog
         open={XOpenPagto}
         totalPedido={totalReceber}
+        cadastroId={XPedidoSel?.cadastro_id || XClienteSel?.cadastro_id || null}
+        tabelaPrecoId={XPedidoSel?.tabela_preco_id || XTabelaPrecoSel?.tabela_preco_id || null}
+        tipoPrecoPadrao={XPedidoSel?.tp_preco_padrao || XTabelaPrecoSel?.tp_pagamento || "V"}
         pagtosPreCarregados={XPagtosPedido}
         onClose={() => setXOpenPagto(false)}
         onConfirmar={confirmarPagamento}

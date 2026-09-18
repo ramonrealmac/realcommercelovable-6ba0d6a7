@@ -48,6 +48,8 @@ const XLocalizarColumns: IGridColumn[] = [
   { key: "subgrupo_nome", label: "Subgrupo", width: "1fr" },
   { key: "nome_reduzido", label: "Nome Reduzido", width: "1fr" },
   { key: "gtin", label: "GTIN", width: "140px" },
+  { key: "pc_desc_maximo_av", label: "Desc. À Vista (%)", width: "120px", align: "right", getValue: (r) => fmt2(r.pc_desc_maximo_av) },
+  { key: "pc_desc_maximo_prz", label: "Desc. À Prazo (%)", width: "120px", align: "right", getValue: (r) => fmt2(r.pc_desc_maximo_prz) },
   { key: "preco_venda", label: "Preço Venda", width: "110px", align: "right", getValue: (r) => fmt2(r.preco_venda) },
 ];
 
@@ -68,7 +70,7 @@ const emptyForm = (): Record<string, string> => ({
   vl_custo: "0", vl_custo_medio: "0", vl_desconto: "0", vl_outro: "0", pc_desconto: "0",
   pc_multiplicador: "0", vl_multiplicador: "0", st_promo: "N",
   preco_venda_faturado: "0", preco_promocional_fat: "0",
-  altura: "0", comprimento: "0", largura: "0", area: "0", peso_bruto: "0", peso_liquido: "0",
+  altura: "0", comprimento: "0", largura: "0", area: "0", peso_bruto: "0", peso_liquido: "0", pc_desc_maximo_av: "0", pc_desc_maximo_prz: "0",
 });
 
 /* ─── Conversão grid columns ─── */
@@ -593,6 +595,8 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
       altura: toNum(XF.altura), comprimento: toNum(XF.comprimento),
       largura: toNum(XF.largura), area: toNum(XF.area),
       peso_bruto: toNum(XF.peso_bruto), peso_liquido: toNum(XF.peso_liquido),
+      pc_desc_maximo_av: toNum(XF.pc_desc_maximo_av),
+      pc_desc_maximo_prz: toNum(XF.pc_desc_maximo_prz),
       controla_estoque: XF.controla_estoque || "S",
     };
 
@@ -1320,9 +1324,11 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
                     {renderNumField("Largura (m)", "largura")}
                     {renderNumField("Área (m²)", "area")}
                   </div>
-                  <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
                     {renderNumField("Peso Bruto", "peso_bruto")}
                     {renderNumField("Peso Líquido", "peso_liquido")}
+                    {renderNumField("Desc. Máximo À Vista (%)", "pc_desc_maximo_av")}
+                    {renderNumField("Desc. Máximo À Prazo (%)", "pc_desc_maximo_prz")}
                   </div>
                 </fieldset>
 

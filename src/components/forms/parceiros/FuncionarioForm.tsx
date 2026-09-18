@@ -333,7 +333,8 @@ const FuncionarioForm: React.FC = () => {
     set(key, val.toFixed(decimals).replace(".", ","));
   }, [XF, set]);
 
-  const renderNumField = (label: string, key: string, options?: { required?: boolean; className?: string }) => {
+  const renderNumField = (label: string, key: string, options?: { required?: boolean; className?: string; disabled?: boolean }) => {
+    const isDisable = options?.disabled;
     if (XIsEditing) {
       return (
         <div className={options?.className}>
@@ -346,7 +347,9 @@ const FuncionarioForm: React.FC = () => {
             onChange={(e) => set(key, formatNumericInput(e.target.value, 2))}
             onBlur={() => handleNumBlur(key, 2)}
             onFocus={(e) => e.target.select()}
-            className={`w-full border border-border rounded px-3 py-1.5 text-sm text-right ${XFieldBgEdit} focus:ring-2 focus:ring-ring outline-none`}
+            disabled={isDisable}
+            readOnly={isDisable}
+            className={`w-full border border-border rounded px-3 py-1.5 text-sm text-right ${isDisable ? XFieldBgRead + " opacity-60 cursor-not-allowed" : XFieldBgEdit} focus:ring-2 focus:ring-ring outline-none`}
           />
         </div>
       );

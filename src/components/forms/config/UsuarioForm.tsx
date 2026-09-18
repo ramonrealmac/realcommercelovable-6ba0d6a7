@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { KeyRound, Upload, Eye, EyeOff, Lock, X, Loader2 } from "lucide-react";
+import { KeyRound, Upload, Eye, EyeOff, Lock, X, Loader2, Search } from "lucide-react";
 import { useAppContext } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import { usePerfis } from "@/hooks/useAccessControl";
@@ -9,6 +9,7 @@ import GridActionToolbar, { gridActions } from "@/components/grid/GridActionTool
 import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import { useCrudController } from "@/hooks/useCrudController";
 import { toast } from "sonner";
+import CargoSearchDialog, { ICargoRow } from "@/components/forms/parceiros/CargoSearchDialog";
 
 /* ── Types ── */
 interface IUserRow {
@@ -18,6 +19,7 @@ interface IUserRow {
   ds_login: string;
   ds_foto: string;
   fl_autorizado: boolean;
+  cargo_id?: number | null;
 }
 
 interface IVinculoRow {
@@ -59,6 +61,10 @@ const UsuarioForm: React.FC = () => {
   const [XSenha, setXSenha] = useState("");
   const [XUploading, setXUploading] = useState(false);
   const XFileInputRef = useRef<HTMLInputElement>(null);
+
+  /* ── Cargo Modal State ── */
+  const [XCargoModalOpen, setXCargoModalOpen] = useState(false);
+  const [XCargoDesc, setXCargoDesc] = useState<string>("");
 
   /* ── Change Password Modal States ── */
   const [XShowAlterarSenhaModal, setXShowAlterarSenhaModal] = useState(false);
@@ -119,13 +125,15 @@ const UsuarioForm: React.FC = () => {
     XTableName: "profiles",
     XPrimaryKey: "id",
     XTitle: "Gestão de Usuários",
-    XDefaultRecord: { id: "", email: "", nm_usuario: "", ds_login: "", ds_foto: "", fl_autorizado: true },
+    XDefaultRecord: { id: "", email: "", nm_usuario: "", ds_login: "", ds_foto: "", fl_autorizado: true, cargo_id: null },
     XSoftDelete: false,
-    XSelectCols: "id, email, nm_usuario, ds_login, ds_foto, fl_autorizado, empresa_usuario!inner(empresa_id, fl_excluido)",
+    XSelectCols: "id, email, nm_usuario, ds_login, ds_foto, fl_autorizado, cargo_id, empresa_usuario!inner(empresa_id, fl_excluido)",
     XApplyFilter: (q) => q.eq("empresa_usuario.empresa_id", XEmpresaId).eq("empresa_usuario.fl_excluido", false),
     XOnSave: async (rec, mode) => {
       if (!rec.email?.trim()) throw new Error("E-mail é obrigatório.");
       
+      let savedUserId = rec.id;
+
       if (mode === "insert") {
         if (!XSenha || XSenha.length < 6) {
           throw new Error("Informe uma senha com no mínimo 6 caracteres.");
@@ -150,18 +158,10 @@ const UsuarioForm: React.FC = () => {
 
         const newUserId = (fnData as any)?.user_id;
         if (!newUserId) throw new Error("ID do usuário não retornado pelo servidor.");
+        savedUserId = newUserId;
         
         toast.success("Usuário criado com sucesso.");
         setXSenha("");
-
-        return {
-          id: newUserId,
-          email: rec.email.trim(),
-          nm_usuario: rec.nm_usuario?.trim() || "",
-          ds_login: rec.ds_login?.trim() || "",
-          ds_foto: rec.ds_foto?.trim() || "",
-          fl_autorizado: rec.fl_autorizado !== undefined ? rec.fl_autorizado : true,
-        };
       } else {
         // Edit mode (calling edge function to prevent RLS update errors)
         const { data: fnData, error: fnErr } = await supabase.functions.invoke("admin-create-user", {
@@ -181,8 +181,17 @@ const UsuarioForm: React.FC = () => {
         }
 
         toast.success("Usuário atualizado com sucesso.");
-        return rec;
       }
+
+      // Salva cargo_id na tabela profiles
+      if (savedUserId) {
+        await (supabase as any).from("profiles").update({ cargo_id: rec.cargo_id || null }).eq("id", savedUserId);
+      }
+
+      return {
+        ...rec,
+        id: savedUserId,
+      };
     },
     XOnDelete: async (rec) => {
       if (!confirm(`Deseja remover "${rec.nm_usuario || rec.email}" da empresa?`)) {
@@ -228,13 +237,21 @@ const UsuarioForm: React.FC = () => {
 
   useEffect(() => { loadAllPerfis(); }, [XEmpresaId, loadAllPerfis]);
 
-  /* ── Sync current record to load vinculos ── */
+  /* ── Sync current record to load vinculos & cargo ── */
   useEffect(() => {
     if (ctrl.XCurrentRecord && ctrl.XFormMode === "view") {
       loadVinculos(ctrl.XCurrentRecord.id);
+      if (ctrl.XCurrentRecord.cargo_id) {
+        (supabase as any).from("cargo").select("cargo_descricao").eq("cargo_id", ctrl.XCurrentRecord.cargo_id).maybeSingle().then(({ data }: any) => {
+          setXCargoDesc(data?.cargo_descricao || "");
+        });
+      } else {
+        setXCargoDesc("");
+      }
     } else if (ctrl.XFormMode === "insert") {
       setXVinculos([]);
       setXSenha("");
+      setXCargoDesc("");
     }
   }, [ctrl.XCurrentRecord, ctrl.XFormMode, loadVinculos]);
 
@@ -350,6 +367,51 @@ const UsuarioForm: React.FC = () => {
             disabled={!isEditing || mode === "edit"} 
             className="w-full border border-border rounded-md px-3 py-2 text-sm bg-card focus:ring-2 focus:ring-ring outline-none disabled:bg-slate-100" 
           />
+        </div>
+        <div className="md:col-span-2">
+          <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Cargo</label>
+          <div className="relative flex items-center">
+            <input 
+              type="text" 
+              value={XCargoDesc || (record.cargo_id ? `Cargo #${record.cargo_id}` : "")} 
+              placeholder="Tecle ENTER para consultar e selecionar o Cargo" 
+              readOnly 
+              disabled={!isEditing} 
+              onClick={() => { if (isEditing) setXCargoModalOpen(true); }}
+              onKeyDown={(e) => {
+                if (isEditing && e.key === "Enter") {
+                  e.preventDefault();
+                  setXCargoModalOpen(true);
+                }
+              }}
+              className="w-full border border-border rounded-md pl-3 pr-20 py-2 text-sm bg-card focus:ring-2 focus:ring-ring outline-none disabled:bg-slate-100 cursor-pointer" 
+            />
+            <div className="absolute right-2 flex items-center gap-1">
+              {isEditing && record.cargo_id && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setField("cargo_id", null);
+                    setXCargoDesc("");
+                  }}
+                  className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-muted-foreground hover:text-foreground"
+                  title="Limpar Cargo"
+                >
+                  <X size={14} />
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={!isEditing}
+                onClick={() => isEditing && setXCargoModalOpen(true)}
+                className="p-1.5 bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
+                title="Consultar Cargo (Enter em branco)"
+              >
+                <Search size={14} />
+              </button>
+            </div>
+          </div>
         </div>
         <div className="flex items-center gap-2 md:col-span-2 py-2">
           <input 
@@ -573,9 +635,18 @@ const UsuarioForm: React.FC = () => {
                 )}
               </button>
             </div>
-          </div>
         </div>
       )}
+
+      <CargoSearchDialog
+        open={XCargoModalOpen}
+        onClose={() => setXCargoModalOpen(false)}
+        empresaMatrizId={XEmpresaMatrizId}
+        onSelect={(cargo) => {
+          ctrl.setField("cargo_id", cargo.cargo_id);
+          setXCargoDesc(cargo.cargo_descricao);
+        }}
+      />
     </>
   );
 };

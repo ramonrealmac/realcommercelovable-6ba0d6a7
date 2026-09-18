@@ -14,6 +14,7 @@ interface SubgrupoGridProps {
 const XSubgrupoColumns: IGridColumn[] = [
   { key: "cd_produto_subgrupo", label: "Código", width: "100px", align: "right" },
   { key: "nome", label: "Nome", width: "1fr" },
+  { key: "pc_desc_maximo", label: "Desc. Maximo(%)", width: "130px", align: "right", render: (r: any) => (r.pc_desc_maximo ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
 ];
 
 const SubgrupoGrid: React.FC<SubgrupoGridProps> = ({ XEmpresaId, XGrupoId }) => {
@@ -26,7 +27,7 @@ const SubgrupoGrid: React.FC<SubgrupoGridProps> = ({ XEmpresaId, XGrupoId }) => 
 
   const loadData = useCallback(async () => {
     const { data } = await db.from("produto_subgrupo")
-      .select("produto_subgrupo_id,cd_produto_subgrupo,nome,produto_grupo_id,empresa_id,excluido")
+      .select("produto_subgrupo_id,cd_produto_subgrupo,nome,produto_grupo_id,empresa_id,excluido,pc_desc_maximo")
       .eq("empresa_id", XEmpresaId)
       .eq("produto_grupo_id", XGrupoId)
       .eq("excluido", false)

@@ -28,6 +28,7 @@ const CadastroCompletoForm = safeLazy(() => import("@/components/forms/parceiros
 const CartaCorrecaoForm = safeLazy(() => import("@/components/forms/nfe/CartaCorrecaoForm"));
 const FornecedorTransportadorForm = safeLazy(() => import("@/components/forms/parceiros/FornecedorTransportadorForm"));
 const FuncionarioForm = safeLazy(() => import("@/components/forms/parceiros/FuncionarioForm"));
+const CargoForm = safeLazy(() => import("@/components/forms/parceiros/CargoForm"));
 const CadastroGrupoForm = safeLazy(() => import("@/components/forms/parceiros/CadastroGrupoForm"));
 const ProdutoForm = safeLazy(() => import("@/components/forms/produtos/ProdutoForm"));
 const LinhaProdutoForm = safeLazy(() => import("@/components/forms/produtos/LinhaProdutoForm"));
@@ -120,6 +121,7 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "cadastro-completo": return <CadastroCompletoForm formTitle="Cadastros" />;
       case "fornecedores-transportadores": return <FornecedorTransportadorForm />;
       case "funcionarios": return <FuncionarioForm />;
+      case "cargos": return <CargoForm />;
       case "grupo-cadastros": return <CadastroGrupoForm />;
       case "produtos": return <ProdutoForm initialProductId={params?.produto_id} />;
       case "linhas-produtos": return <LinhaProdutoForm />;
