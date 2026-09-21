@@ -6,6 +6,7 @@ import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import { useAppContext } from "@/contexts/AppContext";
 import { CreditCard, ShoppingCart, Wallet, ArrowRightLeft, Calculator, Delete, Trash2, Percent, Lock, Coins } from "lucide-react";
 import { CurrencyInput } from "@/components/shared/CurrencyInput";
+import { validarDescontoPedido, obterConfigDescontoEmpresa } from "@/services/descontoValidadorService";
 
 const fmt = (v: number) => (v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const NO_SPIN = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
@@ -555,6 +556,34 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
     
     setXSalvando(true);
     try {
+      const pcDescGeral = XPcDesconto || (subtotalEfetivo > 0 ? (vlDescNum / subtotalEfetivo) * 100 : 0);
+      if (pcDescGeral > 0) {
+        const { data: mov } = await supabase
+          .from("movimento")
+          .select("funcionario_id, tabela_preco_id, tp_preco_padrao")
+          .eq("movimento_id", movimentoId)
+          .maybeSingle();
+
+        const currentTabelaId = tabelaPrecoId !== undefined ? tabelaPrecoId : (mov?.tabela_preco_id ?? null);
+        const currentTpPadrao = tipoPrecoPadrao || mov?.tp_preco_padrao || "V";
+
+        const resVal = await validarDescontoPedido({
+          empresaId: XEmpresaId,
+          funcionarioId: mov?.funcionario_id,
+          tabelaPrecoId: currentTabelaId,
+          tipoPrecoPadrao: currentTpPadrao,
+          pcDescontoTestar: pcDescGeral,
+        });
+
+        if (!resVal.permitido) {
+          const cfg = await obterConfigDescontoEmpresa(XEmpresaId);
+          if (cfg.desconto_excedido === "B") {
+            toast.error(resVal.mensagemErro || "Desconto não permitido.");
+            setXSalvando(false);
+            return;
+          }
+        }
+      }
       setXDeletadosDb([]);
       await onConfirmar(XLinhas, vlDescNum, XPcDesconto, enviarAoCaixa);
       onClose();

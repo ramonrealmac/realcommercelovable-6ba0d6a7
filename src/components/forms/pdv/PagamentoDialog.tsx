@@ -542,7 +542,6 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, cadastroId, tabe
       if (!XNrAutoriz.trim()) { toast.error("Informe o número de autorização."); return; }
     }
 
-    const cond = XCondicoes.find(c => Number(c.condicao_id) === Number(XCondicaoId));
     const band = XBandeiras.find(b => Number(b.bandeira_id) === Number(XBandeiraId));
     const oper = XOperadoras.find(o => Number(o.operadora_id) === Number(XOperadoraId));
     const port = XPortadores.find(o => Number(o.portador_id) === Number(XPortadorId));

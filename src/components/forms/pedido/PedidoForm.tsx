@@ -16,6 +16,7 @@ import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 import { ToolbarBtn, ToolbarSeparator } from "@/components/shared/FormToolbar";
 import { obterPrecoUnitarioItem } from "@/services/precoService";
 import { obterProximoNrMovimento } from "@/services/movimentoSequenceService";
+import { verificarPedidoTemDescontoExcedido, obterConfigDescontoEmpresa } from "@/services/descontoValidadorService";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -838,11 +839,42 @@ const PedidoForm: React.FC = () => {
       }
     }
 
+    // Se o status for alterado para "F" (Caixa), verifica se há desconto acima do permitido
+    if (novo === "F") {
+      const temExcedido = await verificarPedidoTemDescontoExcedido(XEmpresaId, movimento_id);
+      if (temExcedido) {
+        const cfg = await obterConfigDescontoEmpresa(XEmpresaId);
+        if (cfg.desconto_excedido === "B") {
+          // Reverte para orçamento
+          await db.rpc("fu_mudar_status_pedido_pdv", {
+            _movimento_id: movimento_id,
+            _novo_status: "O",
+            _usuario_id: userId
+          });
+          toast.error("O pedido possui desconto acima do permitido e a empresa está configurada para BLOQUEAR NO PEDIDO.");
+          if (XCrudRefreshRef.current) {
+            await XCrudRefreshRef.current();
+          }
+          return;
+        } else {
+          await supabase.from("movimento")
+            .update({ st_bloqueado: "S" })
+            .eq("movimento_id", movimento_id);
+
+          toast.warning("Pedido possui desconto acima do permitido e foi enviado para a Liberação de Pedidos.");
+          if (XCrudRefreshRef.current) {
+            await XCrudRefreshRef.current();
+          }
+          return;
+        }
+      }
+    }
+
     toast.success(`Status alterado para ${ST_PEDIDO_LABELS[novo] || novo}.`);
     if (XCrudRefreshRef.current) {
       await XCrudRefreshRef.current();
     }
-  }, []);
+  }, [XEmpresaId]);
 
   // Keyboard shortcuts F7 and F6
   useEffect(() => {

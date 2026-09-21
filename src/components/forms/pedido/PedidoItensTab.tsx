@@ -11,6 +11,7 @@ import ProdutoSearchDialog, { IProdutoRow, buscarProdutoPorCodigo } from "./Prod
 import { obterPrecoUnitarioItem, calcularPrecoPadraoProduto } from "@/services/precoService";
 
 import { CurrencyInput } from "@/components/shared/CurrencyInput";
+import { validarDescontoPedido, obterConfigDescontoEmpresa } from "@/services/descontoValidadorService";
 
 const db = supabase as any;
 
@@ -373,6 +374,26 @@ const PedidoItensTab: React.FC<IProps> = ({
           return;
         }
       }
+
+      const pcDescItem = Number(XEdit.pc_desconto || 0);
+      if (pcDescItem > 0) {
+        const resVal = await validarDescontoPedido({
+          empresaId: XEmpresaId,
+          funcionarioId: pedido.funcionario_id,
+          produtoId: XEdit.produto_id,
+          tabelaPrecoId: tabelaPrecoId,
+          tipoPrecoPadrao: tipoPrecoPadrao,
+          pcDescontoTestar: pcDescItem,
+        });
+        if (!resVal.permitido) {
+          const cfg = await obterConfigDescontoEmpresa(XEmpresaId);
+          if (cfg.desconto_excedido === "B") {
+            toast.error(resVal.mensagemErro || "Desconto não permitido.");
+            return;
+          }
+        }
+      }
+
 
       const {
         vl_produto, vl_movimento, movimento_item_id,

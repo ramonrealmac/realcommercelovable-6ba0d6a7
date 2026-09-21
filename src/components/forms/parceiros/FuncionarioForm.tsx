@@ -5,8 +5,8 @@ import { toast } from "sonner";
 import FormToolbar from "@/components/shared/FormToolbar";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { baseService } from "@/utils/baseService";
 import { useGridFilter } from "@/hooks/useGridFilter";
+import { handleEnterKeyNavigation, handleSelectKeyDown } from "@/utils/formNavigation";
 
 const db = supabase as any;
 
@@ -394,12 +394,14 @@ const FuncionarioForm: React.FC = () => {
     return (
       <div>
         <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
-        <Select value={XF[key] || ""} onValueChange={(v) => set(key, v)}>
-          <SelectTrigger className={`h-[34px] text-sm ${XFieldBgEdit}`}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {items.map(i => <SelectItem key={i.v} value={i.v}>{i.l}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <select
+          value={XF[key] || ""}
+          onChange={(e) => set(key, e.target.value)}
+          onKeyDown={(e) => handleSelectKeyDown(e)}
+          className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XFieldBgEdit} focus:ring-2 focus:ring-ring outline-none h-[34px]`}
+        >
+          {items.map(i => <option key={i.v} value={i.v}>{i.l}</option>)}
+        </select>
       </div>
     );
   };
@@ -418,13 +420,17 @@ const FuncionarioForm: React.FC = () => {
     return (
       <div>
         <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
-        <Select value={XF[key] || "__none__"} onValueChange={(v) => set(key, v === "__none__" ? "" : v)}>
-          <SelectTrigger className={`h-[34px] text-sm ${XFieldBgEdit}`}><SelectValue placeholder="Selecione..." /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">— Nenhum —</SelectItem>
-            {items.map((i: any) => <SelectItem key={i[valueKey]} value={String(i[valueKey])}>{i[labelKey]}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <select
+          value={XF[key] || ""}
+          onChange={(e) => set(key, e.target.value)}
+          onKeyDown={(e) => handleSelectKeyDown(e)}
+          className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XFieldBgEdit} focus:ring-2 focus:ring-ring outline-none h-[34px]`}
+        >
+          <option value="">— Nenhum —</option>
+          {items.map((i: any) => (
+            <option key={i[valueKey]} value={String(i[valueKey])}>{i[labelKey]}</option>
+          ))}
+        </select>
       </div>
     );
   };
@@ -438,7 +444,11 @@ const FuncionarioForm: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-card">
+    <div
+      className="flex flex-col h-full bg-card"
+      data-form-container
+      onKeyDown={(e) => handleEnterKeyNavigation(e)}
+    >
       <FormToolbar
         XIsEditing={XIsEditing}
         XHasRecord={!!XCurrentRecord}

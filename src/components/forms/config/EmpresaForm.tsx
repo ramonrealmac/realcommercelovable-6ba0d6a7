@@ -137,6 +137,7 @@ const emptyEmpresa = () => ({
   conta_antecipa_id: null as number | null,
   conta_taxa_operadora_id: null as number | null,
   desconto_padrao: "",
+  desconto_excedido: "B",
   deposito_estoque_caixa: 0,
   empresa_deposito_caixa: null as number | null,
   tp_operacao_caixa: 0,
@@ -817,6 +818,18 @@ const EmpresaForm: React.FC = () => {
                     <option value="S">SUBGRUPO DE PRODUTO</option>
                     <option value="L">LINHA DE PRODUTO</option>
                     <option value="C">CARGO</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Desconto Excedido</label>
+                  <select
+                    value={XDisplayVal("desconto_excedido") || "B"}
+                    disabled={!XIsEditing}
+                    onChange={e => updateEdit("desconto_excedido", e.target.value)}
+                    className={`w-full border border-border rounded px-3 py-1.5 text-sm ${!XIsEditing ? "bg-secondary" : "bg-card"}`}
+                  >
+                    <option value="B">BLOQUEIA NO PEDIDO</option>
+                    <option value="L">EXIGE LIBERAÇÃO</option>
                   </select>
                 </div>
               </div>
