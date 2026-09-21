@@ -62,6 +62,7 @@ interface IFuncionario {
   tempo_refresh_pdv: number;
   nfe_config_item: number | null;
   nfce_config_item: number | null;
+  cargo_id: number | null;
 }
 
 const XLocalizarColumns: IGridColumn[] = [
@@ -91,6 +92,7 @@ const emptyForm = (): Record<string, string> => ({
   tempo_refresh_pdv: "30",
   nfe_config_item: "",
   nfce_config_item: "",
+  cargo_id: "",
 });
 
 const FuncionarioForm: React.FC = () => {
@@ -108,6 +110,7 @@ const FuncionarioForm: React.FC = () => {
   // Lookups
   const [XUsuarios, setXUsuarios] = useState<any[]>([]);
   const [XFiscalConfigs, setXFiscalConfigs] = useState<any[]>([]);
+  const [XCargos, setXCargos] = useState<any[]>([]);
 
   const XCurrentRecord = XData[XCurrentIdx] || null;
   const XIsEditing = XFormMode === "edit" || XFormMode === "insert";
@@ -157,9 +160,17 @@ const FuncionarioForm: React.FC = () => {
       .eq("empresa_id", XEmpresaId)
       .order("nome");
 
+    const { data: cargos } = await db
+      .from("cargo")
+      .select("cargo_id, cargo_descricao")
+      .eq("cargo_empresa_id", XEmpresaMatrizId)
+      .eq("excluido", false)
+      .order("cargo_descricao");
+
     setXUsuarios(usersWithProfiles);
     setXFiscalConfigs(configs || []);
-  }, [XEmpresaId]);
+    setXCargos(cargos || []);
+  }, [XEmpresaId, XEmpresaMatrizId]);
 
   const loadData = useCallback(async () => {
     setXLoading(true);
@@ -250,6 +261,7 @@ const FuncionarioForm: React.FC = () => {
       tempo_refresh_pdv: toInt(XF.tempo_refresh_pdv) || 30,
       nfe_config_item: toInt(XF.nfe_config_item),
       nfce_config_item: toInt(XF.nfce_config_item),
+      cargo_id: toInt(XF.cargo_id),
     };
 
     if (XFormMode === "edit" && XCurrentRecord) {
@@ -491,6 +503,7 @@ const FuncionarioForm: React.FC = () => {
                   {renderSelect("Vendedor", "vendedor", [{ v: "S", l: "Sim" }, { v: "N", l: "Não" }])}
                   {renderSelect("Motorista", "motorista", [{ v: "S", l: "Sim" }, { v: "N", l: "Não" }])}
                   {renderSelect("Entregador", "entregador", [{ v: "S", l: "Sim" }, { v: "N", l: "Não" }])}
+                  {renderLookup("Cargo", "cargo_id", XCargos, "cargo_id", "cargo_descricao")}
                   {renderSelect("Pode Operar Caixa", "caixa", [{ v: "S", l: "Sim" }, { v: "N", l: "Não" }])}
                 </div>
               </div>

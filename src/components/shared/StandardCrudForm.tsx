@@ -5,6 +5,7 @@ import { useCrudController, ICrudConfig, TFormMode } from "@/hooks/useCrudContro
 import { useGridFilter } from "@/hooks/useGridFilter";
 import { useAppContext } from "@/contexts/AppContext";
 import RpbFormReportsButton from "@/report-builder/components/executor/RpbFormReportsButton";
+import { handleEnterKeyNavigation } from "@/utils/formNavigation";
 
 export interface IExtraTab {
   key: string;
@@ -237,7 +238,12 @@ function StandardCrudForm<T extends Record<string, any>>({
   const XEffectiveCurrentRecord = ctrl.XFormMode === "insert" ? null : ctrl.XCurrentRecord;
 
   return (
-    <div ref={containerRef} className="flex flex-col h-full bg-background" data-form-container>
+    <div
+      ref={containerRef}
+      className="flex flex-col h-full bg-background"
+      data-form-container
+      onKeyDown={(e) => handleEnterKeyNavigation(e, containerRef.current)}
+    >
       <FormToolbar
         XIsEditing={ctrl.XIsEditing}
         XHasRecord={!!ctrl.XCurrentRecord}

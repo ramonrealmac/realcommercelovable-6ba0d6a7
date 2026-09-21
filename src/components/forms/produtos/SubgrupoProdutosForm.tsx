@@ -3,8 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAppContext } from "@/contexts/AppContext";
 import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import type { IGridColumn } from "@/components/grid/DataGrid";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CurrencyInput } from "@/components/shared/CurrencyInput";
+import { handleSelectKeyDown } from "@/utils/formNavigation";
 
 interface ISubgrupo {
   produto_subgrupo_id: number;
@@ -79,8 +79,11 @@ const SubgrupoProdutosForm: React.FC = () => {
       if (!rec.produto_grupo_id) throw new Error("O grupo de produtos é obrigatório.");
       const pc_desc_maximo_av = typeof rec.pc_desc_maximo_av === "number" ? rec.pc_desc_maximo_av : parseFloat(String(rec.pc_desc_maximo_av || 0).replace(",", ".")) || 0;
       const pc_desc_maximo_prz = typeof rec.pc_desc_maximo_prz === "number" ? rec.pc_desc_maximo_prz : parseFloat(String(rec.pc_desc_maximo_prz || 0).replace(",", ".")) || 0;
+      const cleanRec = { ...rec };
+      delete (cleanRec as any).grupo_nome;
+      delete (cleanRec as any).produto_grupo;
       return { 
-        ...rec, 
+        ...cleanRec, 
         nome: rec.nome.trim(),
         produto_grupo_id: Number(rec.produto_grupo_id),
         pc_desc_maximo_av,
@@ -128,26 +131,25 @@ const SubgrupoProdutosForm: React.FC = () => {
                 Grupo de Produtos <span className="text-destructive">*</span>
               </label>
               {isEditing ? (
-                <Select 
+                <select 
                   value={record.produto_grupo_id ? String(record.produto_grupo_id) : ""} 
-                  onValueChange={v => {
+                  onChange={e => {
+                    const v = e.target.value;
                     const groupVal = v ? Number(v) : null;
                     setField("produto_grupo_id", groupVal);
                     const grp = XGrupos.find(g => g.produto_grupo_id === groupVal);
                     setField("grupo_nome", grp ? grp.nome : "");
                   }}
+                  onKeyDown={(e) => handleSelectKeyDown(e)}
+                  className="w-full border border-border rounded px-3 py-1.5 text-sm bg-card focus:ring-2 focus:ring-ring outline-none h-[34px]"
                 >
-                  <SelectTrigger className="h-[34px] text-sm">
-                    <SelectValue placeholder={XLoadingGroups ? "Carregando grupos..." : "Selecione o grupo..."} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {XGrupos.map(g => (
-                      <SelectItem key={g.produto_grupo_id} value={String(g.produto_grupo_id)}>
-                        {g.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <option value="">{XLoadingGroups ? "Carregando grupos..." : "Selecione o grupo..."}</option>
+                  {XGrupos.map(g => (
+                    <option key={g.produto_grupo_id} value={String(g.produto_grupo_id)}>
+                      {g.nome}
+                    </option>
+                  ))}
+                </select>
               ) : (
                 <input 
                   type="text" 

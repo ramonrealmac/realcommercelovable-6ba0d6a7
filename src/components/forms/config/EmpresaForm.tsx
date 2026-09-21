@@ -136,6 +136,7 @@ const emptyEmpresa = () => ({
   conta_gerencial_caixa: null as number | null,
   conta_antecipa_id: null as number | null,
   conta_taxa_operadora_id: null as number | null,
+  desconto_padrao: "",
   deposito_estoque_caixa: 0,
   empresa_deposito_caixa: null as number | null,
   tp_operacao_caixa: 0,
@@ -800,6 +801,22 @@ const EmpresaForm: React.FC = () => {
                         {p.conta} - {p.nome}
                       </option>
                     ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Desconto Padrão</label>
+                  <select
+                    value={XDisplayVal("desconto_padrao") || ""}
+                    disabled={!XIsEditing}
+                    onChange={e => updateEdit("desconto_padrao", e.target.value)}
+                    className={`w-full border border-border rounded px-3 py-1.5 text-sm ${!XIsEditing ? "bg-secondary" : "bg-card"}`}
+                  >
+                    <option value="">(Nenhum)</option>
+                    <option value="P">PRODUTO</option>
+                    <option value="G">GRUPO DE PRODUTO</option>
+                    <option value="S">SUBGRUPO DE PRODUTO</option>
+                    <option value="L">LINHA DE PRODUTO</option>
+                    <option value="C">CARGO</option>
                   </select>
                 </div>
               </div>

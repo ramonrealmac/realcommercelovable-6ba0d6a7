@@ -11,6 +11,7 @@ import { ToolbarBtn } from "@/components/shared/FormToolbar";
 import { baseService } from "@/utils/baseService";
 import { useGridFilter } from "@/hooks/useGridFilter";
 import { consumePendingProduct } from "@/utils/nfePendingStore";
+import { handleEnterKeyNavigation, formatNumericInput, handleSelectKeyDown } from "@/utils/formNavigation";
 
 const db = supabase as any;
 type TFormMode = "view" | "edit" | "insert";
@@ -794,10 +795,10 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
   const XBgEdit = "bg-card";
   const XBgRead = "bg-secondary";
 
-  const renderReadField = (label: string, value: any, className?: string) => (
+  const renderReadField = (label: string, value: any, className?: string, align?: string) => (
     <div className={className}>
       <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
-      <input type="text" value={value ?? ""} readOnly className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XBgRead}`} />
+      <input type="text" value={value ?? ""} readOnly className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XBgRead} ${align === "right" ? "text-right" : ""}`} />
     </div>
   );
 
@@ -833,8 +834,8 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
           </label>
           <input
             type="text"
-            value={XF[key] || "0,00"}
-            onChange={(e) => handleCostFieldChange(key, e.target.value)}
+            value={XF[key] || (0).toFixed(dec).replace(".", ",")}
+            onChange={(e) => handleCostFieldChange(key, formatNumericInput(e.target.value, dec))}
             onBlur={() => handleNumBlur(key, dec)}
             onFocus={(e) => e.target.select()}
             readOnly={opts?.readOnly}
@@ -844,7 +845,7 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
       );
     }
     const val = XCurrentRecord ? Number((XCurrentRecord as any)[key] || 0) : 0;
-    return renderReadField(label, dec === 4 ? fmt4(val) : fmt2(val), opts?.className);
+    return renderReadField(label, dec === 4 ? fmt4(val) : fmt2(val), opts?.className, "right");
   };
 
   const renderSelect = (label: string, key: string, items: { v: string; l: string }[], opts?: { required?: boolean }) => {
@@ -857,12 +858,14 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
         <label className="block text-xs font-medium text-muted-foreground mb-1">
           {label} {opts?.required && <span className="text-destructive">*</span>}
         </label>
-        <Select value={XF[key] || ""} onValueChange={(v) => set(key, v)}>
-          <SelectTrigger className={`h-[34px] text-sm ${XBgEdit}`}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {items.filter(i => i.v !== "").map(i => <SelectItem key={i.v} value={i.v}>{i.l}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <select
+          value={XF[key] || ""}
+          onChange={(e) => set(key, e.target.value)}
+          onKeyDown={(e) => handleSelectKeyDown(e)}
+          className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XBgEdit} focus:ring-2 focus:ring-ring outline-none h-[34px]`}
+        >
+          {items.map(i => <option key={i.v} value={i.v}>{i.l}</option>)}
+        </select>
       </div>
     );
   };
@@ -878,13 +881,17 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
         <label className="block text-xs font-medium text-muted-foreground mb-1">
           {label} {opts?.required && <span className="text-destructive">*</span>}
         </label>
-        <Select value={XF[key] || "__none__"} onValueChange={(v) => set(key, v === "__none__" ? "" : v)}>
-          <SelectTrigger className={`h-[34px] text-sm ${XBgEdit}`}><SelectValue placeholder="Selecione..." /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">— Nenhum —</SelectItem>
-            {items.filter((i: any) => String(i[valueKey] ?? "") !== "").map((i: any) => <SelectItem key={i[valueKey]} value={String(i[valueKey])}>{i[labelKey]}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <select
+          value={XF[key] || ""}
+          onChange={(e) => set(key, e.target.value)}
+          onKeyDown={(e) => handleSelectKeyDown(e)}
+          className={`w-full border border-border rounded px-3 py-1.5 text-sm ${XBgEdit} focus:ring-2 focus:ring-ring outline-none h-[34px]`}
+        >
+          <option value="">— Selecione —</option>
+          {items.filter((i: any) => String(i[valueKey] ?? "") !== "").map((i: any) => (
+            <option key={i[valueKey]} value={String(i[valueKey])}>{i[labelKey]}</option>
+          ))}
+        </select>
       </div>
     );
   };
@@ -927,7 +934,11 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-card" data-form-container>
+    <div
+      className="flex flex-col h-full bg-card"
+      data-form-container
+      onKeyDown={(e) => handleEnterKeyNavigation(e)}
+    >
       <FormToolbar
         XIsEditing={XIsEditing}
         XHasRecord={!!XCurrentRecord}
@@ -1129,13 +1140,15 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
                   <div className="grid grid-cols-[1fr_120px_100px_100px_auto] gap-2 mb-2 items-end bg-slate-50 dark:bg-slate-900/50 p-2 rounded-md border border-border/60">
                     <div>
                       <label className="block text-[10px] font-bold text-muted-foreground mb-1 uppercase">Depósito *</label>
-                      <Select value={XEstForm.deposito_id || "__none__"} onValueChange={v => setXEstForm(p => ({ ...p, deposito_id: v === "__none__" ? "" : v }))}>
-                        <SelectTrigger className="h-[30px] text-sm"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">—</SelectItem>
-                          {XDepositos.map((d: any) => <SelectItem key={d.deposito_id} value={String(d.deposito_id)}>{d.nome}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <select
+                        value={XEstForm.deposito_id || ""}
+                        onChange={e => setXEstForm(p => ({ ...p, deposito_id: e.target.value }))}
+                        onKeyDown={(e) => handleSelectKeyDown(e)}
+                        className={`w-full border border-border rounded px-2 py-1 text-sm ${XBgEdit} focus:ring-2 focus:ring-ring outline-none h-[30px]`}
+                      >
+                        <option value="">— Depósito —</option>
+                        {XDepositos.map((d: any) => <option key={d.deposito_id} value={String(d.deposito_id)}>{d.nome}</option>)}
+                      </select>
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-muted-foreground mb-1 uppercase">Endereço</label>
@@ -1339,24 +1352,28 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
                     <div className="grid grid-cols-[1fr_1fr_100px_auto] gap-2 mb-2 items-end bg-slate-50 dark:bg-slate-900/50 p-2 rounded-md border border-border/60">
                       <div>
                         <label className="block text-[10px] font-bold text-muted-foreground mb-1 uppercase">Unidade</label>
-                        <Select value={XConvForm.unidade_id || "__none__"} onValueChange={v => setXConvForm(p => ({ ...p, unidade_id: v === "__none__" ? "" : v }))}>
-                          <SelectTrigger className="h-[30px] text-sm"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">—</SelectItem>
-                            {XUnidades.filter((u: any) => u.unidade_id && u.unidade_id !== "").map((u: any) => <SelectItem key={u.unidade_id} value={u.unidade_id}>{u.descricao}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
+                        <select
+                          value={XConvForm.unidade_id || ""}
+                          onChange={e => setXConvForm(p => ({ ...p, unidade_id: e.target.value }))}
+                          onKeyDown={(e) => handleSelectKeyDown(e)}
+                          className={`w-full border border-border rounded px-2 py-1 text-sm ${XBgEdit} focus:ring-2 focus:ring-ring outline-none h-[30px]`}
+                        >
+                          <option value="">— Unidade —</option>
+                          {XUnidades.filter((u: any) => u.unidade_id && u.unidade_id !== "").map((u: any) => <option key={u.unidade_id} value={u.unidade_id}>{u.descricao}</option>)}
+                        </select>
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-muted-foreground mb-1 uppercase">Tipo Movimento</label>
-                        <Select value={XConvForm.tp_movimento || "__none__"} onValueChange={v => setXConvForm(p => ({ ...p, tp_movimento: v === "__none__" ? "" : v }))}>
-                          <SelectTrigger className="h-[30px] text-sm"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">—</SelectItem>
-                            <SelectItem value="Saida por Venda">Saída por Venda</SelectItem>
-                            <SelectItem value="Entrada por Compra">Entrada por Compra</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <select
+                          value={XConvForm.tp_movimento || ""}
+                          onChange={e => setXConvForm(p => ({ ...p, tp_movimento: e.target.value }))}
+                          onKeyDown={(e) => handleSelectKeyDown(e)}
+                          className={`w-full border border-border rounded px-2 py-1 text-sm ${XBgEdit} focus:ring-2 focus:ring-ring outline-none h-[30px]`}
+                        >
+                          <option value="">— Tipo Movimento —</option>
+                          <option value="Saida por Venda">Saída por Venda</option>
+                          <option value="Entrada por Compra">Entrada por Compra</option>
+                        </select>
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-muted-foreground mb-1 uppercase">Fator</label>
