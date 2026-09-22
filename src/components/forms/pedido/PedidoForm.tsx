@@ -7,7 +7,7 @@ import type { TFormMode } from "@/hooks/useCrudController";
 import type { IGridColumn } from "@/components/grid/DataGrid";
 import type { IMovimento, IMovimentoItem } from "./types";
 import DataGrid from "@/components/grid/DataGrid";
-import { ST_PEDIDO_LABELS, TP_DESCONTO_LABELS } from "./types";
+import { ST_PEDIDO_LABELS, TP_DESCONTO_LABELS, MOVIMENTO_LABELS } from "./types";
 import PedidoItensTab from "./PedidoItensTab";
 import PedidoPagamentoTab from "./PedidoPagamentoTab";
 import ClienteSearchDialog, { IClienteRow } from "./ClienteSearchDialog";
@@ -32,6 +32,7 @@ const db = supabase as any;
 
 interface ILookup { id: number; label: string; }
 interface ITabelaLookup extends ILookup { tp_pagamento?: string; }
+interface ITpOperacaoLookup extends ILookup { tp_movimento?: string; }
 interface IClienteInfo { id: number; cnpj: string; razao: string; fantasia: string; cd_cadastro?: number | null; tabela_preco_id?: number | null; condicao_id?: number | null; }
 
 const buildGridCols = (
@@ -92,7 +93,7 @@ interface PedidoCadastroFormContentProps {
   setInnerTab: (tab: string) => void;
 
   vendedores: ILookup[];
-  tpOperacoes: ILookup[];
+  tpOperacoes: ITpOperacaoLookup[];
   rotas: ILookup[];
   cidades: ILookup[];
   clientesCache: Record<number, IClienteInfo>;
@@ -415,18 +416,36 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
         </div>
         <div className="col-span-3">
           <label className="text-xs text-muted-foreground">Tipo de Operação</label>
-          <select disabled={ro} value={record.tp_operacao_id ?? ""} onChange={e => setField("tp_operacao_id", e.target.value ? Number(e.target.value) : null as any)} className="w-full border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none">
+          <select
+            disabled={ro}
+            value={record.tp_operacao_id ?? ""}
+            onChange={(e) => {
+              const selectedId = e.target.value ? Number(e.target.value) : null;
+              setField("tp_operacao_id", selectedId as any);
+              const op = tpOperacoes.find((t) => t.id === selectedId);
+              if (op && op.tp_movimento) {
+                setField("tp_movimento", op.tp_movimento as any);
+              }
+            }}
+            className="w-full border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
+          >
             <option value="">--</option>
-            {tpOperacoes.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+            {tpOperacoes.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
           </select>
         </div>
         <div className="col-span-3">
-          <label className="text-xs text-muted-foreground">Tipo de Movimento <span className="text-destructive">*</span></label>
-          <select disabled={ro} value={record.tp_movimento || "PD"} onChange={e => setField("tp_movimento", e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none">
-            <option value="PD">Pedido</option>
-            <option value="SV">Saída por Venda</option>
-            <option value="OR">Orçamento</option>
-          </select>
+          <label className="text-xs text-muted-foreground">Tipo de Movimento</label>
+          <input
+            type="text"
+            readOnly
+            disabled
+            value={MOVIMENTO_LABELS[record.tp_movimento] || record.tp_movimento || ""}
+            className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-muted-foreground outline-none"
+          />
         </div>
       </div>
 
@@ -546,7 +565,7 @@ const PedidoForm: React.FC = () => {
   const { XEmpresaId } = useAppContext();
   const { handleKeyDown } = useEnterTraversal();
   const [XVendedores, setXVendedores] = useState<ILookup[]>([]);
-  const [XTpOperacoes, setXTpOperacoes] = useState<ILookup[]>([]);
+  const [XTpOperacoes, setXTpOperacoes] = useState<ITpOperacaoLookup[]>([]);
   const [XRotas, setXRotas] = useState<ILookup[]>([]);
   const [XCidades, setXCidades] = useState<ILookup[]>([]);
   const [XTabelasPreco, setXTabelasPreco] = useState<ITabelaLookup[]>([]);
@@ -600,8 +619,12 @@ const PedidoForm: React.FC = () => {
       "funcionario",
     );
     load(
-      db.from("tp_operacao").select("tp_operacao_id, descricao").eq("empresa_id", XEmpresaId).order("descricao"),
-      (d) => setXTpOperacoes(d.map((t: any) => ({ id: t.tp_operacao_id, label: t.descricao }))),
+      db.from("tp_operacao")
+        .select("tp_operacao_id, descricao, tp_movimento")
+        .eq("empresa_id", XEmpresaId)
+        .eq("gera_pedido", "S")
+        .order("descricao"),
+      (d) => setXTpOperacoes(d.map((t: any) => ({ id: t.tp_operacao_id, label: t.descricao, tp_movimento: t.tp_movimento }))),
       "tp_operacao",
     );
     load(

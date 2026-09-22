@@ -7987,6 +7987,7 @@ export type Database = {
           gera_boleto: string | null
           gera_financeiro: string | null
           gera_nf: string | null
+          gera_pedido: string | null
           plano_id: number | null
           tp_movimento: string
           tp_operacao_id: number
@@ -8002,6 +8003,7 @@ export type Database = {
           gera_boleto?: string | null
           gera_financeiro?: string | null
           gera_nf?: string | null
+          gera_pedido?: string | null
           plano_id?: number | null
           tp_movimento?: string
           tp_operacao_id?: number
@@ -8017,6 +8019,7 @@ export type Database = {
           gera_boleto?: string | null
           gera_financeiro?: string | null
           gera_nf?: string | null
+          gera_pedido?: string | null
           plano_id?: number | null
           tp_movimento?: string
           tp_operacao_id?: number

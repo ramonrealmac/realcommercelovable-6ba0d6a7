@@ -164,7 +164,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     const { data, error } = await db.from("vw_pedidos_caixa_union")
       .select("movimento_id, nr_movimento, cadastro_id, cliente_nome, vendedor_id, vendedor_nome, vl_movimento, dt_emissao, is_external, origem, tp_origem, empresa_id")
       .eq("empresa_id", XEmpresaId)
-      .order("dt_emissao", { ascending: false })
+      .order("nr_movimento", { ascending: false })
       .limit(200);
     if (error) { toast.error(error.message); return; }
 

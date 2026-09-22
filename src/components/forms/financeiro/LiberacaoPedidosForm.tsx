@@ -126,7 +126,6 @@ const LiberacaoPedidosForm: React.FC = () => {
         .eq("cadastro_id", clientId)
         .eq("tp_conta", "R")
         .eq("status", "A")
-        .eq("excluido", false)
         .order("dt_vencto", { ascending: true });
 
       if (titlesErr) throw titlesErr;

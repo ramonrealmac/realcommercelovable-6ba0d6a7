@@ -98,3 +98,19 @@ export const TP_DESCONTO_LABELS: Record<string, string> = {
   I: "Desconto Item",
   P: "Desconto Pedido",
 };
+
+export const MOVIMENTO_LABELS: Record<string, string> = {
+  EA: "EA - ENTRADA DE AJUSTE",
+  EC: "EC - ENTRADA DE COMPRAS",
+  ED: "ED - ENTRADA DEVOLUCAO",
+  ET: "ET - ENTRADA TRANSFERENCIA",
+  EO: "EO - ENTRADAS OUTRAS",
+  SA: "SA - SAIDA AJUSTE",
+  SV: "SV - SAIDA VENDAS",
+  SD: "SD - SAIDA DEVOLUCAO",
+  ST: "ST - SAIDA TRANSFERENCIA",
+  SO: "SO - SAIDAS OUTRAS",
+  PD: "PD - PEDIDO",
+  OR: "OR - ORÇAMENTO",
+  VD: "VD - VENDA DIRETA",
+};

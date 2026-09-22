@@ -76,6 +76,7 @@ const PedidoItensTab: React.FC<IProps> = ({
   const codigoRef = useRef<HTMLInputElement>(null);
   const lupaRef = useRef<HTMLButtonElement>(null);
   const precoUnitRef = useRef<HTMLInputElement>(null);
+  const btnSalvarRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!XEmpresaId) return;
@@ -714,6 +715,13 @@ const PedidoItensTab: React.FC<IProps> = ({
                 value={Number(XEdit.vl_outro || 0)}
                 onChange={val => setF("vl_outro", val)}
                 onBlur={e => handleBlur("vl_outro", e.target.value, 2)}
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    btnSalvarRef.current?.focus();
+                  }
+                }}
                 className={`w-full border border-border rounded px-2 py-1 text-sm text-right ${NO_SPIN}`}
               />
             </div>
@@ -723,8 +731,20 @@ const PedidoItensTab: React.FC<IProps> = ({
                 className="w-full border border-border rounded px-2 py-1 text-sm font-semibold text-right" />
             </div>
             <div className="col-span-2 flex items-end gap-1">
-              <button onClick={salvarItem} disabled={ro || XItemSalvo || !XEdit?.produto_id}
-                className="text-sm px-3 py-1 rounded bg-primary text-primary-foreground disabled:opacity-50">
+              <button
+                ref={btnSalvarRef}
+                type="button"
+                onClick={salvarItem}
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    salvarItem();
+                  }
+                }}
+                disabled={ro || XItemSalvo || !XEdit?.produto_id}
+                className="text-sm px-3 py-1 rounded bg-primary text-primary-foreground disabled:opacity-50"
+              >
                 {XEditingId ? "Salvar" : "Inserir"}
               </button>
               <button type="button" onClick={() => { setXItemSalvo(false); novo(); }}

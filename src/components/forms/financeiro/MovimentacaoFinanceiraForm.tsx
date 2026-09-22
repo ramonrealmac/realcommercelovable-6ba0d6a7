@@ -38,7 +38,7 @@ interface IFinanceiroConsolidadoRow {
   valor: number;
   historico: string | null;
   usuario_id: string | null;
-  origem: string; // 'R' | 'P' | 'M' | 'C'
+  origem: string; // 'R' | 'P' | 'M' | 'V' | 'E'
   id_da_origem: number | null;
   created_at: string;
   updated_at: string;
@@ -221,9 +221,9 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
           if (antData) {
             saldoAnt = antData.reduce((acc: number, item: any) => {
               const val = Number(item.valor) || 0;
-              if (item.origem === 'R') return acc + val;
+              if (item.origem === 'R' || item.origem === 'V') return acc + val;
               if (item.origem === 'P') return acc - val;
-              if (item.origem === 'C') return acc + val;
+              if (item.origem === 'E') return acc + val;
               return acc + val;
             }, 0);
           }
@@ -268,11 +268,11 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
       let runningBalance = saldoAnt;
       const mappedWithRunningBalance = mapped.map((r) => {
         const v = Number(r.valor) || 0;
-        if (r.origem === "R") {
+        if (r.origem === "R" || r.origem === "V") {
           runningBalance += v;
         } else if (r.origem === "P") {
           runningBalance -= v;
-        } else if (r.origem === "C") {
+        } else if (r.origem === "E") {
           runningBalance += v;
         } else {
           runningBalance += v;
@@ -340,13 +340,16 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
 
     for (const r of XFilteredRows) {
       const v = Number(r.valor) || 0;
-      if (r.origem === "R") {
+      if (r.origem === "R" || r.origem === "V") {
         totalEntradas += v;
         countEntradas++;
       } else if (r.origem === "P") {
         totalSaidas += v;
         countSaidas++;
-      } else if (r.origem === "C") {
+      } else if (r.origem === "E") {
+        totalSaidas += Math.abs(v);
+        countSaidas++;
+      } else {
         if (v >= 0) {
           totalEntradas += v;
           if (v > 0) countEntradas++;
@@ -394,6 +397,13 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
             ENTRADA (RECEBIMENTO)
           </Badge>
         );
+      case "V":
+        return (
+          <Badge className="bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 font-bold flex items-center gap-1 text-[10px]">
+            <Receipt className="w-3 h-3 text-emerald-600" />
+            VENDA (CAIXA PDV)
+          </Badge>
+        );
       case "P":
         return (
           <Badge className="bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 font-bold flex items-center gap-1 text-[10px]">
@@ -401,11 +411,11 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
             SAÍDA (PAGAMENTO)
           </Badge>
         );
-      case "C":
+      case "E":
         return (
           <Badge className="bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800 font-bold flex items-center gap-1 text-[10px]">
-            <Lock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
-            FECHAMENTO DE CAIXA
+            <ArrowRightLeft className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+            ESTORNO (CAIXA PDV)
           </Badge>
         );
       default:
@@ -687,8 +697,9 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
               <option value=""></option>
               <option value="TODOS">Todos</option>
               <option value="R">Entradas (Recebimentos)</option>
+              <option value="V">Vendas (Caixa PDV)</option>
               <option value="P">Saídas (Pagamentos)</option>
-              <option value="C">Fechamentos de Caixa</option>
+              <option value="E">Estornos (Caixa PDV)</option>
               <option value="M">Outras Movimentações</option>
             </select>
           </div>

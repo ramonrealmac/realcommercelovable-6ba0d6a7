@@ -15,6 +15,7 @@ interface ITpOperacao {
   gera_financeiro: string;
   gera_nf: string;
   gera_boleto: string;
+  gera_pedido: string;
   altera_estoque: string;
   valida_preco: string;
   plano_id: number | null;
@@ -34,6 +35,7 @@ const MOVIMENTO_LABELS: Record<string, string> = {
   SD: "SD - SAIDA DEVOLUCAO",
   ST: "ST - SAIDA TRANSFERENCIA",
   SO: "SO - SAIDAS OUTRAS",
+  OR: "OR - ORÇAMENTO",
 };
 
 const FlagBadge: React.FC<{ val: string | null | undefined }> = ({ val }) => {
@@ -79,6 +81,13 @@ const XGridCols: IGridColumn[] = [
     width: "100px",
     align: "center",
     render: (r) => <FlagBadge val={r.gera_boleto} />,
+  },
+  {
+    key: "gera_pedido",
+    label: "Gerar Pedido",
+    width: "100px",
+    align: "center",
+    render: (r) => <FlagBadge val={r.gera_pedido} />,
   },
   {
     key: "altera_estoque",
@@ -131,6 +140,7 @@ const TpOperacaoForm: React.FC = () => {
       gera_financeiro: "N",
       gera_nf: "N",
       gera_boleto: "N",
+      gera_pedido: "N",
       altera_estoque: "N",
       valida_preco: "N",
       plano_id: null,
@@ -224,6 +234,9 @@ const TpOperacaoForm: React.FC = () => {
                   <option value="ST">ST - Saída Transferência</option>
                   <option value="SO">SO - Saídas Outras</option>
                 </optgroup>
+                <optgroup label="Outros">
+                  <option value="OR">OR - Orçamento</option>
+                </optgroup>
               </select>
             </div>
 
@@ -253,7 +266,7 @@ const TpOperacaoForm: React.FC = () => {
             <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">
               Parâmetros da Operação
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               {/* Gera Financeiro */}
               <div className="flex flex-col justify-between p-3 border border-border rounded bg-card hover:border-muted-foreground/20 transition-all duration-200 min-h-[100px]">
                 <div>
@@ -310,6 +323,26 @@ const TpOperacaoForm: React.FC = () => {
                     disabled={!isEditing}
                     checked={record.gera_boleto === "S"}
                     onCheckedChange={(checked) => setField("gera_boleto", checked ? "S" : "N")}
+                  />
+                </div>
+              </div>
+
+              {/* Gerar Pedido */}
+              <div className="flex flex-col justify-between p-3 border border-border rounded bg-card hover:border-muted-foreground/20 transition-all duration-200 min-h-[100px]">
+                <div>
+                  <span className="text-xs font-semibold block text-foreground">Gerar Pedido</span>
+                  <span className="text-[10px] text-muted-foreground block mt-1 leading-tight">
+                    Habilita a criação de pedidos de venda para a operação.
+                  </span>
+                </div>
+                <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/50">
+                  <span className="text-[10px] font-bold text-muted-foreground">
+                    {record.gera_pedido === "S" ? "ATIVADO" : "DESATIVADO"}
+                  </span>
+                  <Switch
+                    disabled={!isEditing}
+                    checked={record.gera_pedido === "S"}
+                    onCheckedChange={(checked) => setField("gera_pedido", checked ? "S" : "N")}
                   />
                 </div>
               </div>

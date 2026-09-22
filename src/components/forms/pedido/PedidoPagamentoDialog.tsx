@@ -70,6 +70,7 @@ interface IProps {
   tpDesconto: string;
   tabelaPrecoId?: number | null;
   tipoPrecoPadrao?: string | null;
+  tpMovimento?: string | null;
   onClose: () => void;
   onConfirmar: (pagtos: IPagamentoLinha[], vlDesconto: number, pcDesconto: number, enviarAoCaixa?: boolean) => Promise<void>;
 }
@@ -131,7 +132,7 @@ const getQtdParcelasCondicao = (c: ICondicao | null | undefined): number => {
   return 1;
 };
 
-const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId, subtotalPedido, tpDesconto, tabelaPrecoId, tipoPrecoPadrao, onClose, onConfirmar }) => {
+const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId, subtotalPedido, tpDesconto, tabelaPrecoId, tipoPrecoPadrao, tpMovimento, onClose, onConfirmar }) => {
   const { XEmpresaId, XEmpresaMatrizId } = useAppContext();
   const [XCondicoes, setXCondicoes] = useState<ICondicao[]>([]);
   const [XLinhas, setXLinhas] = useState<IPagamentoLinha[]>([]);
@@ -868,7 +869,7 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
                     ? "Gravando..." 
                     : (XLinhas.length === 0 && XDeletadosDb.length > 0 
                         ? "Salvar Exclusão dos Pagamentos" 
-                        : "Finalizar e Enviar p/ Cx.")}
+                        : (tpMovimento === "OR" ? "Salvar Pagamentos" : "Finalizar e Enviar p/ Cx."))}
                 </button>
               </div>
             </div>

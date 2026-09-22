@@ -367,7 +367,7 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
 
     toast.success("Pagamentos processados.");
     
-    if (enviarAoCaixa && onMudarStatus) {
+    if (enviarAoCaixa && pedido?.tp_movimento !== "OR" && onMudarStatus) {
       await onMudarStatus("F");
     } else {
       await load();
@@ -430,6 +430,7 @@ const PedidoPagamentoTab: React.FC<IProps> = ({ pedido, podeEditar, totalPedido:
           tpDesconto={pedido.tp_desconto || "N"}
           tabelaPrecoId={pedido.tabela_preco_id}
           tipoPrecoPadrao={pedido.tp_preco_padrao}
+          tpMovimento={pedido.tp_movimento}
           onClose={() => setXShowPagamento(false)}
           onConfirmar={handleConfirmarPagamento}
         />
