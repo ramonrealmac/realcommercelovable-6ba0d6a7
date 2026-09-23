@@ -173,7 +173,7 @@ export const MENU_CONFIG: MenuItem[] = [
             icon: TruckIcon,
             children: [
               { id: "montagem-rota", title: "Montagem da Rota", icon: MapPinned },
-              { id: "rotas-montadas", title: "Rotas Montadas", icon: Route },
+              { id: "rotas-montadas", title: "Cargas Montadas", icon: Route },
             ],
           },
         ],
