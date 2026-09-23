@@ -149,6 +149,7 @@ const emptyEmpresa = () => ({
   pesquisa_prod_min_letras: 3,
   pesquisa_prod_limite: 200,
   bloquear_pedido: "N",
+  st_pedidos_montagem_rota: "R",
 });
 
 type TEmpresa = ReturnType<typeof emptyEmpresa>;
@@ -835,9 +836,23 @@ const EmpresaForm: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {field("tp_operacao_caixa", "Tipo Operação Caixa", { type: "number" })}
               {field("valida_estoque", "Lógica Validação Estoque")}
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  Pedidos para Montagem de Rota
+                </label>
+                <select
+                  value={XDisplayVal("st_pedidos_montagem_rota") || "R"}
+                  disabled={!XIsEditing}
+                  onChange={e => updateEdit("st_pedidos_montagem_rota", e.target.value)}
+                  className={`w-full border border-border rounded px-3 py-1.5 text-sm ${!XIsEditing ? "bg-secondary" : "bg-card"}`}
+                >
+                  <option value="R">RECEBIDOS NO CAIXA</option>
+                  <option value="N">NÃO RECEBIDOS NO CAIXA</option>
+                </select>
+              </div>
             </div>
 
             <div>

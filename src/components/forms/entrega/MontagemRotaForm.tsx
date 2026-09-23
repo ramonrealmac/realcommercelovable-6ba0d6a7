@@ -91,7 +91,7 @@ const MontagemRotaForm: React.FC = () => {
   // Orders State
   const [XRows, setXRows] = useState<IOrderRow[]>([]);
   const [XSelectedIds, setXSelectedIds] = useState<number[]>([]);
-  const [XOrderSequences, setXOrderSequences] = useState<Record<number, number>>({});
+  const [XOrderSequences, setXOrderSequences] = useState<Record<number, number | string>>({});
   const [XLoading, setXLoading] = useState<boolean>(false);
   const [XSaving, setXSaving] = useState<boolean>(false);
 
@@ -137,19 +137,41 @@ const MontagemRotaForm: React.FC = () => {
     if (!XEmpresaId) return;
     setXLoading(true);
     try {
+      // Fetch empresa setting for route assembly (R = RECEBIDOS NO CAIXA, N = NÃO RECEBIDOS NO CAIXA)
+      const { data: empData } = await db.from("empresa")
+        .select("st_pedidos_montagem_rota")
+        .eq("empresa_id", XEmpresaId)
+        .maybeSingle();
+
+      const stOption = empData?.st_pedidos_montagem_rota || "R";
+      const allowedStPedido = stOption === "N" ? ["F"] : ["R"];
+
+      // Fetch active entrega_items for the company to exclude orders already in a route
+      const { data: activeItems } = await db.from("entrega_item")
+        .select("movimento_id, entrega:entrega_id(status, excluido)")
+        .eq("empresa_id", XEmpresaId)
+        .eq("excluido", false);
+
+      const usedMovIds = new Set<number>();
+      (activeItems || []).forEach((item: any) => {
+        if (item.movimento_id && (!item.entrega || (item.entrega.excluido === false && item.entrega.status !== "Cancelada"))) {
+          usedMovIds.add(item.movimento_id);
+        }
+      });
+
       const { data, error } = await db.from("movimento")
         .select("movimento_id, nr_movimento, dt_emissao, dt_entrega, cadastro_id, vl_movimento, st_entrega, st_entregue, st_pedido, st_bloqueado, empresa_id")
         .eq("empresa_id", XEmpresaId)
         .eq("excluido", false)
         .eq("st_bloqueado", "N") // Apenas liberados
-        .in("st_pedido", ["F", "R"]) // Faturado ou Recebido no Caixa
-        .in("st_entrega", ["S", "P"]) // Sim ou Parcial
+        .in("st_pedido", allowedStPedido) // R = Recebido no caixa, F = Não recebido no caixa (Pré-venda)
+        .in("st_entrega", ["S", "P"]) // Apenas pedidos para entrega ou entrega parcial
         .in("st_entregue", ["N", "P"]) // Não entregue ou Parcialmente entregue
         .order("nr_movimento", { ascending: false });
 
       if (error) throw error;
 
-      const rows: IOrderRow[] = data || [];
+      const rows: IOrderRow[] = (data || []).filter((r: IOrderRow) => !usedMovIds.has(r.movimento_id));
 
       // Fetch client info
       const cadIds = Array.from(new Set(rows.map(r => r.cadastro_id).filter(Boolean)));
@@ -197,24 +219,16 @@ const MontagemRotaForm: React.FC = () => {
   const handleAddToMinuta = (movId: number) => {
     setXSelectedIds(prev => {
       if (prev.includes(movId)) return prev;
-      const nextSeq = Object.keys(XOrderSequences).length + 1;
-      setXOrderSequences(old => ({ ...old, [movId]: nextSeq }));
       return [...prev, movId];
     });
   };
 
   const handleRemoveFromMinuta = (movId: number) => {
-    setXSelectedIds(prev => {
-      const newSeqs = { ...XOrderSequences };
-      delete newSeqs[movId];
-      // Re-sequence remaining
-      const remaining = prev.filter(id => id !== movId);
-      const updatedSeqs: Record<number, number> = {};
-      remaining.forEach((id, index) => {
-        updatedSeqs[id] = index + 1;
-      });
-      setXOrderSequences(updatedSeqs);
-      return remaining;
+    setXSelectedIds(prev => prev.filter(id => id !== movId));
+    setXOrderSequences(prev => {
+      const copy = { ...prev };
+      delete copy[movId];
+      return copy;
     });
   };
 
@@ -222,16 +236,6 @@ const MontagemRotaForm: React.FC = () => {
     setXSelectedIds(prev => {
       const toAdd = filteredRows.filter(r => !prev.includes(r.movimento_id));
       if (toAdd.length === 0) return prev;
-
-      const newSeqs = { ...XOrderSequences };
-      let currSeq = Object.keys(newSeqs).length;
-
-      toAdd.forEach(r => {
-        currSeq++;
-        newSeqs[r.movimento_id] = currSeq;
-      });
-
-      setXOrderSequences(newSeqs);
       return [...prev, ...toAdd.map(r => r.movimento_id)];
     });
     toast.info(`${filteredRows.length} pedido(s) adicionado(s) à minuta.`);
@@ -243,16 +247,81 @@ const MontagemRotaForm: React.FC = () => {
   };
 
   const handleSequenceChange = (movId: number, val: string) => {
-    const num = parseInt(val) || 0;
-    setXOrderSequences(prev => ({ ...prev, [movId]: num }));
+    setXOrderSequences(prev => ({ ...prev, [movId]: val }));
   };
+
+  // Selected orders for Grid 2 (preserved insertion order)
+  const selectedRows = useMemo(() => {
+    return XSelectedIds
+      .map(id => XRows.find(r => r.movimento_id === id))
+      .filter(Boolean) as IOrderRow[];
+  }, [XRows, XSelectedIds]);
 
   // Submit / Save Route
   const handleGerarMinuta = async () => {
     if (!XEmpresaId) return;
+
+    if (!XSelectedVeiculoId) {
+      toast.warning("Selecione o Veículo para a minuta.");
+      return;
+    }
+    if (!XSelectedMotoristaId) {
+      toast.warning("Selecione o Motorista para a minuta.");
+      return;
+    }
+    if (!XRotaText.trim()) {
+      toast.warning("Selecione ou informe a Rota / Destino para a minuta.");
+      return;
+    }
+
     if (XSelectedIds.length === 0) {
       toast.warning("Adicione pelo menos um pedido à minuta.");
       return;
+    }
+
+    // Validation of stop sequences (paradas)
+    const paradas: number[] = [];
+    let missing = false;
+
+    for (const r of selectedRows) {
+      const val = XOrderSequences[r.movimento_id];
+      if (val === undefined || val === null || val === "" || isNaN(Number(val)) || Number(val) <= 0) {
+        missing = true;
+        break;
+      }
+      paradas.push(Number(val));
+    }
+
+    const focusFirstParada = () => {
+      setTimeout(() => {
+        const el = document.getElementById("parada-input-0") as HTMLInputElement | null;
+        if (el) {
+          el.focus();
+          el.select();
+        }
+      }, 50);
+    };
+
+    if (missing) {
+      toast.error("Preencha o número da parada para todos os pedidos da minuta.");
+      focusFirstParada();
+      return;
+    }
+
+    const uniqueParadas = new Set(paradas);
+    if (uniqueParadas.size !== paradas.length) {
+      toast.error("Existem números de parada duplicados na minuta.");
+      focusFirstParada();
+      return;
+    }
+
+    const sortedParadas = [...paradas].sort((a, b) => a - b);
+    for (let i = 0; i < sortedParadas.length; i++) {
+      if (sortedParadas[i] !== i + 1) {
+        toast.error("A sequência de paradas possui saltos ou não começa em 1. Preencha em ordem sequencial sem pular números.");
+        focusFirstParada();
+        return;
+      }
     }
 
     setXSaving(true);
@@ -282,7 +351,7 @@ const MontagemRotaForm: React.FC = () => {
         movimento_id: movId,
         empresa_id: XEmpresaId,
         status_entrega: "Pendente",
-        ordem_sequencia: XOrderSequences[movId] || 0
+        ordem_sequencia: Number(XOrderSequences[movId]) || 0
       }));
 
       const { error: itemsErr } = await db.from("entrega_item").insert(itemsToInsert);
@@ -349,16 +418,6 @@ const MontagemRotaForm: React.FC = () => {
     });
   }, [XAvailableList, XFilterCidade, XFilterUf, XFilterRota, XRotas]);
 
-  // Selected orders for Grid 2
-  const selectedRows = useMemo(() => {
-    const rows = XRows.filter(r => XSelectedIds.includes(r.movimento_id));
-    return rows.sort((a, b) => {
-      const seqA = XOrderSequences[a.movimento_id] ?? 9999;
-      const seqB = XOrderSequences[b.movimento_id] ?? 9999;
-      return seqA - seqB;
-    });
-  }, [XRows, XSelectedIds, XOrderSequences]);
-
   // Grid 1 Columns (Available)
   const XColsAvailable: IGridColumn[] = useMemo(() => [
     {
@@ -404,8 +463,9 @@ const MontagemRotaForm: React.FC = () => {
     },
     {
       key: "ordem_sequencia", label: "Parada", width: "80px", align: "center",
-      render: (r: any) => (
+      render: (r: any, idx: number) => (
         <input
+          id={`parada-input-${idx}`}
           type="number"
           value={XOrderSequences[r.movimento_id] ?? ""}
           onChange={(e) => handleSequenceChange(r.movimento_id, e.target.value)}
@@ -487,19 +547,18 @@ const MontagemRotaForm: React.FC = () => {
             <label className="text-xs text-muted-foreground font-semibold flex items-center gap-1">
               <MapPinned size={13} /> Rota / Destino
             </label>
-            <input
-              type="text"
-              list="rotas-sugeridas"
-              placeholder="Digite ou selecione"
+            <select
               value={XRotaText}
               onChange={(e) => setXRotaText(e.target.value)}
               className="border border-border rounded px-2 py-1.5 text-sm bg-card outline-none focus:ring-2 focus:ring-ring"
-            />
-            <datalist id="rotas-sugeridas">
+            >
+              <option value="">-- Selecionar Rota / Destino --</option>
               {XRotas.map(r => (
-                <option key={r.rota_id} value={r.descricao} />
+                <option key={r.rota_id} value={r.descricao}>
+                  {r.descricao}
+                </option>
               ))}
-            </datalist>
+            </select>
           </div>
 
           {/* OBSERVAÇÕES */}
