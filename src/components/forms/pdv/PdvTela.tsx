@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
-import { LogOut, Search, Trash2, Plus, Receipt, RefreshCw, Settings, Wrench, Percent, ShoppingCart, Tag, CircleDollarSign, Package, CornerDownLeft, Lock, Home, Smartphone, Globe } from "lucide-react";
+import { LogOut, Search, Trash2, Plus, Receipt, RefreshCw, Settings, Wrench, Percent, ShoppingCart, Tag, CircleDollarSign, Package, CornerDownLeft, Lock, Home, Smartphone, Globe, User, UserCheck } from "lucide-react";
 import ProdutoSearchDialog, { buscarProdutoPorCodigo, IProdutoRow } from "../pedido/ProdutoSearchDialog";
 import { obterProximoNrMovimento } from "@/services/movimentoSequenceService";
 import ClienteSearchDialog, { IClienteRow } from "../pedido/ClienteSearchDialog";
@@ -24,6 +24,8 @@ import type {
   IPdvCaixa, IPdvCaixaAbertura, IPdvParamsEmpresa, IPdvPedidoFechado,
   IPdvPagamentoLinha, IMovimentoPagamento,
 } from "./types";
+
+import { useQueryClient } from "@tanstack/react-query";
 
 const db = supabase as any;
 const fmt = (v: number) => (v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -101,6 +103,7 @@ const CartItemRow: React.FC<ICartItemRowProps> = ({ item, idx, XFonteProd, alter
 
 const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => {
   const { XEmpresaId, XEmpresaMatrizId, XEmpresas } = useAppContext();
+  const queryClient = useQueryClient();
   const [XParams, setXParams] = useState<IPdvParamsEmpresa | null>(null);
 
   // Permissões do caixa
@@ -361,6 +364,30 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     );
   }, [XPedidos, XBuscaPedido]);
 
+  // Formatação do nome do cliente selecionado no formato: código - nome
+  const clienteTextoDisplay = useMemo(() => {
+    if (XPedidoSel) {
+      const cod = XPedidoSel.cadastro_id ? `#${XPedidoSel.cadastro_id} - ` : "";
+      return `${cod}${XPedidoSel.cliente_nome || "(Consumidor)"}`;
+    }
+    if (!XCliente) return "(Consumidor)";
+    const codigo = XCliente.cd_cadastro ?? XCliente.cadastro_id ?? "";
+    const nome = XCliente.nome_fantasia || XCliente.razao_social || "(Consumidor)";
+    return codigo ? `${codigo} - ${nome}` : nome;
+  }, [XCliente, XPedidoSel]);
+
+  // Formatação do nome do vendedor selecionado no formato: código - nome
+  const vendedorTextoDisplay = useMemo(() => {
+    if (XPedidoSel) {
+      const cod = XPedidoSel.vendedor_id ? `#${XPedidoSel.vendedor_id} - ` : "";
+      return `${cod}${XPedidoSel.vendedor_nome || "(Caixa)"}`;
+    }
+    if (!XVendedor) return "(Caixa)";
+    const codigo = (XVendedor as any).cd_cadastro ?? XVendedor.cadastro_id ?? "";
+    const nome = XVendedor.nome_fantasia || XVendedor.razao_social || "(Caixa)";
+    return codigo ? `${codigo} - ${nome}` : nome;
+  }, [XVendedor, XPedidoSel]);
+
   // ===== Venda direta =====
   const adicionarProdutoAoCarrinho = (p: IProdutoRow, depositoId?: number) => {
     const qt = XQtProx > 0 ? XQtProx : 1;
@@ -417,6 +444,8 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     setXCart(prev => prev.filter((_, i) => i !== idx));
   };
 
+  const [XTpMovimentoCaixa, setXTpMovimentoCaixa] = useState<string>("SV");
+
   // Carrega parametros da empresa
   useEffect(() => {
     if (!XEmpresaId) return;
@@ -426,6 +455,16 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         .eq("empresa_id", XEmpresaId).maybeSingle();
       if (error) { toast.error(error.message); return; }
       setXParams(data as IPdvParamsEmpresa);
+
+      if (data?.tp_operacao_caixa) {
+        const { data: tpOp } = await db.from("tp_operacao")
+          .select("tp_movimento")
+          .eq("tp_operacao_id", data.tp_operacao_caixa)
+          .maybeSingle();
+        if (tpOp?.tp_movimento) {
+          setXTpMovimentoCaixa(tpOp.tp_movimento);
+        }
+      }
     })();
   }, [XEmpresaId]);
 
@@ -448,11 +487,30 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     }
   }, [XEmpresaId]);
 
+  // Carrega vendedor padrão do caixa (se houver caixa.funcionario_id)
+  const carregarVendedorPadrao = useCallback(async () => {
+    if (!caixa.funcionario_id) return;
+    const { data: func } = await db.from("funcionario")
+      .select("funcionario_id, cd_funcionario, nome")
+      .eq("funcionario_id", caixa.funcionario_id)
+      .maybeSingle();
+
+    if (func) {
+      setXVendedor({
+        cadastro_id: func.funcionario_id,
+        cd_cadastro: func.cd_funcionario ?? func.funcionario_id,
+        razao_social: func.nome,
+        nome_fantasia: func.nome,
+      });
+    }
+  }, [caixa.funcionario_id]);
+
   useEffect(() => { carregarClientePadrao(); }, [carregarClientePadrao]);
+  useEffect(() => { carregarVendedorPadrao(); }, [carregarVendedorPadrao]);
 
   /** Cria movimento (st_pedido='F') quando for venda direta. */
   const criarMovimentoVendaDireta = async (): Promise<{ movimento_id: number; nr: number; total: number; }> => {
-    const nr = await obterProximoNrMovimento(XEmpresaId);
+    const nr = await obterProximoNrMovimento(XEmpresaId, XParams?.tp_operacao_caixa);
     const total = totalReceber;
 
     const mov = {
@@ -460,7 +518,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       cadastro_id: XCliente?.cadastro_id || null,
       funcionario_id: XVendedor?.cadastro_id || caixa.funcionario_id,
       nr_movimento: nr,
-      tp_movimento: "S",
+      tp_movimento: XTpMovimentoCaixa || "SV",
       tp_origem: "PDV",
       st_pedido: "O",
       faturado: "N",
@@ -494,7 +552,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       cd_produto: c.cd_produto,
       nm_produto: c.nm_produto,
       unidade_id: c.unidade_id,
-      tp_movimento: "S",
+      tp_movimento: XTpMovimentoCaixa || "SV",
       qt_movimento: c.qt_item,
       vl_und_produto: c.vl_unitario,
       deposito_id: c.deposito_id,
@@ -643,6 +701,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       }
 
       toast.success(`Pedido ${nrMov} recebido com sucesso.`, { id: tId });
+      queryClient.invalidateQueries({ queryKey: ["movimento"] });
       setXOpenPagto(false);
       setXOpenOpcoes(true);
     } catch (err: any) {
@@ -658,6 +717,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     setXCliente(null);
     carregarClientePadrao();
     setXVendedor(null);
+    carregarVendedorPadrao();
     setXVlDesc(0);
     setXPcDesc(0);
     setXPagtosPedido([]);
@@ -694,6 +754,15 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   // Atalhos de teclado
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
+      // Se qualquer modal estiver aberto, ignora os atalhos globais da tela principal do PDV
+      if (
+        XOpenDesc || XOpenPagto || XOpenCliente || XOpenVend || XOpenProduto ||
+        XOpenOpcoes || XOpenFuncoes || XOpenCanc || XOpenEstorno || XOpenAbert ||
+        XOpenSupr || XOpenSang || XOpenConfig || XOpenEstoqueBloq || XOpenEmissaoPedidos || XShowAtalhos
+      ) {
+        return;
+      }
+
       const activeTag = document.activeElement?.tagName;
       const isInput = activeTag === 'INPUT' || activeTag === 'TEXTAREA';
 
@@ -709,7 +778,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
           break;
         case 'F4':
           e.preventDefault();
-          if (!XPedidoSel && XPodeInfVend) setXOpenVend(true);
+          if (!XPedidoSel) setXOpenVend(true);
           break;
         case 'F5':
           e.preventDefault();
@@ -718,7 +787,11 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
           break;
         case 'F6':
           e.preventDefault();
-          if (!XPedidoSel && XCart.length > 0) setXOpenDesc(true);
+          if (!XPedidoSel && XCart.length > 0) {
+            setXOpenDesc(true);
+          } else if (XCart.length === 0) {
+            toast.info('Adicione produtos ao carrinho para aplicar desconto.');
+          }
           break;
 
         case 'F9':
@@ -743,7 +816,12 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [XPedidoSel, XPodeInfVend, XCart, XOpenDesc, finalizarVenda, carregarPedidos]);
+  }, [
+    XPedidoSel, XPodeInfVend, XCart, XOpenDesc, XOpenPagto, XOpenCliente, XOpenVend,
+    XOpenProduto, XOpenOpcoes, XOpenFuncoes, XOpenCanc, XOpenEstorno, XOpenAbert,
+    XOpenSupr, XOpenSang, XOpenConfig, XOpenEstoqueBloq, XOpenEmissaoPedidos, XShowAtalhos,
+    finalizarVenda, carregarPedidos
+  ]);
 
   // Cores dos painéis (usando o token do menu/sidebar)
   const painelBg = "bg-sidebar/30 dark:bg-sidebar/40";
@@ -811,6 +889,45 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
                 ← VOLTAR
               </button>
             )}
+          </div>
+
+          {/* Campos de Cliente (F3) e Vendedor (F4) */}
+          <div className="px-3 py-1.5 border-b border-border bg-card grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Cliente (F3) */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider shrink-0">
+                Cliente (F3):
+              </span>
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  readOnly
+                  onClick={() => !XPedidoSel && setXOpenCliente(true)}
+                  value={clienteTextoDisplay}
+                  className={`w-full px-3 py-1 border border-border rounded text-sm bg-white text-black font-semibold shadow-inner ${!XPedidoSel ? "cursor-pointer hover:border-blue-400" : "cursor-default"}`}
+                  placeholder="Cliente..."
+                  title={!XPedidoSel ? "Pressione F3 ou clique para alterar o cliente" : undefined}
+                />
+              </div>
+            </div>
+
+            {/* Vendedor (F4) */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider shrink-0">
+                Vendedor (F4):
+              </span>
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  readOnly
+                  onClick={() => !XPedidoSel && setXOpenVend(true)}
+                  value={vendedorTextoDisplay}
+                  className={`w-full px-3 py-1 border border-border rounded text-sm bg-white text-black font-semibold shadow-inner ${!XPedidoSel ? "cursor-pointer hover:border-emerald-500" : "cursor-default"}`}
+                  placeholder="Vendedor..."
+                  title={!XPedidoSel ? "Pressione F4 ou clique para alterar o vendedor" : undefined}
+                />
+              </div>
+            </div>
           </div>
           {!XPedidoSel && (
             <div className="px-3 py-2 border-b border-border flex gap-1.5 bg-card items-center">

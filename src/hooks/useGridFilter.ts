@@ -18,13 +18,20 @@ const isNumericCodeColumn = (key: string, col?: IFilterColumn) => {
     k === "cd_produto" ||
     k === "cd_cadastro" ||
     k === "cd_vendedor" ||
+    k === "nr_movimento" ||
+    k === "nr_nota" ||
+    k === "nr_documento" ||
     k === "produto_id" ||
     k === "cadastro_id" ||
     k === "deposito_id" ||
     k.startsWith("cd_") ||
+    k.startsWith("nr_") ||
     (k.endsWith("_id") && k !== "unidade_id") ||
     labelStr.includes("código") ||
-    labelStr.includes("cód.")
+    labelStr.includes("cód.") ||
+    labelStr.includes("pedido") ||
+    labelStr.includes("número") ||
+    labelStr.includes("nº")
   );
 };
 

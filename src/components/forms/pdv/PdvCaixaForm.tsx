@@ -14,7 +14,7 @@ interface IProps {
 }
 
 const PdvCaixaForm: React.FC<IProps> = ({ initialFuncionarioId, initialDtAbertura }) => {
-  const { XEmpresaId } = useAppContext();
+  const { XEmpresaId, closeTab, XActiveTabId } = useAppContext();
   const [XStep, setXStep] = useState<"loading" | "selecionar" | "pdv">(
     initialFuncionarioId ? "loading" : "selecionar"
   );
@@ -107,7 +107,7 @@ const PdvCaixaForm: React.FC<IProps> = ({ initialFuncionarioId, initialDtAbertur
           setXDtMov(dtMovimento);
           setXStep("pdv");
         }}
-        onCancelar={() => { /* tab fica vazia; usuário fecha aba pelo TabBar */ }}
+        onCancelar={() => { if (XActiveTabId) closeTab(XActiveTabId); }}
       />
     );
   }

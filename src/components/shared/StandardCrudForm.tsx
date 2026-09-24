@@ -6,6 +6,7 @@ import { useGridFilter } from "@/hooks/useGridFilter";
 import { useAppContext } from "@/contexts/AppContext";
 import RpbFormReportsButton from "@/report-builder/components/executor/RpbFormReportsButton";
 import { handleEnterKeyNavigation } from "@/utils/formNavigation";
+import { toast } from "sonner";
 
 export interface IExtraTab {
   key: string;
@@ -208,6 +209,10 @@ function StandardCrudForm<T extends Record<string, any>>({
   }, [XInitialId, ctrl.XData, config.XPrimaryKey, config.XTableName, config.XSelectCols, config.XSoftDelete, config.XOnAfterLoad, ctrl.setXCurrentIdx, ctrl.setXFormMode, ctrl.setXData]);
 
   const handleSelectFromSearch = (row: any) => {
+    if (row?.excluido === true) {
+      toast.error("Pedido excluído.");
+      return;
+    }
     if (config.XConfirmDiscardOnSelect && ctrl.XIsEditing) {
       const confirmDiscard = window.confirm(
         "Você possui alterações não salvas. Deseja realmente descartar e visualizar o registro selecionado?"
@@ -352,6 +357,7 @@ function StandardCrudForm<T extends Record<string, any>>({
             onRowDoubleClick={handleSelectFromSearch}
             maxHeight="500px"
             exportTitle={XExportTitle || config.XTitle}
+            initialSorts={[{ key: config.XOrderBy || config.XPrimaryKey, dir: config.XOrderAsc === false ? "desc" : "asc" }]}
           />
         )}
       </div>

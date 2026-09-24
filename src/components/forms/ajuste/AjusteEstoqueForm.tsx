@@ -185,7 +185,7 @@ export default function AjusteEstoqueForm() {
           if (mode === "insert") {
             delete cleanRec.movimento_id;
             if (!cleanRec.nr_movimento) {
-              cleanRec.nr_movimento = await obterProximoNrMovimento(XEmpresaId);
+              cleanRec.nr_movimento = await obterProximoNrMovimento(XEmpresaId, cleanRec.tp_operacao_id);
             }
           }
 

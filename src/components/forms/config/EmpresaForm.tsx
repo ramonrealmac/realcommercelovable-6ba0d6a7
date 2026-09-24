@@ -181,6 +181,9 @@ const EmpresaForm: React.FC = () => {
   // Planos de contas lookup
   const [XPlanosContas, setXPlanosContas] = useState<{ plano_conta_id: number; conta: string; nome: string }[]>([]);
 
+  // Tipos de Operação lookup
+  const [XTpOperacoes, setXTpOperacoes] = useState<{ tp_operacao_id: number; descricao: string; tp_movimento: string }[]>([]);
+
   /* ── Load ── */
   const loadData = useCallback(async () => {
     // Carrega todas as empresas cadastradas no sistema que não estão excluídas
@@ -256,6 +259,36 @@ const EmpresaForm: React.FC = () => {
     else setXPlanosContas([]);
   }, [XEmpresaId]);
 
+  const loadTpOperacoes = useCallback(async (empresaId: number) => {
+    if (!empresaId) {
+      setXTpOperacoes([]);
+      return;
+    }
+    let { data } = await db
+      .from("tp_operacao")
+      .select("tp_operacao_id, descricao, tp_movimento")
+      .eq("empresa_id", empresaId)
+      .eq("excluido", false)
+      .order("descricao");
+
+    // Fallback se a empresa ainda não tiver tipos cadastrados
+    if (!data || data.length === 0) {
+      const fallbackId = XEmpresaId || 5;
+      const res = await db
+        .from("tp_operacao")
+        .select("tp_operacao_id, descricao, tp_movimento")
+        .eq("empresa_id", fallbackId)
+        .eq("excluido", false)
+        .order("descricao");
+
+      if (res.data && res.data.length > 0) {
+        data = res.data;
+      }
+    }
+
+    setXTpOperacoes(data || []);
+  }, [XEmpresaId]);
+
   const handleGerarHorarios = async () => {
     const empresaId = XFormMode === "insert" ? null : XCurrent?.empresa_id;
     if (!empresaId) { toast.error("Salve a empresa antes de gerar horários."); return; }
@@ -283,13 +316,14 @@ const EmpresaForm: React.FC = () => {
 
   const XCurrent = XData[XCurrentIdx] || null;
 
-  // Load horarios and plano_conta when current record changes
+  // Load horarios, plano_conta, and tp_operacao when current record changes
   useEffect(() => {
     if (XCurrent) {
       loadHorarios(XCurrent.empresa_id);
       loadPlanosContas(XCurrent.empresa_id);
+      loadTpOperacoes(XCurrent.empresa_id);
     }
-  }, [XCurrent, loadHorarios, loadPlanosContas]);
+  }, [XCurrent, loadHorarios, loadPlanosContas, loadTpOperacoes]);
 
   useEffect(() => {
     if (XCurrent && XFormMode === "edit") {
@@ -837,7 +871,39 @@ const EmpresaForm: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {field("tp_operacao_caixa", "Tipo Operação Caixa", { type: "number" })}
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  Tipo de Operação Padrão do Caixa *
+                </label>
+                <select
+                  value={XDisplayVal("tp_operacao_caixa") || ""}
+                  disabled={!XIsEditing}
+                  onChange={e => updateEdit("tp_operacao_caixa", e.target.value ? Number(e.target.value) : 0)}
+                  className={`w-full border border-border rounded px-3 py-1.5 text-sm ${!XIsEditing ? "bg-secondary" : "bg-card"}`}
+                >
+                  <option value="">(Selecione o Tipo de Operação)</option>
+                  {Object.entries(
+                    XTpOperacoes.reduce((acc, op) => {
+                      const cat = op.tp_movimento?.toUpperCase().startsWith("E") 
+                        ? "Entradas" 
+                        : op.tp_movimento?.toUpperCase().startsWith("S") 
+                        ? "Saídas" 
+                        : "Outros";
+                      if (!acc[cat]) acc[cat] = [];
+                      acc[cat].push(op);
+                      return acc;
+                    }, {} as Record<string, typeof XTpOperacoes>)
+                  ).map(([categoria, ops]) => (
+                    <optgroup key={categoria} label={categoria}>
+                      {ops.map(op => (
+                        <option key={op.tp_operacao_id} value={op.tp_operacao_id}>
+                          {op.tp_movimento ? `${op.tp_movimento} - ${op.descricao}` : op.descricao}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
               {field("valida_estoque", "Lógica Validação Estoque")}
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">

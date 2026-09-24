@@ -5,12 +5,17 @@ import { supabase } from "@/integrations/supabase/client";
  * Utiliza primordialmente a RPC atômica get_proximo_nr_movimento que atualiza a tabela sys_sequencial.
  * Caso a RPC não esteja disponível, faz a atualização direta na tabela sys_sequencial ou fallback no MAX(nr_movimento).
  */
-export async function obterProximoNrMovimento(empresaId: number): Promise<number> {
+export async function obterProximoNrMovimento(empresaId: number, tpOperacaoId?: number | null): Promise<number> {
   const empId = empresaId && empresaId > 0 ? empresaId : 1;
+  const opId = tpOperacaoId && Number(tpOperacaoId) > 0 ? Number(tpOperacaoId) : null;
+  const chaveSeq = opId ? String(opId) : "0";
 
   // 1. Tentar pela função RPC no PostgreSQL
   try {
-    const { data, error } = await supabase.rpc("get_proximo_nr_movimento" as any, { p_empresa_id: empId });
+    const { data, error } = await supabase.rpc("get_proximo_nr_movimento" as any, {
+      p_empresa_id: empId,
+      p_tp_operacao_id: opId,
+    });
     if (!error && data != null && Number(data) > 0) {
       return Number(data);
     }
@@ -27,7 +32,7 @@ export async function obterProximoNrMovimento(empresaId: number): Promise<number
       .eq("empresa_id", empId)
       .eq("tabela", "movimento")
       .eq("nm_campo1", "nr_movimento")
-      .eq("nm_campo2", "")
+      .eq("nm_campo2", chaveSeq)
       .maybeSingle();
 
     if (seqData && seqData.ult_seq != null) {
@@ -38,16 +43,15 @@ export async function obterProximoNrMovimento(empresaId: number): Promise<number
         .eq("empresa_id", empId)
         .eq("tabela", "movimento")
         .eq("nm_campo1", "nr_movimento")
-        .eq("nm_campo2", "");
+        .eq("nm_campo2", chaveSeq);
       return nextSeq;
     } else {
-      // Se ainda não existe registro no sys_sequencial para a empresa, calcula o maior atual
-      const { data: maxNrData } = await db
-        .from("movimento")
-        .select("nr_movimento")
-        .eq("empresa_id", empId)
-        .order("nr_movimento", { ascending: false })
-        .limit(1);
+      // Se ainda não existe registro no sys_sequencial para a empresa/operação, calcula o maior atual
+      let query = db.from("movimento").select("nr_movimento").eq("empresa_id", empId);
+      if (opId) {
+        query = query.eq("tp_operacao_id", opId);
+      }
+      const { data: maxNrData } = await query.order("nr_movimento", { ascending: false }).limit(1);
 
       const maxNr = maxNrData && maxNrData[0]?.nr_movimento ? Number(maxNrData[0].nr_movimento) : 0;
       const nextSeq = maxNr + 1;
@@ -58,7 +62,7 @@ export async function obterProximoNrMovimento(empresaId: number): Promise<number
           empresa_id: empId,
           tabela: "movimento",
           nm_campo1: "nr_movimento",
-          nm_campo2: "",
+          nm_campo2: chaveSeq,
           ult_seq: nextSeq,
         });
 
@@ -67,12 +71,11 @@ export async function obterProximoNrMovimento(empresaId: number): Promise<number
   } catch (e) {
     console.warn("Erro ao ler/atualizar sys_sequencial, utilizando fallback de MAX:", e);
     const db = supabase as any;
-    const { data: maxNrData } = await db
-      .from("movimento")
-      .select("nr_movimento")
-      .eq("empresa_id", empId)
-      .order("nr_movimento", { ascending: false })
-      .limit(1);
+    let query = db.from("movimento").select("nr_movimento").eq("empresa_id", empId);
+    if (opId) {
+      query = query.eq("tp_operacao_id", opId);
+    }
+    const { data: maxNrData } = await query.order("nr_movimento", { ascending: false }).limit(1);
     return ((maxNrData && maxNrData[0]?.nr_movimento) || 0) + 1;
   }
 }

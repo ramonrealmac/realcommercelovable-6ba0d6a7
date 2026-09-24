@@ -82,6 +82,7 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
   const [XCfgOpen, setXCfgOpen] = useState(false);
   const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const gridTemplateColumns = XCampos.map(k => COL_WIDTHS[k] || "1fr").join(" ");
 
@@ -142,9 +143,23 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
     }
   }, [empresaId, tipo]);
 
+  const focusInput = useCallback(() => {
+    const el = (inputRef.current || document.getElementById("cliente-search-input")) as HTMLInputElement | null;
+    if (el) {
+      el.focus();
+      try { el.select(); } catch {}
+    }
+  }, []);
+
   useEffect(() => {
-    if (open) { setXTermo(""); buscar(""); setXSelectedIdx(null); }
-  }, [open, buscar]);
+    if (open) {
+      setXTermo("");
+      buscar("");
+      setXSelectedIdx(null);
+      const timers = [10, 50, 100, 200, 350].map((ms) => setTimeout(focusInput, ms));
+      return () => timers.forEach(clearTimeout);
+    }
+  }, [open, buscar, focusInput]);
 
   useEffect(() => {
     if (!open) return;
@@ -189,7 +204,11 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl" onOpenAutoFocus={(e) => {
+        e.preventDefault();
+        focusInput();
+        setTimeout(focusInput, 50);
+      }}>
         <DialogHeader>
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <DialogTitle>{tipo === "fornecedor" ? "Pesquisar Fornecedor" : "Pesquisar Cliente"}</DialogTitle>
@@ -235,6 +254,8 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
+              id="cliente-search-input"
+              ref={inputRef}
               autoFocus
               value={XTermo}
               onChange={e => setXTermo(e.target.value)}

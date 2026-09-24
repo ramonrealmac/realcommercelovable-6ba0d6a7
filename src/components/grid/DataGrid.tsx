@@ -36,7 +36,9 @@ interface DataGridProps {
   headerClassName?: string;
   onSortChange?: (sorts: ISortItem[]) => void;
   sorts?: ISortItem[];
+  initialSorts?: ISortItem[];
   minWidth?: string;
+  getRowClassName?: (row: any, idx: number) => string;
 }
 
 // --- Sorting logic ---
@@ -284,9 +286,11 @@ const DataGrid: React.FC<DataGridProps> = ({
   headerClassName,
   onSortChange,
   sorts,
+  initialSorts = [],
   minWidth = "500px",
-}) => {
-  const [XInternalSorts, setXInternalSorts] = useState<ISortItem[]>([]);
+  getRowClassName,
+}: DataGridProps) => {
+  const [XInternalSorts, setXInternalSorts] = useState<ISortItem[]>(initialSorts);
   const XSorts = sorts !== undefined ? sorts : XInternalSorts;
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -545,18 +549,21 @@ const DataGrid: React.FC<DataGridProps> = ({
               Carregando...
             </div>
           )}
-          {!loading && !isLoading && XSortedData.map((row, i) => (
-            <div
-              key={i}
-              id={`grid-row-${i}`}
-              className={`text-[11px] cursor-pointer transition-colors ${
-                selectedIdx === i
-                  ? "bg-grid-selected text-grid-selected-foreground"
-                  : i % 2 === 0
-                  ? "bg-card hover:bg-accent"
-                  : "bg-grid-stripe hover:bg-accent"
-              }`}
-              style={{ display: "grid", gridTemplateColumns: gridTemplate }}
+          {!loading && !isLoading && XSortedData.map((row, i) => {
+            const isExcluido = row?.excluido === true;
+            const customClass = getRowClassName ? getRowClassName(row, i) : "";
+            return (
+              <div
+                key={i}
+                id={`grid-row-${i}`}
+                className={`text-[11px] cursor-pointer transition-colors ${
+                  selectedIdx === i
+                    ? "bg-grid-selected text-grid-selected-foreground"
+                    : i % 2 === 0
+                    ? "bg-card hover:bg-accent"
+                    : "bg-grid-stripe hover:bg-accent"
+                } ${isExcluido ? "!text-red-600 dark:!text-red-400 font-semibold" : ""} ${customClass}`}
+                style={{ display: "grid", gridTemplateColumns: gridTemplate }}
               onClick={(e) => {
                 const target = e.target as HTMLElement;
                 const isInteractive = target.closest("button, input, select, textarea, [role='menuitem']");
@@ -584,7 +591,8 @@ const DataGrid: React.FC<DataGridProps> = ({
                 </div>
               ))}
             </div>
-          ))}
+          );
+        })}
           {!loading && !isLoading && XSortedData.length === 0 && (
             <div className="px-3 py-4 text-center text-xs text-muted-foreground">
               Nenhum registro encontrado.

@@ -3,7 +3,10 @@ import SelecionarCaixaDialog from "./SelecionarCaixaDialog";
 import PdvTela from "./PdvTela";
 import type { IPdvCaixa, IPdvCaixaAbertura } from "./types";
 
+import { useAppContext } from "@/contexts/AppContext";
+
 const PdvCaixaForm: React.FC = () => {
+  const { closeTab, XActiveTabId } = useAppContext();
   const [XStep, setXStep] = useState<"selecionar" | "pdv">("selecionar");
   const [XCaixa, setXCaixa] = useState<IPdvCaixa | null>(null);
   const [XAbertura, setXAbertura] = useState<IPdvCaixaAbertura | null>(null);
@@ -18,7 +21,7 @@ const PdvCaixaForm: React.FC = () => {
           setXDtMov(dtMovimento);
           setXStep("pdv");
         }}
-        onCancelar={() => { /* tab fica vazia; usuário fecha aba pelo TabBar */ }}
+        onCancelar={() => { if (XActiveTabId) closeTab(XActiveTabId); }}
       />
     );
   }

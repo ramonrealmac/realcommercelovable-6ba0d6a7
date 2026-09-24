@@ -33,8 +33,8 @@ export class MovimentoService extends BaseService<Movimento, MovimentoInsert, Mo
   /**
    * Obtém o próximo número do movimento sequencial para a empresa.
    */
-  private async getProximoNumeroMovimento(empresaId: number): Promise<number> {
-    return obterProximoNrMovimento(empresaId);
+  private async getProximoNumeroMovimento(empresaId: number, tpOperacaoId?: number | null): Promise<number> {
+    return obterProximoNrMovimento(empresaId, tpOperacaoId);
   }
 
   /**

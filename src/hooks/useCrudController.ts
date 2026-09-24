@@ -15,6 +15,7 @@ export interface ICrudConfig<T extends Record<string, any>> {
   XTitle: string;
   XDefaultRecord: Partial<T>;
   XOrderBy?: string;
+  XOrderAsc?: boolean;
   XSelectCols?: string;
   XEmpresaId?: number;          // when set, filters/inserts using empresa_id
   XValidator?: ZodSchema<any>;
@@ -34,6 +35,7 @@ export interface ICrudConfig<T extends Record<string, any>> {
   XInitialMode?: TFormMode;
   XResetModeOnSelect?: boolean;
   XConfirmDiscardOnSelect?: boolean;
+  XStaleTime?: number;
 }
 
 export function useCrudController<T extends Record<string, any>>(config: ICrudConfig<T>) {
@@ -61,7 +63,9 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
       if (config.XSoftDelete !== false) q = q.eq("excluido", false);
       if (config.XEmpresaId !== undefined) q = q.eq("empresa_id", config.XEmpresaId);
       if (config.XApplyFilter) q = config.XApplyFilter(q);
-      q = q.order(config.XOrderBy || config.XPrimaryKey);
+      const orderCol = config.XOrderBy || config.XPrimaryKey;
+      const orderAsc = config.XOrderAsc !== undefined ? config.XOrderAsc : true;
+      q = q.order(orderCol, { ascending: orderAsc });
 
       if (config.XUsePagination) {
         const size = config.XPageSize || 50;
@@ -75,7 +79,7 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
       
       return { list: (data || []) as T[], count };
     },
-    staleTime: 1000 * 60 * 5, // 5 minutos de cache (evita requisições repetidas ao trocar de abas)
+    staleTime: config.XStaleTime ?? 0,
   });
 
   // Sincroniza o cache do React Query com o estado local para manter compatibilidade com componentes antigos

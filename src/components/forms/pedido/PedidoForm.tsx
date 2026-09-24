@@ -38,25 +38,41 @@ interface IClienteInfo { id: number; cnpj: string; razao: string; fantasia: stri
 const buildGridCols = (
   vendedores: ILookup[],
   clientesCache: Record<number, IClienteInfo>,
+  tpOperacoes: ITpOperacaoLookup[],
 ): IGridColumn[] => [
     { key: "nr_movimento", label: "Pedido", width: "90px", align: "right" },
     { key: "dt_emissao", label: "Emissão", width: "120px", render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
+    {
+      key: "_operacao", label: "Tipo de Operação", width: "1.5fr",
+      getValue: r => tpOperacoes.find(t => t.id === r.tp_operacao_id)?.label || "",
+      render: r => tpOperacoes.find(t => t.id === r.tp_operacao_id)?.label || (r.tp_operacao_id ? `#${r.tp_operacao_id}` : ""),
+    },
     {
       key: "_cliente", label: "Cliente", width: "2fr",
       getValue: r => clientesCache[r.cadastro_id]?.razao || "",
       render: r => clientesCache[r.cadastro_id]?.razao || (r.cadastro_id ? `#${clientesCache[r.cadastro_id]?.cd_cadastro ?? r.cadastro_id}` : ""),
     },
-    { key: "_vendedor", label: "Vendedor", width: "1fr", render: r => vendedores.find(v => v.id === r.funcionario_id)?.label || "" },
+    {
+      key: "_vendedor", label: "Vendedor", width: "1fr",
+      getValue: r => {
+        const v = vendedores.find(x => x.id === r.funcionario_id) as any;
+        return v?.nome || (v?.label?.includes(" - ") ? v.label.split(" - ").slice(1).join(" - ") : v?.label) || "";
+      },
+      render: r => {
+        const v = vendedores.find(x => x.id === r.funcionario_id) as any;
+        return v?.nome || (v?.label?.includes(" - ") ? v.label.split(" - ").slice(1).join(" - ") : v?.label) || "";
+      }
+    },
 
+    { key: "vl_movimento", label: "Total", width: "120px", align: "right", render: r => Number(r.vl_movimento || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) },
+    { key: "faturado", label: "Faturado", width: "90px" },
     {
       key: "st_pedido",
       label: "Status",
       width: "180px",
-      getValue: r => `${ST_PEDIDO_LABELS[r.st_pedido] || r.st_pedido || ""} ${r.st_pedido || ""}`,
-      render: r => ST_PEDIDO_LABELS[r.st_pedido] || r.st_pedido
+      getValue: r => r.excluido ? "EXCLUÍDO" : `${ST_PEDIDO_LABELS[r.st_pedido] || r.st_pedido || ""} ${r.st_pedido || ""}`,
+      render: r => r.excluido ? "EXCLUÍDO" : (ST_PEDIDO_LABELS[r.st_pedido] || r.st_pedido)
     },
-    { key: "vl_movimento", label: "Total", width: "120px", align: "right", render: r => Number(r.vl_movimento || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) },
-    { key: "faturado", label: "Faturado", width: "90px" },
   ];
 
 const XDefaultRecord: Partial<IMovimento> = {
@@ -615,14 +631,13 @@ const PedidoForm: React.FC = () => {
 
     load(
       db.from("funcionario").select("funcionario_id, cd_funcionario, nome").eq("empresa_id", XEmpresaId).eq("vendedor", "S").order("nome").limit(500),
-      (d) => setXVendedores(d.map((c: any) => ({ id: c.funcionario_id, label: `${c.cd_funcionario ?? c.funcionario_id} - ${c.nome}` }))),
+      (d) => setXVendedores(d.map((c: any) => ({ id: c.funcionario_id, label: `${c.cd_funcionario ?? c.funcionario_id} - ${c.nome}`, nome: c.nome }))),
       "funcionario",
     );
     load(
       db.from("tp_operacao")
         .select("tp_operacao_id, descricao, tp_movimento")
         .eq("empresa_id", XEmpresaId)
-        .eq("gera_pedido", "S")
         .order("descricao"),
       (d) => setXTpOperacoes(d.map((t: any) => ({ id: t.tp_operacao_id, label: t.descricao, tp_movimento: t.tp_movimento }))),
       "tp_operacao",
@@ -1134,8 +1149,8 @@ const PedidoForm: React.FC = () => {
         .eq("excluido", false);
       if (errItensOrig) throw new Error("Erro ao buscar itens do pedido original: " + errItensOrig.message);
 
-      // 3. Obtém o próximo número de movimento (nr_movimento)
-      const proximoNr = await obterProximoNrMovimento(XEmpresaId);
+      // 3. Obtém o próximo número de movimento (nr_movimento) para esta empresa e operação
+      const proximoNr = await obterProximoNrMovimento(XEmpresaId, movOrig.tp_operacao_id);
 
       // 4. Prepara o payload para o novo pedido em modo Orçamento ('O')
       const {
@@ -1225,8 +1240,8 @@ const PedidoForm: React.FC = () => {
 
   // Grid de colunas memoizado — evita recriar array a cada render
   const gridCols = useMemo(
-    () => buildGridCols(XVendedores, XClientesCache),
-    [XVendedores, XClientesCache]
+    () => buildGridCols(XVendedores, XClientesCache, XTpOperacoes),
+    [XVendedores, XClientesCache, XTpOperacoes]
   );
 
   // Controla qual movimento_id precisa ter itens buscados
@@ -1343,15 +1358,19 @@ const PedidoForm: React.FC = () => {
           XDefaultRecord: { ...XDefaultRecord, empresa_id: XEmpresaId } as any,
           XEmpresaId,
           XSelectCols: "*",
-          XOrderBy: "movimento_id",
+          XOrderBy: "nr_movimento",
+          XOrderAsc: false,
           XKeepEditAfterInsert: true,
-          XApplyFilter: (q) => q.in("tp_movimento", ["PD", "SV", "OR"]),
+          XSoftDelete: false,
+          XApplyFilter: (q) => q.in("tp_movimento", ["PD", "SV", "OR", "S"]),
           XCanEdit: (rec) => {
-            if (!rec || !rec.st_pedido) return true;
+            if (!rec) return true;
+            if (rec.excluido) return false;
             return rec.st_pedido === "O";
           },
           XCanDelete: (rec) => {
-            if (!rec || !rec.st_pedido) return true;
+            if (!rec) return true;
+            if (rec.excluido) return false;
             return rec.st_pedido === "O";
           },
           XOnAfterLoad: (rows: any[]) => {
@@ -1407,7 +1426,7 @@ const PedidoForm: React.FC = () => {
             if (mode === "insert") {
               delete cleanRec.movimento_id;
               if (!cleanRec.nr_movimento) {
-                cleanRec.nr_movimento = await obterProximoNrMovimento(XEmpresaId);
+                cleanRec.nr_movimento = await obterProximoNrMovimento(XEmpresaId, cleanRec.tp_operacao_id);
               }
             }
 
