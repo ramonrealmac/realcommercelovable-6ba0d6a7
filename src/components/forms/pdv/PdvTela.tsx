@@ -335,7 +335,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       }
     }, 200);
     return () => clearTimeout(timer);
-  }, [XPedidoSel, XOpenProduto, XOpenCliente, XOpenVend, XOpenPagto, XOpenConfig]);
+  }, [XPedidoSel, XOpenProduto, XOpenCliente, XOpenVend, XOpenPagto, XOpenConfig, XOpenDesc]);
 
   // Carrega itens do pedido selecionado
   useEffect(() => {
@@ -725,8 +725,14 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     carregarPedidos();
   };
 
+  const abrirDesconto = () => {
+    setXOpenPagto(false);
+    setXOpenDesc(true);
+  };
+
   // ===== Finalizar venda =====
   const finalizarVenda = useCallback(async () => {
+    setXOpenDesc(false);
     if (!podeReceber) { toast.error("Selecione um pedido ou adicione itens à venda direta."); return; }
     if (!XParams) { toast.error("Parâmetros da empresa não carregados."); return; }
 
@@ -788,7 +794,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         case 'F6':
           e.preventDefault();
           if (!XPedidoSel && XCart.length > 0) {
-            setXOpenDesc(true);
+            abrirDesconto();
           } else if (XCart.length === 0) {
             toast.info('Adicione produtos ao carrinho para aplicar desconto.');
           }
@@ -891,44 +897,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
             )}
           </div>
 
-          {/* Campos de Cliente (F3) e Vendedor (F4) */}
-          <div className="px-3 py-1.5 border-b border-border bg-card grid grid-cols-1 md:grid-cols-2 gap-3">
-            {/* Cliente (F3) */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider shrink-0">
-                Cliente (F3):
-              </span>
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  readOnly
-                  onClick={() => !XPedidoSel && setXOpenCliente(true)}
-                  value={clienteTextoDisplay}
-                  className={`w-full px-3 py-1 border border-border rounded text-sm bg-white text-black font-semibold shadow-inner ${!XPedidoSel ? "cursor-pointer hover:border-blue-400" : "cursor-default"}`}
-                  placeholder="Cliente..."
-                  title={!XPedidoSel ? "Pressione F3 ou clique para alterar o cliente" : undefined}
-                />
-              </div>
-            </div>
 
-            {/* Vendedor (F4) */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider shrink-0">
-                Vendedor (F4):
-              </span>
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  readOnly
-                  onClick={() => !XPedidoSel && setXOpenVend(true)}
-                  value={vendedorTextoDisplay}
-                  className={`w-full px-3 py-1 border border-border rounded text-sm bg-white text-black font-semibold shadow-inner ${!XPedidoSel ? "cursor-pointer hover:border-emerald-500" : "cursor-default"}`}
-                  placeholder="Vendedor..."
-                  title={!XPedidoSel ? "Pressione F4 ou clique para alterar o vendedor" : undefined}
-                />
-              </div>
-            </div>
-          </div>
           {!XPedidoSel && (
             <div className="px-3 py-2 border-b border-border flex gap-1.5 bg-card items-center">
               <div className="relative flex-1">
@@ -1134,13 +1103,13 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
               </div>
             </div>
             <div className="p-2 border-t border-border bg-card flex gap-2">
-              <button onClick={() => setXOpenDesc(true)} disabled={XPedidoSel != null || XCart.length === 0}
+              <button type="button" onClick={abrirDesconto} disabled={XPedidoSel != null || XCart.length === 0}
                 className="flex-[0.4] text-sm px-3 py-2 rounded border border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 disabled:opacity-50 flex items-center justify-center gap-1 font-medium">
                 <Percent size={16} /> Desconto
               </button>
                 <div className="flex-1 flex gap-2">
 
-                  <button onClick={finalizarVenda} disabled={!podeReceber}
+                  <button type="button" onClick={finalizarVenda} disabled={!podeReceber}
                     className="flex-[2] text-sm px-3 py-2 rounded bg-primary text-primary-foreground disabled:opacity-50 flex items-center justify-center gap-1 font-bold">
                     <Receipt size={18} /> Finalizar Venda (F9)
                   </button>
@@ -1164,7 +1133,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
           { key: 'F5', label: 'Atualizar', color: 'bg-primary/10 border-primary/20 text-primary', enabled: true,
             action: () => { carregarPedidos(); toast.info('Lista de pedidos atualizada.'); } },
           { key: 'F6', label: 'Desconto', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel && XCart.length > 0,
-            action: () => setXOpenDesc(true) },
+            action: () => abrirDesconto() },
 
           { key: 'F9', label: 'Finalizar', color: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400', enabled: podeReceber,
             action: () => finalizarVenda() },
@@ -1230,20 +1199,26 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         subtotal={subtotal}
         descontoAtual={XVlDesc}
         percAtual={XPcDesc}
-        onClose={() => setXOpenDesc(false)}
+        onClose={() => {
+          setXOpenDesc(false);
+          setXOpenPagto(false);
+          setTimeout(() => searchRef.current?.focus(), 50);
+        }}
         onAplicar={(d) => { setXVlDesc(d.vl_desconto); setXPcDesc(d.pc_desconto); }}
       />
 
-      <PagamentoDialog
-        open={XOpenPagto}
-        totalPedido={totalReceber}
-        cadastroId={XPedidoSel?.cadastro_id || XCliente?.cadastro_id || null}
-        tabelaPrecoId={XPedidoSel?.tabela_preco_id || null}
-        tipoPrecoPadrao={XPedidoSel?.tp_preco_padrao || "V"}
-        pagtosPreCarregados={XPagtosPedido}
-        onClose={() => setXOpenPagto(false)}
-        onConfirmar={confirmarPagamento}
-      />
+      {XOpenPagto && !XOpenDesc && (
+        <PagamentoDialog
+          open={XOpenPagto && !XOpenDesc}
+          totalPedido={totalReceber}
+          cadastroId={XPedidoSel?.cadastro_id || XCliente?.cadastro_id || null}
+          tabelaPrecoId={XPedidoSel?.tabela_preco_id || null}
+          tipoPrecoPadrao={XPedidoSel?.tp_preco_padrao || "V"}
+          pagtosPreCarregados={XPagtosPedido}
+          onClose={() => setXOpenPagto(false)}
+          onConfirmar={confirmarPagamento}
+        />
+      )}
 
       <OpcoesPagamentoDialog
         open={XOpenOpcoes}
