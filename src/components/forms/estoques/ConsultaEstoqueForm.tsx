@@ -85,7 +85,55 @@ const ConsultaEstoqueForm: React.FC = () => {
 
       const { data, error } = await query;
       if (error) throw error;
-      setXLogData(data || []);
+
+      const rawLogs = data || [];
+
+      // Extrai os códigos/IDs numéricos de documentos para obter o nr_movimento (Número do Pedido)
+      const docIds = Array.from(new Set(
+        rawLogs
+          .map((r: any) => r.nr_doc)
+          .filter((doc: any) => doc && /^\d+$/.test(String(doc)))
+          .map((doc: any) => Number(doc))
+      ));
+
+      let movMap: Record<string, string> = {};
+
+      if (docIds.length > 0) {
+        // Busca o nr_movimento correspondente por movimento_id ou nr_movimento na tabela movimento
+        const [{ data: movsById }, { data: movsByNr }] = await Promise.all([
+          db.from("movimento")
+            .select("movimento_id, nr_movimento")
+            .eq("empresa_id", XEmpresaId)
+            .in("movimento_id", docIds),
+          db.from("movimento")
+            .select("movimento_id, nr_movimento")
+            .eq("empresa_id", XEmpresaId)
+            .in("nr_movimento", docIds),
+        ]);
+
+        (movsById || []).forEach((m: any) => {
+          if (m.movimento_id && m.nr_movimento) {
+            movMap[String(m.movimento_id)] = String(m.nr_movimento);
+          }
+        });
+
+        (movsByNr || []).forEach((m: any) => {
+          if (m.nr_movimento) {
+            movMap[String(m.nr_movimento)] = String(m.nr_movimento);
+          }
+        });
+      }
+
+      const enrichedLogs = rawLogs.map((r: any) => {
+        const docKey = r.nr_doc ? String(r.nr_doc) : "";
+        const pedidoNr = movMap[docKey] || docKey;
+        return {
+          ...r,
+          pedido_nr: pedidoNr,
+        };
+      });
+
+      setXLogData(enrichedLogs);
     } catch (error: any) {
       toast.error("Erro ao carregar log: " + error.message);
     } finally {
@@ -132,7 +180,13 @@ const ConsultaEstoqueForm: React.FC = () => {
     },
     { key: "operacao", label: "Operação", width: "120px" },
     { key: "origem", label: "Origem", width: "120px" },
-    { key: "nr_doc", label: "Nr. Doc", width: "100px" },
+    {
+      key: "pedido_nr",
+      label: "Pedido",
+      width: "100px",
+      render: (r: any) => r.pedido_nr || r.nr_doc || "",
+      getValue: (r: any) => r.pedido_nr || r.nr_doc || ""
+    },
     {
       key: "produto",
       label: "Produto",

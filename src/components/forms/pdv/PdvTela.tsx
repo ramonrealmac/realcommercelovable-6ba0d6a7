@@ -138,6 +138,9 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   const [XVendedor, setXVendedor] = useState<IVendedorRow | null>(null);
   const [XSearchTerm, setXSearchTerm] = useState("");
   const [XQtProx, setXQtProx] = useState<number>(1);
+  const [XQtInputStr, setXQtInputStr] = useState<string>("1,000");
+  const [XQtDisabled, setXQtDisabled] = useState<boolean>(true);
+  const qtInputRef = useRef<HTMLInputElement>(null);
   const [XOpenProduto, setXOpenProduto] = useState(false);
   const [XOpenCliente, setXOpenCliente] = useState(false);
   const [XOpenVend, setXOpenVend] = useState(false);
@@ -161,14 +164,77 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   const pedidoSearchRef = useRef<HTMLInputElement>(null);
   const [XShowAtalhos, setXShowAtalhos] = useState(false);
 
+  const formatQtDisplay = (num: number) => {
+    return num.toLocaleString("pt-BR", {
+      minimumFractionDigits: 3,
+      maximumFractionDigits: 3,
+    });
+  };
+
+  const ativarQuantidade = useCallback(() => {
+    setXQtDisabled(false);
+    setTimeout(() => {
+      qtInputRef.current?.focus();
+      qtInputRef.current?.select();
+    }, 50);
+  }, []);
+
+  const handleQtInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    const onlyDigits = val.replace(/\D/g, "");
+
+    if (!onlyDigits) {
+      setXQtProx(0);
+      setXQtInputStr("0,000");
+      return;
+    }
+
+    const n = parseInt(onlyDigits, 10);
+    const num = n / 1000;
+    setXQtProx(num);
+    setXQtInputStr(formatQtDisplay(num));
+  };
+
+  const handleQtBlur = () => {
+    if (!XQtInputStr || XQtProx <= 0) {
+      setXQtProx(1);
+      setXQtInputStr("1,000");
+    } else {
+      setXQtInputStr(formatQtDisplay(XQtProx));
+    }
+  };
+
+  const handleQtKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      setXQtDisabled(true);
+      setTimeout(() => {
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      }, 50);
+    }
+  };
+
   // Carrega pedidos fechados
   const carregarPedidos = useCallback(async () => {
     if (!XEmpresaId) return;
-    const { data, error } = await db.from("vw_pedidos_caixa_union")
-      .select("movimento_id, nr_movimento, cadastro_id, cliente_nome, vendedor_id, vendedor_nome, vl_movimento, dt_emissao, is_external, origem, tp_origem, empresa_id")
+
+    let { data, error } = await db.from("vw_pedidos_caixa_union")
+      .select("movimento_id, nr_movimento, cadastro_id, cliente_nome, vendedor_id, vendedor_nome, vl_movimento, dt_emissao, is_external, origem, tp_origem, empresa_id, tabela_preco_id, tp_preco_padrao")
       .eq("empresa_id", XEmpresaId)
       .order("nr_movimento", { ascending: false })
       .limit(200);
+
+    if (error && (error.message?.includes("tabela_preco_id") || error.code === "42703")) {
+      const retry = await db.from("vw_pedidos_caixa_union")
+        .select("movimento_id, nr_movimento, cadastro_id, cliente_nome, vendedor_id, vendedor_nome, vl_movimento, dt_emissao, is_external, origem, tp_origem, empresa_id")
+        .eq("empresa_id", XEmpresaId)
+        .order("nr_movimento", { ascending: false })
+        .limit(200);
+      data = retry.data;
+      error = retry.error;
+    }
+
     if (error) { toast.error(error.message); return; }
 
     setXPedidos(((data || []) as any[]).map(m => ({
@@ -182,7 +248,9 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       dt_emissao: m.dt_emissao,
       is_external: !!m.is_external,
       origem: m.origem || "LOCAL",
-      tp_origem: m.tp_origem || null
+      tp_origem: m.tp_origem || null,
+      tabela_preco_id: m.tabela_preco_id || null,
+      tp_preco_padrao: m.tp_preco_padrao || "V"
     })));
   }, [XEmpresaId]);
 
@@ -197,8 +265,6 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   const validarEstoqueAntesDeFinalizar = async (): Promise<boolean> => {
     if (!XParams?.lg_valida_estoque_pdv) return true; // validação desativada
 
-    // Monta lista de itens para validar — somente itens SEM entrega pendente
-    // (itens entrega='S' não terão baixa de estoque agora, então não devem bloquear)
     type IItemValidar = {
       produto_id: number;
       nm_produto: string;
@@ -210,7 +276,6 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     let itensValidar: IItemValidar[] = [];
 
     if (XPedidoSel) {
-      // Pedido fechado: busca itens do banco incluindo o campo entrega
       const tableName = XPedidoSel.is_external ? "emovimento_item" : "movimento_item";
       const idColumn = XPedidoSel.is_external ? "emovimento_id" : "movimento_id";
       const { data: itBanco } = await db.from(tableName)
@@ -226,7 +291,6 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
         entrega: String(it.entrega || 'N').toUpperCase(),
       }));
     } else {
-      // Venda direta: usa o carrinho (entrega sempre 'N' no caixa direto)
       itensValidar = XCart.map(c => ({
         produto_id: c.produto_id,
         nm_produto: c.nm_produto,
@@ -237,12 +301,9 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       }));
     }
 
-    // Filtra apenas itens que terão baixa imediata (entrega = 'N')
     const itensBaixaImediata = itensValidar.filter(i => i.entrega !== 'S');
-
     if (itensBaixaImediata.length === 0) return true;
 
-    // Busca saldo disponível (físico - reservado) para cada produto+depósito
     const prodIds = [...new Set(itensBaixaImediata.map(i => i.produto_id))];
     const deposIds = [...new Set(itensBaixaImediata.map(i => i.deposito_id).filter(Boolean))];
 
@@ -282,8 +343,6 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     return true;
   };
 
-
-
   // ===== Salvar como Pre-venda (apenas para venda direta) =====
   const salvarPreVenda = useCallback(async () => {
     if (XCart.length === 0) { toast.error("Adicione itens ao carrinho."); return; }
@@ -291,10 +350,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
 
     const tid = toast.loading("Enviando para o caixa...");
     try {
-      // 1. Cria o movimento como 'O'
       const { movimento_id, nr } = await criarMovimentoVendaDireta();
-      
-      // 2. Muda o status para 'F' via RPC (isso reserva o estoque)
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData.user?.id;
 
@@ -313,8 +369,6 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
       toast.error(err.message || "Erro ao enviar para o caixa.", { id: tid });
     }
   }, [XCart, XParams, XCliente, XVendedor, XEmpresaId, caixa.funcionario_id]);
-
-
 
   useEffect(() => { carregarPedidos(); }, [carregarPedidos]);
 
@@ -389,7 +443,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
   }, [XVendedor, XPedidoSel]);
 
   // ===== Venda direta =====
-  const adicionarProdutoAoCarrinho = (p: IProdutoRow, depositoId?: number) => {
+  const adicionarProdutoAoCarrinho = useCallback((p: IProdutoRow, depositoId?: number) => {
     const qt = XQtProx > 0 ? XQtProx : 1;
     if (XVlDesc > 0 || XPcDesc > 0) { setXVlDesc(0); setXPcDesc(0); }
     setXCart(prev => {
@@ -412,18 +466,88 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     });
     setXSearchTerm("");
     setXQtProx(1);
+    setXQtInputStr("1,000");
+    setXQtDisabled(true);
     setTimeout(() => searchRef.current?.focus(), 50);
+  }, [XQtProx, XVlDesc, XPcDesc, XParams?.deposito_estoque_caixa]);
+
+  // Ref de controle para bipagem de código de barras em alta velocidade vs digitação manual
+  const lastKeyTimeRef = useRef<number>(0);
+  const fastKeyCountRef = useRef<number>(0);
+  const scanTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isProcessingScanRef = useRef<boolean>(false);
+
+  const buscarTermo = useCallback(async (termoOverride?: string) => {
+    if (isProcessingScanRef.current) return;
+    const t = (termoOverride !== undefined ? termoOverride : XSearchTerm).trim();
+    if (!t) {
+      setXOpenProduto(true);
+      return;
+    }
+
+    isProcessingScanRef.current = true;
+    try {
+      const XGroupIds = XEmpresas
+        .filter(e => e.empresa_matriz_id === XEmpresaMatrizId || e.empresa_id === XEmpresaMatrizId)
+        .map(e => e.empresa_id);
+      const p = await buscarProdutoPorCodigo(t, XEmpresaId, XGroupIds);
+      if (p) {
+        adicionarProdutoAoCarrinho(p);
+      } else {
+        toast.error(`Produto "${t}" não encontrado. Use a pesquisa avançada.`);
+        setXSearchTerm("");
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao buscar produto.");
+    } finally {
+      isProcessingScanRef.current = false;
+      fastKeyCountRef.current = 0;
+      if (scanTimerRef.current) {
+        clearTimeout(scanTimerRef.current);
+        scanTimerRef.current = null;
+      }
+    }
+  }, [XSearchTerm, XEmpresas, XEmpresaMatrizId, XEmpresaId, adicionarProdutoAoCarrinho]);
+
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setXSearchTerm(val);
+
+    const now = Date.now();
+    const diff = now - lastKeyTimeRef.current;
+    lastKeyTimeRef.current = now;
+
+    // Leitores de código de barras enviam caracteres com intervalo muito curto (< 45ms)
+    if (diff < 45) {
+      fastKeyCountRef.current += 1;
+    } else {
+      fastKeyCountRef.current = 0;
+    }
+
+    if (scanTimerRef.current) {
+      clearTimeout(scanTimerRef.current);
+      scanTimerRef.current = null;
+    }
+
+    // Se detectada bipagem (teclas em altíssima velocidade), aciona busca e adição automática
+    if (fastKeyCountRef.current >= 3 && val.trim().length >= 3) {
+      scanTimerRef.current = setTimeout(() => {
+        if (fastKeyCountRef.current >= 3) {
+          buscarTermo(val);
+        }
+      }, 120);
+    }
   };
 
-  const buscarTermo = async () => {
-    const t = XSearchTerm.trim();
-    if (!t) { setXOpenProduto(true); return; }
-    const XGroupIds = XEmpresas
-      .filter(e => e.empresa_matriz_id === XEmpresaMatrizId || e.empresa_id === XEmpresaMatrizId)
-      .map(e => e.empresa_id);
-    const p = await buscarProdutoPorCodigo(t, XEmpresaId, XGroupIds);
-    if (p) adicionarProdutoAoCarrinho(p);
-    else { toast.error("Produto não encontrado. Use a pesquisa avançada."); setXOpenProduto(true); }
+  const handleSearchInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (scanTimerRef.current) {
+        clearTimeout(scanTimerRef.current);
+        scanTimerRef.current = null;
+      }
+      buscarTermo();
+    }
   };
 
   const alterarQt = (idx: number, delta: number) => {
@@ -784,7 +908,11 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
           break;
         case 'F4':
           e.preventDefault();
-          if (!XPedidoSel) setXOpenVend(true);
+          if (!XPedidoSel && XCart.length > 0) {
+            abrirDesconto();
+          } else if (XCart.length === 0) {
+            toast.info('Adicione produtos ao carrinho para aplicar desconto.');
+          }
           break;
         case 'F5':
           e.preventDefault();
@@ -797,6 +925,12 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
             abrirDesconto();
           } else if (XCart.length === 0) {
             toast.info('Adicione produtos ao carrinho para aplicar desconto.');
+          }
+          break;
+        case 'F7':
+          e.preventDefault();
+          if (!XPedidoSel) {
+            ativarQuantidade();
           }
           break;
 
@@ -826,7 +960,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
     XPedidoSel, XPodeInfVend, XCart, XOpenDesc, XOpenPagto, XOpenCliente, XOpenVend,
     XOpenProduto, XOpenOpcoes, XOpenFuncoes, XOpenCanc, XOpenEstorno, XOpenAbert,
     XOpenSupr, XOpenSang, XOpenConfig, XOpenEstoqueBloq, XOpenEmissaoPedidos, XShowAtalhos,
-    finalizarVenda, carregarPedidos
+    finalizarVenda, carregarPedidos, ativarQuantidade
   ]);
 
   // Cores dos painéis (usando o token do menu/sidebar)
@@ -902,12 +1036,32 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
             <div className="px-3 py-2 border-b border-border flex gap-1.5 bg-card items-center">
               <div className="relative flex-1">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input ref={searchRef} value={XSearchTerm} onChange={e => setXSearchTerm(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter") buscarTermo(); }}
+                <input
+                  ref={searchRef}
+                  value={XSearchTerm}
+                  onChange={handleSearchInputChange}
+                  onKeyDown={handleSearchInputKeyDown}
                   placeholder="Código ou nome... (Enter)"
-                  className="w-full pl-8 pr-2 py-1.5 border border-border rounded text-sm bg-white text-black" />
+                  className="w-full pl-8 pr-2 py-1.5 border border-border rounded text-sm bg-white text-black"
+                />
               </div>
-              <button onClick={buscarTermo} tabIndex={-1} title="Confirmar Produto (Enter)"
+
+              {/* Campo Quantidade */}
+              <div className="flex items-center gap-1">
+                <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Qtd:</span>
+                <input
+                  ref={qtInputRef}
+                  type="text"
+                  disabled={XQtDisabled}
+                  value={XQtInputStr}
+                  onChange={handleQtInputChange}
+                  onBlur={handleQtBlur}
+                  onKeyDown={handleQtKeyDown}
+                  className="w-24 px-2 py-1.5 border border-border rounded text-sm bg-white text-black font-semibold text-right disabled:opacity-80 disabled:cursor-not-allowed outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <button onClick={() => buscarTermo()} tabIndex={-1} title="Confirmar Produto (Enter)"
                 className="h-9 px-3 rounded bg-emerald-500 text-white flex items-center justify-center hover:bg-emerald-600 transition-colors">
                 <CornerDownLeft size={18} />
               </button>
@@ -1105,7 +1259,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
             <div className="p-2 border-t border-border bg-card flex gap-2">
               <button type="button" onClick={abrirDesconto} disabled={XPedidoSel != null || XCart.length === 0}
                 className="flex-[0.4] text-sm px-3 py-2 rounded border border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 disabled:opacity-50 flex items-center justify-center gap-1 font-medium">
-                <Percent size={16} /> Desconto
+                <Percent size={16} /> Desconto (F4)
               </button>
                 <div className="flex-1 flex gap-2">
 
@@ -1128,12 +1282,14 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
             action: () => { searchRef.current?.focus(); searchRef.current?.select(); } },
           { key: 'F3', label: 'Cliente', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel,
             action: () => setXOpenCliente(true) },
-          ...(XPodeInfVend ? [{ key: 'F4', label: 'Vendedor', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel,
-            action: () => setXOpenVend(true) }] : []),
+          { key: 'F4', label: 'Desconto', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel && XCart.length > 0,
+            action: () => abrirDesconto() },
           { key: 'F5', label: 'Atualizar', color: 'bg-primary/10 border-primary/20 text-primary', enabled: true,
             action: () => { carregarPedidos(); toast.info('Lista de pedidos atualizada.'); } },
-          { key: 'F6', label: 'Desconto', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel && XCart.length > 0,
-            action: () => abrirDesconto() },
+          ...(XPodeInfVend ? [{ key: 'F6', label: 'Vendedor', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel,
+            action: () => setXOpenVend(true) }] : []),
+          { key: 'F7', label: 'Quantidade', color: 'bg-primary/10 border-primary/20 text-primary', enabled: !XPedidoSel,
+            action: () => ativarQuantidade() },
 
           { key: 'F9', label: 'Finalizar', color: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400', enabled: podeReceber,
             action: () => finalizarVenda() },
@@ -1165,9 +1321,10 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
                 { key: 'F1', label: 'Exibir / ocultar esta ajuda' },
                 { key: 'F2', label: 'Focar campo de busca de produto' },
                 { key: 'F3', label: 'Pesquisar cliente' },
-                { key: 'F4', label: 'Pesquisar vendedor' },
+                { key: 'F4', label: 'Abrir desconto' },
                 { key: 'F5', label: 'Atualizar lista de pedidos' },
-                { key: 'F6', label: 'Abrir desconto' },
+                { key: 'F6', label: 'Pesquisar vendedor' },
+                { key: 'F7', label: 'Alterar quantidade de itens' },
 
                 { key: 'F9', label: 'Finalizar / receber venda' },
                 { key: 'Esc', label: 'Deselecionar pedido' },
@@ -1212,6 +1369,7 @@ const PdvTela: React.FC<IProps> = ({ caixa, abertura, dtMovimento, onSair }) => 
           open={XOpenPagto && !XOpenDesc}
           totalPedido={totalReceber}
           cadastroId={XPedidoSel?.cadastro_id || XCliente?.cadastro_id || null}
+          movimentoId={XPedidoSel?.movimento_id || null}
           tabelaPrecoId={XPedidoSel?.tabela_preco_id || null}
           tipoPrecoPadrao={XPedidoSel?.tp_preco_padrao || "V"}
           pagtosPreCarregados={XPagtosPedido}

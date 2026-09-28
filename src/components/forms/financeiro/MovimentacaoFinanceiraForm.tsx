@@ -222,8 +222,7 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
             saldoAnt = antData.reduce((acc: number, item: any) => {
               const val = Number(item.valor) || 0;
               if (item.origem === 'R' || item.origem === 'V') return acc + val;
-              if (item.origem === 'P') return acc - val;
-              if (item.origem === 'E') return acc + val;
+              if (item.origem === 'P' || item.origem === 'E') return acc - val;
               return acc + val;
             }, 0);
           }
@@ -270,16 +269,14 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
         const v = Number(r.valor) || 0;
         if (r.origem === "R" || r.origem === "V") {
           runningBalance += v;
-        } else if (r.origem === "P") {
+        } else if (r.origem === "P" || r.origem === "E") {
           runningBalance -= v;
-        } else if (r.origem === "E") {
-          runningBalance += v;
         } else {
           runningBalance += v;
         }
         return {
           ...r,
-          saldo_acumulado: r.vl_saldo_acumulado !== undefined && r.vl_saldo_acumulado !== null ? Number(r.vl_saldo_acumulado) : runningBalance
+          saldo_acumulado: runningBalance
         };
       });
 
@@ -433,7 +430,7 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
     {
       key: "data_ocorrencia",
       label: "Data Ocorrência",
-      width: "120px",
+      width: "110px",
       align: "center",
       getValue: (r: IFinanceiroConsolidadoRow) => r.data_ocorrencia ?? "",
       render: (r: IFinanceiroConsolidadoRow) => <span>{fmtDate(r.data_ocorrencia)}</span>
@@ -441,23 +438,26 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
     {
       key: "origem",
       label: "Origem",
-      width: "180px",
+      width: "170px",
       render: (r: IFinanceiroConsolidadoRow) => getOrigemBadge(r.origem)
     },
     {
       key: "historico",
       label: "Histórico / Descrição",
-      width: "2.2fr",
-      render: (r: IFinanceiroConsolidadoRow) => (
-        <span className="font-medium text-foreground truncate block" title={r.historico || "—"}>
-          {r.historico || "—"}
-        </span>
-      )
+      width: "2fr",
+      render: (r: IFinanceiroConsolidadoRow) => {
+        const hText = (r.historico || "—").replace(/#/g, "").replace(/\s+/g, " ");
+        return (
+          <span className="font-medium text-foreground truncate block" title={hText}>
+            {hText}
+          </span>
+        );
+      }
     },
     {
       key: "portador_nome",
       label: "Portador (Conta/Caixa)",
-      width: "1.4fr",
+      width: "1.2fr",
       render: (r: IFinanceiroConsolidadoRow) => (
         <span className="text-muted-foreground truncate block">{r.portador_nome || "—"}</span>
       )
@@ -465,23 +465,45 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
     {
       key: "plano_conta_nome",
       label: "Plano de Contas",
-      width: "1.6fr",
+      width: "1.4fr",
       render: (r: IFinanceiroConsolidadoRow) => (
         <span className="text-muted-foreground truncate block">{r.plano_conta_nome || "—"}</span>
       )
     },
     {
-      key: "valor",
-      label: "Valor Movimento",
+      key: "entrada",
+      label: "Entradas",
       width: "125px",
       align: "right",
-      getValue: (r: IFinanceiroConsolidadoRow) => Number(r.valor ?? 0),
+      getValue: (r: IFinanceiroConsolidadoRow) => {
+        const isEntrada = r.origem === "R" || r.origem === "V" || (r.origem === "C" && Number(r.valor) >= 0);
+        return isEntrada ? Number(r.valor ?? 0) : 0;
+      },
       render: (r: IFinanceiroConsolidadoRow) => {
-        const isEntrada = r.origem === "R" || (r.origem === "C" && Number(r.valor) >= 0);
-        const isSaida = r.origem === "P" || (r.origem === "C" && Number(r.valor) < 0);
+        const isEntrada = r.origem === "R" || r.origem === "V" || (r.origem === "C" && Number(r.valor) >= 0) || (Number(r.valor) > 0 && r.origem !== "P" && r.origem !== "E");
+        if (!isEntrada) return <span className="text-muted-foreground/40 text-xs">—</span>;
         return (
-          <span className={`font-bold text-xs ${isEntrada ? "text-emerald-600 dark:text-emerald-400" : isSaida ? "text-rose-600 dark:text-rose-400" : ""}`}>
-            {isSaida ? `- ${fmtMoney(r.valor)}` : fmtMoney(r.valor)}
+          <span className="font-bold text-xs text-emerald-600 dark:text-emerald-400">
+            {fmtMoney(r.valor)}
+          </span>
+        );
+      }
+    },
+    {
+      key: "saida",
+      label: "Saídas",
+      width: "125px",
+      align: "right",
+      getValue: (r: IFinanceiroConsolidadoRow) => {
+        const isSaida = r.origem === "P" || r.origem === "E" || (r.origem === "C" && Number(r.valor) < 0);
+        return isSaida ? Number(r.valor ?? 0) : 0;
+      },
+      render: (r: IFinanceiroConsolidadoRow) => {
+        const isSaida = r.origem === "P" || r.origem === "E" || (r.origem === "C" && Number(r.valor) < 0);
+        if (!isSaida) return <span className="text-muted-foreground/40 text-xs">—</span>;
+        return (
+          <span className="font-bold text-xs text-rose-600 dark:text-rose-400">
+            {fmtMoney(r.valor)}
           </span>
         );
       }
@@ -495,7 +517,7 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
       render: (r: IFinanceiroConsolidadoRow) => {
         const v = Number(r.saldo_acumulado ?? 0);
         return (
-          <span className={`font-bold text-xs ${v >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`}>
+          <span className={`font-extrabold text-xs ${v >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
             {fmtMoney(v)}
           </span>
         );
@@ -504,7 +526,7 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
     {
       key: "acoes",
       label: "Ações",
-      width: "75px",
+      width: "60px",
       align: "center",
       render: (r: IFinanceiroConsolidadoRow) => (
         <button
@@ -929,7 +951,7 @@ const MovimentacaoFinanceiraForm: React.FC = () => {
                 <div className="bg-card p-2.5 rounded-md border border-border">
                   <span className="text-[10px] text-muted-foreground uppercase font-semibold">Histórico / Descrição</span>
                   <p className="text-xs text-foreground mt-0.5 whitespace-pre-wrap">
-                    {XDetailModal.row.historico || "Nenhum histórico informado."}
+                    {XDetailModal.row.historico ? XDetailModal.row.historico.replace(/#/g, "").replace(/\s+/g, " ") : "Nenhum histórico informado."}
                   </p>
                 </div>
               </div>

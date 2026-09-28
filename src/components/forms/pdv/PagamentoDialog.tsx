@@ -125,6 +125,7 @@ interface IProps {
   open: boolean;
   totalPedido: number;
   cadastroId?: number | null;
+  movimentoId?: number | null;
   tabelaPrecoId?: number | null;
   tipoPrecoPadrao?: string | null;
   /** Pagamentos previamente cadastrados em movimento_pagamento (preenche automaticamente). */
@@ -134,7 +135,7 @@ interface IProps {
   onConfirmar: (linhas: IPdvPagamentoLinha[]) => Promise<void>;
 }
 
-const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, cadastroId, tabelaPrecoId, tipoPrecoPadrao, pagtosPreCarregados, onClose, onConfirmar }) => {
+const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, cadastroId, movimentoId, tabelaPrecoId, tipoPrecoPadrao, pagtosPreCarregados, onClose, onConfirmar }) => {
   const { XEmpresaId } = useAppContext();
   const isMobile = useIsMobile();
   const [XCondicoes, setXCondicoes] = useState<ICondicao[]>([]);
@@ -179,6 +180,18 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, cadastroId, tabe
     nextRef: React.RefObject<HTMLElement | null>,
     skipWhen?: () => boolean
   ) => {
+    if ((e.altKey && (e.key === "ArrowDown" || e.key === "ArrowUp")) || e.key === "F4") {
+      e.preventDefault();
+      try {
+        if (typeof (e.currentTarget as any).showPicker === "function") {
+          (e.currentTarget as any).showPicker();
+        }
+      } catch {
+        /* fallback */
+      }
+      return;
+    }
+
     if (e.key === "Enter") {
       e.preventDefault();
       if (skipWhen && skipWhen()) {
@@ -199,8 +212,6 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, cadastroId, tabe
         nextRef.current?.focus();
       }
     }
-    // ArrowUp/Down changes value without opening dropdown (native behavior)
-    // Alt+ArrowDown opens the dropdown (native browser behavior)
   };
 
   const handleInputKeyDown = (
@@ -219,6 +230,9 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, cadastroId, tabe
   useEffect(() => {
     if (open) {
       console.log("[PagamentoDialog] totalPedido:", totalPedido, "totalPago:", totalPago, "valorAPagar:", valorAPagar);
+      setTimeout(() => {
+        condicaoRef.current?.focus();
+      }, 100);
     }
   }, [open, totalPedido, totalPago, valorAPagar]);
 
@@ -322,17 +336,35 @@ const PagamentoDialog: React.FC<IProps> = ({ open, totalPedido, cadastroId, tabe
       try {
         console.log("PagamentoDialog: Iniciando carga de dados. Empresa:", XEmpresaId);
         
+        let activeTabelaId = tabelaPrecoId;
+        let activeTpPadrao = tipoPrecoPadrao;
+
+        if (movimentoId) {
+          const { data: movRow } = await db.from("movimento")
+            .select("tabela_preco_id, tp_preco_padrao")
+            .eq("movimento_id", movimentoId)
+            .maybeSingle();
+          if (movRow) {
+            activeTabelaId = movRow.tabela_preco_id ?? activeTabelaId;
+            activeTpPadrao = movRow.tp_preco_padrao || activeTpPadrao || "V";
+          }
+        }
+
         let tpTab: "V" | "P" = "V";
-        if (tabelaPrecoId) {
+        if (activeTabelaId) {
           const { data: tabData } = await db.from("tabela_preco")
             .select("tp_pagamento")
-            .eq("tabela_preco_id", tabelaPrecoId)
+            .eq("tabela_id", activeTabelaId)
             .maybeSingle();
-          if (tabData?.tp_pagamento === "P") {
-            tpTab = "P";
+          if (tabData) {
+            tpTab = tabData.tp_pagamento === "P" ? "P" : "V";
+          } else {
+            tpTab = activeTpPadrao === "P" ? "P" : "V";
           }
-        } else if (tipoPrecoPadrao === "P") {
+        } else if (activeTpPadrao === "P") {
           tpTab = "P";
+        } else {
+          tpTab = "V";
         }
         setXTpPagamentoTabela(tpTab);
 

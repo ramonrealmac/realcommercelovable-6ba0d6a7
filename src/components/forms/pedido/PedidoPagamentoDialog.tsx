@@ -207,10 +207,10 @@ const PedidoPagamentoDialog: React.FC<IProps> = ({ open, movimentoId, cadastroId
             .select("tp_pagamento")
             .eq("tabela_id", currentTabelaId)
             .maybeSingle();
-          if (tab?.tp_pagamento === "P") {
-            tpTab = "P";
+          if (tab) {
+            tpTab = tab.tp_pagamento === "P" ? "P" : "V";
           } else {
-            tpTab = "V";
+            tpTab = currentTpPadrao === "P" ? "P" : "V";
           }
         } else {
           tpTab = currentTpPadrao === "P" ? "P" : "V";

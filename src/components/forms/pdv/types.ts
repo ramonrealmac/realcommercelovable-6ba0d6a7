@@ -49,6 +49,8 @@ export interface IPdvPedidoFechado {
   is_external?: boolean;
   origem?: string;
   tp_origem?: string | null;
+  tabela_preco_id?: number | null;
+  tp_preco_padrao?: string | null;
 }
 
 export interface IPdvPagamentoLinha {
