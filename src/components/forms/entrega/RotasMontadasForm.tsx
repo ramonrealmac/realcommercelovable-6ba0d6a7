@@ -456,16 +456,14 @@ const RotasMontadasForm: React.FC = () => {
   // Action: Emitir NF-e em LOOP automático para todos os pedidos da minuta
   const handleEmitirNfeLoop = async () => {
     if (!XSelectedRoute || XStops.length === 0) return;
-    if (!allBaixados) {
-      toast.warning("Não é possível emitir NF-e: existem pedidos pendentes de baixa no caixa.");
-      return;
-    }
 
     setXEmitindoNfe(true);
     const tId = toast.loading(`Iniciando emissão de NF-e (${XStops.length} pedido(s))...`);
 
     let sucessos = 0;
+    let ignorados = 0;
     const errosList: string[] = [];
+    const ignoradosList: string[] = [];
 
     try {
       // Busca ID numérico do funcionário caixa para obter nfe_config_item
@@ -495,6 +493,37 @@ const RotasMontadasForm: React.FC = () => {
       for (let i = 0; i < XStops.length; i++) {
         const stop = XStops[i];
         const nrPed = stop.nr_movimento || stop.movimento_id;
+
+        // 0.1 Se o pedido já está faturado, pula para o próximo
+        if (stop.faturado === "S") {
+          ignorados++;
+          ignoradosList.push(`Pedido #${nrPed}: Já faturado`);
+          continue;
+        }
+
+        // 0.2 Verifica se o tipo de operação permite gerar NF
+        try {
+          const { data: movOp } = await db.from("movimento")
+            .select("tp_operacao_id")
+            .eq("movimento_id", stop.movimento_id)
+            .maybeSingle();
+
+          if (movOp?.tp_operacao_id) {
+            const { data: tpOp } = await db.from("tp_operacao")
+              .select("gera_nf, descricao")
+              .eq("tp_operacao_id", movOp.tp_operacao_id)
+              .maybeSingle();
+
+            if (tpOp && tpOp.gera_nf === "N") {
+              ignorados++;
+              ignoradosList.push(`Pedido #${nrPed}: Operação '${tpOp.descricao || "Sem Nota"}' (Gerar Nota = NÃO)`);
+              continue; // Pula para a próxima nota sem interromper!
+            }
+          }
+        } catch (opErr) {
+          console.warn(`Erro ao verificar tipo de operação do Pedido #${nrPed}:`, opErr);
+        }
+
         toast.loading(`Gerando NF-e (${i + 1}/${XStops.length}) - Pedido #${nrPed}...`, { id: tId });
 
         try {
@@ -529,15 +558,20 @@ const RotasMontadasForm: React.FC = () => {
         } catch (pedErr: any) {
           console.error(`Erro ao emitir NF-e do Pedido #${nrPed}:`, pedErr);
           errosList.push(`Pedido #${nrPed}: ${pedErr.message || "Erro desconhecido"}`);
+          // Continua para o próximo pedido sem interromper o loop!
         }
       }
 
       await loadRouteDetails(XSelectedRoute.entrega_id);
 
       if (errosList.length === 0) {
-        toast.success(`Todas as ${sucessos} NF-e(s) da Minuta #${XSelectedRoute.cd_entrega} foram emitidas e autorizadas com sucesso!`, { id: tId });
+        let msg = `${sucessos} NF-e(s) emitida(s) com sucesso na Minuta #${XSelectedRoute.cd_entrega}!`;
+        if (ignorados > 0) {
+          msg += ` (${ignorados} pedido(s) ignorado(s) pois já estavam faturados ou configurados sem emissão fiscal).`;
+        }
+        toast.success(msg, { id: tId, duration: 6000 });
       } else if (sucessos > 0) {
-        toast.warning(`${sucessos} NF-e(s) emitida(s). Ocorreram rejeições em ${errosList.length} pedido(s):\n${errosList.join("\n")}`, { id: tId, duration: 8000 });
+        toast.warning(`${sucessos} NF-e(s) emitida(s). Ocorreram pendências/rejeições em ${errosList.length} pedido(s):\n${errosList.join("\n")}`, { id: tId, duration: 8000 });
       } else {
         toast.error(`Falha na emissão das NF-e(s):\n${errosList.join("\n")}`, { id: tId, duration: 8000 });
       }

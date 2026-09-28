@@ -105,12 +105,35 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
   const [XPreValTipo, setXPreValTipo] = React.useState<"NFE" | "NFCE">("NFE");
 
   // Verifica se já existe documento para bloquear botões e carregar PDF ao abrir
+  const [XGeraNf, setXGeraNf] = React.useState<boolean>(true);
+
+  // Verifica se já existe documento para bloquear botões e se o tipo de operação permite gerar nota (gera_nf)
   React.useEffect(() => {
     if (open && dados?.movimento_id) {
       setXEmitido(false);
       setXNfeId(null);
       setXLastPdf(null);
+      setXGeraNf(true);
       (async () => {
+        // Verifica se o Tipo de Operação do Movimento permite emissão de NF (gera_nf)
+        const { data: mov } = await supabase
+          .from("movimento")
+          .select("tp_operacao_id")
+          .eq("movimento_id", dados.movimento_id)
+          .maybeSingle();
+
+        if (mov?.tp_operacao_id) {
+          const { data: tpOp } = await supabase
+            .from("tp_operacao")
+            .select("gera_nf")
+            .eq("tp_operacao_id", mov.tp_operacao_id)
+            .maybeSingle();
+
+          if (tpOp && tpOp.gera_nf === "N") {
+            setXGeraNf(false);
+          }
+        }
+
         const { data: existente } = await supabase
           .from("fiscal_nfe_cabecalho")
           .select("nfe_cabecalho_id, c_stat")
@@ -405,17 +428,19 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
       key: "a4", shortcut: "2", label: "2. A4 / PDF", desc: "Relatório de Pedido", icon: <FileText size={28} />, color: "text-blue-600",
       action: () => imprimir(dados, "a4"), enabled: true
     },
-    {
-      key: "nfce", shortcut: "3", label: "3. NFCe", desc: "Nota de Consumidor", icon: <ScanLine size={28} />, color: "text-emerald-600",
-      action: () => handleGerarFiscal("NFCE"), enabled: !XEmitido
-    },
-    {
-      key: "nfe", shortcut: "4", label: "4. NFe", desc: "Nota Fiscal Eletrônica", icon: <FileCode2 size={28} />, color: "text-amber-600",
-      action: () => handleGerarFiscal("NFE"), enabled: !XEmitido
-    },
+    ...(XGeraNf ? [
+      {
+        key: "nfce", shortcut: "3", label: "3. NFCe", desc: "Nota de Consumidor", icon: <ScanLine size={28} />, color: "text-emerald-600",
+        action: () => handleGerarFiscal("NFCE"), enabled: !XEmitido
+      },
+      {
+        key: "nfe", shortcut: "4", label: "4. NFe", desc: "Nota Fiscal Eletrônica", icon: <FileCode2 size={28} />, color: "text-amber-600",
+        action: () => handleGerarFiscal("NFE"), enabled: !XEmitido
+      }
+    ] : [])
   ];
 
-  // Atalhos de teclado: 1=Bobina, 2=A4, 3=NFCe, 4=NFe, 5=Concluir
+  // Atalhos de teclado: 1=Bobina, 2=A4, 3=NFCe (se ativo), 4=NFe (se ativo), 5=Concluir
   const contentRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     if (!open) return;
@@ -426,10 +451,10 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
       const k = e.key;
-      if (k === "1") { e.preventDefault(); cards[0].action(); }
-      else if (k === "2") { e.preventDefault(); cards[1].action(); }
-      else if (k === "3") { e.preventDefault(); cards[2].action(); }
-      else if (k === "4") { e.preventDefault(); cards[3].action(); }
+      if (k === "1" && cards[0]) { e.preventDefault(); cards[0].action(); }
+      else if (k === "2" && cards[1]) { e.preventDefault(); cards[1].action(); }
+      else if (k === "3" && XGeraNf && cards[2]) { e.preventDefault(); cards[2].action(); }
+      else if (k === "4" && XGeraNf && cards[3]) { e.preventDefault(); cards[3].action(); }
       else if (k === "5") { e.preventDefault(); onConcluir(); }
     };
     window.addEventListener("keydown", onKey, true);
@@ -440,7 +465,7 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
       document.removeEventListener("keydown", onKey, true);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, XSalvando, dados, empresaId, funcionarioId]);
+  }, [open, XSalvando, dados, empresaId, funcionarioId, XGeraNf]);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !XSalvando && onClose()}>
@@ -448,7 +473,7 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold text-slate-800">Finalizar Venda</DialogTitle>
           <DialogDescription className="text-slate-500">
-            Selecione uma opção de documento fiscal
+            {XGeraNf ? "Selecione uma opção de documento fiscal ou impressão" : "Operação sem emissão fiscal (Gerar Nota = Não)"}
           </DialogDescription>
         </DialogHeader>
 

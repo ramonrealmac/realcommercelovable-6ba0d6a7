@@ -69,7 +69,7 @@ const FaturarPedidoDialog: React.FC<IProps> = ({ open, funcionarioId, empresaId,
 
       // 2. Busca somente movimentos da empresa logada, recebidos no caixa (st_pedido = 'R'), com tp_movimento em ('PD', 'SV', 'VD', 'OR') e faturado != 'S'
       const { data: movs, error: movErr } = await db.from("movimento")
-        .select("movimento_id, nr_movimento, dt_emissao, vl_movimento, cadastro_id, st_pedido, faturado, tp_movimento")
+        .select("movimento_id, nr_movimento, dt_emissao, vl_movimento, cadastro_id, st_pedido, faturado, tp_movimento, tp_operacao_id, tp_operacao:tp_operacao_id(gera_nf)")
         .eq("empresa_id", empresaId)
         .in("tp_movimento", ["PD", "SV", "VD", "OR"])
         .eq("st_pedido", "R")
@@ -78,8 +78,11 @@ const FaturarPedidoDialog: React.FC<IProps> = ({ open, funcionarioId, empresaId,
 
       if (movErr) throw movErr;
 
-      // 3. Exclui movimentos que já possuem nota fiscal autorizada/pendente emitida
-      let rawMovs = (movs || []).filter((m: any) => !movimentosComNota.has(Number(m.movimento_id)));
+      // 3. Exclui movimentos que já possuem nota fiscal emitida OU cujo tipo de operação tem gera_nf = 'N'
+      let rawMovs = (movs || []).filter((m: any) => {
+        if (m.tp_operacao && m.tp_operacao.gera_nf === "N") return false;
+        return !movimentosComNota.has(Number(m.movimento_id));
+      });
 
       // 4. Carrega cache de clientes
       const clientIds = Array.from(new Set(rawMovs.map((m: any) => m.cadastro_id).filter(Boolean))) as number[];

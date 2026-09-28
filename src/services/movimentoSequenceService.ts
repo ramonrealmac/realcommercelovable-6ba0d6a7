@@ -26,6 +26,20 @@ export async function obterProximoNrMovimento(empresaId: number, tpOperacaoId?: 
   // 2. Fallback via tabela sys_sequencial
   try {
     const db = supabase as any;
+    let chaveSeq = opId ? String(opId) : "0";
+
+    if (opId) {
+      const { data: tpData } = await db
+        .from("tp_operacao")
+        .select("tp_movimento")
+        .eq("tp_operacao_id", opId)
+        .maybeSingle();
+
+      if (tpData?.tp_movimento) {
+        chaveSeq = String(tpData.tp_movimento);
+      }
+    }
+
     const { data: seqData } = await db
       .from("sys_sequencial")
       .select("ult_seq")
@@ -46,11 +60,7 @@ export async function obterProximoNrMovimento(empresaId: number, tpOperacaoId?: 
         .eq("nm_campo2", chaveSeq);
       return nextSeq;
     } else {
-      // Se ainda não existe registro no sys_sequencial para a empresa/operação, calcula o maior atual
       let query = db.from("movimento").select("nr_movimento").eq("empresa_id", empId);
-      if (opId) {
-        query = query.eq("tp_operacao_id", opId);
-      }
       const { data: maxNrData } = await query.order("nr_movimento", { ascending: false }).limit(1);
 
       const maxNr = maxNrData && maxNrData[0]?.nr_movimento ? Number(maxNrData[0].nr_movimento) : 0;
@@ -71,11 +81,7 @@ export async function obterProximoNrMovimento(empresaId: number, tpOperacaoId?: 
   } catch (e) {
     console.warn("Erro ao ler/atualizar sys_sequencial, utilizando fallback de MAX:", e);
     const db = supabase as any;
-    let query = db.from("movimento").select("nr_movimento").eq("empresa_id", empId);
-    if (opId) {
-      query = query.eq("tp_operacao_id", opId);
-    }
-    const { data: maxNrData } = await query.order("nr_movimento", { ascending: false }).limit(1);
+    const { data: maxNrData } = await db.from("movimento").select("nr_movimento").eq("empresa_id", empId).order("nr_movimento", { ascending: false }).limit(1);
     return ((maxNrData && maxNrData[0]?.nr_movimento) || 0) + 1;
   }
 }

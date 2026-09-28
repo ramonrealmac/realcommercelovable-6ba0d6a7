@@ -71,6 +71,14 @@ export const fiscalEmissaoService = {
         throw new Error("Movimento não localizado: " + movErr?.message);
       }
 
+      // 1.05 Verificar se o Tipo de Operação permite emissão de Nota Fiscal (gera_nf)
+      if (movimento.tp_operacao_id) {
+        const { data: tpOp } = await db.from("tp_operacao").select("gera_nf, descricao").eq("tp_operacao_id", movimento.tp_operacao_id).maybeSingle();
+        if (tpOp && tpOp.gera_nf === "N") {
+          throw new Error(`O tipo de operação '${tpOp.descricao || movimento.tp_operacao_id}' está configurado com Gerar Nota Fiscal = NÃO.`);
+        }
+      }
+
       // 1.1 Obter dados dos produtos manualmente (devido à falta de relacionamento no cache do schema)
       if (movimento.movimento_item && movimento.movimento_item.length > 0) {
         const productIds = movimento.movimento_item.map((i: any) => i.produto_id).filter(Boolean);
