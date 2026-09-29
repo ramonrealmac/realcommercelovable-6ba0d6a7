@@ -9,7 +9,8 @@ import {
   Truck,
   User,
   Search,
-  Eraser
+  Eraser,
+  CheckCircle
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppContext } from "@/contexts/AppContext";
@@ -80,6 +81,9 @@ const RotasMontadasForm: React.FC = () => {
 
   // Detail Grid State (Pedidos da Minuta)
   const [XStops, setXStops] = useState<IRouteStopRow[]>([]);
+
+  // State for Minuta Concluída Modal
+  const [XMinutaConcluidaModal, setXMinutaConcluidaModal] = useState<{ open: boolean; cdEntrega: number; msg?: string } | null>(null);
 
   // State for batch operation loading flags
   const [XBaixandoCaixa, setXBaixandoCaixa] = useState<boolean>(false);
@@ -271,7 +275,7 @@ const RotasMontadasForm: React.FC = () => {
 
       if (entregaIds.length > 0) {
         const { data: itemsRes } = await db.from("entrega_item")
-          .select("entrega_id, movimento_id, movimento:movimento_id(st_pedido, faturado)")
+          .select("entrega_id, movimento_id, movimento:movimento_id(st_pedido, faturado, tp_operacao_id, tp_operacao:tp_operacao_id(gera_nf))")
           .in("entrega_id", entregaIds)
           .eq("excluido", false);
 
@@ -295,10 +299,13 @@ const RotasMontadasForm: React.FC = () => {
           info.total++;
           const m = Array.isArray(it.movimento) ? it.movimento[0] : it.movimento;
           const temNfeGerada = nfeMovSet.has(Number(it.movimento_id));
+          const tpOp = m ? (Array.isArray(m.tp_operacao) ? m.tp_operacao[0] : m.tp_operacao) : null;
+          const geraNf = tpOp ? tpOp.gera_nf : "S";
 
-          // Considera o pedido concluído na tela de Cargas Montadas se foi baixado no caixa (st_pedido = 'R')
-          // E a emissão da NF-e já foi iniciada (existe registro em fiscal_nfe_cabecalho) OU faturado = 'S'
-          if (m && m.st_pedido === "R" && (temNfeGerada || m.faturado === "S")) {
+          // Um pedido é considerado concluído na minuta se:
+          // 1. Está baixado no caixa (st_pedido = 'R') AND
+          // 2. Não gera NF-e (gera_nf = 'N') OU já tem NF-e gerada OU está marcado como faturado = 'S'
+          if (m && m.st_pedido === "R" && (geraNf === "N" || temNfeGerada || m.faturado === "S")) {
             info.concluidos++;
           }
         });
@@ -406,6 +413,12 @@ const RotasMontadasForm: React.FC = () => {
     if (!XSelectedRoute || XStops.length === 0) return false;
     return XStops.every(s => s.st_pedido === "R");
   }, [XSelectedRoute, XStops]);
+
+  // Check if there are any orders in the selected minuta that require NF-e emission
+  const temPedidoParaEmitirNfe = useMemo(() => {
+    if (!allBaixados || XStops.length === 0) return false;
+    return XStops.some(s => s.gera_nf !== "N" && s.faturado !== "S" && !s.nr_nota);
+  }, [allBaixados, XStops]);
 
   // Action: Baixar Caixa em LOOP automático para todos os pedidos pendentes da minuta
   const handleBaixarCaixaLoop = async () => {
@@ -551,6 +564,36 @@ const RotasMontadasForm: React.FC = () => {
       }
 
       await loadRouteDetails(XSelectedRoute.entrega_id);
+      await loadRoutes();
+
+      // Verifica se após as baixas no caixa todos os pedidos da minuta foram concluídos
+      const { data: updatedStops } = await db.from("entrega_item")
+        .select("movimento_id, movimento:movimento_id(st_pedido, faturado, tp_operacao_id, tp_operacao:tp_operacao_id(gera_nf))")
+        .eq("entrega_id", XSelectedRoute.entrega_id)
+        .eq("excluido", false);
+
+      let allDone = true;
+      (updatedStops || []).forEach((it: any) => {
+        const m = Array.isArray(it.movimento) ? it.movimento[0] : it.movimento;
+        const tpOp = m ? (Array.isArray(m.tp_operacao) ? m.tp_operacao[0] : m.tp_operacao) : null;
+        const geraNf = tpOp ? tpOp.gera_nf : "S";
+
+        if (!m || m.st_pedido !== "R" || (geraNf !== "N" && m.faturado !== "S")) {
+          allDone = false;
+        }
+      });
+
+      if (allDone && updatedStops && updatedStops.length > 0) {
+        await db.from("entrega")
+          .update({ status: "Concluida", dt_fim: new Date().toISOString() })
+          .eq("entrega_id", XSelectedRoute.entrega_id);
+
+        setXMinutaConcluidaModal({
+          open: true,
+          cdEntrega: XSelectedRoute.cd_entrega,
+          msg: `A Minuta de Cargas Montadas Nº ${XSelectedRoute.cd_entrega} foi concluída com sucesso! Todos os pedidos foram baixados no caixa e finalizados.`
+        });
+      }
 
       if (errosList.length === 0) {
         toast.success(`Todos os ${sucessos} pedido(s) da Minuta ${XSelectedRoute.cd_entrega} foram baixados no caixa com sucesso!`, { id: tId });
@@ -958,8 +1001,14 @@ const RotasMontadasForm: React.FC = () => {
 
                 <button
                   onClick={handleEmitirNfeLoop}
-                  disabled={!allBaixados || XEmitindoNfe}
-                  title={!allBaixados ? "Habilitado apenas quando todos os pedidos da minuta estiverem baixados no caixa" : "Emitir NF-e em lote para os pedidos"}
+                  disabled={!temPedidoParaEmitirNfe || XEmitindoNfe}
+                  title={
+                    !allBaixados 
+                      ? "Habilitado apenas quando todos os pedidos da minuta estiverem baixados no caixa" 
+                      : !temPedidoParaEmitirNfe
+                      ? "Esta minuta não contém pedidos pendentes de emissão fiscal (gera_nf = N ou já faturados)"
+                      : "Emitir NF-e em lote para os pedidos"
+                  }
                   className="flex items-center gap-2 px-4 py-2 text-xs font-bold rounded bg-primary hover:bg-primary/95 text-primary-foreground shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {XEmitindoNfe ? (
@@ -984,6 +1033,32 @@ const RotasMontadasForm: React.FC = () => {
         </div>
 
       </div>
+
+      {/* Modal Alerta Minuta Concluída */}
+      {XMinutaConcluidaModal?.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-card text-card-foreground border border-border rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 text-center transform animate-in zoom-in-95 duration-200">
+            <div className="mx-auto w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <CheckCircle size={28} />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-foreground">Minuta de Carga Concluída!</h3>
+              <p className="text-xs text-muted-foreground mt-2">
+                {XMinutaConcluidaModal.msg}
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setXMinutaConcluidaModal(null)}
+                className="w-full py-2 px-4 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow"
+              >
+                OK, Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
