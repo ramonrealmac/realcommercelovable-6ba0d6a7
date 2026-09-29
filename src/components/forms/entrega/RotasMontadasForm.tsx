@@ -7,13 +7,16 @@ import {
   FileText,
   ClipboardList,
   Truck,
-  User
+  User,
+  Search,
+  Eraser
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppContext } from "@/contexts/AppContext";
 import DataGrid, { type IGridColumn } from "@/components/grid/DataGrid";
 import { toast } from "sonner";
 import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
+import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 
 const db = supabase as any;
 
@@ -46,6 +49,9 @@ interface IRouteStopRow {
   cadastro_id?: number | null;
   tabela_preco_id?: number | null;
   tp_preco_padrao?: string | null;
+  tp_operacao_id?: number | null;
+  gera_nf?: string | null;
+  nr_nota?: string | number | null;
   clienteNome?: string;
   clienteCpfCnpj?: string | null;
   cidade?: string;
@@ -57,10 +63,15 @@ const fmtMoney = (v: number | null | undefined) =>
 
 const RotasMontadasForm: React.FC = () => {
   const { XEmpresaId } = useAppContext();
+  const { handleKeyDown } = useEnterTraversal();
 
   // Filters State for Master Grid
   const [XFilterCdEntrega, setXFilterCdEntrega] = useState<string>("");
   const [XFilterRota, setXFilterRota] = useState<string>("");
+  const [XFilterStatus, setXFilterStatus] = useState<"PENDENTES" | "CONCLUIDAS" | "TODAS" | "">("");
+  const [XFilterTipoData, setXFilterTipoData] = useState<"EMISSAO" | "CONCLUSAO" | "">("");
+  const [XFilterDtInicial, setXFilterDtInicial] = useState<string>("");
+  const [XFilterDtFinal, setXFilterDtFinal] = useState<string>("");
 
   // Master Grid State (Minutas)
   const [XRoutes, setXRoutes] = useState<IRouteRow[]>([]);
@@ -99,7 +110,7 @@ const RotasMontadasForm: React.FC = () => {
       const movIds = stops.map(s => s.movimento_id);
       if (movIds.length > 0) {
         const { data: movRes, error: movErr } = await db.from("movimento")
-          .select("movimento_id, nr_movimento, dt_emissao, vl_movimento, cadastro_id, st_pedido, faturado, tabela_preco_id, tp_preco_padrao")
+          .select("movimento_id, nr_movimento, dt_emissao, vl_movimento, cadastro_id, st_pedido, faturado, tabela_preco_id, tp_preco_padrao, tp_operacao_id")
           .in("movimento_id", movIds);
 
         if (movErr) throw movErr;
@@ -116,6 +127,28 @@ const RotasMontadasForm: React.FC = () => {
           cadMap = new Map<number, any>((cadRes || []).map((c: any) => [c.cadastro_id, c]));
         }
 
+        // Fetch tp_operacao details (gera_nf)
+        const tpOpIds = Array.from(new Set((movRes || []).map((m: any) => m.tp_operacao_id).filter(Boolean)));
+        let tpOpMap = new Map<number, any>();
+        if (tpOpIds.length > 0) {
+          const { data: tpOpRes } = await db.from("tp_operacao")
+            .select("tp_operacao_id, gera_nf, descricao")
+            .in("tp_operacao_id", tpOpIds);
+          tpOpMap = new Map<number, any>((tpOpRes || []).map((t: any) => [t.tp_operacao_id, t]));
+        }
+
+        // Fetch fiscal NF-e cabecalho details (nr_nota, st_nf)
+        let nfeCabMap = new Map<number, any>();
+        const { data: nfeCabRes } = await db.from("fiscal_nfe_cabecalho")
+          .select("movimento_id, nr_nota, st_nf")
+          .in("movimento_id", movIds)
+          .eq("excluido", false);
+        if (nfeCabRes) {
+          (nfeCabRes || []).forEach((n: any) => {
+            if (n.movimento_id) nfeCabMap.set(Number(n.movimento_id), n);
+          });
+        }
+
         stops.forEach(s => {
           if (movMap.has(s.movimento_id)) {
             const m = movMap.get(s.movimento_id);
@@ -127,6 +160,17 @@ const RotasMontadasForm: React.FC = () => {
             s.cadastro_id = m.cadastro_id;
             s.tabela_preco_id = m.tabela_preco_id;
             s.tp_preco_padrao = m.tp_preco_padrao;
+            s.tp_operacao_id = m.tp_operacao_id;
+
+            if (m.tp_operacao_id && tpOpMap.has(m.tp_operacao_id)) {
+              s.gera_nf = tpOpMap.get(m.tp_operacao_id).gera_nf;
+            }
+
+            if (nfeCabMap.has(s.movimento_id)) {
+              const nfe = nfeCabMap.get(s.movimento_id);
+              s.nr_nota = nfe.nr_nota;
+            }
+
             if (m.cadastro_id && cadMap.has(m.cadastro_id)) {
               const c = cadMap.get(m.cadastro_id);
               s.clienteNome = c.razao_social;
@@ -148,19 +192,78 @@ const RotasMontadasForm: React.FC = () => {
   // Load minutas (including Motorista and Veiculo lookup)
   const loadRoutes = useCallback(async () => {
     if (!XEmpresaId) return;
+
+    // 1. Validação: verificar se pelo menos um filtro foi informado
+    const hasAnyFilter = 
+      Boolean(XFilterTipoData) || 
+      Boolean(XFilterDtInicial) || 
+      Boolean(XFilterDtFinal) || 
+      Boolean(XFilterStatus) || 
+      Boolean(XFilterCdEntrega.trim()) || 
+      Boolean(XFilterRota.trim());
+
+    if (!hasAnyFilter) {
+      toast.warning("Informe pelo menos um filtro para realizar a pesquisa.");
+      return;
+    }
+
+    // 2. Validação: se for digitado datas sem ser escolhido o tipo de data
+    if ((XFilterDtInicial || XFilterDtFinal) && !XFilterTipoData) {
+      toast.warning("Selecione o Tipo de Data ao informar o período de datas.");
+      return;
+    }
+
+    // 3. Validação: se escolher um tipo de data e não digitar as datas
+    if (XFilterTipoData && !XFilterDtInicial && !XFilterDtFinal) {
+      toast.warning("Informe a Data Inicial ou Data Final ao selecionar o Tipo de Data.");
+      return;
+    }
+
     setXLoadingMaster(true);
     setXActiveIdx(null);
     setXStops([]);
     try {
-      const { data, error } = await db.from("entrega")
+      let query = db.from("entrega")
         .select("entrega_id, cd_entrega, dt_inicio, dt_fim, rota, observacoes, status, veiculo_id, motorista_id")
         .eq("empresa_id", XEmpresaId)
-        .eq("excluido", false)
-        .order("cd_entrega", { ascending: false });
+        .eq("excluido", false);
+
+      if (XFilterTipoData && (XFilterDtInicial || XFilterDtFinal)) {
+        const dateCol = XFilterTipoData === "CONCLUSAO" ? "dt_fim" : "dt_inicio";
+
+        if (XFilterDtInicial) {
+          query = query.gte(dateCol, `${XFilterDtInicial}T00:00:00`);
+        }
+        if (XFilterDtFinal) {
+          query = query.lte(dateCol, `${XFilterDtFinal}T23:59:59`);
+        }
+      }
+
+      query = query.order("cd_entrega", { ascending: false });
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
-      const allRoutes: IRouteRow[] = data || [];
+      let allRoutes: IRouteRow[] = data || [];
+
+      // Aplica filtro de Status na memória
+      if (XFilterStatus === "PENDENTES") {
+        allRoutes = allRoutes.filter(r => r.status !== "Concluida");
+      } else if (XFilterStatus === "CONCLUIDAS") {
+        allRoutes = allRoutes.filter(r => r.status === "Concluida");
+      }
+
+      // Aplica filtro de Nº Minuta na memória
+      if (XFilterCdEntrega.trim()) {
+        allRoutes = allRoutes.filter(r => String(r.cd_entrega).includes(XFilterCdEntrega.trim()));
+      }
+
+      // Aplica filtro de Rota na memória
+      if (XFilterRota.trim()) {
+        const term = XFilterRota.trim().toLowerCase();
+        allRoutes = allRoutes.filter(r => r.rota && r.rota.toLowerCase().includes(term));
+      }
 
       // Verifica o status dos pedidos de cada minuta para ocultar as que já foram 100% baixadas e faturadas
       const entregaIds = allRoutes.map(r => r.entrega_id);
@@ -217,17 +320,18 @@ const RotasMontadasForm: React.FC = () => {
             });
         }
 
-        // Filtra para manter na tela apenas minutas que possuem ao menos 1 pedido pendente de baixa no caixa ou de inicio da emissão fiscal
-        activeMinutas = allRoutes.filter(r => {
+        // Atualiza o atributo local status da minuta
+        allRoutes.forEach(r => {
           const info = statusMap.get(r.entrega_id);
-          if (!info || info.total === 0) return true;
-          return info.concluidos < info.total;
+          if (info && info.total > 0 && info.concluidos === info.total) {
+            r.status = "Concluida";
+          }
         });
       }
 
-      // Fetch driver and vehicle names for remaining active minutas
-      const motIds = Array.from(new Set(activeMinutas.map(r => r.motorista_id).filter(Boolean)));
-      const veicIds = Array.from(new Set(activeMinutas.map(r => r.veiculo_id).filter(Boolean)));
+      // Fetch driver and vehicle names for all minutas
+      const motIds = Array.from(new Set(allRoutes.map(r => r.motorista_id).filter(Boolean)));
+      const veicIds = Array.from(new Set(allRoutes.map(r => r.veiculo_id).filter(Boolean)));
 
       let motMap = new Map<number, any>();
       if (motIds.length > 0) {
@@ -245,7 +349,7 @@ const RotasMontadasForm: React.FC = () => {
         veicMap = new Map<number, any>((veicRes || []).map((v: any) => [v.veiculo_id, v]));
       }
 
-      activeMinutas.forEach(r => {
+      allRoutes.forEach(r => {
         if (r.motorista_id && motMap.has(r.motorista_id)) {
           r.motoristaNome = motMap.get(r.motorista_id).nome;
         }
@@ -256,36 +360,46 @@ const RotasMontadasForm: React.FC = () => {
         }
       });
 
-      setXRoutes(activeMinutas);
+      setXRoutes(allRoutes);
+      if (allRoutes.length === 0) {
+        toast.info("Nenhuma minuta encontrada com os filtros informados.");
+      }
     } catch (e: any) {
       console.error("Erro ao carregar minutas de carga:", e);
       toast.error("Erro ao carregar minutas: " + e.message);
     } finally {
       setXLoadingMaster(false);
     }
-  }, [XEmpresaId]);
+  }, [XEmpresaId, XFilterTipoData, XFilterDtInicial, XFilterDtFinal, XFilterStatus, XFilterCdEntrega, XFilterRota]);
 
-  useEffect(() => {
-    loadRoutes();
-  }, [loadRoutes]);
+  const handleClearFiltersAndGrids = () => {
+    setXFilterCdEntrega("");
+    setXFilterRota("");
+    setXFilterStatus("");
+    setXFilterTipoData("");
+    setXFilterDtInicial("");
+    setXFilterDtFinal("");
+    setXRoutes([]);
+    setXStops([]);
+    setXActiveIdx(null);
+  };
+
+  const handleKeyDownFilterPanel = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.key === "Enter") {
+      const target = e.target as HTMLElement;
+      if (target.getAttribute("data-last-filter") === "true") {
+        e.preventDefault();
+        loadRoutes();
+      } else {
+        handleKeyDown(e);
+      }
+    }
+  };
 
   const handleRowClick = (row: any, idx: number) => {
     setXActiveIdx(idx);
     loadRouteDetails(row.entrega_id);
   };
-
-  // Filter master grid routes
-  const filteredRoutes = useMemo(() => {
-    return XRoutes.filter(r => {
-      if (XFilterCdEntrega.trim() && !String(r.cd_entrega).includes(XFilterCdEntrega.trim())) {
-        return false;
-      }
-      if (XFilterRota.trim() && !r.rota.toLowerCase().includes(XFilterRota.trim().toLowerCase())) {
-        return false;
-      }
-      return true;
-    });
-  }, [XRoutes, XFilterCdEntrega, XFilterRota]);
 
   // Check if all orders in minuta have their baixa finalized (st_pedido === 'R')
   const allBaixados = useMemo(() => {
@@ -439,7 +553,7 @@ const RotasMontadasForm: React.FC = () => {
       await loadRouteDetails(XSelectedRoute.entrega_id);
 
       if (errosList.length === 0) {
-        toast.success(`Todos os ${sucessos} pedido(s) da Minuta #${XSelectedRoute.cd_entrega} foram baixados no caixa com sucesso!`, { id: tId });
+        toast.success(`Todos os ${sucessos} pedido(s) da Minuta ${XSelectedRoute.cd_entrega} foram baixados no caixa com sucesso!`, { id: tId });
       } else if (sucessos > 0) {
         toast.warning(`${sucessos} pedido(s) baixados no caixa. ${errosList.length} pedido(s) apresentaram erro:\n${errosList.join("\n")}`, { id: tId, duration: 8000 });
       } else {
@@ -494,39 +608,37 @@ const RotasMontadasForm: React.FC = () => {
         const stop = XStops[i];
         const nrPed = stop.nr_movimento || stop.movimento_id;
 
-        // 0.1 Se o pedido já está faturado, pula para o próximo
-        if (stop.faturado === "S") {
-          ignorados++;
-          ignoradosList.push(`Pedido #${nrPed}: Já faturado`);
-          continue;
-        }
-
-        // 0.2 Verifica se o tipo de operação permite gerar NF
         try {
-          const { data: movOp } = await db.from("movimento")
-            .select("tp_operacao_id")
-            .eq("movimento_id", stop.movimento_id)
-            .maybeSingle();
+          // 0.1 Se o pedido já está faturado, pula para o próximo
+          if (stop.faturado === "S") {
+            ignorados++;
+            ignoradosList.push(`Pedido #${nrPed}: Já faturado`);
+            continue;
+          }
 
-          if (movOp?.tp_operacao_id) {
-            const { data: tpOp } = await db.from("tp_operacao")
-              .select("gera_nf, descricao")
-              .eq("tp_operacao_id", movOp.tp_operacao_id)
+          // 0.2 Verifica se o tipo de operação permite gerar NF
+          if (stop.movimento_id) {
+            const { data: movOp } = await db.from("movimento")
+              .select("tp_operacao_id")
+              .eq("movimento_id", stop.movimento_id)
               .maybeSingle();
 
-            if (tpOp && tpOp.gera_nf === "N") {
-              ignorados++;
-              ignoradosList.push(`Pedido #${nrPed}: Operação '${tpOp.descricao || "Sem Nota"}' (Gerar Nota = NÃO)`);
-              continue; // Pula para a próxima nota sem interromper!
+            if (movOp?.tp_operacao_id) {
+              const { data: tpOp } = await db.from("tp_operacao")
+                .select("gera_nf, descricao")
+                .eq("tp_operacao_id", movOp.tp_operacao_id)
+                .maybeSingle();
+
+              if (tpOp && tpOp.gera_nf === "N") {
+                ignorados++;
+                ignoradosList.push(`Pedido #${nrPed}: Operação '${tpOp.descricao || "Sem Nota"}' (Gerar Nota = NÃO)`);
+                continue; // Pula para a próxima nota sem interromper!
+              }
             }
           }
-        } catch (opErr) {
-          console.warn(`Erro ao verificar tipo de operação do Pedido #${nrPed}:`, opErr);
-        }
 
-        toast.loading(`Gerando NF-e (${i + 1}/${XStops.length}) - Pedido #${nrPed}...`, { id: tId });
+          toast.loading(`Gerando NF-e (${i + 1}/${XStops.length}) - Pedido #${nrPed}...`, { id: tId });
 
-        try {
           // 1. Gera cabeçalho, itens, pagamentos e insere evento PENDENTE no banco de dados
           const res = await fiscalEmissaoService.gerarDocumentoFiscalFromMovimento(
             stop.movimento_id,
@@ -558,22 +670,23 @@ const RotasMontadasForm: React.FC = () => {
         } catch (pedErr: any) {
           console.error(`Erro ao emitir NF-e do Pedido #${nrPed}:`, pedErr);
           errosList.push(`Pedido #${nrPed}: ${pedErr.message || "Erro desconhecido"}`);
-          // Continua para o próximo pedido sem interromper o loop!
+          // Continua obrigatoriamente para a próxima nota do lote sem travar a execução!
         }
       }
 
       await loadRouteDetails(XSelectedRoute.entrega_id);
+      await loadRoutes();
 
       if (errosList.length === 0) {
-        let msg = `${sucessos} NF-e(s) emitida(s) com sucesso na Minuta #${XSelectedRoute.cd_entrega}!`;
+        let msg = `${sucessos} NF-e(s) emitida(s) com sucesso na Minuta ${XSelectedRoute.cd_entrega}!`;
         if (ignorados > 0) {
           msg += ` (${ignorados} pedido(s) ignorado(s) pois já estavam faturados ou configurados sem emissão fiscal).`;
         }
         toast.success(msg, { id: tId, duration: 6000 });
       } else if (sucessos > 0) {
-        toast.warning(`${sucessos} NF-e(s) emitida(s). Ocorreram pendências/rejeições em ${errosList.length} pedido(s):\n${errosList.join("\n")}`, { id: tId, duration: 8000 });
+        toast.warning(`Processamento de lote concluído! ${sucessos} NF-e(s) emitida(s) com sucesso.\n${errosList.length} pedido(s) apresentaram rejeição/erro e foram ignorados para dar prosseguimento às demais:\n${errosList.join("\n")}`, { id: tId, duration: 10000 });
       } else {
-        toast.error(`Falha na emissão das NF-e(s):\n${errosList.join("\n")}`, { id: tId, duration: 8000 });
+        toast.error(`Emissão em lote finalizada. Todos os pedidos da minuta foram processados, mas ocorreram rejeições em ${errosList.length} pedido(s) (nenhum travamento ocorreu):\n${errosList.join("\n")}`, { id: tId, duration: 10000 });
       }
     } catch (e: any) {
       console.error("Erro ao emitir NF-e em lote:", e);
@@ -585,8 +698,23 @@ const RotasMontadasForm: React.FC = () => {
 
   // Master Grid Columns (Minutas)
   const XCols: IGridColumn[] = useMemo(() => [
-    { key: "cd_entrega", label: "Número da Minuta", width: "140px", align: "right" },
+    { key: "cd_entrega", label: "Número da Minuta", width: "120px", align: "right" },
     { key: "rota", label: "Rota", width: "1fr" },
+    {
+      key: "status",
+      label: "Status",
+      width: "95px",
+      align: "center",
+      render: (r: any) => (
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+          r.status === "Concluida"
+            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-400"
+            : "bg-amber-100 text-amber-800 dark:bg-amber-950/20 dark:text-amber-400"
+        }`}>
+          {r.status === "Concluida" ? "Concluída" : "Pendente"}
+        </span>
+      )
+    },
   ], []);
 
   // Stops Subgrid Columns (Pedidos da Minuta)
@@ -607,6 +735,30 @@ const RotasMontadasForm: React.FC = () => {
           {r.st_pedido === "R" ? "RECEBIDO CAIXA" : "PENDENTE CAIXA"}
         </span>
       )
+    },
+    {
+      key: "status_fiscal", label: "Status Fiscal", width: "155px", align: "center",
+      render: (r: any) => {
+        if (r.gera_nf === "N") {
+          return (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              SEM NOTA FISCAL
+            </span>
+          );
+        }
+        if (r.faturado === "S" || r.nr_nota) {
+          return (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-400">
+              {r.nr_nota ? `NF-E Nº ${r.nr_nota}` : "NF-E EMITIDA"}
+            </span>
+          );
+        }
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/20 dark:text-amber-400">
+            PENDENTE EMISSÃO
+          </span>
+        );
+      }
     },
   ], []);
 
@@ -632,26 +784,105 @@ const RotasMontadasForm: React.FC = () => {
         {/* Left Side: Master Minutas List (2/5 cols) */}
         <div className="xl:col-span-2 flex flex-col gap-2">
           {/* Header Filters */}
-          <div className="grid grid-cols-2 gap-2 bg-muted/30 p-2 rounded border border-border">
-            <div className="flex flex-col gap-0.5">
-              <label className="text-[10px] text-muted-foreground font-semibold">Número da Minuta</label>
-              <input
-                type="text"
-                placeholder="Filtrar Nº Minuta..."
-                value={XFilterCdEntrega}
-                onChange={(e) => setXFilterCdEntrega(e.target.value)}
-                className="border border-border rounded px-2 py-1 text-xs bg-card outline-none focus:ring-1 focus:ring-ring"
-              />
+          <div 
+            className="bg-muted/30 p-2.5 rounded border border-border flex flex-col gap-2"
+            onKeyDown={handleKeyDownFilterPanel}
+          >
+            <div className="grid grid-cols-3 gap-2">
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[10px] text-muted-foreground font-semibold">Tipo Data</label>
+                <select
+                  value={XFilterTipoData}
+                  onChange={(e) => setXFilterTipoData(e.target.value as "EMISSAO" | "CONCLUSAO" | "")}
+                  className="border border-border rounded px-1.5 py-1 text-xs bg-card outline-none focus:ring-1 focus:ring-ring font-semibold"
+                >
+                  <option value=""></option>
+                  <option value="EMISSAO">EMISSÃO</option>
+                  <option value="CONCLUSAO">CONCLUSÃO</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[10px] text-muted-foreground font-semibold">Dt. Inicial</label>
+                <input
+                  type="date"
+                  value={XFilterDtInicial}
+                  onChange={(e) => setXFilterDtInicial(e.target.value)}
+                  className="border border-border rounded px-1.5 py-1 text-xs bg-card outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[10px] text-muted-foreground font-semibold">Dt. Final</label>
+                <input
+                  type="date"
+                  value={XFilterDtFinal}
+                  onChange={(e) => setXFilterDtFinal(e.target.value)}
+                  className="border border-border rounded px-1.5 py-1 text-xs bg-card outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
             </div>
-            <div className="flex flex-col gap-0.5">
-              <label className="text-[10px] text-muted-foreground font-semibold">Rota</label>
-              <input
-                type="text"
-                placeholder="Filtrar Rota..."
-                value={XFilterRota}
-                onChange={(e) => setXFilterRota(e.target.value)}
-                className="border border-border rounded px-2 py-1 text-xs bg-card outline-none focus:ring-1 focus:ring-ring"
-              />
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[10px] text-muted-foreground font-semibold">Status</label>
+                <select
+                  value={XFilterStatus}
+                  onChange={(e) => setXFilterStatus(e.target.value as any)}
+                  className="border border-border rounded px-1.5 py-1 text-xs bg-card outline-none focus:ring-1 focus:ring-ring font-semibold"
+                >
+                  <option value=""></option>
+                  <option value="PENDENTES">Pendentes</option>
+                  <option value="CONCLUIDAS">Concluídas</option>
+                  <option value="TODAS">Todas</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[10px] text-muted-foreground font-semibold">Nº Minuta</label>
+                <input
+                  type="text"
+                  placeholder="Nº Minuta..."
+                  value={XFilterCdEntrega}
+                  onChange={(e) => setXFilterCdEntrega(e.target.value)}
+                  className="border border-border rounded px-2 py-1 text-xs bg-card outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[10px] text-muted-foreground font-semibold">Rota</label>
+                <input
+                  type="text"
+                  placeholder="Rota..."
+                  data-last-filter="true"
+                  value={XFilterRota}
+                  onChange={(e) => setXFilterRota(e.target.value)}
+                  className="border border-border rounded px-2 py-1 text-xs bg-card outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+            </div>
+
+            {/* Action Buttons: Filtrar e Limpar */}
+            <div className="flex justify-end gap-2 pt-1 border-t border-border/50">
+              <button
+                type="button"
+                onClick={loadRoutes}
+                disabled={XLoadingMaster}
+                data-focusable="true"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-all disabled:opacity-50"
+              >
+                <Search size={13} className={XLoadingMaster ? "animate-spin" : ""} />
+                Filtrar
+              </button>
+              <button
+                type="button"
+                onClick={handleClearFiltersAndGrids}
+                data-focusable="true"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded border border-border bg-card hover:bg-accent text-foreground transition-all"
+              >
+                <Eraser size={13} />
+                Limpar
+              </button>
             </div>
           </div>
 
@@ -659,7 +890,7 @@ const RotasMontadasForm: React.FC = () => {
           <div className="flex-1 bg-card border border-border rounded-lg shadow-sm overflow-hidden min-h-[350px]">
             <DataGrid
               columns={XCols}
-              data={filteredRoutes}
+              data={XRoutes}
               selectedIdx={XActiveIdx}
               onRowClick={(row, idx) => handleRowClick(row, idx)}
               maxHeight="calc(100vh - 250px)"
@@ -690,7 +921,7 @@ const RotasMontadasForm: React.FC = () => {
               <div className="flex-1 border border-border rounded-lg bg-card shadow-sm overflow-hidden flex flex-col min-h-[350px]">
                 <div className="p-3 border-b border-border bg-secondary/20 flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
-                    <ClipboardList size={14} className="text-primary" /> Pedidos da Minuta (Minuta #{XSelectedRoute.cd_entrega} - {XSelectedRoute.rota})
+                    <ClipboardList size={14} className="text-primary" /> Pedidos da Minuta (Minuta {XSelectedRoute.cd_entrega} - {XSelectedRoute.rota})
                   </span>
                   <span className="text-xs text-muted-foreground font-semibold">
                     {XStops.length} pedido(s)

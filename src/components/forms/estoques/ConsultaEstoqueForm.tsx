@@ -188,11 +188,19 @@ const ConsultaEstoqueForm: React.FC = () => {
       getValue: (r: any) => r.pedido_nr || r.nr_doc || ""
     },
     {
+      key: "cd_produto",
+      label: "Cód. Produto",
+      width: "100px",
+      align: "right",
+      render: (r: any) => r.produto?.cd_produto ?? r.produto_id ?? "",
+      getValue: (r: any) => r.produto?.cd_produto ?? r.produto_id ?? ""
+    },
+    {
       key: "produto",
-      label: "Produto",
+      label: "Descrição do Produto",
       width: "350px",
-      render: (r: any) => r.produto ? `${r.produto.cd_produto} - ${r.produto.nome}` : String(r.produto_id),
-      getValue: (r: any) => r.produto ? `${r.produto.cd_produto} - ${r.produto.nome}` : String(r.produto_id)
+      render: (r: any) => r.produto?.nome || String(r.produto_id || ""),
+      getValue: (r: any) => r.produto?.nome || String(r.produto_id || "")
     },
     {
       key: "deposito",
@@ -233,6 +241,56 @@ const ConsultaEstoqueForm: React.FC = () => {
     const XTab = XTabs.find(t => t.id === XActiveTabId);
     if (XTab) closeTab(XTab.id);
   };
+
+  const filteredLogData = useMemo(() => {
+    if (!XLogData || XLogData.length === 0) return [];
+
+    return XLogData.filter((r: any) => {
+      for (const [key, filterVal] of Object.entries(XGridFilters)) {
+        if (!filterVal || filterVal.trim() === "") continue;
+        const val = filterVal.trim();
+        const valNorm = val.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+        if (key === "pedido_nr") {
+          // 1 - Filtro da coluna Pedido usando = (igualdade exata)
+          const rowVal = String(r.pedido_nr || r.nr_doc || "").trim();
+          if (rowVal !== val) return false;
+        } else if (key === "cd_produto") {
+          // Filtro da coluna Cód. Produto usando = (igualdade exata)
+          const rowVal = String(r.produto?.cd_produto ?? r.produto_id ?? "").trim();
+          if (rowVal !== val) return false;
+        } else if (key === "operacao") {
+          // 2 - Filtro da coluna Operação usando LIKE insensível a acentos e caixa
+          const rowVal = (String(r.operacao || "") + " " + String(r.tp_operacao || "")).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+          if (!rowVal.includes(valNorm)) return false;
+        } else if (key === "origem") {
+          // 2 - Filtro da coluna Origem usando LIKE
+          const rowVal = String(r.origem || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+          if (!rowVal.includes(valNorm)) return false;
+        } else if (key === "deposito") {
+          // 2 - Filtro da coluna Local / Depósito usando LIKE
+          const rowVal = String(r.deposito?.nome || r.deposito_id || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+          if (!rowVal.includes(valNorm)) return false;
+        } else if (key === "dt_hs_log") {
+          // Filtro da coluna de Data usando = na data digitada
+          if (!r.dt_hs_log) return false;
+          const d = new Date(r.dt_hs_log);
+          const dateBrStr = d.toLocaleDateString("pt-BR"); // ex: 29/09/2026
+          const isoDateStr = getLocalDateString(d); // ex: 2026-09-29
+          const isExactDate = dateBrStr === val || isoDateStr === val;
+          if (!isExactDate) return false;
+        } else if (key === "produto") {
+          // Coluna Descrição do Produto: LIKE na descrição do produto
+          const rowVal = String(r.produto?.nome || r.produto_id || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+          if (!rowVal.includes(valNorm)) return false;
+        } else {
+          const rowVal = String((r as any)[key] ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+          if (!rowVal.includes(valNorm)) return false;
+        }
+      }
+      return true;
+    });
+  }, [XLogData, XGridFilters]);
 
   return (
     <div className="flex flex-col h-full bg-card">
@@ -368,7 +426,7 @@ const ConsultaEstoqueForm: React.FC = () => {
       <div className="flex-1 overflow-hidden p-4">
         <DataGrid
           columns={XColumns}
-          data={XLogData}
+          data={filteredLogData}
           showFilters={XShowFilters}
           filterValues={XGridFilters}
           onFilterChange={(k, v) => setXGridFilters(prev => ({ ...prev, [k]: v }))}
