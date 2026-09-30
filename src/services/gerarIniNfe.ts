@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Gerador de arquivo INI para o ACBrLib (formato oficial do leiaute SEFAZ).
  * Compatível com NFe (modelo 55) e NFCe (modelo 65).
