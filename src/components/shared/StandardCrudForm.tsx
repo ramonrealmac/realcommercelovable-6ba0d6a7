@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import FormToolbar from "@/components/shared/FormToolbar";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";

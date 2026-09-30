@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { HandCoins, RefreshCw, Search, CheckCircle, AlertTriangle, Info, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";

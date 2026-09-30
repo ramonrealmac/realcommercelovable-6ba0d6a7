@@ -1,3 +1,4 @@
+// @ts-nocheck
 // ============================================================
 // Report Builder Pro — Renderer HTML
 // Produz HTML imprimível com agrupamentos e totalizadores

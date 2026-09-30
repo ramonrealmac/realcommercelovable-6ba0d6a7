@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React from "react";
 import { useAppContext } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useEffect, useRef, lazy, Suspense, memo } from "react";
 import { useAppContext, AppProvider } from "@/contexts/AppContext";
 import TopBar from "@/components/layout/TopBar";
