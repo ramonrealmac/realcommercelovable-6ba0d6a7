@@ -47,6 +47,7 @@ interface StandardCrudFormProps<T extends Record<string, any>> {
     currentRecord: any;
     isEditing: boolean;
     setRecord: (r: any) => void;
+    setField?: (key: string, val: any) => void;
     refresh: () => Promise<void>;
     setInnerTab: (tab: string) => void;
     handleIncluir: () => void;
@@ -273,6 +274,7 @@ function StandardCrudForm<T extends Record<string, any>>({
               currentRecord: ctrl.XCurrentRecord,
               isEditing: ctrl.XIsEditing,
               setRecord: ctrl.setXEditRecord,
+              setField: (key: string, val: any) => ctrl.setXEditRecord((prev: any) => ({ ...prev, [key]: val })),
               refresh: ctrl.loadData,
               setInnerTab: setXInnerTab,
               handleIncluir: () => { ctrl.handleIncluir(); setXInnerTab("cadastro"); },

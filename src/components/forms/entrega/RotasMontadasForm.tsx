@@ -63,7 +63,7 @@ const fmtMoney = (v: number | null | undefined) =>
   (Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const RotasMontadasForm: React.FC = () => {
-  const { XEmpresaId } = useAppContext();
+  const { XEmpresaId, openTab } = useAppContext();
   const { handleKeyDown } = useEnterTraversal();
 
   // Filters State for Master Grid
@@ -1020,6 +1020,22 @@ const RotasMontadasForm: React.FC = () => {
                       <FileText size={15} /> Emitir NF-e
                     </>
                   )}
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (!XSelectedRoute) return;
+                    openTab({
+                      title: `MDF-e — Minuta #${XSelectedRoute.cd_entrega}`,
+                      component: "mdfe-form",
+                      params: { minuta_id: XSelectedRoute.entrega_id }
+                    });
+                  }}
+                  disabled={!XSelectedRoute}
+                  title="Gerar Manifesto MDF-e a partir desta Minuta"
+                  className="flex items-center gap-2 px-4 py-2 text-xs font-bold rounded bg-amber-600 hover:bg-amber-700 text-white shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Truck size={15} /> Gerar MDF-e
                 </button>
               </div>
             </>

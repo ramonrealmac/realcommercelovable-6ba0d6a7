@@ -4,9 +4,12 @@ import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
 import StandardCrudForm from "@/components/shared/StandardCrudForm";
 import type { IGridColumn } from "@/components/grid/DataGrid";
-import { Send, Lock, XCircle } from "lucide-react";
+import { Send, Lock, XCircle, Truck } from "lucide-react";
 import { mdfeEmissaoService } from "../services/mdfeEmissaoService";
 import { areUFsNeighbors } from "../services/ufBorders";
+import MinutaSearchDialog from "./dialogs/MinutaSearchDialog";
+import { ToolbarBtn } from "@/components/shared/FormToolbar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 import MdfDocumentosTab from "./tabs/MdfDocumentosTab";
 import MdfVeiculosTab from "./tabs/MdfVeiculosTab";
@@ -256,9 +259,16 @@ const isInfPagMandatory = (record: any) => {
 
 interface IProps {
   initialId?: number;
+  initialMinutaId?: number;
+  params?: {
+    mdf_manifesto_id?: number;
+    minuta_id?: number;
+    entrega_id?: number;
+  };
 }
 
-const MdfeForm: React.FC<IProps> = ({ initialId }) => {
+const MdfeForm: React.FC<IProps> = ({ initialId, initialMinutaId, params }) => {
+  const targetMinutaId = params?.minuta_id || params?.entrega_id || initialMinutaId;
   const { XEmpresaId } = useAppContext();
   const { handleKeyDown } = useEnterTraversal();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -270,6 +280,275 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
   const [selectedManifestoId, setSelectedManifestoId] = useState<number | null>(null);
   const [formaPagto, setFormaPagto] = useState<string>("0");
   const [rotas, setRotas] = useState<{ rota_id: number; descricao: string; possui_pedagio: boolean }[]>([]);
+
+  // Estados de seleção de Minuta
+  const [minutaSearchOpen, setMinutaSearchOpen] = useState(false);
+  const pendingSetFieldRef = useRef<((k: string, v: any) => void) | null>(null);
+
+  const handleImportarMinuta = useCallback(async (minutaId: number, setFieldFn?: (k: string, v: any) => void) => {
+    if (!XEmpresaId) return;
+    const tid = toast.loading("Importando dados da Minuta...");
+    try {
+      // 1. Buscar a minuta
+      const { data: minuta, error: errMinuta } = await (supabase as any)
+        .from("entrega")
+        .select("entrega_id, cd_entrega, veiculo_id, motorista_id, rota")
+        .eq("entrega_id", minutaId)
+        .maybeSingle();
+
+      if (errMinuta || !minuta) {
+        toast.error("Minuta de Carga não localizada.", { id: tid });
+        return;
+      }
+
+      // 2. Buscar os itens da minuta
+      const { data: items, error: errItems } = await (supabase as any)
+        .from("entrega_item")
+        .select("movimento_id")
+        .eq("entrega_id", minutaId)
+        .or("excluido.is.null,excluido.eq.false");
+
+      if (errItems || !items || items.length === 0) {
+        toast.warning("Minuta não possui pedidos cadastrados.", { id: tid });
+        return;
+      }
+
+      const movIds = items.map((i: any) => i.movimento_id).filter(Boolean);
+
+      // 3. Buscar NF-es dos movimentos da minuta
+      const { data: nfeList } = await (supabase as any)
+        .from("fiscal_nfe_cabecalho")
+        .select("nfe_cabecalho_id, movimento_id, chave_nfe, nr_nota, vl_total_nf, cadastro_id, st_nf")
+        .in("movimento_id", movIds)
+        .or("excluido.is.null,excluido.eq.false");
+
+      // Filtrar apenas pedidos com NF-e válida (chave de 44 caracteres)
+      const nfeElegiveis = (nfeList || []).filter((n: any) => n.chave_nfe && n.chave_nfe.trim().length === 44);
+
+      // VERIFICAR SE TEM ALGUM PEDIDO COM NF
+      if (nfeElegiveis.length === 0) {
+        toast.error("Minuta nao tem pedido(s) com NF-e", { id: tid });
+        return;
+      }
+
+      const movIdsComNfe = Array.from(new Set(nfeElegiveis.map((n: any) => n.movimento_id)));
+
+      // ABA PERCURSO - Passo 1: UF de carregamento será sempre a UF da empresa logada
+      const { data: empData } = await (supabase as any)
+        .from("empresa")
+        .select("uf, cidade_id, endereco_cidade_id")
+        .eq("empresa_id", XEmpresaId)
+        .single();
+
+      const empUf = empData?.uf || "";
+      const empCidadeId = empData?.cidade_id || empData?.endereco_cidade_id;
+
+      if (setFieldFn) setFieldFn("ufini", empUf);
+
+      // Buscar cadastros/clientes dos pedidos com NF-e para verificar a UF dos clientes
+      const cadIds = Array.from(new Set(nfeElegiveis.map((n: any) => n.cadastro_id).filter(Boolean)));
+      let ufsClientes: string[] = [];
+      let cidadesClientes: { cidade_id: number; estado_id: string }[] = [];
+
+      if (cadIds.length > 0) {
+        const { data: cadData } = await (supabase as any)
+          .from("cadastro")
+          .select("cadastro_id, endereco_cidade_id, cidade:endereco_cidade_id(cidade_id, estado_id)")
+          .in("cadastro_id", cadIds);
+
+        if (cadData) {
+          cadData.forEach((c: any) => {
+            if (c.cidade?.estado_id) {
+              ufsClientes.push(c.cidade.estado_id);
+              cidadesClientes.push({
+                cidade_id: c.cidade.cidade_id,
+                estado_id: c.cidade.estado_id
+              });
+            }
+          });
+        }
+      }
+
+      // ABA PERCURSO - Passo 3: verificar se a UF dos clientes dos pedidos da minuta sao todos da mesma UF
+      const distinctUfs = Array.from(new Set(ufsClientes));
+      let commonUfFim = "";
+
+      if (distinctUfs.length > 1) {
+        toast.warning("Existe UF fora do padrão na Minuta");
+      } else if (distinctUfs.length === 1) {
+        commonUfFim = distinctUfs[0];
+        if (setFieldFn) setFieldFn("uffim", commonUfFim);
+      }
+
+      // ABA DADOS GERAIS - Atualizar totais buscando das NFs
+      const qtdNfe = nfeElegiveis.length;
+      const valorTotal = nfeElegiveis.reduce((acc: number, n: any) => acc + Number(n.vl_total_nf || 0), 0);
+
+      // Calcular peso total dos itens das NFs
+      const { data: movItems } = await (supabase as any)
+        .from("movimento_item")
+        .select("quantidade, produto:produto_id(peso_bruto, peso_liquido)")
+        .in("movimento_id", movIdsComNfe)
+        .or("excluido.is.null,excluido.eq.false");
+
+      let pesoTotal = 0;
+      if (movItems) {
+        movItems.forEach((mi: any) => {
+          const pesoUnit = Number(mi.produto?.peso_bruto || mi.produto?.peso_liquido || 0);
+          const qtd = Number(mi.quantidade || 0);
+          pesoTotal += (pesoUnit * qtd);
+        });
+      }
+
+      if (setFieldFn) {
+        setFieldFn("qtd_nfe", qtdNfe);
+        setFieldFn("valor_total", valorTotal);
+        setFieldFn("peso_total", pesoTotal);
+      }
+
+      // Se o manifesto já estiver gravado no banco
+      if (selectedManifestoId) {
+        // Atualizar totais do manifesto no banco
+        await (supabase as any)
+          .from("fiscal_mdf_manifesto")
+          .update({
+            qtd_nfe: qtdNfe,
+            valor_total: valorTotal,
+            peso_total: pesoTotal,
+            ufini: empUf,
+            uffim: commonUfFim || undefined,
+            dt_alteracao: new Date().toISOString()
+          })
+          .eq("mdf_manifesto_id", selectedManifestoId);
+
+        // Carregamento
+        if (empCidadeId) {
+          await (supabase as any)
+            .from("fiscal_mdf_carrega")
+            .delete()
+            .eq("mdf_manifesto_id", selectedManifestoId);
+
+          await (supabase as any)
+            .from("fiscal_mdf_carrega")
+            .insert([{
+              mdf_manifesto_id: selectedManifestoId,
+              cidade_id: empCidadeId,
+              excluido: false
+            }]);
+        }
+
+        // Descarregamento
+        const distinctCidadesDest = Array.from(new Set(cidadesClientes.map(c => c.cidade_id)));
+        if (distinctCidadesDest.length > 0) {
+          await (supabase as any)
+            .from("fiscal_mdf_descarrega")
+            .delete()
+            .eq("mdf_manifesto_id", selectedManifestoId);
+
+          const descarregaRows = distinctCidadesDest.map(cidId => ({
+            mdf_manifesto_id: selectedManifestoId,
+            cidade_id: cidId,
+            excluido: false
+          }));
+
+          await (supabase as any)
+            .from("fiscal_mdf_descarrega")
+            .insert(descarregaRows);
+        }
+
+        // Documentos
+        await (supabase as any)
+          .from("fiscal_mdf_documento")
+          .delete()
+          .eq("mdf_manifesto_id", selectedManifestoId);
+
+        const pesoMedio = nfeElegiveis.length > 0 ? (pesoTotal / nfeElegiveis.length) : 0;
+        const docsRows = nfeElegiveis.map((n: any) => {
+          const cad = cidadesClientes.find(() => true);
+          return {
+            mdf_manifesto_id: selectedManifestoId,
+            chave: n.chave_nfe,
+            cidade_id: cad?.cidade_id || empCidadeId,
+            valor: Number(n.vl_total_nf || 0),
+            peso: pesoMedio,
+            tipo_documento: "NFE",
+            excluido: false
+          };
+        });
+
+        await (supabase as any)
+          .from("fiscal_mdf_documento")
+          .insert(docsRows);
+
+        // Veículos
+        if (minuta.veiculo_id) {
+          await (supabase as any)
+            .from("fiscal_mdf_veiculo")
+            .delete()
+            .eq("mdf_manifesto_id", selectedManifestoId);
+
+          const { data: veicObj } = await (supabase as any)
+            .from("cadastro_veiculo")
+            .select("veiculo_id, placa, renavam, tara, capacidade_kg, tp_rodado, tp_carroceria, uf")
+            .eq("veiculo_id", minuta.veiculo_id)
+            .maybeSingle();
+
+          if (veicObj) {
+            await (supabase as any)
+              .from("fiscal_mdf_veiculo")
+              .insert([{
+                mdf_manifesto_id: selectedManifestoId,
+                veiculo_id: veicObj.veiculo_id,
+                placa: veicObj.placa,
+                renavam: veicObj.renavam,
+                tara: veicObj.tara,
+                capacidade_kg: veicObj.capacidade_kg,
+                tp_rodado: veicObj.tp_rodado || "01",
+                tp_carroceria: veicObj.tp_carroceria || "00",
+                uf: veicObj.uf || empUf,
+                tp_veiculo: "TRACAO",
+                excluido: false
+              }]);
+          }
+        }
+
+        // Motoristas
+        if (minuta.motorista_id) {
+          await (supabase as any)
+            .from("fiscal_mdf_condutor")
+            .delete()
+            .eq("mdf_manifesto_id", selectedManifestoId);
+
+          await (supabase as any)
+            .from("fiscal_mdf_condutor")
+            .insert([{
+              mdf_manifesto_id: selectedManifestoId,
+              condutor_id: minuta.motorista_id,
+              excluido: false
+            }]);
+
+          setRefreshMotoristasTrigger(p => p + 1);
+        }
+      }
+
+      // ABA PERCURSO - Passo 5: divisa UFs
+      if (empUf && commonUfFim && !areUFsNeighbors(empUf, commonUfFim)) {
+        toast.warning(`As UFs de início (${empUf}) e fim (${commonUfFim}) não fazem divisa. Cadastre as UFs de percurso na aba Percurso.`);
+      }
+
+      toast.success(`Minuta Nº ${minuta.cd_entrega} importada com sucesso! (${nfeElegiveis.length} NF-e(s))`, { id: tid });
+      XRefreshRef.current?.();
+    } catch (e: any) {
+      console.error("Erro ao importar minuta:", e);
+      toast.error("Erro ao importar minuta: " + e.message, { id: tid });
+    }
+  }, [XEmpresaId, selectedManifestoId]);
+
+  useEffect(() => {
+    if (targetMinutaId) {
+      handleImportarMinuta(targetMinutaId);
+    }
+  }, [targetMinutaId, handleImportarMinuta]);
 
   useEffect(() => {
     if (!XEmpresaId) return;
@@ -479,6 +758,7 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
   }, []);
 
   return (
+    <>
     <StandardCrudForm
       config={{
         XTableName: "fiscal_mdf_manifesto",
@@ -606,9 +886,29 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
       XRefreshRef={XRefreshRef}
       XAfterInsertTab="percurso"
       XCadastroLabel="Dados Gerais"
-      XToolbarExtras={({ currentRecord }) => (
-        <MdfIdSync currentRecord={currentRecord} onIdChange={setSelectedManifestoId} />
-      )}
+      XToolbarExtras={({ currentRecord, setField, setRecord }) => {
+        const st = currentRecord?.status;
+        const podeImportar = !st || ["D", "R"].includes(String(st));
+        return (
+          <>
+            <MdfIdSync currentRecord={currentRecord} onIdChange={setSelectedManifestoId} />
+            {podeImportar && (
+              <ToolbarBtn
+                icon={<Truck size={18} />}
+                label="Importar Minuta de Carga"
+                color="warning"
+                onClick={() => {
+                  pendingSetFieldRef.current = (k: string, v: any) => {
+                    if (setField) setField(k, v);
+                    if (setRecord) setRecord((prev: any) => ({ ...prev, [k]: v }));
+                  };
+                  setMinutaSearchOpen(true);
+                }}
+              />
+            )}
+          </>
+        );
+      }}
       XHiddenTabs={(rec) => {
         const mandatory = isInfPagMandatory(rec);
         if (!mandatory) return ["pagamento", "componentes", "parcelas"];
@@ -1011,6 +1311,17 @@ const MdfeForm: React.FC<IProps> = ({ initialId }) => {
         );
       }}
     />
+
+    {/* Diálogo de Seleção de Minuta */}
+    <MinutaSearchDialog
+      open={minutaSearchOpen}
+      onClose={() => setMinutaSearchOpen(false)}
+      empresaId={XEmpresaId}
+      onSelect={(minutaId) => {
+        handleImportarMinuta(minutaId, pendingSetFieldRef.current || undefined);
+      }}
+    />
+    </>
   );
 };
 
