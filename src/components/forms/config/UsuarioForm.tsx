@@ -635,6 +635,7 @@ const UsuarioForm: React.FC = () => {
                 )}
               </button>
             </div>
+          </div>
         </div>
       )}
 
