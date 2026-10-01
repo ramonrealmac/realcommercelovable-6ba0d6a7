@@ -293,20 +293,24 @@ const SuprimentoSangriaForm: React.FC<IProps> = ({
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (funcionarioId || XCaixaSel) {
+      if (funcionarioId) {
         document.getElementById("ss_valor_input")?.focus();
       } else {
         document.getElementById("ss_caixa_select")?.focus();
       }
     }, 150);
     return () => clearTimeout(timer);
-  }, [funcionarioId, XCaixaSel]);
+  }, [funcionarioId]);
 
   const handleResponsavelKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
       e.stopPropagation();
-      document.getElementById("ss_confirmar_btn")?.focus();
+      if (!XCadastroSel) {
+        setXSearchOpen(true);
+      } else {
+        document.getElementById("ss_confirmar_btn")?.focus();
+      }
     }
   };
 
@@ -614,6 +618,7 @@ const FuncionarioSearchDialog: React.FC<IFuncionarioSearchDialogProps> = ({ open
       const selected = XSelectedIdx !== null ? XSelectedIdx : 0;
       if (XRows[selected]) {
         e.preventDefault();
+        e.stopPropagation();
         onSelect({
           funcionario_id: XRows[selected].funcionario_id,
           cd_funcionario: XRows[selected].cd_funcionario,
