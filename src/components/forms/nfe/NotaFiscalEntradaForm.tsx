@@ -21,6 +21,7 @@ import { provedorService } from "@/services/provedorService";
 import { formatCPFCNPJ } from "@/lib/validators";
 import { setPendingSupplier } from "@/utils/nfePendingStore";
 import { parseNfeXml } from "./NfeXmlParser";
+import { calcularQuantidadeConvertida } from "@/utils/fatorConversao";
 import type { TFormMode } from "@/hooks/useCrudController";
 
 const db = supabase as any;
@@ -308,15 +309,30 @@ const NotaFiscalEntradaForm: React.FC<NotaFiscalEntradaFormProps> = ({ initialMo
 
     for (const item of (itens || [])) {
       if (!item.produto_id) continue;
-      // Busca fator de conversão cadastrado para este item do fornecedor
-      const { data: vinculo } = await db.from("produto_fornecedor")
-        .select("fator_conversao")
-        .eq("empresa_id", XEmpresaId)
+      
+      let qtEstoque = Number(item.qt_entrada || 0);
+
+      // 1) Consulta os fatores de conversão cadastrados para o produto pela unidade de entrada da NF-e
+      const { data: fatorConvObj } = await db.from("produto_fator_conversao")
+        .select("*")
         .eq("produto_id", item.produto_id)
-        .eq("cadastro_id", rec.cadastro_id)
+        .eq("unidade_entrada_id", item.unidade || "")
+        .eq("excluido", false)
         .maybeSingle();
-      const fator = Number(vinculo?.fator_conversao || 1);
-      const qtEstoque = Number(item.qt_entrada || 0) * fator;
+
+      if (fatorConvObj) {
+        qtEstoque = calcularQuantidadeConvertida(Number(item.qt_entrada || 0), fatorConvObj);
+      } else {
+        // 2) Fallback para produto_fornecedor caso não haja fator genérico cadastrado
+        const { data: vinculo } = await db.from("produto_fornecedor")
+          .select("fator_conversao")
+          .eq("empresa_id", XEmpresaId)
+          .eq("produto_id", item.produto_id)
+          .eq("cadastro_id", rec.cadastro_id)
+          .maybeSingle();
+        const fator = Number(vinculo?.fator_conversao || 1);
+        qtEstoque = Number(item.qt_entrada || 0) * (fator > 0 ? fator : 1);
+      }
 
       // Garantir que existe o registro mestre na tabela estoque com saldo zero
       const { data: est } = await db.from("estoque")

@@ -12,6 +12,7 @@ import { baseService } from "@/utils/baseService";
 import { useGridFilter } from "@/hooks/useGridFilter";
 import { consumePendingProduct } from "@/utils/nfePendingStore";
 import { handleEnterKeyNavigation, formatNumericInput, handleSelectKeyDown } from "@/utils/formNavigation";
+import { validarFatorConversao } from "@/utils/fatorConversao";
 
 const db = supabase as any;
 type TFormMode = "view" | "edit" | "insert";
@@ -96,6 +97,14 @@ const XBarraGridCols: IGridColumn[] = [
   { key: "cod_barra", label: "Código de Barras", width: "1fr" },
 ];
 
+/* ─── Fator de Conversão grid columns ─── */
+const XFatorConvGridCols: IGridColumn[] = [
+  { key: "unidade_entrada_id", label: "Unid. Entrada", width: "130px" },
+  { key: "unidade_saida_id", label: "Unid. Saída", width: "130px" },
+  { key: "fator_conversao", label: "Fator Conversão", width: "150px", align: "right", getValue: (r) => fmt4(r.fator_conversao) },
+  { key: "tp_funcao", label: "Função", width: "1fr", getValue: (r) => r.tp_funcao === "M" ? "M - Multiplicação" : "D - Divisão" },
+];
+
 interface IProdutoFormProps {
   initialProductId?: number;
 }
@@ -149,6 +158,14 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
   const [XBarraForm, setXBarraForm] = useState({ cod_barra: "" });
   const [XBarraShowFilters, setXBarraShowFilters] = useState(false);
   const [XBarraFilterValues, setXBarraFilterValues] = useState<Record<string, string>>({});
+
+  // Fator de Conversão sub-grid
+  const [XFatorConversoes, setXFatorConversoes] = useState<any[]>([]);
+  const [XFatorConvIdx, setXFatorConvIdx] = useState(-1);
+  const [XFatorConvMode, setXFatorConvMode] = useState<"view" | "edit" | "insert">("view");
+  const [XFatorConvForm, setXFatorConvForm] = useState({ unidade_entrada_id: "", unidade_saida_id: "", fator_conversao: "1,0000", tp_funcao: "M" });
+  const [XFatorConvShowFilters, setXFatorConvShowFilters] = useState(false);
+  const [XFatorConvFilterValues, setXFatorConvFilterValues] = useState<Record<string, string>>({});
 
   const XCurrentRecord = XData[XCurrentIdx] || null;
   const XIsEditing = XFormMode === "edit" || XFormMode === "insert";
@@ -281,12 +298,13 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
         d && (Number(d.empresa_id) === Number(XEmpresaId) || d.st_privado === false)
       );
       const XVisibleDepIds = XVisibleDeps.map((d: any) => d.deposito_id);
-      const [rEst, rConv, rBarra] = await Promise.all([
+      const [rEst, rConv, rBarra, rFatorConv] = await Promise.all([
         XVisibleDepIds.length > 0
           ? db.from("estoque").select("*").eq("produto_id", produtoId).eq("excluido", false).in("deposito_id", XVisibleDepIds)
           : Promise.resolve({ data: [] }),
         db.from("produto_conversao").select("*").eq("empresa_id", XEmpresaMatrizId).eq("produto_id", produtoId).eq("excluido", false).order("conversao_id"),
         db.from("produto_codbarra").select("*").eq("empresa_id", XEmpresaMatrizId).eq("produto_id", produtoId).eq("excluido", false).order("produto_codbarra_id"),
+        db.from("produto_fator_conversao").select("*").eq("empresa_id", XEmpresaMatrizId).eq("produto_id", produtoId).eq("excluido", false).order("produto_fator_conversao_id"),
       ]);
       const XDepMap: Record<number, { nome: string; empresa_id: number; endereco: string }> = {};
       XVisibleDeps.forEach((d: any) => { if (d) XDepMap[d.deposito_id] = { nome: d.nome, empresa_id: d.empresa_id, endereco: d.endereco || "" }; });
@@ -298,8 +316,10 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
       })));
       setXConversoes(rConv?.data || []);
       setXBarras(rBarra?.data || []);
+      setXFatorConversoes(rFatorConv?.data || []);
       setXEstIdx(-1);
       setXBarraIdx(-1);
+      setXFatorConvIdx(-1);
     } catch (e) {
       console.error("[ProdutoForm] Erro ao carregar subdados do produto:", e);
     }
@@ -770,6 +790,97 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
     loadSubData(XCurrentRecord.produto_id);
   };
 
+  /* ─── Fator de Conversão CRUD ─── */
+  const handleFatorConvIncluir = () => {
+    if (!XCurrentRecord) return;
+    const defaultUnidadeSaida = XF.unidade_id || (XUnidades[0]?.unidade_id ?? "");
+    setXFatorConvMode("insert");
+    setXFatorConvForm({
+      unidade_entrada_id: "",
+      unidade_saida_id: defaultUnidadeSaida,
+      fator_conversao: "1,0000",
+      tp_funcao: "M",
+    });
+  };
+
+  const handleFatorConvEditar = () => {
+    if (XFatorConvIdx < 0) return;
+    const r = XFatorConversoes[XFatorConvIdx];
+    if (r) {
+      setXFatorConvMode("edit");
+      setXFatorConvForm({
+        unidade_entrada_id: r.unidade_entrada_id || "",
+        unidade_saida_id: r.unidade_saida_id || "",
+        fator_conversao: fmtInput4(r.fator_conversao),
+        tp_funcao: r.tp_funcao || "M",
+      });
+    }
+  };
+
+  const handleFatorConvSalvar = async () => {
+    if (!XCurrentRecord) return;
+    const err = validarFatorConversao({
+      unidade_entrada_id: XFatorConvForm.unidade_entrada_id,
+      unidade_saida_id: XFatorConvForm.unidade_saida_id,
+      fator_conversao: parseNum(XFatorConvForm.fator_conversao),
+      tp_funcao: XFatorConvForm.tp_funcao as any,
+    });
+    if (err) {
+      toast.error(err);
+      return;
+    }
+
+    const ue = XFatorConvForm.unidade_entrada_id.trim();
+    const us = XFatorConvForm.unidade_saida_id.trim();
+    const fn = XFatorConvForm.tp_funcao;
+
+    const isDup = XFatorConversoes.some((item, idx) => {
+      if (XFatorConvMode === "edit" && idx === XFatorConvIdx) return false;
+      return (
+        item.unidade_entrada_id === ue &&
+        item.unidade_saida_id === us &&
+        item.tp_funcao === fn
+      );
+    });
+
+    if (isDup) {
+      toast.error("Já existe um fator de conversão cadastrado para esta combinação de Unidade de Entrada, Saída e Função.");
+      return;
+    }
+
+    const payload = {
+      produto_id: XCurrentRecord.produto_id,
+      empresa_id: XEmpresaMatrizId,
+      unidade_entrada_id: ue,
+      unidade_saida_id: us,
+      fator_conversao: parseNum(XFatorConvForm.fator_conversao),
+      tp_funcao: fn,
+    };
+
+    if (XFatorConvMode === "edit" && XFatorConvIdx >= 0) {
+      await db.from("produto_fator_conversao")
+        .update({ ...payload, dt_alteracao: new Date().toISOString() })
+        .eq("produto_fator_conversao_id", XFatorConversoes[XFatorConvIdx].produto_fator_conversao_id);
+    } else {
+      await db.from("produto_fator_conversao").insert(payload);
+    }
+
+    toast.success("Fator de conversão salvo com sucesso.");
+    setXFatorConvMode("view");
+    loadSubData(XCurrentRecord.produto_id);
+  };
+
+  const handleFatorConvExcluir = async () => {
+    if (XFatorConvIdx < 0 || !XCurrentRecord) return;
+    if (!confirm("Deseja realmente excluir este fator de conversão?")) return;
+    await db.from("produto_fator_conversao")
+      .update({ excluido: true, dt_alteracao: new Date().toISOString() })
+      .eq("produto_fator_conversao_id", XFatorConversoes[XFatorConvIdx].produto_fator_conversao_id);
+    toast.success("Fator de conversão excluído com sucesso.");
+    setXFatorConvIdx(-1);
+    loadSubData(XCurrentRecord.produto_id);
+  };
+
   /* ─── Upload foto ─── */
   const handleUploadFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -927,10 +1038,10 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
   );
 
   /* ─── Sub-tabs configuration ─── */
-  const XSubTabs = ["cadastro", "venda_externa", "estoques", "codbarras", "tributacoes", "custo", "adicionais"];
+  const XSubTabs = ["cadastro", "venda_externa", "estoques", "codbarras", "fator_conversao", "tributacoes", "custo", "adicionais"];
   const XSubTabLabels: Record<string, string> = {
     cadastro: "Cadastro", venda_externa: "Venda Externa", estoques: "Estoques", codbarras: "Código de Barras",
-    tributacoes: "Tributações", custo: "Formação do Custo da Compra", adicionais: "Dados Adicionais",
+    fator_conversao: "Fator de Conversão", tributacoes: "Tributações", custo: "Formação do Custo da Compra", adicionais: "Dados Adicionais",
   };
 
   return (
@@ -1255,6 +1366,109 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
                   }
                 />
                 {XBarras.length === 0 && (
+                  <div className="text-sm text-muted-foreground text-center py-4">Não existem dados a serem exibidos</div>
+                )}
+              </div>
+            )}
+
+            {/* ══════ ABA FATOR DE CONVERSÃO ══════ */}
+            {XSubTab === "fator_conversao" && (
+              <div className="space-y-2">
+                {XFatorConvMode !== "view" && (
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_140px_160px_auto] gap-2 mb-2 items-end bg-slate-50 dark:bg-slate-900/50 p-2 rounded-md border border-border/60">
+                    <div>
+                      <label className="block text-[10px] font-bold text-muted-foreground mb-1 uppercase">Unidade de Entrada *</label>
+                      <select
+                        value={XFatorConvForm.unidade_entrada_id}
+                        onChange={(e) => setXFatorConvForm(p => ({ ...p, unidade_entrada_id: e.target.value }))}
+                        className={`w-full border border-border rounded px-2 py-1 text-sm ${XBgEdit} focus:ring-2 focus:ring-ring outline-none h-[30px]`}
+                      >
+                        <option value="">— Selecione —</option>
+                        {XUnidades.map((u: any) => (
+                          <option key={u.unidade_id} value={u.unidade_id}>
+                            {u.unidade_id} - {u.descricao}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-muted-foreground mb-1 uppercase">Unidade de Saída *</label>
+                      <select
+                        value={XFatorConvForm.unidade_saida_id}
+                        onChange={(e) => setXFatorConvForm(p => ({ ...p, unidade_saida_id: e.target.value }))}
+                        className={`w-full border border-border rounded px-2 py-1 text-sm ${XBgEdit} focus:ring-2 focus:ring-ring outline-none h-[30px]`}
+                      >
+                        <option value="">— Selecione —</option>
+                        {XUnidades.map((u: any) => (
+                          <option key={u.unidade_id} value={u.unidade_id}>
+                            {u.unidade_id} - {u.descricao}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-muted-foreground mb-1 uppercase">Fator Conversão *</label>
+                      <input
+                        type="text"
+                        value={XFatorConvForm.fator_conversao}
+                        onChange={(e) => setXFatorConvForm(p => ({ ...p, fator_conversao: formatNumericInput(e.target.value, 4) }))}
+                        onBlur={() => setXFatorConvForm(p => ({ ...p, fator_conversao: fmtInput4(p.fator_conversao) }))}
+                        onFocus={(e) => e.target.select()}
+                        className={`w-full border border-border rounded px-2 py-1 text-sm text-right ${XBgEdit} focus:ring-2 focus:ring-ring outline-none`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-muted-foreground mb-1 uppercase">Função *</label>
+                      <select
+                        value={XFatorConvForm.tp_funcao}
+                        onChange={(e) => setXFatorConvForm(p => ({ ...p, tp_funcao: e.target.value as "M" | "D" }))}
+                        className={`w-full border border-border rounded px-2 py-1 text-sm ${XBgEdit} focus:ring-2 focus:ring-ring outline-none h-[30px]`}
+                      >
+                        <option value="M">M - Multiplicação</option>
+                        <option value="D">D - Divisão</option>
+                      </select>
+                    </div>
+                    <div className="flex gap-1">
+                      <button onClick={handleFatorConvSalvar} className="px-3 py-1 text-xs bg-emerald-600 text-white rounded font-bold hover:bg-emerald-700">Salvar</button>
+                      <button onClick={() => setXFatorConvMode("view")} className="px-3 py-1 text-xs bg-slate-200 text-slate-700 rounded font-bold hover:bg-slate-300">Sair</button>
+                    </div>
+                  </div>
+                )}
+
+                <DataGrid
+                  columns={XFatorConvGridCols}
+                  data={XFatorConversoes}
+                  selectedIdx={XFatorConvIdx}
+                  onRowClick={(_, idx) => setXFatorConvIdx(idx)}
+                  onRowDoubleClick={(_, idx) => {
+                    setXFatorConvIdx(idx);
+                    const r = XFatorConversoes[idx];
+                    if (r) {
+                      setXFatorConvMode("edit");
+                      setXFatorConvForm({
+                        unidade_entrada_id: r.unidade_entrada_id || "",
+                        unidade_saida_id: r.unidade_saida_id || "",
+                        fator_conversao: fmtInput4(r.fator_conversao),
+                        tp_funcao: r.tp_funcao || "M",
+                      });
+                    }
+                  }}
+                  maxHeight="300px"
+                  showFilters={XFatorConvShowFilters}
+                  filterValues={XFatorConvFilterValues}
+                  onFilterChange={(key, val) => setXFatorConvFilterValues(prev => ({ ...prev, [key]: val }))}
+                  exportTitle="Fatores de Conversão"
+                  toolbarLeft={
+                    <>
+                      <ToolbarBtn icon={<Plus size={14} />} label="Incluir" onClick={handleFatorConvIncluir} color="success" disabled={!XCurrentRecord} />
+                      <ToolbarBtn icon={<SquarePen size={14} />} label="Editar" onClick={handleFatorConvEditar} disabled={XFatorConvIdx < 0} color="warning" />
+                      <ToolbarBtn icon={<Trash2 size={14} />} label="Excluir" onClick={handleFatorConvExcluir} disabled={XFatorConvIdx < 0} color="destructive" />
+                      <ToolbarBtn icon={<RefreshCw size={14} />} label="Recarregar" onClick={() => XCurrentRecord && loadSubData(XCurrentRecord.produto_id)} color="info" />
+                      <ToolbarBtn icon={<Filter size={14} />} label="Filtrar" onClick={() => setXFatorConvShowFilters(!XFatorConvShowFilters)} color="info" />
+                    </>
+                  }
+                />
+                {XFatorConversoes.length === 0 && (
                   <div className="text-sm text-muted-foreground text-center py-4">Não existem dados a serem exibidos</div>
                 )}
               </div>
