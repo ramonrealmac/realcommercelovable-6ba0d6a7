@@ -173,38 +173,40 @@ function StandardCrudForm<T extends Record<string, any>>({
   const initialIdLoadedRef = useRef<any>(null);
 
   useEffect(() => {
-    if (XInitialId !== undefined && XInitialId !== null && String(XInitialId) !== String(initialIdLoadedRef.current)) {
-      if (ctrl.XData.length > 0) {
-        const idx = ctrl.XData.findIndex(r => String(r[config.XPrimaryKey]) === String(XInitialId));
-        if (idx >= 0) {
+    if (XInitialId !== undefined && XInitialId !== null) {
+      const isNewInitialId = String(XInitialId) !== String(initialIdLoadedRef.current);
+      const idx = ctrl.XData.findIndex(r => String(r[config.XPrimaryKey]) === String(XInitialId));
+
+      if (idx >= 0) {
+        if (isNewInitialId || ctrl.XCurrentIdx !== idx) {
           initialIdLoadedRef.current = XInitialId;
           ctrl.setXCurrentIdx(idx);
           ctrl.setXFormMode("view");
           setXInnerTab("cadastro");
-        } else {
-          // Se não encontrou na lista carregada, busca o registro específico direto no banco pelo ID
-          (async () => {
-            try {
-              let q = (supabase as any)
-                .from(config.XTableName)
-                .select(config.XSelectCols || "*")
-                .eq(config.XPrimaryKey, XInitialId);
-              if (config.XSoftDelete !== false) q = q.eq("excluido", false);
-              
-              const { data, error } = await q.maybeSingle();
-              if (data && !error) {
-                initialIdLoadedRef.current = XInitialId;
-                ctrl.setXData((prev: any[]) => [data, ...prev.filter((r: any) => String(r[config.XPrimaryKey]) !== String(XInitialId))]);
-                ctrl.setXCurrentIdx(0);
-                ctrl.setXFormMode("view");
-                setXInnerTab("cadastro");
-                config.XOnAfterLoad?.([data]);
-              }
-            } catch (err) {
-              console.error("Erro ao carregar registro inicial:", err);
-            }
-          })();
         }
+      } else {
+        // Se ainda não encontrou na lista carregada, busca o registro específico direto no banco pelo ID
+        (async () => {
+          try {
+            let q = (supabase as any)
+              .from(config.XTableName)
+              .select(config.XSelectCols || "*")
+              .eq(config.XPrimaryKey, XInitialId);
+            if (config.XSoftDelete !== false) q = q.eq("excluido", false);
+            
+            const { data, error } = await q.maybeSingle();
+            if (data && !error) {
+              initialIdLoadedRef.current = XInitialId;
+              ctrl.setXData((prev: any[]) => [data, ...prev.filter((r: any) => String(r[config.XPrimaryKey]) !== String(XInitialId))]);
+              ctrl.setXCurrentIdx(0);
+              ctrl.setXFormMode("view");
+              setXInnerTab("cadastro");
+              config.XOnAfterLoad?.([data]);
+            }
+          } catch (err) {
+            console.error("Erro ao carregar registro inicial:", err);
+          }
+        })();
       }
     }
   }, [XInitialId, ctrl.XData, config.XPrimaryKey, config.XTableName, config.XSelectCols, config.XSoftDelete, config.XOnAfterLoad, ctrl.setXCurrentIdx, ctrl.setXFormMode, ctrl.setXData]);
@@ -271,7 +273,7 @@ function StandardCrudForm<T extends Record<string, any>>({
         extras={(
           <div className="flex items-center gap-1">
             {XToolbarExtras && XToolbarExtras({
-              currentRecord: ctrl.XCurrentRecord,
+              currentRecord: ctrl.XIsEditing ? ctrl.XEditRecord : ctrl.XCurrentRecord,
               isEditing: ctrl.XIsEditing,
               setRecord: ctrl.setXEditRecord,
               setField: (key: string, val: any) => ctrl.setXEditRecord((prev: any) => ({ ...prev, [key]: val })),

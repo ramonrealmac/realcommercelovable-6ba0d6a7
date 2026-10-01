@@ -420,6 +420,12 @@ const RotasMontadasForm: React.FC = () => {
     return XStops.some(s => s.gera_nf !== "N" && s.faturado !== "S" && !s.nr_nota);
   }, [allBaixados, XStops]);
 
+  // Check if there is at least one order with NF-e emitted in the selected minuta
+  const temPedidoComNfe = useMemo(() => {
+    if (!XSelectedRoute || XStops.length === 0) return false;
+    return XStops.some(s => Boolean(s.nr_nota) && String(s.nr_nota).trim() !== "" && String(s.nr_nota) !== "0");
+  }, [XSelectedRoute, XStops]);
+
   // Action: Baixar Caixa em LOOP automático para todos os pedidos pendentes da minuta
   const handleBaixarCaixaLoop = async () => {
     if (!XSelectedRoute || XStops.length === 0) {
@@ -1028,11 +1034,17 @@ const RotasMontadasForm: React.FC = () => {
                     openTab({
                       title: `MDF-e — Minuta #${XSelectedRoute.cd_entrega}`,
                       component: "mdfe-form",
-                      params: { minuta_id: XSelectedRoute.entrega_id }
+                      params: { minuta_id: XSelectedRoute.entrega_id, timestamp: Date.now() }
                     });
                   }}
-                  disabled={!XSelectedRoute}
-                  title="Gerar Manifesto MDF-e a partir desta Minuta"
+                  disabled={!XSelectedRoute || !temPedidoComNfe}
+                  title={
+                    !XSelectedRoute 
+                      ? "Selecione uma minuta" 
+                      : !temPedidoComNfe 
+                      ? "A minuta selecionada não possui nenhum pedido com nota fiscal emitida" 
+                      : "Gerar Manifesto MDF-e a partir desta Minuta"
+                  }
                   className="flex items-center gap-2 px-4 py-2 text-xs font-bold rounded bg-amber-600 hover:bg-amber-700 text-white shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Truck size={15} /> Gerar MDF-e

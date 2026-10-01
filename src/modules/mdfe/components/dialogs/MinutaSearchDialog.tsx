@@ -23,7 +23,7 @@ export interface IMinutaRow {
 interface IProps {
   open: boolean;
   onClose: () => void;
-  onSelect: (minutaId: number) => void;
+  onSelect: (minutaId: number) => Promise<boolean> | boolean;
   empresaId: number;
 }
 
@@ -61,6 +61,7 @@ const MinutaSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empresa
   const [XTermo, setXTermo] = useState("");
   const [XRows, setXRows] = useState<IMinutaRow[]>([]);
   const [XLoading, setXLoading] = useState(false);
+  const [XValidating, setXValidating] = useState(false);
   const [XCampos, setXCampos] = useState<CampoKey[]>(CAMPOS_DEFAULT);
   const [XCfgOpen, setXCfgOpen] = useState(false);
   const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
@@ -112,6 +113,7 @@ const MinutaSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empresa
         .from("entrega")
         .select("entrega_id, cd_entrega, dt_inicio, dt_fim, rota, veiculo_id, motorista_id, status, excluido")
         .eq("empresa_id", empresaId)
+        .ilike("status", "Conclui%")
         .or("excluido.is.null,excluido.eq.false")
         .order("entrega_id", { ascending: false })
         .limit(100);
@@ -241,9 +243,17 @@ const MinutaSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empresa
     }, 10);
   };
 
-  const handleConfirmRow = (entregaId: number) => {
-    onSelect(entregaId);
-    onClose();
+  const handleConfirmRow = async (entregaId: number) => {
+    if (XValidating) return;
+    setXValidating(true);
+    try {
+      onClose();
+      await onSelect(entregaId);
+    } catch {
+      focusInput();
+    } finally {
+      setXValidating(false);
+    }
   };
 
   // Teclado para navegação na grid e confirmação com Enter
@@ -420,9 +430,9 @@ const MinutaSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empresa
                 </div>
               )}
 
-              {XLoading && (
+              {(XLoading || XValidating) && (
                 <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-6">
-                  Carregando minutas...
+                  {XValidating ? "Validando minuta..." : "Carregando minutas..."}
                 </div>
               )}
               {!XLoading && XRows.length === 0 && (

@@ -172,7 +172,7 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "rotas-montadas": return <RotasMontadasForm />;
       case "fiscal-config": return <FiscalConfigForm />;
       case "mdfe-lista": return <ListaMdfeForm />;
-      case "mdfe-form": return <MdfeForm initialId={params?.mdf_manifesto_id} />;
+      case "mdfe-form": return <MdfeForm initialId={params?.mdf_manifesto_id} initialMinutaId={params?.minuta_id} params={params} />;
       case "empresas": return <EmpresaForm />;
       case "PerfilForm": return <PerfilForm />;
       case "ControleAcessoForm": return <ControleAcessoForm />;

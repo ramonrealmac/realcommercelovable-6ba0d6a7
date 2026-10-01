@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -82,10 +82,27 @@ export function useCrudController<T extends Record<string, any>>(config: ICrudCo
     staleTime: config.XStaleTime ?? 0,
   });
 
+  // Maintain a ref to XCurrentIdx so we can use it inside the effect without adding it as a dependency
+  const currentIdxRef = useRef(XCurrentIdx);
+  useEffect(() => { currentIdxRef.current = XCurrentIdx; }, [XCurrentIdx]);
+
   // Sincroniza o cache do React Query com o estado local para manter compatibilidade com componentes antigos
   useEffect(() => {
     if (fetchedData) {
-      setXData(fetchedData.list);
+      setXData((prevData) => {
+        // Try to maintain the currently selected record if possible
+        const cIdx = currentIdxRef.current;
+        if (prevData.length > 0 && cIdx >= 0 && cIdx < prevData.length) {
+          const currentId = prevData[cIdx]?.[config.XPrimaryKey];
+          if (currentId !== undefined) {
+            const newIdx = fetchedData.list.findIndex((r: any) => String(r[config.XPrimaryKey]) === String(currentId));
+            if (newIdx >= 0 && newIdx !== cIdx) {
+              setTimeout(() => setXCurrentIdx(newIdx), 0);
+            }
+          }
+        }
+        return fetchedData.list;
+      });
       if (config.XUsePagination && fetchedData.count !== null) {
         setXTotalCount(fetchedData.count);
       } else {

@@ -126,12 +126,23 @@ const MdfDocumentosTab: React.FC<IProps> = ({ mdfManifestoId, empresaId, podeEdi
   }, [rows, cidadeId]);
 
   const handleAdd = async () => {
-    const chaveClean = chave.replace(/\D/g, "");
+    let chaveClean = chave.replace(/\D/g, "");
     if (chaveClean.length !== 44) {
       toast.warning("A chave do documento deve ter exatamente 44 dígitos.");
       return;
     }
-    
+
+    // Validação/Recálculo do Dígito Verificador (Módulo 11 SEFAZ)
+    const key43 = chaveClean.substring(0, 43);
+    const weights = [2, 3, 4, 5, 6, 7, 8, 9];
+    let sum = 0;
+    for (let i = key43.length - 1, w = 0; i >= 0; i--, w++) {
+      sum += parseInt(key43[i], 10) * weights[w % weights.length];
+    }
+    const rem = sum % 11;
+    const correctDV = (rem === 0 || rem === 1) ? 0 : 11 - rem;
+    chaveClean = key43 + String(correctDV);
+
     // Validação do modelo conforme seleção
     const model = chaveClean.substring(20, 22);
     if (tpDoc === "NFE" && model !== "55") {
