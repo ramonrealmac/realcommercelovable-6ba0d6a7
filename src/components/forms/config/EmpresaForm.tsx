@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import CidadeSearchDialog from "@/components/shared/CidadeSearchDialog";
 import { useRef } from "react";
+import { rpbListRelatorios } from "@/report-builder/services/rpbService";
+import type { IRpbRelatorio } from "@/report-builder/types";
 
 const db = supabase as any;
 
@@ -150,6 +152,9 @@ const emptyEmpresa = () => ({
   pesquisa_prod_limite: 200,
   bloquear_pedido: "N",
   st_pedidos_montagem_rota: "R",
+  rpb_relatorio_pedido_id: null as number | null,
+  rpb_relatorio_bobina_id: null as number | null,
+  rpb_relatorio_a4_id: null as number | null,
 });
 
 type TEmpresa = ReturnType<typeof emptyEmpresa>;
@@ -162,6 +167,7 @@ const EmpresaForm: React.FC = () => {
   const [XData, setXData] = useState<TEmpresa[]>([]);
   const [XCurrentIdx, setXCurrentIdx] = useState(0);
   const [XEdit, setXEdit] = useState<TEmpresa>(emptyEmpresa());
+  const XCurrent = XData[XCurrentIdx] || null;
   const [XSearchFilters, setXSearchFilters] = useState<Record<string, string>>({});
   const XIsEditing = XFormMode === "edit" || XFormMode === "insert";
 
@@ -183,6 +189,9 @@ const EmpresaForm: React.FC = () => {
 
   // Tipos de Operação lookup
   const [XTpOperacoes, setXTpOperacoes] = useState<{ tp_operacao_id: number; descricao: string; tp_movimento: string }[]>([]);
+
+  // RPB Relatórios lookup
+  const [XRpbRelatorios, setXRpbRelatorios] = useState<IRpbRelatorio[]>([]);
 
   /* ── Load ── */
   const loadData = useCallback(async () => {
@@ -210,6 +219,14 @@ const EmpresaForm: React.FC = () => {
     if (empRes.data) setXEmpresasLookup(empRes.data);
     if (depRes.data) setXDepositos(depRes.data);
   }, []);
+
+  const targetEmpId = XIsEditing ? XEdit.empresa_id : (XCurrent?.empresa_id || XEmpresaId);
+
+  useEffect(() => {
+    if (targetEmpId) {
+      rpbListRelatorios(targetEmpId).then(setXRpbRelatorios);
+    }
+  }, [targetEmpId]);
 
   const loadHorarios = useCallback(async (empresaId: number) => {
     const { data: h } = await db.from("empresa_hs_lojavirtual").select("*").eq("empresa_id", empresaId).order("dia_semana");
@@ -313,8 +330,6 @@ const EmpresaForm: React.FC = () => {
     loadData();
     loadLookups();
   }, [loadData, loadLookups]);
-
-  const XCurrent = XData[XCurrentIdx] || null;
 
   // Load horarios, plano_conta, and tp_operacao when current record changes
   useEffect(() => {
@@ -623,6 +638,7 @@ const EmpresaForm: React.FC = () => {
   const TABS = [
     { id: "cadastro", label: "Cadastro" },
     { id: "financeiro", label: "Financeiro / Caixa" },
+    { id: "relatorios", label: "Relatórios" },
     { id: "integracoes", label: "Integrações" },
     { id: "ia", label: "IA & Automação" },
     { id: "horario", label: "Horário Loja Virtual" },
@@ -1291,6 +1307,93 @@ const EmpresaForm: React.FC = () => {
                 className="font-mono text-xs"
                 disabled={!XIsEditing}
               />
+            </div>
+          </div>
+        )}
+
+        {/* ── Relatórios ── */}
+        {XInnerTab === "relatorios" && (
+          <div className="space-y-6 max-w-4xl">
+            {/* Movimentação */}
+            <div className="border border-border rounded-lg p-4 bg-card shadow-sm space-y-4">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-primary border-b border-border pb-2 flex items-center gap-2">
+                📋 Movimentação
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    Pedido de Venda / Movimento
+                  </label>
+                  <select
+                    value={XDisplayVal("rpb_relatorio_pedido_id") || ""}
+                    disabled={!XIsEditing}
+                    onChange={e => updateEdit("rpb_relatorio_pedido_id", e.target.value ? Number(e.target.value) : null)}
+                    className={`w-full border border-border rounded px-3 py-1.5 text-sm ${!XIsEditing ? "bg-secondary" : "bg-card"}`}
+                  >
+                    <option value="">— Padrão do Sistema (Sem RPB customizado) —</option>
+                    {XRpbRelatorios.map(r => (
+                      <option key={r.rpb_relatorio_id} value={r.rpb_relatorio_id}>
+                        [{r.visibilidade === 'P' ? 'PRIVADO' : 'GLOBAL'}] {r.nome} {r.categoria ? `(${r.categoria})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Relatório RPB padrão utilizado para impressão de Pedidos.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Cupom Fiscal */}
+            <div className="border border-border rounded-lg p-4 bg-card shadow-sm space-y-4">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-primary border-b border-border pb-2 flex items-center gap-2">
+                🧾 Cupom Fiscal
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    Bobina (Impressão Térmica / Não Fiscal)
+                  </label>
+                  <select
+                    value={XDisplayVal("rpb_relatorio_bobina_id") || ""}
+                    disabled={!XIsEditing}
+                    onChange={e => updateEdit("rpb_relatorio_bobina_id", e.target.value ? Number(e.target.value) : null)}
+                    className={`w-full border border-border rounded px-3 py-1.5 text-sm ${!XIsEditing ? "bg-secondary" : "bg-card"}`}
+                  >
+                    <option value="">— Padrão do Sistema (Impressão Nativa Bobina) —</option>
+                    {XRpbRelatorios.map(r => (
+                      <option key={r.rpb_relatorio_id} value={r.rpb_relatorio_id}>
+                        [{r.visibilidade === 'P' ? 'PRIVADO' : 'GLOBAL'}] {r.nome} {r.categoria ? `(${r.categoria})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Relatório RPB ativado ao selecionar a opção Bobina no Caixa/PDV.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    A4 / PDF (Relatório A4)
+                  </label>
+                  <select
+                    value={XDisplayVal("rpb_relatorio_a4_id") || ""}
+                    disabled={!XIsEditing}
+                    onChange={e => updateEdit("rpb_relatorio_a4_id", e.target.value ? Number(e.target.value) : null)}
+                    className={`w-full border border-border rounded px-3 py-1.5 text-sm ${!XIsEditing ? "bg-secondary" : "bg-card"}`}
+                  >
+                    <option value="">— Padrão do Sistema (Impressão Nativa A4/PDF) —</option>
+                    {XRpbRelatorios.map(r => (
+                      <option key={r.rpb_relatorio_id} value={r.rpb_relatorio_id}>
+                        [{r.visibilidade === 'P' ? 'PRIVADO' : 'GLOBAL'}] {r.nome} {r.categoria ? `(${r.categoria})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Relatório RPB ativado ao selecionar a opção A4/PDF no Caixa/PDV.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         )}

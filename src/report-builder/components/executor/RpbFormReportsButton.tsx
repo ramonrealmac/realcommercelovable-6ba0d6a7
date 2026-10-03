@@ -43,8 +43,8 @@ const RpbFormReportsButton: React.FC<Props> = ({
         const { data } = await supabase
           .from('rpb_relatorio')
           .select('*')
-          .eq('empresa_id', XEmpresaId)
           .or(`nm_form.eq.${formId},nm_form.eq.${formTitle}`)
+          .or(`visibilidade.eq.G,visibilidade.is.null,and(visibilidade.eq.P,empresa_id.eq.${XEmpresaId})`)
           .eq('excluido', false)
           .order('nome');
         

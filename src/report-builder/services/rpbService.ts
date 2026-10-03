@@ -35,10 +35,17 @@ export function applyCompanyFilterToSql(sql: string, mode?: RpbFiltroEmpresaMode
 const db = supabase as any;
 
 // ── Relatório ────────────────────────────────────────────────
-export async function rpbListRelatorios(empresaId: number): Promise<IRpbRelatorio[]> {
-  const { data } = await db.from('rpb_relatorio')
-    .select('*').eq('empresa_id', empresaId).eq('excluido', false)
-    .order('categoria').order('nome');
+export async function rpbListRelatorios(empresaId?: number): Promise<IRpbRelatorio[]> {
+  let query = db.from('rpb_relatorio').select('*').eq('excluido', false);
+
+  if (empresaId) {
+    // Regra:
+    // SE visibilidade = 'G' (ou NULL) -> exibir para todas as empresas
+    // SE visibilidade = 'P' -> exibir somente se empresa_id = empresaId
+    query = query.or(`visibilidade.eq.G,visibilidade.is.null,and(visibilidade.eq.P,empresa_id.eq.${empresaId})`);
+  }
+
+  const { data } = await query.order('categoria').order('nome');
   return data || [];
 }
 
@@ -49,6 +56,9 @@ export async function rpbGetRelatorio(id: number): Promise<IRpbRelatorio | null>
 
 export async function rpbInsertRelatorio(payload: Partial<IRpbRelatorio>) {
   const { rpb_relatorio_id, created_at, updated_at, ...cleanPayload } = payload as any;
+  if (!cleanPayload.visibilidade) {
+    cleanPayload.visibilidade = 'G';
+  }
   return db.from('rpb_relatorio').insert(cleanPayload).select().single();
 }
 

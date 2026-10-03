@@ -39,6 +39,17 @@ const GRID_COLS: IGridColumn[] = [
   { key: 'categoria',        label: 'Categoria', width: '130px' },
   { key: 'nome',             label: 'Nome',      width: '1.5fr' },
   { 
+    key: 'visibilidade',     
+    label: 'Visibilidade', 
+    width: '110px',
+    align: 'center',
+    render: (row) => (
+      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${row.visibilidade === 'P' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-300'}`}>
+        {row.visibilidade === 'P' ? 'PRIVADO' : 'GLOBAL'}
+      </span>
+    )
+  },
+  { 
     key: 'nm_form',          
     label: 'Vínculo Form', 
     width: '130px',
@@ -60,7 +71,7 @@ const FILTRO_TIPOS = [
 ];
 
 const emptyForm = (): Partial<IRpbRelatorio> => ({
-  nome: '', descricao: '', categoria: '', nm_form: '', query_sql: '', rpb_conexao_id: null,
+  nome: '', descricao: '', categoria: '', visibilidade: 'G', nm_form: '', query_sql: '', rpb_conexao_id: null,
 });
 
 const emptyFiltro = (): Partial<IRpbFiltro> => ({
@@ -337,7 +348,8 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
     setSelected(rel);
     setForm({
       nome: rel.nome, descricao: rel.descricao,
-      categoria: rel.categoria, nm_form: rel.nm_form || '',
+      categoria: rel.categoria, visibilidade: rel.visibilidade || 'G',
+      nm_form: rel.nm_form || '',
       query_sql: rel.query_sql, rpb_conexao_id: rel.rpb_conexao_id,
       layout_json: rel.layout_json,
     });
@@ -665,6 +677,28 @@ const RpbManager: React.FC<IProps> = ({ initialView, initialSelectedId }) => {
               <input value={isEditing ? (form.descricao || '') : selected?.descricao || ''} readOnly={!isEditing}
                 onChange={e => setF('descricao', e.target.value)}
                 className={inp + (!isEditing ? ' bg-secondary' : '')} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground font-semibold">Visibilidade *</label>
+              {isEditing ? (
+                <select
+                  value={form.visibilidade || 'G'}
+                  onChange={e => setF('visibilidade', e.target.value as 'G' | 'P')}
+                  className={sel}
+                >
+                  <option value="G">GLOBAL (Visível para todas as empresas)</option>
+                  <option value="P">PRIVADO (Visível apenas para esta empresa)</option>
+                </select>
+              ) : (
+                <input
+                  readOnly
+                  value={selected?.visibilidade === 'P' ? 'PRIVADO (Visível apenas para esta empresa)' : 'GLOBAL (Visível para todas as empresas)'}
+                  className={inp + ' bg-secondary'}
+                />
+              )}
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                GLOBAL fica disponível em todas as empresas. PRIVADO é exclusivo da empresa cadastrada.
+              </p>
             </div>
             <div>
               <label className="text-xs text-muted-foreground font-semibold">Vínculo com Formulário (Tela)</label>

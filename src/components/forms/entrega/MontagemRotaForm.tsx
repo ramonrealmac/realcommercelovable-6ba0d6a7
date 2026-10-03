@@ -19,6 +19,8 @@ import DataGrid, { type IGridColumn } from "@/components/grid/DataGrid";
 import { toast } from "sonner";
 import { formatCPFCNPJ } from "@/lib/validators";
 
+import RpbFormReportsButton from "@/report-builder/components/executor/RpbFormReportsButton";
+
 const db = supabase as any;
 
 interface IVeiculo {
@@ -144,7 +146,9 @@ const MontagemRotaForm: React.FC = () => {
         .maybeSingle();
 
       const stOption = empData?.st_pedidos_montagem_rota || "R";
-      const allowedStPedido = stOption === "N" ? ["F"] : ["R"];
+      // N = NÃO RECEBIDOS NO CAIXA (Pedidos em aberto, orçamentos, finalizados pré-caixa: O, A, F, P)
+      // R = RECEBIDOS NO CAIXA (Baixados no caixa: R)
+      const allowedStPedido = stOption === "N" ? ["O", "A", "F", "P"] : ["R"];
 
       // Fetch active entrega_items for the company to exclude orders already in a route
       const { data: activeItems } = await db.from("entrega_item")
@@ -163,10 +167,10 @@ const MontagemRotaForm: React.FC = () => {
         .select("movimento_id, nr_movimento, dt_emissao, dt_entrega, cadastro_id, vl_movimento, st_entrega, st_entregue, st_pedido, st_bloqueado, empresa_id")
         .eq("empresa_id", XEmpresaId)
         .eq("excluido", false)
-        .eq("st_bloqueado", "N") // Apenas liberados
-        .in("st_pedido", allowedStPedido) // R = Recebido no caixa, F = Não recebido no caixa (Pré-venda)
-        .in("st_entrega", ["S", "P"]) // Apenas pedidos para entrega ou entrega parcial
-        .in("st_entregue", ["N", "P"]) // Não entregue ou Parcialmente entregue
+        .eq("st_bloqueado", "N") // Apenas liberados (não bloqueados por crédito/margem)
+        .in("st_pedido", allowedStPedido) // N = O, A, F, P | R = R
+        .in("st_entrega", ["S", "P"]) // OBRIGATÓRIO: Entrega Total ('S') ou Entrega Parcial ('P')
+        .or("st_entregue.in.(N,P),st_entregue.is.null") // Não entregue ('N'), Parcial ('P') ou nulo
         .order("nr_movimento", { ascending: false });
 
       if (error) throw error;
@@ -487,13 +491,28 @@ const MontagemRotaForm: React.FC = () => {
           <h2 className="text-lg font-bold tracking-tight">Montagem da Rota (Minutas de Entrega)</h2>
           <p className="text-xs text-muted-foreground">Adicione os pedidos da fila à minuta de entrega e ordene a sequência de paradas.</p>
         </div>
-        <button
-          onClick={loadPendingOrders}
-          disabled={XLoading}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border border-border bg-card hover:bg-accent hover:text-accent-foreground transition-all"
-        >
-          <RefreshCw size={13} className={XLoading ? "animate-spin" : ""} /> Atualizar Fila
-        </button>
+        <div className="flex items-center gap-2">
+          <RpbFormReportsButton 
+            nmForm="montagem-rota" 
+            variant="outline" 
+            label="Imprimir Minuta" 
+            currentRecord={{
+              veiculo_id: XSelectedVeiculoId,
+              motorista_id: XSelectedMotoristaId,
+              rota: XRotaText,
+              observacoes: XObservacoes,
+              movimento_ids: XSelectedIds.join(","),
+              sys_empresa_id: String(XEmpresaId)
+            }}
+          />
+          <button
+            onClick={loadPendingOrders}
+            disabled={XLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border border-border bg-card hover:bg-accent hover:text-accent-foreground transition-all"
+          >
+            <RefreshCw size={13} className={XLoading ? "animate-spin" : ""} /> Atualizar Fila
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">

@@ -245,6 +245,7 @@ export interface IRpbRelatorio {
   nome:             string;
   descricao:        string;
   categoria:        string;
+  visibilidade:     'G' | 'P';
   nm_form:          string;
   query_sql:        string;
   rpb_conexao_id:   number | null;

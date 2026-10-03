@@ -10,6 +10,7 @@ import FiscalProgressDialog from "@/components/fiscal/FiscalProgressDialog";
 import FiscalPreValidacaoDialog from "@/components/forms/fiscal/FiscalPreValidacaoDialog";
 import type { IFiscalValidacaoErro } from "@/services/fiscalPreValidacao";
 import { supabase } from "@/integrations/supabase/client";
+import { useAppContext } from "@/contexts/AppContext";
 
 
 export interface IImpressaoItem {
@@ -90,6 +91,7 @@ const imprimir = (d: IImpressaoDados | null, modo: "bobina" | "a4") => {
 };
 
 const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funcionarioId, onClose, onConcluir }) => {
+  const { openTab } = useAppContext();
   const [XSalvando, setXSalvando] = React.useState(false);
   const [XStatus, setXStatus] = React.useState<string>("");
   const [XNfeId, setXNfeId] = React.useState<number | null>(null);
@@ -419,14 +421,43 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
     }
   };
 
+  const handleImprimir = async (modo: "bobina" | "a4") => {
+    if (!dados?.movimento_id) {
+      imprimir(dados, modo);
+      return;
+    }
+    const colName = modo === "bobina" ? "rpb_relatorio_bobina_id" : "rpb_relatorio_a4_id";
+    const { data: emp } = await supabase.from("empresa").select(colName).eq("empresa_id", empresaId).maybeSingle();
+    const rpbId = (emp as any)?.[colName];
+
+    if (rpbId) {
+      const { data: rel } = await supabase.from("rpb_relatorio").select("nome").eq("rpb_relatorio_id", rpbId).maybeSingle();
+      if (rel) {
+        openTab({
+          title: rel.nome || `Relatório ${modo.toUpperCase()}`,
+          component: `rpb-exec-${rpbId}`,
+          props: {
+            initialFilters: {
+              movimento_id: String(dados.movimento_id),
+              sys_empresa_id: String(empresaId)
+            }
+          }
+        });
+        toast.success(`Abrindo relatório RPB: ${rel.nome}`);
+        return;
+      }
+    }
+    imprimir(dados, modo);
+  };
+
   const cards = [
     {
       key: "bobina", shortcut: "1", label: "1. Bobina", desc: "Impressão Térmica", icon: <Printer size={28} />, color: "text-slate-600",
-      action: () => imprimir(dados, "bobina"), enabled: true
+      action: () => handleImprimir("bobina"), enabled: true
     },
     {
       key: "a4", shortcut: "2", label: "2. A4 / PDF", desc: "Relatório de Pedido", icon: <FileText size={28} />, color: "text-blue-600",
-      action: () => imprimir(dados, "a4"), enabled: true
+      action: () => handleImprimir("a4"), enabled: true
     },
     ...(XGeraNf ? [
       {
