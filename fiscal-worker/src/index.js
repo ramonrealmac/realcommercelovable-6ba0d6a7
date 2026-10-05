@@ -247,7 +247,27 @@ const processarEvento = async (evento) => {
                 verificar_validade_cert: configDb.verificar_validade_cert !== false,
                 certificadoSenha: decodeSenhaCertificado(
                     payloadConfig.certificadoSenha || configDb.senha_certificado || ""
-                )
+                ),
+                // Configurações do DANFE (NFe 55 e NFCe 65) vindas do banco
+                danfe_tipo: configDb.danfe_tipo ?? payloadConfig.danfe_tipo,
+                danfe_pos_canhoto: configDb.danfe_pos_canhoto ?? payloadConfig.danfe_pos_canhoto,
+                danfe_exibe_resumo_canhoto: configDb.danfe_exibe_resumo_canhoto ?? payloadConfig.danfe_exibe_resumo_canhoto,
+                danfe_path_logo: configDb.danfe_path_logo ?? payloadConfig.danfe_path_logo,
+                danfe_logo_em_cima: configDb.danfe_logo_em_cima ?? payloadConfig.danfe_logo_em_cima,
+                danfe_expande_logo: configDb.danfe_expande_logo ?? payloadConfig.danfe_expande_logo,
+                danfe_fonte_nome: configDb.danfe_fonte_nome ?? payloadConfig.danfe_fonte_nome,
+                danfe_fonte_tamanho: configDb.danfe_fonte_tamanho ?? payloadConfig.danfe_fonte_tamanho,
+                danfe_casas_qcom: configDb.danfe_casas_qcom ?? payloadConfig.danfe_casas_qcom,
+                danfe_casas_vuncom: configDb.danfe_casas_vuncom ?? payloadConfig.danfe_casas_vuncom,
+                danfe_exibe_info_adic: configDb.danfe_exibe_info_adic ?? payloadConfig.danfe_exibe_info_adic,
+                nfce_modo_impressao: configDb.nfce_modo_impressao ?? payloadConfig.nfce_modo_impressao,
+                nfce_largura_bobina: configDb.nfce_largura_bobina ?? payloadConfig.nfce_largura_bobina,
+                nfce_imprime_duas_linhas: configDb.nfce_imprime_duas_linhas ?? payloadConfig.nfce_imprime_duas_linhas,
+                nfce_qr_lateral: configDb.nfce_qr_lateral ?? payloadConfig.nfce_qr_lateral,
+                nfce_via_consumidor: configDb.nfce_via_consumidor ?? payloadConfig.nfce_via_consumidor,
+                nfce_imprime_itens: configDb.nfce_imprime_itens ?? payloadConfig.nfce_imprime_itens,
+                posprinter_porta: configDb.posprinter_porta ?? payloadConfig.posprinter_porta,
+                posprinter_modelo: configDb.posprinter_modelo ?? payloadConfig.posprinter_modelo,
             };
             logger.info(`Configurações carregadas: Tipo=${payload.config.tipo_certificado} UF=${payload.config.uf} SSL_Lib=${payload.config.ssl_lib || 'Default'}`);
             

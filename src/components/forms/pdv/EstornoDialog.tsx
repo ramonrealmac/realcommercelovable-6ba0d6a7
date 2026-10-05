@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
 import { RotateCcw, X } from "lucide-react";
+import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -69,6 +70,56 @@ const EstornoDialog: React.FC<IProps> = ({ open, onClose, onEstornado }) => {
     if (!confirm("Confirma o estorno desta venda? O financeiro será apagado, o estoque devolvido e o pedido voltará para o status Em Aberto para poder ser alterado.")) return;
     setXSalvando(true);
     try {
+      // 1. Verifica se há notas fiscais ativas vinculadas a este movimento
+      const { data: nfeCab } = await supabase
+        .from("fiscal_nfe_cabecalho")
+        .select("nfe_cabecalho_id, nr_nota, serie, modelo, st_nf, c_stat")
+        .eq("movimento_id", XSelId)
+        .eq("excluido", false)
+        .neq("st_nf", "C")
+        .order("nfe_cabecalho_id", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (nfeCab?.nfe_cabecalho_id) {
+        if (nfeCab.st_nf === "A") {
+          const modLbl = nfeCab.modelo === "65" ? "NFC-e" : "NF-e";
+          const just = prompt(
+            `Este pedido possui a ${modLbl} nº ${nfeCab.nr_nota || nfeCab.nfe_cabecalho_id} autorizada na SEFAZ.\n\nPara estornar a venda, a nota fiscal precisa ser cancelada na SEFAZ.\nDigite a justificativa do cancelamento (mínimo 15 caracteres):`,
+            "Estorno de recebimento de venda no caixa"
+          );
+
+          if (just === null) {
+            setXSalvando(false);
+            return;
+          }
+          if (just.trim().length < 15) {
+            toast.error("A justificativa de cancelamento da nota fiscal deve ter no mínimo 15 caracteres.");
+            setXSalvando(false);
+            return;
+          }
+
+          toast.info("Enviando solicitação de cancelamento da nota fiscal para a SEFAZ...");
+          const cancRes = await fiscalEmissaoService.cancelarDocumento(
+            nfeCab.nfe_cabecalho_id,
+            XEmpresaId,
+            just.trim()
+          );
+
+          if (!cancRes.success) {
+            toast.error("Falha ao solicitar cancelamento da nota fiscal: " + (cancRes.message || "Erro desconhecido"));
+            setXSalvando(false);
+            return;
+          }
+        } else {
+          // Se a nota não foi autorizada (pendente/erro/rejeitada), exclui o rascunho para não bloquear
+          await supabase
+            .from("fiscal_nfe_cabecalho")
+            .update({ excluido: true })
+            .eq("nfe_cabecalho_id", nfeCab.nfe_cabecalho_id);
+        }
+      }
+
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData.user?.id;
 

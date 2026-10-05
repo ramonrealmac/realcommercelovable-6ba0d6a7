@@ -863,6 +863,13 @@ export const fiscalEmissaoService = {
 
       if (!emailDestino) return { success: false, message: "Destinatário não informado e não localizado no cadastro." };
 
+      if (!fConfig?.email_smtp_host || !fConfig?.email_smtp_user) {
+        return {
+          success: false,
+          message: "Servidor de e-mail não configurado. Acesse a tela de Configuração Fiscal > Envio de E-mail e preencha o Servidor SMTP (Host), Usuário e Senha."
+        };
+      }
+
       const { data: { user: authUser } } = await supabase.auth.getUser();
       const tipo: "NFE" | "NFCE" = Number(cab.modelo) === 65 ? "NFCE" : "NFE";
 

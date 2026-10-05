@@ -138,15 +138,16 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
 
         const { data: existente } = await supabase
           .from("fiscal_nfe_cabecalho")
-          .select("nfe_cabecalho_id, c_stat")
+          .select("nfe_cabecalho_id, c_stat, st_nf")
           .eq("movimento_id", dados.movimento_id)
           .eq("excluido", false)
+          .neq("st_nf", "C")
           .order("nfe_cabecalho_id", { ascending: false })
           .limit(1)
           .maybeSingle();
         if (existente?.nfe_cabecalho_id) {
           const cStat = Number(existente.c_stat || 0);
-          const autorizada = cStat === 100 || cStat === 150;
+          const autorizada = (cStat === 100 || cStat === 150) && existente.st_nf === "A";
           if (autorizada) {
             setXEmitido(true);
             setXNfeId(existente.nfe_cabecalho_id);
@@ -194,16 +195,17 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
       // 0. Verifica se já existe QUALQUER documento fiscal vinculado a este pedido
       const { data: existente } = await supabase
         .from("fiscal_nfe_cabecalho")
-        .select("nfe_cabecalho_id, c_stat, x_motivo, modelo")
+        .select("nfe_cabecalho_id, c_stat, x_motivo, modelo, st_nf")
         .eq("movimento_id", dados.movimento_id)
         .eq("excluido", false)
+        .neq("st_nf", "C")
         .order("nfe_cabecalho_id", { ascending: false })
         .limit(1)
         .maybeSingle();
 
       if (existente?.nfe_cabecalho_id) {
         const cStat = Number(existente.c_stat || 0);
-        const autorizada = cStat === 100 || cStat === 150;
+        const autorizada = (cStat === 100 || cStat === 150) && existente.st_nf === "A";
         const mesmoModelo = String(existente.modelo) === (tipo === "NFE" ? "55" : "65");
 
         if (autorizada) {

@@ -517,6 +517,56 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave, confi
         lib.ConfigGravarValor(handle, "DANFe", "MostraPreview", "0");
         lib.ConfigGravarValor(handle, "DANFe", "MostraStatus", "0");
 
+        if (configPayload) {
+            if (configPayload.danfe_tipo !== undefined && configPayload.danfe_tipo !== null) lib.ConfigGravarValor(handle, "DANFE", "TipoDANFE", String(configPayload.danfe_tipo));
+            if (configPayload.danfe_pos_canhoto !== undefined && configPayload.danfe_pos_canhoto !== null) lib.ConfigGravarValor(handle, "DANFENFe", "PosCanhoto", String(configPayload.danfe_pos_canhoto));
+            if (configPayload.danfe_exibe_resumo_canhoto !== undefined && configPayload.danfe_exibe_resumo_canhoto !== null) lib.ConfigGravarValor(handle, "DANFENFe", "ExibeResumoCanhoto", configPayload.danfe_exibe_resumo_canhoto ? "1" : "0");
+            if (configPayload.danfe_path_logo) lib.ConfigGravarValor(handle, "DANFE", "PathLogo", String(configPayload.danfe_path_logo));
+            if (configPayload.danfe_logo_em_cima !== undefined && configPayload.danfe_logo_em_cima !== null) lib.ConfigGravarValor(handle, "DANFENFe", "LogoemCima", configPayload.danfe_logo_em_cima ? "1" : "0");
+            if (configPayload.danfe_expande_logo !== undefined && configPayload.danfe_expande_logo !== null) lib.ConfigGravarValor(handle, "DANFE", "ExpandeLogoMarca", configPayload.danfe_expande_logo ? "1" : "0");
+            if (configPayload.danfe_fonte_nome) lib.ConfigGravarValor(handle, "DANFENFe", "Fonte.Nome", String(configPayload.danfe_fonte_nome));
+            if (configPayload.danfe_casas_qcom !== undefined && configPayload.danfe_casas_qcom !== null) lib.ConfigGravarValor(handle, "DANFE", "CasasDecimais.qCom", String(configPayload.danfe_casas_qcom));
+            if (configPayload.danfe_casas_vuncom !== undefined && configPayload.danfe_casas_vuncom !== null) lib.ConfigGravarValor(handle, "DANFE", "CasasDecimais.vUnCom", String(configPayload.danfe_casas_vuncom));
+            if (configPayload.danfe_exibe_info_adic !== undefined && configPayload.danfe_exibe_info_adic !== null) lib.ConfigGravarValor(handle, "DANFE", "ExibeInforAdicProduto", configPayload.danfe_exibe_info_adic ? "1" : "0");
+
+            // Configurações da NFC-e
+            if (configPayload.nfce_modo_impressao) {
+                const modo = String(configPayload.nfce_modo_impressao).toUpperCase();
+                if (modo === 'FORTES_A4') {
+                    // Impressão da NFC-e em Folha A4 Normal
+                    lib.ConfigGravarValor(handle, "DANFENFCe", "TipoRelatorioBobina", "2");
+                    lib.ConfigGravarValor(handle, "DANFE", "TipoDANFE", "5");
+                    lib.ConfigGravarValor(handle, "DANFENFCe", "TipoDANFE", "5");
+                } else if (modo === 'ESCPOS') {
+                    // Impressão Direta ESC/POS
+                    if (configPayload.posprinter_porta) {
+                        lib.ConfigGravarValor(handle, "PosPrinter", "Porta", String(configPayload.posprinter_porta));
+                        if (configPayload.posprinter_modelo !== undefined && configPayload.posprinter_modelo !== null) {
+                            lib.ConfigGravarValor(handle, "PosPrinter", "Modelo", String(configPayload.posprinter_modelo));
+                        }
+                        lib.ConfigGravarValor(handle, "DANFENFCe", "TipoRelatorioBobina", "1");
+                    } else {
+                        console.warn(`[FiscalLib] ⚠️ Modo ESC/POS selecionado sem porta definida. Usando Fortes Bobina (0) como fallback seguro.`);
+                        lib.ConfigGravarValor(handle, "DANFENFCe", "TipoRelatorioBobina", "0");
+                    }
+                } else if (modo === 'RESUMIDO') {
+                    // Extrato Resumido (Sem itens)
+                    lib.ConfigGravarValor(handle, "DANFENFCe", "TipoRelatorioBobina", "0");
+                    lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeItens", "0");
+                } else {
+                    // FORTES_BOBINA (Padrão Bobina Térmica 80mm/58mm)
+                    lib.ConfigGravarValor(handle, "DANFENFCe", "TipoRelatorioBobina", "0");
+                    lib.ConfigGravarValor(handle, "DANFE", "TipoDANFE", "4");
+                    lib.ConfigGravarValor(handle, "DANFENFCe", "TipoDANFE", "4");
+                }
+            }
+            if (configPayload.nfce_largura_bobina !== undefined && configPayload.nfce_largura_bobina !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "LarguraBobina", String(configPayload.nfce_largura_bobina));
+            if (configPayload.nfce_imprime_duas_linhas !== undefined && configPayload.nfce_imprime_duas_linhas !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeEmDuasLinhas", configPayload.nfce_imprime_duas_linhas ? "1" : "0");
+            if (configPayload.nfce_qr_lateral !== undefined && configPayload.nfce_qr_lateral !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeQRCodeLateral", configPayload.nfce_qr_lateral ? "1" : "0");
+            if (configPayload.nfce_via_consumidor !== undefined && configPayload.nfce_via_consumidor !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ViaConsumidor", configPayload.nfce_via_consumidor ? "1" : "0");
+            if (configPayload.nfce_imprime_itens !== undefined && configPayload.nfce_imprime_itens !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeItens", configPayload.nfce_imprime_itens ? "1" : "0");
+        }
+
         if (tp === 'PDF' && lib.ImprimirDANFEPDF) {
             const ret = lib.ImprimirDANFEPDF(handle);
             console.log(`[FiscalLib] ImprimirDANFEPDF (${modeloLabel}) ret=${ret}`);
@@ -898,6 +948,51 @@ const configurarHandle = (lib, handle, configPayload, prefix = 'NFE') => {
 
     lib.ConfigGravarValor(handle, "NFe", "PathEvento", eventoDir);
     lib.ConfigGravarValor(handle, "DANFe", "PathPDF", pdfDir);
+
+    // Configurações Globais do DANFE (NFe 55 e NFCe 65)
+    if (configPayload.danfe_tipo !== undefined && configPayload.danfe_tipo !== null) lib.ConfigGravarValor(handle, "DANFE", "TipoDANFE", String(configPayload.danfe_tipo));
+    if (configPayload.danfe_pos_canhoto !== undefined && configPayload.danfe_pos_canhoto !== null) lib.ConfigGravarValor(handle, "DANFENFe", "PosCanhoto", String(configPayload.danfe_pos_canhoto));
+    if (configPayload.danfe_exibe_resumo_canhoto !== undefined && configPayload.danfe_exibe_resumo_canhoto !== null) lib.ConfigGravarValor(handle, "DANFENFe", "ExibeResumoCanhoto", configPayload.danfe_exibe_resumo_canhoto ? "1" : "0");
+    if (configPayload.danfe_path_logo) lib.ConfigGravarValor(handle, "DANFE", "PathLogo", String(configPayload.danfe_path_logo));
+    if (configPayload.danfe_logo_em_cima !== undefined && configPayload.danfe_logo_em_cima !== null) lib.ConfigGravarValor(handle, "DANFENFe", "LogoemCima", configPayload.danfe_logo_em_cima ? "1" : "0");
+    if (configPayload.danfe_expande_logo !== undefined && configPayload.danfe_expande_logo !== null) lib.ConfigGravarValor(handle, "DANFE", "ExpandeLogoMarca", configPayload.danfe_expande_logo ? "1" : "0");
+    if (configPayload.danfe_fonte_nome) lib.ConfigGravarValor(handle, "DANFENFe", "Fonte.Nome", String(configPayload.danfe_fonte_nome));
+    if (configPayload.danfe_casas_qcom !== undefined && configPayload.danfe_casas_qcom !== null) lib.ConfigGravarValor(handle, "DANFE", "CasasDecimais.qCom", String(configPayload.danfe_casas_qcom));
+    if (configPayload.danfe_casas_vuncom !== undefined && configPayload.danfe_casas_vuncom !== null) lib.ConfigGravarValor(handle, "DANFE", "CasasDecimais.vUnCom", String(configPayload.danfe_casas_vuncom));
+    if (configPayload.danfe_exibe_info_adic !== undefined && configPayload.danfe_exibe_info_adic !== null) lib.ConfigGravarValor(handle, "DANFE", "ExibeInforAdicProduto", configPayload.danfe_exibe_info_adic ? "1" : "0");
+
+    // Configurações da NFC-e (Modo de Impressão)
+    if (configPayload.nfce_modo_impressao) {
+        const modo = String(configPayload.nfce_modo_impressao).toUpperCase();
+        if (modo === 'FORTES_A4') {
+            lib.ConfigGravarValor(handle, "DANFENFCe", "TipoRelatorioBobina", "2");
+            lib.ConfigGravarValor(handle, "DANFE", "TipoDANFE", "5");
+            lib.ConfigGravarValor(handle, "DANFENFCe", "TipoDANFE", "5");
+        } else if (modo === 'ESCPOS') {
+            if (configPayload.posprinter_porta) {
+                lib.ConfigGravarValor(handle, "PosPrinter", "Porta", String(configPayload.posprinter_porta));
+                if (configPayload.posprinter_modelo !== undefined && configPayload.posprinter_modelo !== null) {
+                    lib.ConfigGravarValor(handle, "PosPrinter", "Modelo", String(configPayload.posprinter_modelo));
+                }
+                lib.ConfigGravarValor(handle, "DANFENFCe", "TipoRelatorioBobina", "1");
+            } else {
+                console.warn(`[FiscalLib] ⚠️ Modo ESC/POS selecionado sem porta definida. Usando Fortes Bobina (0) como fallback seguro.`);
+                lib.ConfigGravarValor(handle, "DANFENFCe", "TipoRelatorioBobina", "0");
+            }
+        } else if (modo === 'RESUMIDO') {
+            lib.ConfigGravarValor(handle, "DANFENFCe", "TipoRelatorioBobina", "0");
+            lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeItens", "0");
+        } else {
+            lib.ConfigGravarValor(handle, "DANFENFCe", "TipoRelatorioBobina", "0");
+            lib.ConfigGravarValor(handle, "DANFE", "TipoDANFE", "4");
+            lib.ConfigGravarValor(handle, "DANFENFCe", "TipoDANFE", "4");
+        }
+    }
+    if (configPayload.nfce_largura_bobina !== undefined && configPayload.nfce_largura_bobina !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "LarguraBobina", String(configPayload.nfce_largura_bobina));
+    if (configPayload.nfce_imprime_duas_linhas !== undefined && configPayload.nfce_imprime_duas_linhas !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeEmDuasLinhas", configPayload.nfce_imprime_duas_linhas ? "1" : "0");
+    if (configPayload.nfce_qr_lateral !== undefined && configPayload.nfce_qr_lateral !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeQRCodeLateral", configPayload.nfce_qr_lateral ? "1" : "0");
+    if (configPayload.nfce_via_consumidor !== undefined && configPayload.nfce_via_consumidor !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ViaConsumidor", configPayload.nfce_via_consumidor ? "1" : "0");
+    if (configPayload.nfce_imprime_itens !== undefined && configPayload.nfce_imprime_itens !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeItens", configPayload.nfce_imprime_itens ? "1" : "0");
 
     lib.ConfigGravarValor(handle, "Principal", "LogNivel", "0");
     lib.ConfigGravarValor(handle, "NFe", "SalvarGer", "1");
@@ -1719,25 +1814,34 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
 
                 // 2. Configura SMTP
                 if (config_email) {
-                    libNFe.ConfigGravarValor(handle, "Email", "Servidor", config_email.host || "");
-                    libNFe.ConfigGravarValor(handle, "Email", "Porta", String(config_email.port || "587"));
-                    libNFe.ConfigGravarValor(handle, "Email", "Usuario", config_email.user || "");
+                    const emailUser = String(config_email.user || "").trim();
+                    const emailHost = String(config_email.host || "").trim();
+                    const emailPort = String(config_email.port || "587").trim();
+                    const isSSL = Boolean(config_email.ssl);
+                    const isTLS = Boolean(config_email.tls);
+
+                    libNFe.ConfigGravarValor(handle, "Email", "Servidor", emailHost);
+                    libNFe.ConfigGravarValor(handle, "Email", "Porta", emailPort);
+                    libNFe.ConfigGravarValor(handle, "Email", "Usuario", emailUser);
                     libNFe.ConfigGravarValor(handle, "Email", "Senha", config_email.pass || "");
-                    libNFe.ConfigGravarValor(handle, "Email", "SSL", config_email.ssl ? "1" : "0");
-                    libNFe.ConfigGravarValor(handle, "Email", "TLS", config_email.tls ? "1" : "0");
-                    libNFe.ConfigGravarValor(handle, "Email", "Nome", config_email.nome_remetente || "");
-                    // Conta = endereço usado como remetente (From) — alguns servidores rejeitam sem isso
-                    libNFe.ConfigGravarValor(handle, "Email", "Conta", config_email.user || "");
-                    // DefaultHELO: corrige "Invalid HELO name" — alguns servidores rejeitam
-                    // quando o cliente envia "localhost" ou hostname interno. Usamos um FQDN
-                    // baseado no domínio do remetente ou do host SMTP.
-                    const heloFromUser = (config_email.user || "").split("@")[1] || "";
+                    libNFe.ConfigGravarValor(handle, "Email", "SSL", isSSL ? "1" : "0");
+                    libNFe.ConfigGravarValor(handle, "Email", "TLS", isTLS ? "1" : "0");
+                    libNFe.ConfigGravarValor(handle, "Email", "SSLAuto", (isSSL || isTLS || emailPort === "587" || emailPort === "465") ? "1" : "0");
+                    libNFe.ConfigGravarValor(handle, "Email", "Nome", config_email.nome_remetente || emailUser);
+                    // Endereco é o remetente oficial (From.Address) exigido pelo ACBrLib!
+                    libNFe.ConfigGravarValor(handle, "Email", "Endereco", emailUser);
+                    libNFe.ConfigGravarValor(handle, "Email", "Conta", emailUser);
+                    libNFe.ConfigGravarValor(handle, "Email", "From", emailUser);
+                    libNFe.ConfigGravarValor(handle, "Email", "Codificacao", "UTF-8");
+
+                    // DefaultHELO: corrige "Invalid HELO name"
+                    const heloFromUser = emailUser.split("@")[1] || "";
                     const helo = (config_email.helo && String(config_email.helo).trim())
                         || heloFromUser
-                        || (config_email.host || "")
+                        || emailHost
                         || "localhost.localdomain";
                     libNFe.ConfigGravarValor(handle, "Email", "DefaultHELO", helo);
-                    console.log(`[FiscalLib] SMTP DefaultHELO definido como: ${helo}`);
+                    console.log(`[FiscalLib] Configurado SMTP ACBr: Host=${emailHost}:${emailPort}, From=${emailUser}, HELO=${helo}`);
                 }
 
                 // 3. Enviar

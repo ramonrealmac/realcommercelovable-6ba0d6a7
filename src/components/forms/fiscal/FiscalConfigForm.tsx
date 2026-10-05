@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { Save, Search, Activity, ShieldCheck, Terminal, Mail } from "lucide-react";
+import { Save, Search, Activity, ShieldCheck, Terminal, Mail, Printer, FileText, Image, Sliders } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppContext } from "@/contexts/AppContext";
 import MonitorFiscalLogDialog from "./MonitorFiscalLogDialog";
@@ -48,6 +48,26 @@ interface FiscalConfigFormValues {
   ssl_xml_sign_lib: string;
   ssl_type: string;
   verificar_validade_cert: boolean;
+  // Campos de Configuração do DANFE (NFe 55 e NFCe 65)
+  danfe_tipo: string;
+  danfe_pos_canhoto: string;
+  danfe_exibe_resumo_canhoto: boolean;
+  danfe_path_logo: string;
+  danfe_logo_em_cima: boolean;
+  danfe_expande_logo: boolean;
+  danfe_fonte_nome: string;
+  danfe_fonte_tamanho: number;
+  danfe_casas_qcom: number;
+  danfe_casas_vuncom: number;
+  danfe_exibe_info_adic: boolean;
+  nfce_modo_impressao: string;
+  nfce_largura_bobina: number;
+  nfce_imprime_duas_linhas: boolean;
+  nfce_qr_lateral: boolean;
+  nfce_via_consumidor: boolean;
+  nfce_imprime_itens: boolean;
+  posprinter_porta: string;
+  posprinter_modelo: number;
 }
 
 const FiscalConfigForm = () => {
@@ -87,7 +107,27 @@ const FiscalConfigForm = () => {
       ssl_http_lib: "AUTO",
       ssl_xml_sign_lib: "AUTO",
       ssl_type: "AUTO",
-      verificar_validade_cert: true
+      verificar_validade_cert: true,
+      // Padrões do DANFE
+      danfe_tipo: "0",
+      danfe_pos_canhoto: "0",
+      danfe_exibe_resumo_canhoto: true,
+      danfe_path_logo: "",
+      danfe_logo_em_cima: false,
+      danfe_expande_logo: true,
+      danfe_fonte_nome: "Arial",
+      danfe_fonte_tamanho: 8,
+      danfe_casas_qcom: 2,
+      danfe_casas_vuncom: 2,
+      danfe_exibe_info_adic: true,
+      nfce_modo_impressao: "FORTES_BOBINA",
+      nfce_largura_bobina: 302,
+      nfce_imprime_duas_linhas: false,
+      nfce_qr_lateral: false,
+      nfce_via_consumidor: false,
+      nfce_imprime_itens: true,
+      posprinter_porta: "",
+      posprinter_modelo: 0,
     }
   });
 
@@ -108,7 +148,13 @@ const FiscalConfigForm = () => {
               email_smtp_host, email_smtp_port, email_smtp_user, email_smtp_pass, 
               email_smtp_ssl, email_smtp_tls, email_assunto_nfe, email_corpo_nfe,
               pasta_arquivos_fiscais, nr_timeout_nfe, nfe_versao_metodo, nfce_versao_metodo,
-              ssl_lib, ssl_crypt_lib, ssl_http_lib, ssl_xml_sign_lib, ssl_type, verificar_validade_cert
+              ssl_lib, ssl_crypt_lib, ssl_http_lib, ssl_xml_sign_lib, ssl_type, verificar_validade_cert,
+              danfe_tipo, danfe_pos_canhoto, danfe_exibe_resumo_canhoto, danfe_path_logo,
+              danfe_logo_em_cima, danfe_expande_logo, danfe_fonte_nome, danfe_fonte_tamanho,
+              danfe_casas_qcom, danfe_casas_vuncom, danfe_exibe_info_adic,
+              nfce_modo_impressao, nfce_largura_bobina, nfce_imprime_duas_linhas,
+              nfce_qr_lateral, nfce_via_consumidor, nfce_imprime_itens,
+              posprinter_porta, posprinter_modelo
             `)
             .eq("empresa_id", XEmpresaId)
             .maybeSingle(),
@@ -165,7 +211,27 @@ const FiscalConfigForm = () => {
             ssl_http_lib: (data as any).ssl_http_lib || "AUTO",
             ssl_xml_sign_lib: (data as any).ssl_xml_sign_lib || "AUTO",
             ssl_type: (data as any).ssl_type || "AUTO",
-            verificar_validade_cert: (data as any).verificar_validade_cert !== false
+            verificar_validade_cert: (data as any).verificar_validade_cert !== false,
+            // Campos de DANFE salvos
+            danfe_tipo: (data as any).danfe_tipo || "0",
+            danfe_pos_canhoto: (data as any).danfe_pos_canhoto || "0",
+            danfe_exibe_resumo_canhoto: (data as any).danfe_exibe_resumo_canhoto !== false,
+            danfe_path_logo: (data as any).danfe_path_logo || "",
+            danfe_logo_em_cima: !!(data as any).danfe_logo_em_cima,
+            danfe_expande_logo: (data as any).danfe_expande_logo !== false,
+            danfe_fonte_nome: (data as any).danfe_fonte_nome || "Arial",
+            danfe_fonte_tamanho: Number((data as any).danfe_fonte_tamanho) || 8,
+            danfe_casas_qcom: Number((data as any).danfe_casas_qcom) || 2,
+            danfe_casas_vuncom: Number((data as any).danfe_casas_vuncom) || 2,
+            danfe_exibe_info_adic: (data as any).danfe_exibe_info_adic !== false,
+            nfce_modo_impressao: (data as any).nfce_modo_impressao || "FORTES_BOBINA",
+            nfce_largura_bobina: Number((data as any).nfce_largura_bobina) || 302,
+            nfce_imprime_duas_linhas: !!(data as any).nfce_imprime_duas_linhas,
+            nfce_qr_lateral: !!(data as any).nfce_qr_lateral,
+            nfce_via_consumidor: !!(data as any).nfce_via_consumidor,
+            nfce_imprime_itens: (data as any).nfce_imprime_itens !== false,
+            posprinter_porta: (data as any).posprinter_porta || "",
+            posprinter_modelo: Number((data as any).posprinter_modelo) || 0,
           });
 
           if (data.cliente_padrao_id) {
@@ -181,82 +247,121 @@ const FiscalConfigForm = () => {
             form.setValue("cliente_padrao_nome", "Não definido (Consumidor)");
           }
         } else {
-          // Se não houver configuração para esta empresa, reseta para os padrões
-          form.reset({
-            tipo_certificado: "ARQUIVO",
-            certificado: "",
-            senha_certificado: "",
-            ambiente_nfe: "2",
-            uf: companyUf,
-            cliente_padrao_id: null,
-            cliente_padrao_nome: "Não definido (Consumidor)",
-            email_smtp_host: "",
-            email_smtp_port: 587,
-            email_smtp_user: "",
-            email_smtp_pass: "",
-            email_smtp_ssl: false,
-            email_smtp_tls: true,
-            email_assunto_nfe: "NF-e emitida: [CHAVE]",
-            email_corpo_nfe: "Olá, segue em anexo a NF-e e o DANFE referente à sua compra.",
-            pasta_arquivos_fiscais: "",
-            nr_timeout_nfe: 60,
-            nfe_versao_metodo: "1.0",
-            nfce_versao_metodo: "1.0",
-            ssl_lib: "AUTO",
-            ssl_crypt_lib: "AUTO",
-            ssl_http_lib: "AUTO",
-            ssl_xml_sign_lib: "AUTO",
-            ssl_type: "AUTO",
-            verificar_validade_cert: true
-          });
+            // Se não houver configuração para esta empresa, reseta para os padrões
+            form.reset({
+              tipo_certificado: "ARQUIVO",
+              certificado: "",
+              senha_certificado: "",
+              ambiente_nfe: "2",
+              uf: companyUf,
+              cliente_padrao_id: null,
+              cliente_padrao_nome: "Não definido (Consumidor)",
+              email_smtp_host: "",
+              email_smtp_port: 587,
+              email_smtp_user: "",
+              email_smtp_pass: "",
+              email_smtp_ssl: false,
+              email_smtp_tls: true,
+              email_assunto_nfe: "NF-e emitida: [CHAVE]",
+              email_corpo_nfe: "Olá, segue em anexo a NF-e e o DANFE referente à sua compra.",
+              pasta_arquivos_fiscais: "",
+              nr_timeout_nfe: 60,
+              nfe_versao_metodo: "1.0",
+              nfce_versao_metodo: "1.0",
+              ssl_lib: "AUTO",
+              ssl_crypt_lib: "AUTO",
+              ssl_http_lib: "AUTO",
+              ssl_xml_sign_lib: "AUTO",
+              ssl_type: "AUTO",
+              verificar_validade_cert: true,
+              danfe_tipo: "0",
+              danfe_pos_canhoto: "0",
+              danfe_exibe_resumo_canhoto: true,
+              danfe_path_logo: "",
+              danfe_logo_em_cima: false,
+              danfe_expande_logo: true,
+              danfe_fonte_nome: "Arial",
+              danfe_fonte_tamanho: 8,
+              danfe_casas_qcom: 2,
+              danfe_casas_vuncom: 2,
+              danfe_exibe_info_adic: true,
+              nfce_modo_impressao: "FORTES_BOBINA",
+              nfce_largura_bobina: 302,
+              nfce_imprime_duas_linhas: false,
+              nfce_qr_lateral: false,
+              nfce_via_consumidor: false,
+              nfce_imprime_itens: true,
+              posprinter_porta: "",
+              posprinter_modelo: 0,
+            });
+          }
+        } catch (err: any) {
+          toast.error("Erro ao carregar configurações fiscais: " + err.message);
+        } finally {
+          setLoading(false);
         }
-      } catch (err: any) {
-        toast.error("Erro ao carregar configurações fiscais: " + err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    carregarConfig();
-  }, [XEmpresaId]);
-
-  const onSubmit = async (values: FiscalConfigFormValues) => {
-    if (!XEmpresaId) return;
-    setLoading(true);
-    try {
-      // Verifica se ja existe
-      const { data: existing } = await supabase
-        .from("fiscal_config")
-        .select("empresa_id")
-        .eq("empresa_id", XEmpresaId)
-        .maybeSingle();
-
-      const payload = {
-        tipo_certificado: values.tipo_certificado,
-        certificado: values.certificado,
-        senha_certificado: values.senha_certificado ? btoa(values.senha_certificado) : null,
-        ambiente_nfe: values.ambiente_nfe,
-        cliente_padrao_id: values.cliente_padrao_id,
-        email_smtp_host: values.email_smtp_host,
-        email_smtp_port: values.email_smtp_port,
-        email_smtp_user: values.email_smtp_user,
-        email_smtp_pass: values.email_smtp_pass,
-        email_smtp_ssl: values.email_smtp_ssl,
-        email_smtp_tls: values.email_smtp_tls,
-        email_assunto_nfe: values.email_assunto_nfe,
-        email_corpo_nfe: values.email_corpo_nfe,
-        pasta_arquivos_fiscais: values.pasta_arquivos_fiscais || null,
-        nr_timeout_nfe: Math.max(10, Math.min(600, Number(values.nr_timeout_nfe) || 60)),
-        nfe_versao_metodo: values.nfe_versao_metodo,
-        nfce_versao_metodo: values.nfce_versao_metodo,
-        // Novos campos SSL salvos no banco
-        ssl_lib: values.ssl_lib || "",
-        ssl_crypt_lib: values.ssl_crypt_lib || "",
-        ssl_http_lib: values.ssl_http_lib || "",
-        ssl_xml_sign_lib: values.ssl_xml_sign_lib || "",
-        ssl_type: values.ssl_type || "",
-        verificar_validade_cert: !!values.verificar_validade_cert
       };
+
+      carregarConfig();
+    }, [XEmpresaId]);
+
+    const onSubmit = async (values: FiscalConfigFormValues) => {
+      if (!XEmpresaId) return;
+      setLoading(true);
+      try {
+        // Verifica se ja existe
+        const { data: existing } = await supabase
+          .from("fiscal_config")
+          .select("empresa_id")
+          .eq("empresa_id", XEmpresaId)
+          .maybeSingle();
+
+        const payload = {
+          tipo_certificado: values.tipo_certificado,
+          certificado: values.certificado,
+          senha_certificado: values.senha_certificado ? btoa(values.senha_certificado) : null,
+          ambiente_nfe: values.ambiente_nfe,
+          cliente_padrao_id: values.cliente_padrao_id,
+          email_smtp_host: values.email_smtp_host,
+          email_smtp_port: values.email_smtp_port,
+          email_smtp_user: values.email_smtp_user,
+          email_smtp_pass: values.email_smtp_pass,
+          email_smtp_ssl: values.email_smtp_ssl,
+          email_smtp_tls: values.email_smtp_tls,
+          email_assunto_nfe: values.email_assunto_nfe,
+          email_corpo_nfe: values.email_corpo_nfe,
+          pasta_arquivos_fiscais: values.pasta_arquivos_fiscais || null,
+          nr_timeout_nfe: Math.max(10, Math.min(600, Number(values.nr_timeout_nfe) || 60)),
+          nfe_versao_metodo: values.nfe_versao_metodo,
+          nfce_versao_metodo: values.nfce_versao_metodo,
+          // Novos campos SSL salvos no banco
+          ssl_lib: values.ssl_lib || "",
+          ssl_crypt_lib: values.ssl_crypt_lib || "",
+          ssl_http_lib: values.ssl_http_lib || "",
+          ssl_xml_sign_lib: values.ssl_xml_sign_lib || "",
+          ssl_type: values.ssl_type || "",
+          verificar_validade_cert: !!values.verificar_validade_cert,
+          // Novos campos de DANFE e NFC-e
+          danfe_tipo: values.danfe_tipo || "0",
+          danfe_pos_canhoto: values.danfe_pos_canhoto || "0",
+          danfe_exibe_resumo_canhoto: !!values.danfe_exibe_resumo_canhoto,
+          danfe_path_logo: values.danfe_path_logo || "",
+          danfe_logo_em_cima: !!values.danfe_logo_em_cima,
+          danfe_expande_logo: !!values.danfe_expande_logo,
+          danfe_fonte_nome: values.danfe_fonte_nome || "Arial",
+          danfe_fonte_tamanho: Number(values.danfe_fonte_tamanho) || 8,
+          danfe_casas_qcom: Number(values.danfe_casas_qcom) || 2,
+          danfe_casas_vuncom: Number(values.danfe_casas_vuncom) || 2,
+          danfe_exibe_info_adic: !!values.danfe_exibe_info_adic,
+          nfce_modo_impressao: values.nfce_modo_impressao || "FORTES_BOBINA",
+          nfce_largura_bobina: Number(values.nfce_largura_bobina) || 302,
+          nfce_imprime_duas_linhas: !!values.nfce_imprime_duas_linhas,
+          nfce_qr_lateral: !!values.nfce_qr_lateral,
+          nfce_via_consumidor: !!values.nfce_via_consumidor,
+          nfce_imprime_itens: !!values.nfce_imprime_itens,
+          posprinter_porta: values.posprinter_porta || "",
+          posprinter_modelo: Number(values.posprinter_modelo) || 0,
+        };
 
       if (existing) {
         const { error } = await supabase
@@ -449,10 +554,11 @@ const FiscalConfigForm = () => {
         </div>
 
         <Tabs defaultValue="dados" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
+          <TabsList className="grid w-full grid-cols-4 mb-6">
             <TabsTrigger value="dados">Dados Principais</TabsTrigger>
             <TabsTrigger value="email">Envio de E-mail</TabsTrigger>
             <TabsTrigger value="modelos">Modelos e Sequenciais</TabsTrigger>
+            <TabsTrigger value="danfe">Layout do DANFE</TabsTrigger>
           </TabsList>
 
           <TabsContent value="dados" className="space-y-6">
@@ -1077,6 +1183,473 @@ const FiscalConfigForm = () => {
                 <FiscalConfigItemGrid XEmpresaId={Number(XEmpresaId)} />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="danfe" className="space-y-6">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+
+                {/* NF-e Modelo 55 */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-primary" />
+                      NF-e (Modelo 55) – Layout e Canhoto
+                    </CardTitle>
+                    <CardDescription>
+                      Configure a orientação, formato de impressão e exibição do canhoto da Nota Fiscal Eletrônica.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="danfe_tipo"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Formato / Orientação do Papel</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione o formato" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="0">0 - Retrato (A4 Vertical)</SelectItem>
+                                <SelectItem value="1">1 - Paisagem (A4 Horizontal)</SelectItem>
+                                <SelectItem value="2">2 - Simplificado (Etiqueta / Resumido)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormDescription>Padrão nacional: Retrato em papel A4.</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="danfe_pos_canhoto"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Posição do Canhoto de Entrega</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione a posição" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="0">0 - Cabeçalho (Topo)</SelectItem>
+                                <SelectItem value="1">1 - Rodapé (Fim da Folha)</SelectItem>
+                                <SelectItem value="2">2 - Sem Canhoto (Ocultar)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormDescription>Local do canhoto de recebimento da nota.</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                      <FormField
+                        control={form.control}
+                        name="danfe_exibe_resumo_canhoto"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                            <div className="space-y-0.5">
+                              <FormLabel>Resumo de Valores no Canhoto</FormLabel>
+                              <FormDescription className="text-xs">Exibe valor total e número da nota no canhoto.</FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="danfe_exibe_info_adic"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                            <div className="space-y-0.5">
+                              <FormLabel>Informações Adicionais do Item</FormLabel>
+                              <FormDescription className="text-xs">Exibe observações e detalhes fiscais do produto.</FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Fontes e Precisão Decimal */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Sliders className="w-5 h-5 text-primary" />
+                      Fontes e Casas Decimais
+                    </CardTitle>
+                    <CardDescription>
+                      Ajuste a tipografia e a precisão de casas decimais para quantidades e valores unitários.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="danfe_fonte_nome"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Nome da Fonte</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione a fonte" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="Arial">Arial (Recomendado)</SelectItem>
+                                <SelectItem value="Times New Roman">Times New Roman</SelectItem>
+                                <SelectItem value="Courier New">Courier New (Monospaçada)</SelectItem>
+                                <SelectItem value="Tahoma">Tahoma</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="danfe_fonte_tamanho"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Tamanho Base da Fonte</FormLabel>
+                            <FormControl>
+                              <Input type="number" min={6} max={12} {...field} onChange={e => field.onChange(parseInt(e.target.value) || 8)} />
+                            </FormControl>
+                            <FormDescription>Padrão: 8pt (Faixa de 6 a 12pt).</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="danfe_casas_qcom"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Casas Decimais – Quantidade (qCom)</FormLabel>
+                            <Select onValueChange={val => field.onChange(parseInt(val))} value={String(field.value)}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="2">2 casas (ex: 1,00)</SelectItem>
+                                <SelectItem value="3">3 casas (ex: 1,000 - Balança / Pesagem)</SelectItem>
+                                <SelectItem value="4">4 casas (ex: 1,0000)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="danfe_casas_vuncom"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Casas Decimais – Valor Unitário (vUnCom)</FormLabel>
+                            <Select onValueChange={val => field.onChange(parseInt(val))} value={String(field.value)}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="2">2 casas (ex: R$ 10,50)</SelectItem>
+                                <SelectItem value="3">3 casas (ex: R$ 10,500)</SelectItem>
+                                <SelectItem value="4">4 casas (ex: R$ 10,5025 - Combustível / Atacado)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Logomarca */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Image className="w-5 h-5 text-primary" />
+                      Logomarca do Emissor
+                    </CardTitle>
+                    <CardDescription>
+                      Insira a imagem do logo da empresa para ser impressa no topo do DANFE.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="danfe_path_logo"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Caminho da Logomarca (No Servidor)</FormLabel>
+                          <div className="flex gap-2">
+                            <FormControl>
+                              <Input placeholder="Ex: C:\Empresa\logo.png" {...field} />
+                            </FormControl>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => {
+                                const dir = field.value ? field.value.substring(0, field.value.lastIndexOf('\\')) : 'C:\\';
+                                buscarCertificados(dir || 'C:\\');
+                              }}
+                            >
+                              <Search className="w-4 h-4 mr-2" />
+                              Buscar
+                            </Button>
+                          </div>
+                          <FormDescription>Formatos suportados: PNG, JPG ou BMP.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="danfe_logo_em_cima"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                            <div className="space-y-0.5">
+                              <FormLabel>Posicionar Logo no Topo</FormLabel>
+                              <FormDescription className="text-xs">Exibe a logo acima da Razão Social em vez do lado esquerdo.</FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="danfe_expande_logo"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                            <div className="space-y-0.5">
+                              <FormLabel>Ajustar/Esticar Logo</FormLabel>
+                              <FormDescription className="text-xs">Redimensiona o logo para preencher toda a área reservada.</FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* NFC-e Modelo 65 */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Printer className="w-5 h-5 text-primary" />
+                      NFC-e (Modelo 65) – Bobina Térmica & ESC/POS
+                    </CardTitle>
+                    <CardDescription>
+                      Configure a impressão em impressoras não-fiscais térmicas para venda ao consumidor.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="nfce_modo_impressao"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Modo de Relatório / Impressão</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione o modo" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="FORTES_BOBINA">Bobina Térmica Gráfica (Fortes - Padrão PDV)</SelectItem>
+                                <SelectItem value="ESCPOS">Impressão Direta ESC/POS (Ultra-Rápida / Texto)</SelectItem>
+                                <SelectItem value="FORTES_A4">Folha A4 Normal (Sem Impressora Térmica)</SelectItem>
+                                <SelectItem value="RESUMIDO">Extrato Resumido (Sem Detalhar Itens)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormDescription>Define como a NFC-e será formatada para o consumidor.</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="nfce_largura_bobina"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Largura da Bobina Térmica</FormLabel>
+                            <Select onValueChange={val => field.onChange(parseInt(val))} value={String(field.value)}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione a largura" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="302">80mm (Padrão 48 colunas - Bematech, Epson, Daruma)</SelectItem>
+                                <SelectItem value="280">58mm (Compacta 32 colunas - Miniprinters)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    {form.watch("nfce_modo_impressao") === "ESCPOS" && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/40 space-y-0">
+                        <FormField
+                          control={form.control}
+                          name="posprinter_porta"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-primary font-semibold">Porta da Impressora ESC/POS</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Ex: COM1, RAW:NomeImpressora, LPT1, 192.168.1.200:9100" {...field} />
+                              </FormControl>
+                              <FormDescription>Porta serial (COM1), nome do spooler Windows (RAW:Nome) ou IP.</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="posprinter_modelo"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-primary font-semibold">Modelo da Impressora Térmica</FormLabel>
+                              <Select onValueChange={val => field.onChange(parseInt(val))} value={String(field.value)}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecione o protocolo" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="0">0 - Texto Genérico / Raw</SelectItem>
+                                  <SelectItem value="1">1 - EscPos Epson</SelectItem>
+                                  <SelectItem value="2">2 - EscBematech (MP-4200)</SelectItem>
+                                  <SelectItem value="3">3 - EscDaruma (DR800)</SelectItem>
+                                  <SelectItem value="4">4 - EscElgin (Elgin i9 / i7)</SelectItem>
+                                  <SelectItem value="5">5 - EscDiebold</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormDescription>Protocolo de comandos da impressora.</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                      <FormField
+                        control={form.control}
+                        name="nfce_imprime_duas_linhas"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                            <div className="space-y-0.5">
+                              <FormLabel>Nome do Produto em 2 Linhas</FormLabel>
+                              <FormDescription className="text-xs">Quebra a descrição do item para a linha de baixo.</FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="nfce_qr_lateral"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                            <div className="space-y-0.5">
+                              <FormLabel>QR Code ao Lado dos Totais</FormLabel>
+                              <FormDescription className="text-xs">Imprime o QR Code na lateral em vez de no final.</FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="nfce_via_consumidor"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                            <div className="space-y-0.5">
+                              <FormLabel>Identificar "Via do Consumidor"</FormLabel>
+                              <FormDescription className="text-xs">Adiciona o texto identificador no topo da nota.</FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="nfce_imprime_itens"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                            <div className="space-y-0.5">
+                              <FormLabel>Listar Itens no Cupom</FormLabel>
+                              <FormDescription className="text-xs">Desative para emitir extrato resumido sem itens.</FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Botão de Salvar */}
+                <div className="flex justify-end bg-card p-4 rounded-lg border shadow-sm">
+                  <Button type="submit" disabled={loading} className="px-8">
+                    <Save className="w-4 h-4 mr-2" />
+                    Salvar Configurações do DANFE
+                  </Button>
+                </div>
+              </form>
+            </Form>
           </TabsContent>
         </Tabs>
 
