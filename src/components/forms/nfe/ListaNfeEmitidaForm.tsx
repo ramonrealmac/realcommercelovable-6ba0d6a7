@@ -169,6 +169,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
   const [XDtIni, setXDtIni] = useState(getTodayString());
   const [XDtFim, setXDtFim] = useState(getTodayString());
   const [XFilterAmbiente, setXFilterAmbiente] = useState("");
+  const [XFilterModelo, setXFilterModelo] = useState("");
   const [XFilterTipo, setXFilterTipo] = useState("");
   const [XFilterFinalidade, setXFilterFinalidade] = useState("");
   const [XFilterStatus, setXFilterStatus] = useState("");
@@ -263,6 +264,9 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
       }
       if (XDtFim && String(XDtFim).trim() !== "") {
         query = query.lte("dt_emissao", `${XDtFim}T23:59:59`);
+      }
+      if (XFilterModelo && String(XFilterModelo).trim() !== "") {
+        query = query.eq("modelo", String(XFilterModelo).trim());
       }
       if (XFilterTipo && String(XFilterTipo).trim() !== "") {
         query = query.eq("tp_nf", Number(XFilterTipo));
@@ -361,6 +365,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
     setXDtIni(today);
     setXDtFim(today);
     setXFilterAmbiente("");
+    setXFilterModelo("");
     setXFilterTipo("");
     setXFilterFinalidade("");
     setXFilterStatus("");
@@ -783,6 +788,19 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
                   <option value="">(Todos)</option>
                   <option value="1">Produção</option>
                   <option value="2">Homologação</option>
+                </select>
+              </div>
+              <div className="h-6 w-px bg-border" />
+              <div className="flex flex-col px-2">
+                <span className="text-[9px] text-muted-foreground uppercase font-bold">Modelo</span>
+                <select
+                  value={XFilterModelo}
+                  onChange={e => setXFilterModelo(e.target.value)}
+                  className="bg-transparent border-none text-xs p-0 focus:ring-0 w-24 cursor-pointer font-medium"
+                >
+                  <option value="">(Todos)</option>
+                  <option value="55">55 - NF-e</option>
+                  <option value="65">65 - NFC-e</option>
                 </select>
               </div>
               <div className="h-6 w-px bg-border" />
