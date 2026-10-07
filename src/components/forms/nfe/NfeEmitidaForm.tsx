@@ -258,7 +258,7 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
               type="button"
               onClick={async () => {
                 if (!confirm(`Enviar NF-e #${currentRecord.nfe_cabecalho_id} para a SEFAZ via fiscal-worker?`)) return;
-                const tid = toast.loading("Enviando para fila do fiscal-worker...");
+                const tid = toast.loading("Recarregando cadastros da fonte, recalculando tributos e enviando para a SEFAZ...");
                 const targetEmpresaId = currentRecord.empresa_id || XEmpresaId;
                 try {
                   const res = await fiscalEmissaoService.retransmitirDocumento(

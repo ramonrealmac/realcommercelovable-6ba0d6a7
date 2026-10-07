@@ -1215,9 +1215,9 @@ const FiscalConfigForm = () => {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="0">0 - Retrato (A4 Vertical)</SelectItem>
-                                <SelectItem value="1">1 - Paisagem (A4 Horizontal)</SelectItem>
-                                <SelectItem value="2">2 - Simplificado (Etiqueta / Resumido)</SelectItem>
+                                <SelectItem value="1">1 - Retrato (A4 Vertical)</SelectItem>
+                                <SelectItem value="2">2 - Paisagem (A4 Horizontal)</SelectItem>
+                                <SelectItem value="3">3 - Simplificado (Etiqueta / Resumido)</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormDescription>Padrão nacional: Retrato em papel A4.</FormDescription>
@@ -1398,38 +1398,10 @@ const FiscalConfigForm = () => {
                       Logomarca do Emissor
                     </CardTitle>
                     <CardDescription>
-                      Insira a imagem do logo da empresa para ser impressa no topo do DANFE.
+                      A imagem da logomarca é obtida automaticamente do Cadastro da Empresa. Defina abaixo as opções de posicionamento para o DANFE/DAMDFE.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="danfe_path_logo"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Caminho da Logomarca (No Servidor)</FormLabel>
-                          <div className="flex gap-2">
-                            <FormControl>
-                              <Input placeholder="Ex: C:\Empresa\logo.png" {...field} />
-                            </FormControl>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => {
-                                const dir = field.value ? field.value.substring(0, field.value.lastIndexOf('\\')) : 'C:\\';
-                                buscarCertificados(dir || 'C:\\');
-                              }}
-                            >
-                              <Search className="w-4 h-4 mr-2" />
-                              Buscar
-                            </Button>
-                          </div>
-                          <FormDescription>Formatos suportados: PNG, JPG ou BMP.</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}

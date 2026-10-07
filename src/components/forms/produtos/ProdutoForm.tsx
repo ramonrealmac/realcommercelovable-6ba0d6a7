@@ -668,20 +668,65 @@ const ProdutoForm: React.FC<IProdutoFormProps> = ({ initialProductId }) => {
   const handleEstSalvar = async () => {
     if (!XCurrentRecord) return;
     if (!XEstForm.deposito_id) { toast.error("Selecione o depósito."); return; }
+    const depId = parseInt(XEstForm.deposito_id);
+
+    const isDupLocal = XEstoques.some((item, idx) => {
+      if (XEstMode === "edit" && idx === XEstIdx) return false;
+      return item.deposito_id === depId;
+    });
+
+    if (isDupLocal) {
+      toast.error("Este produto já possui um cadastro de estoque para o depósito selecionado.");
+      return;
+    }
+
     const XPay = {
       produto_id: XCurrentRecord.produto_id,
       empresa_id: XEmpresaMatrizId,
-      deposito_id: parseInt(XEstForm.deposito_id),
+      deposito_id: depId,
       endereco: XEstForm.endereco.trim(),
       estoque_minimo: parseFloat(XEstForm.estoque_minimo) || 0,
       estoque_padrao: parseFloat(XEstForm.estoque_padrao) || 0,
     };
+
     if (XEstMode === "edit" && XEstIdx >= 0) {
       const { error } = await db.from("estoque").update({ ...XPay, dt_alteracao: new Date().toISOString() }).eq("estoque_id", XEstoques[XEstIdx].estoque_id);
-      if (error) { toast.error("Erro: " + error.message); return; }
+      if (error) {
+        if (error.code === "23505" || error.message?.includes("produto_deposito_uk")) {
+          toast.error("Este produto já possui um cadastro de estoque para o depósito selecionado.");
+        } else {
+          toast.error("Erro: " + error.message);
+        }
+        return;
+      }
     } else {
-      const { error } = await db.from("estoque").insert(XPay);
-      if (error) { toast.error("Erro: " + error.message); return; }
+      const { data: existingRows } = await db.from("estoque")
+        .select("estoque_id, excluido")
+        .eq("produto_id", XCurrentRecord.produto_id)
+        .eq("deposito_id", depId)
+        .limit(1);
+
+      if (existingRows && existingRows.length > 0) {
+        const existing = existingRows[0];
+        if (!existing.excluido) {
+          toast.error("Este produto já possui um cadastro de estoque para o depósito selecionado.");
+          return;
+        }
+        const { error: updateErr } = await db.from("estoque")
+          .update({ ...XPay, excluido: false, dt_alteracao: new Date().toISOString() })
+          .eq("estoque_id", existing.estoque_id);
+        if (updateErr) { toast.error("Erro: " + updateErr.message); return; }
+      } else {
+        const { error } = await db.from("estoque").insert(XPay);
+        if (error) {
+          if (error.code === "23505" || error.message?.includes("produto_deposito_uk")) {
+            toast.error("Este produto já possui um cadastro de estoque para o depósito selecionado.");
+          } else {
+            toast.error("Erro: " + error.message);
+          }
+          return;
+        }
+      }
     }
     toast.success("Estoque salvo.");
     setXEstMode("view");

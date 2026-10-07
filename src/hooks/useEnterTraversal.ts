@@ -39,8 +39,9 @@ export function useEnterTraversal() {
       // Ignora inputs do tipo hidden
       if (el.tagName === "INPUT" && (el as HTMLInputElement).type === "hidden") return false;
 
-      // Ignora botões auxiliares que não sejam de submit
+      // Ignora botões auxiliares que não sejam de submit (a menos que tenham data-focusable="true")
       if (el.tagName === "BUTTON") {
+        if (el.getAttribute("data-focusable") === "true") return true;
         if ((el as HTMLButtonElement).type === "button") return false;
         if (el.getAttribute("data-lookup-trigger") === "true") return false;
       }

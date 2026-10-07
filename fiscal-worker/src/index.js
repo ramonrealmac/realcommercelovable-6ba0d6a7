@@ -223,9 +223,11 @@ const processarEvento = async (evento) => {
         
         if (configDb) {
             let companyUf = "SP";
+            let empresaLogo = "";
             if (empresaRaw) {
                 const empresa = await attachCidade(empresaRaw);
                 companyUf = empresa.endereco_uf || empresa.cidade?.estado_id || "SP";
+                empresaLogo = empresaRaw.logomarca || empresaRaw.url_logo || "";
             }
             
             // Mescla config do payload com DB, mas campos SSL SEMPRE vêm do banco (fonte confiável)
@@ -248,11 +250,12 @@ const processarEvento = async (evento) => {
                 certificadoSenha: decodeSenhaCertificado(
                     payloadConfig.certificadoSenha || configDb.senha_certificado || ""
                 ),
-                // Configurações do DANFE (NFe 55 e NFCe 65) vindas do banco
+                // Configurações do DANFE (NFe 55, NFCe 65 e MDFe 58)
+                // A imagem do logo é buscada da tabela 'empresa' (logomarca/url_logo); o posicionamento vem da fiscal_config
                 danfe_tipo: configDb.danfe_tipo ?? payloadConfig.danfe_tipo,
                 danfe_pos_canhoto: configDb.danfe_pos_canhoto ?? payloadConfig.danfe_pos_canhoto,
                 danfe_exibe_resumo_canhoto: configDb.danfe_exibe_resumo_canhoto ?? payloadConfig.danfe_exibe_resumo_canhoto,
-                danfe_path_logo: configDb.danfe_path_logo ?? payloadConfig.danfe_path_logo,
+                danfe_path_logo: empresaLogo || configDb.danfe_path_logo || payloadConfig.danfe_path_logo || "",
                 danfe_logo_em_cima: configDb.danfe_logo_em_cima ?? payloadConfig.danfe_logo_em_cima,
                 danfe_expande_logo: configDb.danfe_expande_logo ?? payloadConfig.danfe_expande_logo,
                 danfe_fonte_nome: configDb.danfe_fonte_nome ?? payloadConfig.danfe_fonte_nome,

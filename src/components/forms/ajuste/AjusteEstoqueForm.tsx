@@ -10,6 +10,7 @@ import { ToolbarBtn, ToolbarSeparator } from "@/components/shared/FormToolbar";
 import { Send, CheckCircle2, Lock, Trash2, Calendar, ClipboardList } from "lucide-react";
 import AjusteEstoqueItensTab from "./AjusteEstoqueItensTab";
 import { obterProximoNrMovimento } from "@/services/movimentoSequenceService";
+import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 
 const db = supabase as any;
 
@@ -61,6 +62,7 @@ const XDefaultRecord: Partial<IMovimento> = {
 };
 
 export default function AjusteEstoqueForm() {
+  const { handleKeyDown } = useEnterTraversal();
   const { XEmpresaId, XEmpresaMatrizId, XEmpresas } = useAppContext();
   const [XDepositos, setXDepositos] = useState<IDepositoLookup[]>([]);
   const [XAutoNovoItem, setXAutoNovoItem] = useState(0);
@@ -167,7 +169,34 @@ export default function AjusteEstoqueForm() {
         XEmpresaId,
         XSelectCols: "*",
         XOrderBy: "movimento_id",
-        XApplyFilter: (q) => q.eq("tp_movimento", "AE"),
+        XApplyFilter: (q) => q.eq("tp_movimento", "AE").eq("excluido", false),
+        XCanEdit: (rec) => {
+          if (!rec) return true;
+          if (rec.excluido) return false;
+          return rec.st_pedido === "A";
+        },
+        XCanDelete: (rec) => {
+          if (!rec) return true;
+          if (rec.excluido) return false;
+          return rec.st_pedido === "A";
+        },
+        XOnDelete: async (rec) => {
+          if (rec.st_pedido && rec.st_pedido === "F") {
+            throw new Error("Não é possível excluir um ajuste de estoque já finalizado.");
+          }
+          if (rec.movimento_id) {
+            await db.from("movimento_item").update({ excluido: true }).eq("movimento_id", rec.movimento_id);
+            const { error } = await db.from("movimento")
+              .update({ excluido: true, dt_alteracao: new Date().toISOString() })
+              .eq("movimento_id", rec.movimento_id);
+            if (error) {
+              const { error: err2 } = await db.from("movimento")
+                .update({ excluido: true })
+                .eq("movimento_id", rec.movimento_id);
+              if (err2) throw err2;
+            }
+          }
+        },
         XOnBeforeSave: async (rec, mode) => {
           if (!rec.dt_emissao) throw new Error("Informe a Data do Ajuste.");
           if (!rec.deposito_id) throw new Error("Selecione o Depósito Padrão.");
@@ -197,7 +226,6 @@ export default function AjusteEstoqueForm() {
             setXAutoNovoItem(n => n + 1);
           }
         },
-        XSoftDelete: false,
       }}
       XGridCols={gridCols}
       XExportTitle="Ajustes de Estoque"
@@ -224,7 +252,7 @@ export default function AjusteEstoqueForm() {
         const ro = !isEditing || (mode === "edit" && !isAberto);
 
         return (
-          <div className="space-y-4 max-w-4xl">
+          <div className="space-y-4 max-w-4xl" onKeyDown={handleKeyDown}>
             <div className="bg-gradient-to-br from-card to-card/90 border border-border/60 rounded-xl p-5 shadow-sm space-y-4">
               <div className="grid grid-cols-12 gap-4">
                 {/* Número do Ajuste */}
@@ -247,7 +275,7 @@ export default function AjusteEstoqueForm() {
                       disabled={ro} 
                       value={record.dt_emissao ? record.dt_emissao.substring(0, 10) : ""} 
                       onChange={e => setField("dt_emissao" as any, e.target.value as any)} 
-                      className="w-full border border-border rounded-lg px-3 py-1.5 text-sm bg-background/50 focus:bg-background outline-none focus:ring-1 focus:ring-primary/20" 
+                      className="w-full border border-border rounded-lg px-3 py-1.5 text-sm bg-background/50 focus:bg-background focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all" 
                     />
                   </div>
                 </div>
@@ -259,7 +287,7 @@ export default function AjusteEstoqueForm() {
                     disabled={ro} 
                     value={record.deposito_id ?? ""} 
                     onChange={e => setField("deposito_id" as any, e.target.value ? Number(e.target.value) : null as any)} 
-                    className="w-full border border-border rounded-lg px-3 py-1.5 text-sm mt-1 bg-background/50 focus:bg-background outline-none font-medium"
+                    className="w-full border border-border rounded-lg px-3 py-1.5 text-sm mt-1 bg-background/50 focus:bg-background focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all font-medium"
                   >
                     <option value="">-- Selecione o Depósito Padrão --</option>
                     {XDepositos.map(d => (
@@ -290,7 +318,7 @@ export default function AjusteEstoqueForm() {
                   value={record.observacao ?? ""} 
                   onChange={e => setField("observacao" as any, e.target.value as any)} 
                   placeholder="Descreva o motivo geral do ajuste físico (ex: inventário rotativo mensal de produtos acabados)..."
-                  className="w-full border border-border rounded-lg px-3 py-2 text-sm mt-1 min-h-[100px] bg-background/50 focus:bg-background outline-none focus:ring-1 focus:ring-primary/20" 
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm mt-1 min-h-[100px] bg-background/50 focus:bg-background focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all" 
                 />
               </div>
             </div>

@@ -14,6 +14,7 @@ import MotoristaGrid from "./MotoristaGrid";
 import CidadeSearchDialog from "@/components/shared/CidadeSearchDialog";
 import { baseService } from "@/utils/baseService";
 import { useGridFilter } from "@/hooks/useGridFilter";
+import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 
 const db = supabase as any;
 
@@ -139,6 +140,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
   skipInitialLoad = false,
 }) => {
   const { XEmpresaId, XEmpresaMatrizId, XEmpresas, closeTab, XTabs, XActiveTabId } = useAppContext();
+  const { handleKeyDown } = useEnterTraversal();
 
   const XCurrentEmpresa = useMemo(() => {
     return (XEmpresas || []).find((e: any) => e.empresa_id === XEmpresaId) || null;
@@ -467,7 +469,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
       db.from("portador").select("portador_id,nome").eq("empresa_id", XEmpresaId).eq("excluido", false).order("nome"),
       db.from("rota").select("rota_id,descricao").eq("empresa_id", XEmpresaId).eq("excluido", false).order("descricao"),
       db.from("tabela_preco").select("tabela_id,descricao").eq("empresa_id", XEmpresaId).eq("excluido", false).order("descricao"),
-      db.from("cadastro").select("cadastro_id,razao_social").eq("empresa_id", XEmpresaId).eq("st_vendedor", "S").eq("excluido", false).order("razao_social"),
+      db.from("funcionario").select("funcionario_id,nome").or(`empresa_id.eq.${XEmpresaId},empresa_id.eq.${XEmpresaMatrizId},empresa_id.is.null`).or("vendedor.eq.S,vendedor.eq.s").order("nome"),
     ]);
     setXCidades(r1.data || []);
     setXGrupos(r2.data || []);
@@ -476,8 +478,14 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
     setXPortadores(r5.data || []);
     setXRotas(r6.data || []);
     setXTabelas(r7.data || []);
-    setXVendedores(r8.data || []);
-  }, [XEmpresaId]);
+
+    let vData = r8.data || [];
+    if (vData.length === 0) {
+      const { data: fFb } = await db.from("funcionario").select("funcionario_id,nome").or(`empresa_id.eq.${XEmpresaId},empresa_id.eq.${XEmpresaMatrizId},empresa_id.is.null`).order("nome");
+      vData = fFb || [];
+    }
+    setXVendedores(vData);
+  }, [XEmpresaId, XEmpresaMatrizId]);
 
   const loadData = useCallback(async (savedId?: number, filters?: Record<string, string>) => {
     setXLoading(true);
@@ -1003,7 +1011,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
   const renderLookup = (label: string, key: string, items: any[], valueKey: string, labelKey: string) => {
     if (!XIsEditing) {
       const XId = XCurrentRecord ? (XCurrentRecord as any)[key] : null;
-      const XItem = items.find((i: any) => i[valueKey] === XId);
+      const XItem = items.find((i: any) => String(i[valueKey]) === String(XId));
       return renderReadField(label, XItem ? XItem[labelKey] : "");
     }
     return (
@@ -1074,7 +1082,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
 
 
   return (
-    <div className="flex flex-col h-full bg-card" data-form-container>
+    <div className="flex flex-col h-full bg-card" data-form-container onKeyDown={handleKeyDown}>
       <FormToolbar
         XIsEditing={XIsEditing}
         XHasRecord={!!XCurrentRecord}
@@ -1332,7 +1340,7 @@ const CadastroCompletoForm: React.FC<ICadastroFormConfig> = ({
 
                 <h3 className="text-sm font-semibold text-muted-foreground pt-2">Vínculos</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {renderLookup("Vendedor (Funcionário)", "funcionario_id", XVendedores, "cadastro_id", "razao_social")}
+                  {renderLookup("Vendedor (Funcionário)", "funcionario_id", XVendedores, "funcionario_id", "nome")}
                   {renderLookup("Portador", "portador_id", XPortadores, "portador_id", "nome")}
                   {renderLookup("Rota", "rota_id", XRotas, "rota_id", "descricao")}
                 </div>

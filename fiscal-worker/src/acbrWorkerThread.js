@@ -8,7 +8,7 @@ import koffi from 'koffi';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
-import { exec } from 'child_process';
+import { exec, spawnSync } from 'child_process';
 import { parentPort, workerData } from 'worker_threads';
 import crypto from 'crypto';
 
@@ -480,6 +480,164 @@ const normalizarIniNFeAntesDaDll = (iniContent) => {
 };
 
 /**
+ * Resolve a imagem da logomarca (caminho local ou URL).
+ * Se for URL HTTP/HTTPS, faz download síncrono para o diretório de destino antes da impressão.
+ */
+const resolverCaminhoLogo = (logoInput, baseDir) => {
+    if (!logoInput || typeof logoInput !== 'string') return '';
+    const logoStr = logoInput.trim();
+    if (!logoStr) return '';
+
+    if (logoStr.startsWith('http://') || logoStr.startsWith('https://')) {
+        try {
+            const urlObj = new URL(logoStr);
+            let ext = path.extname(urlObj.pathname);
+            if (!ext || ext.length > 5 || ext.includes('?')) ext = '.png';
+            const hash = crypto.createHash('md5').update(logoStr).digest('hex').substring(0, 12);
+            const targetDir = baseDir || path.join(process.cwd(), 'temp');
+            if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+            const localPath = path.join(targetDir, `logo_emissor_${hash}${ext}`);
+
+            if (fs.existsSync(localPath)) {
+                const stat = fs.statSync(localPath);
+                if (Date.now() - stat.mtimeMs < 3600000 && stat.size > 0) return localPath;
+            }
+
+            const res = spawnSync('curl', ['-s', '-k', '-L', logoStr, '-o', localPath], { timeout: 10000 });
+            if (fs.existsSync(localPath) && fs.statSync(localPath).size > 0) {
+                console.log(`[FiscalWorker] 🖼️ Logo baixada via curl com sucesso: ${localPath}`);
+                return localPath;
+            }
+
+            const psRes = spawnSync('powershell', ['-NoProfile', '-Command', `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object System.Net.WebClient).DownloadFile('${logoStr}', '${localPath}')`], { timeout: 10000 });
+            if (fs.existsSync(localPath) && fs.statSync(localPath).size > 0) {
+                console.log(`[FiscalWorker] 🖼️ Logo baixada via PowerShell com sucesso: ${localPath}`);
+                return localPath;
+            }
+        } catch (e) {
+            console.warn('[FiscalWorker] Falha ao resolver logo da URL:', e.message);
+        }
+        return '';
+    }
+
+    if (fs.existsSync(logoStr)) {
+        return logoStr;
+    }
+
+    return '';
+};
+
+/**
+ * Aplica todas as configurações de layout do DANFE / Logomarca no handle da ACBrLib.
+ */
+const aplicarConfiguracoesDanfeNoHandle = (lib, handle, configPayload, pdfDir) => {
+    if (!configPayload) return;
+
+    // 1. Mapeamento de danfe_tipo e Orientação (1 = Retrato, 2 = Paisagem, 3 = Simplificado)
+    const tipoRaw = configPayload.danfe_tipo !== undefined && configPayload.danfe_tipo !== null ? String(configPayload.danfe_tipo).trim() : "1";
+    let tipoAcbr = "1";
+    let orientacaoAcbr = "0";
+
+    if (tipoRaw === "2") {
+        tipoAcbr = "2"; // Paisagem (Landscape)
+        orientacaoAcbr = "1"; // 1 = orPaisagem
+    } else if (tipoRaw === "3") {
+        tipoAcbr = "3"; // Simplificado
+        orientacaoAcbr = "0";
+    } else {
+        tipoAcbr = "1"; // Retrato (Portrait)
+        orientacaoAcbr = "0";
+    }
+
+    console.log(`[FiscalLib] 📐 Aplicando layout DANFE: TipoDANFE=${tipoAcbr}, Orientacao=${orientacaoAcbr} (raw=${tipoRaw})`);
+
+    lib.ConfigGravarValor(handle, "DANFE", "TipoDANFE", tipoAcbr);
+    lib.ConfigGravarValor(handle, "DANFENFe", "TipoDANFE", tipoAcbr);
+    lib.ConfigGravarValor(handle, "DANFENFCe", "TipoDANFE", tipoAcbr);
+    lib.ConfigGravarValor(handle, "DAMDFe", "TipoDANFE", tipoAcbr);
+
+    lib.ConfigGravarValor(handle, "DANFE", "Orientacao", orientacaoAcbr);
+    lib.ConfigGravarValor(handle, "DANFENFe", "Orientacao", orientacaoAcbr);
+    lib.ConfigGravarValor(handle, "DANFENFCe", "Orientacao", orientacaoAcbr);
+    lib.ConfigGravarValor(handle, "DAMDFe", "Orientacao", orientacaoAcbr);
+
+    // 2. Canhoto e opções gerais
+    if (configPayload.danfe_pos_canhoto !== undefined && configPayload.danfe_pos_canhoto !== null) {
+        lib.ConfigGravarValor(handle, "DANFE", "PosCanhoto", String(configPayload.danfe_pos_canhoto));
+        lib.ConfigGravarValor(handle, "DANFENFe", "PosCanhoto", String(configPayload.danfe_pos_canhoto));
+    }
+    if (configPayload.danfe_exibe_resumo_canhoto !== undefined && configPayload.danfe_exibe_resumo_canhoto !== null) {
+        const valCanhoto = configPayload.danfe_exibe_resumo_canhoto ? "1" : "0";
+        lib.ConfigGravarValor(handle, "DANFE", "ExibeResumoCanhoto", valCanhoto);
+        lib.ConfigGravarValor(handle, "DANFENFe", "ExibeResumoCanhoto", valCanhoto);
+    }
+
+    // 3. Logomarca: resolve imagem (download de URL se necessário)
+    let logoPathLocal = "";
+    if (configPayload.danfe_path_logo) {
+        logoPathLocal = resolverCaminhoLogo(configPayload.danfe_path_logo, pdfDir);
+    }
+
+    const temLogoValida = Boolean(logoPathLocal && fs.existsSync(logoPathLocal) && fs.statSync(logoPathLocal).size > 0);
+
+    if (temLogoValida) {
+        console.log(`[FiscalLib] 🖼️ Logomarca válida aplicada no ACBrLib: ${logoPathLocal}`);
+        lib.ConfigGravarValor(handle, "DANFE", "PathLogo", String(logoPathLocal));
+        lib.ConfigGravarValor(handle, "DANFENFe", "PathLogo", String(logoPathLocal));
+        lib.ConfigGravarValor(handle, "DANFENFCe", "PathLogo", String(logoPathLocal));
+        lib.ConfigGravarValor(handle, "DAMDFe", "PathLogo", String(logoPathLocal));
+        lib.ConfigGravarValor(handle, "DANFE", "Logo", String(logoPathLocal));
+        lib.ConfigGravarValor(handle, "DANFENFe", "Logo", String(logoPathLocal));
+    } else {
+        if (configPayload.danfe_path_logo) {
+            console.warn(`[FiscalLib] ⚠️ Logomarca informada (${configPayload.danfe_path_logo}) não pôde ser resolvida para um arquivo local.`);
+        }
+        lib.ConfigGravarValor(handle, "DANFE", "PathLogo", "");
+        lib.ConfigGravarValor(handle, "DANFENFe", "PathLogo", "");
+        lib.ConfigGravarValor(handle, "DANFENFCe", "PathLogo", "");
+        lib.ConfigGravarValor(handle, "DAMDFe", "PathLogo", "");
+        lib.ConfigGravarValor(handle, "DANFE", "Logo", "");
+        lib.ConfigGravarValor(handle, "DANFENFe", "Logo", "");
+    }
+
+    // 4. LogoEmCima e ExpandeLogoMarca
+    // REGRA VITAL DA ACBR: Se LogoemCima = 1 mas a logo NÃO existe, Fortes Report esconde o texto do emitente e o cabeçalho fica BRANCO!
+    // Por isso, se não houver logo válida no disco, LogoemCima DEVE ser 0 para forçar o Fortes Report a imprimir os dados textuais do emitente.
+    let valLogoCima = "0";
+    if (configPayload.danfe_logo_em_cima) {
+        valLogoCima = temLogoValida ? "1" : "0";
+    }
+    lib.ConfigGravarValor(handle, "DANFE", "LogoemCima", valLogoCima);
+    lib.ConfigGravarValor(handle, "DANFENFe", "LogoemCima", valLogoCima);
+
+    if (configPayload.danfe_expande_logo !== undefined && configPayload.danfe_expande_logo !== null) {
+        const valExp = configPayload.danfe_expande_logo ? "1" : "0";
+        lib.ConfigGravarValor(handle, "DANFE", "ExpandeLogoMarca", valExp);
+        lib.ConfigGravarValor(handle, "DANFENFe", "ExpandeLogoMarca", valExp);
+        lib.ConfigGravarValor(handle, "DAMDFe", "ExpandeLogoMarca", valExp);
+    }
+
+    // 5. Outras configurações visuais
+    if (configPayload.danfe_fonte_nome) {
+        lib.ConfigGravarValor(handle, "DANFE", "Fonte.Nome", String(configPayload.danfe_fonte_nome));
+        lib.ConfigGravarValor(handle, "DANFENFe", "Fonte.Nome", String(configPayload.danfe_fonte_nome));
+    }
+    if (configPayload.danfe_casas_qcom !== undefined && configPayload.danfe_casas_qcom !== null) {
+        lib.ConfigGravarValor(handle, "DANFE", "CasasDecimais.qCom", String(configPayload.danfe_casas_qcom));
+        lib.ConfigGravarValor(handle, "DANFENFe", "CasasDecimais.qCom", String(configPayload.danfe_casas_qcom));
+    }
+    if (configPayload.danfe_casas_vuncom !== undefined && configPayload.danfe_casas_vuncom !== null) {
+        lib.ConfigGravarValor(handle, "DANFE", "CasasDecimais.vUnCom", String(configPayload.danfe_casas_vuncom));
+        lib.ConfigGravarValor(handle, "DANFENFe", "CasasDecimais.vUnCom", String(configPayload.danfe_casas_vuncom));
+    }
+    if (configPayload.danfe_exibe_info_adic !== undefined && configPayload.danfe_exibe_info_adic !== null) {
+        const valInfo = configPayload.danfe_exibe_info_adic ? "1" : "0";
+        lib.ConfigGravarValor(handle, "DANFE", "ExibeInforAdicProduto", valInfo);
+        lib.ConfigGravarValor(handle, "DANFENFe", "ExibeInforAdicProduto", valInfo);
+    }
+};
+
+/**
  * Tenta imprimir DANFE/DANFCE baseado em print_config { tp_imp, nm_impressora }.
  * Retorna um objeto de resultado e nunca propaga erro para o fluxo fiscal.
  */
@@ -495,42 +653,26 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave, confi
         const pdfDir = path.join(resolverBaseArquivos(configPayload), "PDF");
         if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
 
-        // Limpa arquivos antigos da mesma chave para evitar pegar o arquivo errado
-        if (chave) {
-            try {
-                const files = fs.readdirSync(pdfDir);
-                for (const f of files) {
-                    if (f.includes(chave) && f.toLowerCase().endsWith('.pdf')) {
-                        fs.unlinkSync(path.join(pdfDir, f));
-                    }
-                }
-            } catch (e) { /* ignore */ }
-        }
+        // Diretorio isolado por job para evitar que PDF travado no leitor do Windows impeça a DLL de gravar
+        const jobPdfDir = path.join(pdfDir, `job_${Date.now()}`);
+        if (!fs.existsSync(jobPdfDir)) fs.mkdirSync(jobPdfDir, { recursive: true });
 
-        lib.ConfigGravarValor(handle, "DANFE", "PathPDF", pdfDir);
-        lib.ConfigGravarValor(handle, "DANFENFe", "PathPDF", pdfDir);
-        lib.ConfigGravarValor(handle, "DANFENFCe", "PathPDF", pdfDir);
-        lib.ConfigGravarValor(handle, "DANFe", "PathPDF", pdfDir);
-        lib.ConfigGravarValor(handle, "NFe", "PathPDF", pdfDir);
+        lib.ConfigGravarValor(handle, "DANFE", "PathPDF", jobPdfDir);
+        lib.ConfigGravarValor(handle, "DANFENFe", "PathPDF", jobPdfDir);
+        lib.ConfigGravarValor(handle, "DANFENFCe", "PathPDF", jobPdfDir);
+        lib.ConfigGravarValor(handle, "DANFe", "PathPDF", jobPdfDir);
+        lib.ConfigGravarValor(handle, "NFe", "PathPDF", jobPdfDir);
         lib.ConfigGravarValor(handle, "DANFE", "MostraPreview", "0");
         lib.ConfigGravarValor(handle, "DANFE", "MostraStatus", "0");
         lib.ConfigGravarValor(handle, "DANFe", "MostraPreview", "0");
         lib.ConfigGravarValor(handle, "DANFe", "MostraStatus", "0");
 
         if (configPayload) {
-            if (configPayload.danfe_tipo !== undefined && configPayload.danfe_tipo !== null) lib.ConfigGravarValor(handle, "DANFE", "TipoDANFE", String(configPayload.danfe_tipo));
-            if (configPayload.danfe_pos_canhoto !== undefined && configPayload.danfe_pos_canhoto !== null) lib.ConfigGravarValor(handle, "DANFENFe", "PosCanhoto", String(configPayload.danfe_pos_canhoto));
-            if (configPayload.danfe_exibe_resumo_canhoto !== undefined && configPayload.danfe_exibe_resumo_canhoto !== null) lib.ConfigGravarValor(handle, "DANFENFe", "ExibeResumoCanhoto", configPayload.danfe_exibe_resumo_canhoto ? "1" : "0");
-            if (configPayload.danfe_path_logo) lib.ConfigGravarValor(handle, "DANFE", "PathLogo", String(configPayload.danfe_path_logo));
-            if (configPayload.danfe_logo_em_cima !== undefined && configPayload.danfe_logo_em_cima !== null) lib.ConfigGravarValor(handle, "DANFENFe", "LogoemCima", configPayload.danfe_logo_em_cima ? "1" : "0");
-            if (configPayload.danfe_expande_logo !== undefined && configPayload.danfe_expande_logo !== null) lib.ConfigGravarValor(handle, "DANFE", "ExpandeLogoMarca", configPayload.danfe_expande_logo ? "1" : "0");
-            if (configPayload.danfe_fonte_nome) lib.ConfigGravarValor(handle, "DANFENFe", "Fonte.Nome", String(configPayload.danfe_fonte_nome));
-            if (configPayload.danfe_casas_qcom !== undefined && configPayload.danfe_casas_qcom !== null) lib.ConfigGravarValor(handle, "DANFE", "CasasDecimais.qCom", String(configPayload.danfe_casas_qcom));
-            if (configPayload.danfe_casas_vuncom !== undefined && configPayload.danfe_casas_vuncom !== null) lib.ConfigGravarValor(handle, "DANFE", "CasasDecimais.vUnCom", String(configPayload.danfe_casas_vuncom));
-            if (configPayload.danfe_exibe_info_adic !== undefined && configPayload.danfe_exibe_info_adic !== null) lib.ConfigGravarValor(handle, "DANFE", "ExibeInforAdicProduto", configPayload.danfe_exibe_info_adic ? "1" : "0");
+            aplicarConfiguracoesDanfeNoHandle(lib, handle, configPayload, jobPdfDir);
 
-            // Configurações da NFC-e
-            if (configPayload.nfce_modo_impressao) {
+            // Configurações da NFC-e (Apenas para Modelo 65 / NFCE)
+            const isNFCe = modeloLabel === 'NFCE' || String(configPayload?.modelo) === '65';
+            if (isNFCe && configPayload.nfce_modo_impressao) {
                 const modo = String(configPayload.nfce_modo_impressao).toUpperCase();
                 if (modo === 'FORTES_A4') {
                     // Impressão da NFC-e em Folha A4 Normal
@@ -560,11 +702,11 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave, confi
                     lib.ConfigGravarValor(handle, "DANFENFCe", "TipoDANFE", "4");
                 }
             }
-            if (configPayload.nfce_largura_bobina !== undefined && configPayload.nfce_largura_bobina !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "LarguraBobina", String(configPayload.nfce_largura_bobina));
-            if (configPayload.nfce_imprime_duas_linhas !== undefined && configPayload.nfce_imprime_duas_linhas !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeEmDuasLinhas", configPayload.nfce_imprime_duas_linhas ? "1" : "0");
-            if (configPayload.nfce_qr_lateral !== undefined && configPayload.nfce_qr_lateral !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeQRCodeLateral", configPayload.nfce_qr_lateral ? "1" : "0");
-            if (configPayload.nfce_via_consumidor !== undefined && configPayload.nfce_via_consumidor !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ViaConsumidor", configPayload.nfce_via_consumidor ? "1" : "0");
-            if (configPayload.nfce_imprime_itens !== undefined && configPayload.nfce_imprime_itens !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeItens", configPayload.nfce_imprime_itens ? "1" : "0");
+            if (isNFCe && configPayload.nfce_largura_bobina !== undefined && configPayload.nfce_largura_bobina !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "LarguraBobina", String(configPayload.nfce_largura_bobina));
+            if (isNFCe && configPayload.nfce_imprime_duas_linhas !== undefined && configPayload.nfce_imprime_duas_linhas !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeEmDuasLinhas", configPayload.nfce_imprime_duas_linhas ? "1" : "0");
+            if (isNFCe && configPayload.nfce_qr_lateral !== undefined && configPayload.nfce_qr_lateral !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeQRCodeLateral", configPayload.nfce_qr_lateral ? "1" : "0");
+            if (isNFCe && configPayload.nfce_via_consumidor !== undefined && configPayload.nfce_via_consumidor !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ViaConsumidor", configPayload.nfce_via_consumidor ? "1" : "0");
+            if (isNFCe && configPayload.nfce_imprime_itens !== undefined && configPayload.nfce_imprime_itens !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeItens", configPayload.nfce_imprime_itens ? "1" : "0");
         }
 
         if (tp === 'PDF' && lib.ImprimirDANFEPDF) {
@@ -579,14 +721,14 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave, confi
             // Aguarda um curto tempo para o SO liberar o arquivo
             waitSync(500);
 
-            // Busca pelo arquivo exato ou busca recursiva no diretório de saída
+            // Busca pelo arquivo exato ou busca recursiva no diretório do job
             let finalPdf = null;
             if (chave) {
-                const p = path.join(pdfDir, `${chave}-nfe.pdf`);
+                const p = path.join(jobPdfDir, `${chave}-nfe.pdf`);
                 if (fs.existsSync(p)) {
                     finalPdf = p;
                 } else {
-                    const pAlt = path.join(pdfDir, `${chave}.pdf`);
+                    const pAlt = path.join(jobPdfDir, `${chave}.pdf`);
                     if (fs.existsSync(pAlt)) finalPdf = pAlt;
                 }
             }
@@ -608,12 +750,11 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave, confi
                     }
                     return null;
                 };
-                finalPdf = encontrarPdfRecursivo(pdfDir) || encontrarPdfRecursivo(path.join(resolverBaseArquivos(configPayload), "PDF"));
+                finalPdf = encontrarPdfRecursivo(jobPdfDir) || encontrarPdfRecursivo(pdfDir);
             }
 
             if (!finalPdf) {
-                const files = fs.readdirSync(pdfDir);
-                console.warn(`[FiscalLib] PDF não localizado em ${pdfDir}. Esperado: ${chave}-nfe.pdf. Arquivos presentes:`, files);
+                console.warn(`[FiscalLib] PDF não localizado em ${jobPdfDir}.`);
                 return { sucesso: false, erro: `Arquivo PDF (${chave}-nfe.pdf) não foi localizado no diretório de saída.`, pdf_path: pdfDir };
             }
 
@@ -621,6 +762,12 @@ const tentarImprimirDANFE = (lib, handle, printConfig, modeloLabel, chave, confi
             try {
                 pdf_base64 = fs.readFileSync(finalPdf).toString('base64');
                 console.log(`[FiscalLib] PDF carregado com sucesso: ${finalPdf}`);
+
+                // Tenta copiar para a pasta principal de PDFs para manter histórico
+                try {
+                    const standardPath = path.join(pdfDir, `${chave}-nfe.pdf`);
+                    fs.copyFileSync(finalPdf, standardPath);
+                } catch (eCopy) { /* se estiver travado no leitor do usuário, ignora cópia */ }
             } catch (e) {
                 console.error(`[FiscalLib] Falha ao ler PDF: ${e.message}`);
                 return { sucesso: false, erro: `Falha ao ler arquivo gerado: ${e.message}`, pdf_path: finalPdf };
@@ -680,6 +827,16 @@ const tentarImprimirDAMDFE = (lib, handle, printConfig, modeloLabel, chave, conf
         lib.ConfigGravarValor(handle, "DAMDFe", "PathPDF", pdfDir);
         lib.ConfigGravarValor(handle, "DAMDFe", "MostraPreview", "0");
         lib.ConfigGravarValor(handle, "DAMDFe", "MostraStatus", "0");
+
+        if (configPayload && configPayload.danfe_path_logo) {
+            const logoPath = resolverCaminhoLogo(configPayload.danfe_path_logo, pdfDir);
+            if (logoPath) {
+                lib.ConfigGravarValor(handle, "DAMDFe", "PathLogo", String(logoPath));
+            }
+        }
+        if (configPayload && configPayload.danfe_expande_logo !== undefined && configPayload.danfe_expande_logo !== null) {
+            lib.ConfigGravarValor(handle, "DAMDFe", "ExpandeLogoMarca", configPayload.danfe_expande_logo ? "1" : "0");
+        }
 
         if (tp === 'PDF' && lib.ImprimirDANFEPDF) {
             const ret = lib.ImprimirDANFEPDF(handle);
@@ -950,19 +1107,11 @@ const configurarHandle = (lib, handle, configPayload, prefix = 'NFE') => {
     lib.ConfigGravarValor(handle, "DANFe", "PathPDF", pdfDir);
 
     // Configurações Globais do DANFE (NFe 55 e NFCe 65)
-    if (configPayload.danfe_tipo !== undefined && configPayload.danfe_tipo !== null) lib.ConfigGravarValor(handle, "DANFE", "TipoDANFE", String(configPayload.danfe_tipo));
-    if (configPayload.danfe_pos_canhoto !== undefined && configPayload.danfe_pos_canhoto !== null) lib.ConfigGravarValor(handle, "DANFENFe", "PosCanhoto", String(configPayload.danfe_pos_canhoto));
-    if (configPayload.danfe_exibe_resumo_canhoto !== undefined && configPayload.danfe_exibe_resumo_canhoto !== null) lib.ConfigGravarValor(handle, "DANFENFe", "ExibeResumoCanhoto", configPayload.danfe_exibe_resumo_canhoto ? "1" : "0");
-    if (configPayload.danfe_path_logo) lib.ConfigGravarValor(handle, "DANFE", "PathLogo", String(configPayload.danfe_path_logo));
-    if (configPayload.danfe_logo_em_cima !== undefined && configPayload.danfe_logo_em_cima !== null) lib.ConfigGravarValor(handle, "DANFENFe", "LogoemCima", configPayload.danfe_logo_em_cima ? "1" : "0");
-    if (configPayload.danfe_expande_logo !== undefined && configPayload.danfe_expande_logo !== null) lib.ConfigGravarValor(handle, "DANFE", "ExpandeLogoMarca", configPayload.danfe_expande_logo ? "1" : "0");
-    if (configPayload.danfe_fonte_nome) lib.ConfigGravarValor(handle, "DANFENFe", "Fonte.Nome", String(configPayload.danfe_fonte_nome));
-    if (configPayload.danfe_casas_qcom !== undefined && configPayload.danfe_casas_qcom !== null) lib.ConfigGravarValor(handle, "DANFE", "CasasDecimais.qCom", String(configPayload.danfe_casas_qcom));
-    if (configPayload.danfe_casas_vuncom !== undefined && configPayload.danfe_casas_vuncom !== null) lib.ConfigGravarValor(handle, "DANFE", "CasasDecimais.vUnCom", String(configPayload.danfe_casas_vuncom));
-    if (configPayload.danfe_exibe_info_adic !== undefined && configPayload.danfe_exibe_info_adic !== null) lib.ConfigGravarValor(handle, "DANFE", "ExibeInforAdicProduto", configPayload.danfe_exibe_info_adic ? "1" : "0");
+    aplicarConfiguracoesDanfeNoHandle(lib, handle, configPayload, pdfDir);
 
-    // Configurações da NFC-e (Modo de Impressão)
-    if (configPayload.nfce_modo_impressao) {
+    // Configurações da NFC-e (Modo de Impressão) - Apenas para Modelo 65
+    const isNFCe = String(configPayload?.modelo) === '65';
+    if (isNFCe && configPayload.nfce_modo_impressao) {
         const modo = String(configPayload.nfce_modo_impressao).toUpperCase();
         if (modo === 'FORTES_A4') {
             lib.ConfigGravarValor(handle, "DANFENFCe", "TipoRelatorioBobina", "2");
@@ -988,11 +1137,11 @@ const configurarHandle = (lib, handle, configPayload, prefix = 'NFE') => {
             lib.ConfigGravarValor(handle, "DANFENFCe", "TipoDANFE", "4");
         }
     }
-    if (configPayload.nfce_largura_bobina !== undefined && configPayload.nfce_largura_bobina !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "LarguraBobina", String(configPayload.nfce_largura_bobina));
-    if (configPayload.nfce_imprime_duas_linhas !== undefined && configPayload.nfce_imprime_duas_linhas !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeEmDuasLinhas", configPayload.nfce_imprime_duas_linhas ? "1" : "0");
-    if (configPayload.nfce_qr_lateral !== undefined && configPayload.nfce_qr_lateral !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeQRCodeLateral", configPayload.nfce_qr_lateral ? "1" : "0");
-    if (configPayload.nfce_via_consumidor !== undefined && configPayload.nfce_via_consumidor !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ViaConsumidor", configPayload.nfce_via_consumidor ? "1" : "0");
-    if (configPayload.nfce_imprime_itens !== undefined && configPayload.nfce_imprime_itens !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeItens", configPayload.nfce_imprime_itens ? "1" : "0");
+    if (isNFCe && configPayload.nfce_largura_bobina !== undefined && configPayload.nfce_largura_bobina !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "LarguraBobina", String(configPayload.nfce_largura_bobina));
+    if (isNFCe && configPayload.nfce_imprime_duas_linhas !== undefined && configPayload.nfce_imprime_duas_linhas !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeEmDuasLinhas", configPayload.nfce_imprime_duas_linhas ? "1" : "0");
+    if (isNFCe && configPayload.nfce_qr_lateral !== undefined && configPayload.nfce_qr_lateral !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeQRCodeLateral", configPayload.nfce_qr_lateral ? "1" : "0");
+    if (isNFCe && configPayload.nfce_via_consumidor !== undefined && configPayload.nfce_via_consumidor !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ViaConsumidor", configPayload.nfce_via_consumidor ? "1" : "0");
+    if (isNFCe && configPayload.nfce_imprime_itens !== undefined && configPayload.nfce_imprime_itens !== null) lib.ConfigGravarValor(handle, "DANFENFCe", "ImprimeItens", configPayload.nfce_imprime_itens ? "1" : "0");
 
     lib.ConfigGravarValor(handle, "Principal", "LogNivel", "0");
     lib.ConfigGravarValor(handle, "NFe", "SalvarGer", "1");
@@ -1011,7 +1160,7 @@ const updateIniString = (iniText, section, key, value) => {
             currentSection = trimmed.slice(1, -1).trim();
         }
 
-        if (currentSection === section && trimmed.split('=')[0].trim() === key) {
+        if (currentSection.toLowerCase() === section.toLowerCase() && trimmed.split('=')[0].trim().toLowerCase() === key.toLowerCase()) {
             newLines.push(`${key}=${value}`);
             keyUpdated = true;
         } else {
@@ -1020,11 +1169,11 @@ const updateIniString = (iniText, section, key, value) => {
     }
 
     if (!keyUpdated) {
-        let sectionIndex = newLines.findIndex(line => line.trim() === `[${section}]`);
+        let sectionIndex = newLines.findIndex(line => line.trim().toLowerCase() === `[${section.toLowerCase()}]`);
         if (sectionIndex !== -1) {
             newLines.splice(sectionIndex + 1, 0, `${key}=${value}`);
         } else {
-            newLines.push(`\n[${section}]`);
+            newLines.push(`\r\n[${section}]`);
             newLines.push(`${key}=${value}`);
         }
     }
@@ -1101,6 +1250,52 @@ const patchIniForThread = (iniContent, configPayload) => {
             updated = updateIniString(updated, "DFe", "Senha", decodeSenhaCertificado(configPayload.certificadoSenha));
             updated = updateIniString(updated, "DFe", "NumeroSerie", "");
         }
+    }
+
+    // Configurações Globais do DANFE no INI temporário antes do Inicializar
+    const tipoRaw = configPayload.danfe_tipo !== undefined && configPayload.danfe_tipo !== null ? String(configPayload.danfe_tipo).trim() : "1";
+    let tipoAcbr = "1";
+    let orientacaoAcbr = "0";
+
+    if (tipoRaw === "2") {
+        tipoAcbr = "2"; // Paisagem (Landscape)
+        orientacaoAcbr = "1"; // 1 = orPaisagem
+    } else if (tipoRaw === "3") {
+        tipoAcbr = "3"; // Simplificado
+        orientacaoAcbr = "0";
+    } else {
+        tipoAcbr = "1"; // Retrato (Portrait)
+        orientacaoAcbr = "0";
+    }
+
+    updated = updateIniString(updated, "DANFE", "TipoDANFE", tipoAcbr);
+    updated = updateIniString(updated, "DANFENFe", "TipoDANFE", tipoAcbr);
+    updated = updateIniString(updated, "DANFE", "Orientacao", orientacaoAcbr);
+    updated = updateIniString(updated, "DANFENFe", "Orientacao", orientacaoAcbr);
+
+    let logoPathLocal = "";
+    if (configPayload.danfe_path_logo) {
+        logoPathLocal = resolverCaminhoLogo(configPayload.danfe_path_logo, path.join(resolverBaseArquivos(configPayload), "PDF"));
+    }
+    const temLogoValida = Boolean(logoPathLocal && fs.existsSync(logoPathLocal) && fs.statSync(logoPathLocal).size > 0);
+    const logoFinal = temLogoValida ? logoPathLocal : "";
+
+    updated = updateIniString(updated, "DANFE", "PathLogo", logoFinal);
+    updated = updateIniString(updated, "DANFENFe", "PathLogo", logoFinal);
+    updated = updateIniString(updated, "DANFE", "Logo", logoFinal);
+    updated = updateIniString(updated, "DANFENFe", "Logo", logoFinal);
+
+    let valLogoCima = "0";
+    if (configPayload.danfe_logo_em_cima) {
+        valLogoCima = temLogoValida ? "1" : "0";
+    }
+    updated = updateIniString(updated, "DANFE", "LogoemCima", valLogoCima);
+    updated = updateIniString(updated, "DANFENFe", "LogoemCima", valLogoCima);
+
+    if (configPayload.danfe_expande_logo !== undefined && configPayload.danfe_expande_logo !== null) {
+        const valExp = configPayload.danfe_expande_logo ? "1" : "0";
+        updated = updateIniString(updated, "DANFE", "ExpandeLogoMarca", valExp);
+        updated = updateIniString(updated, "DANFENFe", "ExpandeLogoMarca", valExp);
     }
 
     return updated;
@@ -1587,7 +1782,20 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
         case 'IMPRIMIR_NFCE':
             return executarNaDLL(libNFe, config, async (handle) => {
                 libNFe.LimparLista(handle);
-                const ret = libNFe.CarregarXML(handle, dados);
+                let dadosProcessados = dados;
+                const pdfDir = path.join(resolverBaseArquivos(config), "PDF");
+                aplicarConfiguracoesDanfeNoHandle(libNFe, handle, config, pdfDir);
+
+                if (config && config.danfe_tipo !== undefined && config.danfe_tipo !== null) {
+                    const tipoTarget = String(config.danfe_tipo).trim();
+                    if (tipoTarget === '2') {
+                        dadosProcessados = String(dadosProcessados || '').replace(/<tpImp>\s*\d\s*<\/tpImp>/g, '<tpImp>2</tpImp>').replace(/tpImp=\s*\d/g, 'tpImp=2');
+                    } else if (tipoTarget === '1') {
+                        dadosProcessados = String(dadosProcessados || '').replace(/<tpImp>\s*\d\s*<\/tpImp>/g, '<tpImp>1</tpImp>').replace(/tpImp=\s*\d/g, 'tpImp=1');
+                    }
+                }
+
+                const ret = libNFe.CarregarXML(handle, dadosProcessados);
                 if (ret !== 0) return { sucesso: false, erro: '[IMPRIMIR] CarregarXML: ' + lerRetornoACBr(libNFe, handle), pdf_path: null };
                 const modeloLabel = comando === 'IMPRIMIR_NFCE' ? 'NFCE' : 'NFE';
                 return tentarImprimirDANFE(libNFe, handle, jsonPayload.print_config, modeloLabel, jsonPayload.chave, config);

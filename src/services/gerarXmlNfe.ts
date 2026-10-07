@@ -109,7 +109,9 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
   xml += `<tpNF>${tpNF}</tpNF>`;
   xml += `<idDest>${(cadastro?.endereco_uf !== empresa.endereco_uf) ? '2' : '1'}</idDest>`; 
   xml += `<cMunFG>${cMunEmit}</cMunFG>`;
-  xml += `<tpImp>${isNFCe ? '4' : '1'}</tpImp>`;
+  const danfeTipo = String((fiscalConfig as any)?.danfe_tipo || "1").trim();
+  const tpImpVal = isNFCe ? '4' : (danfeTipo === '2' ? '2' : (danfeTipo === '3' ? '3' : '1'));
+  xml += `<tpImp>${tpImpVal}</tpImp>`;
   xml += `<tpEmis>1</tpEmis>`;
   xml += `<cDV>0</cDV>`; // O ACBr calcula o dígito real
   xml += `<tpAmb>${ambiente}</tpAmb>`;

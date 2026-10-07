@@ -395,7 +395,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
       return;
     }
     const targetEmpresaId = row.empresa_id || XEmpresaId;
-    toast.info("Enfileirando transmissão...");
+    toast.info("Recarregando cadastros da fonte, recalculando tributos e enfileirando transmissão...");
     try {
       const res = await fiscalEmissaoService.retransmitirDocumento(row.nfe_cabecalho_id, targetEmpresaId);
       if (!res.success || !res.fiscal_evento_id) {

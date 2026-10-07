@@ -47,7 +47,9 @@ export function gerarIniNfe(params) {
   linhas.push(`dhEmi=${dhEmi}`);
   linhas.push(`tpNF=${tpNF}`);
   linhas.push('idDest=1');
-  linhas.push(`tpImp=${isNFCe ? '4' : '1'}`);
+  const danfeTipo = String(fiscalConfig?.danfe_tipo || "1").trim();
+  const tpImpVal = isNFCe ? '4' : (danfeTipo === '2' ? '2' : (danfeTipo === '3' ? '3' : '1'));
+  linhas.push(`tpImp=${tpImpVal}`);
   linhas.push('tpEmis=1');
   linhas.push(`tpAmb=${ambiente}`);
   linhas.push(`finNFe=${finNFe}`);

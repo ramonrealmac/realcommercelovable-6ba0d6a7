@@ -5,9 +5,10 @@ import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
 import DataGrid, { IGridColumn } from "@/components/grid/DataGrid";
 import GridActionToolbar, { gridActions } from "@/components/grid/GridActionToolbar";
-import { Search, Info, HelpCircle } from "lucide-react";
+import { Search, Info, HelpCircle, Trash2 } from "lucide-react";
 import type { IMovimento, IMovimentoItem } from "../pedido/types";
 import ProdutoSearchDialog, { IProdutoRow, buscarProdutoPorCodigo } from "../pedido/ProdutoSearchDialog";
+import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 
 const db = supabase as any;
 
@@ -55,6 +56,7 @@ const formatNumericInput = (rawString: string, decimals = 4): string => {
 };
 
 export default function AjusteEstoqueItensTab({ pedido, podeEditar, onItemsChanged, autoNovoTrigger }: IProps) {
+  const { handleKeyDown } = useEnterTraversal();
   const { XEmpresaId, XEmpresaMatrizId, XEmpresas } = useAppContext();
   const [XItens, setXItens] = useState<IMovimentoItem[]>([]);
   const [XDepositos, setXDepositos] = useState<IDepositoLookup[]>([]);
@@ -67,7 +69,23 @@ export default function AjusteEstoqueItensTab({ pedido, podeEditar, onItemsChang
   const [XSelectedIdx, setXSelectedIdx] = useState<number | null>(null);
   const codigoRef = useRef<HTMLInputElement>(null);
   const lupaRef = useRef<HTMLButtonElement>(null);
+  const tpAjsRef = useRef<HTMLSelectElement>(null);
   const qtdRef = useRef<HTMLInputElement>(null);
+  const infadRef = useRef<HTMLInputElement>(null);
+  const salvarBtnRef = useRef<HTMLButtonElement>(null);
+  const isSavingRef = useRef(false);
+
+  const focusCodigoInput = useCallback(() => {
+    const tryFocus = (attemptsLeft: number) => {
+      if (codigoRef.current) {
+        codigoRef.current.focus();
+        codigoRef.current.select();
+      } else if (attemptsLeft > 0) {
+        setTimeout(() => tryFocus(attemptsLeft - 1), 40);
+      }
+    };
+    setTimeout(() => tryFocus(5), 40);
+  }, []);
 
   const XGroupEmpresaIds = useMemo(() => {
     return XEmpresas
@@ -158,10 +176,10 @@ export default function AjusteEstoqueItensTab({ pedido, podeEditar, onItemsChang
   }, [XDepositos, pedido?.deposito_id]);
 
   useEffect(() => {
-    if (autoNovoTrigger && pedido?.movimento_id && podeEditar && !XEdit) {
+    if (pedido?.movimento_id && podeEditar && !XEdit) {
       novo();
     }
-  }, [autoNovoTrigger, pedido?.movimento_id, podeEditar, novo, XEdit]);
+  }, [pedido?.movimento_id, podeEditar, autoNovoTrigger]);
 
   const editar = (it: IMovimentoItem) => {
     if (!podeEditar) return;
@@ -198,8 +216,8 @@ export default function AjusteEstoqueItensTab({ pedido, podeEditar, onItemsChang
     setXCodigo(String(p.cd_produto ?? p.produto_id));
     carregarEstoquePorDeposito(p.produto_id);
     
-    // Foco imediato na quantidade
-    setTimeout(() => { qtdRef.current?.focus(); qtdRef.current?.select(); }, 80);
+    // Foco imediato no tipo de ajuste
+    setTimeout(() => { tpAjsRef.current?.focus(); }, 80);
   }, [carregarEstoquePorDeposito]);
 
   const onCodigoBlur = async () => {
@@ -209,7 +227,7 @@ export default function AjusteEstoqueItensTab({ pedido, podeEditar, onItemsChang
       return;
     }
     if (XEdit?.produto_id && (String(XEdit.produto_id) === t || XEdit.cd_produto === t)) {
-      setTimeout(() => { qtdRef.current?.focus(); qtdRef.current?.select(); }, 30);
+      setTimeout(() => { tpAjsRef.current?.focus(); }, 30);
       return;
     }
     const p = await buscarProdutoPorCodigo(t, XEmpresaId, XGroupEmpresaIds);
@@ -231,40 +249,59 @@ export default function AjusteEstoqueItensTab({ pedido, podeEditar, onItemsChang
   };
 
   const salvarItem = async () => {
-    if (!pedido?.movimento_id) { toast.error("Salve o cabeçalho do ajuste antes."); return; }
-    if (!XEdit?.produto_id) { toast.error("Selecione o produto."); return; }
-    const qt = parseNum(XEdit.qt_movimento);
-    if (qt <= 0) { toast.error("Qtd. inválida."); return; }
-    if (!XEdit.deposito_id) { toast.error("Selecione o depósito."); return; }
-    if (!XEdit.tp_ajs_estoque) { toast.error("Selecione o tipo de ajuste."); return; }
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
+    try {
+      if (!pedido?.movimento_id) { toast.error("Salve o cabeçalho do ajuste antes."); return; }
+      if (!XEdit?.produto_id) { toast.error("Selecione o produto."); return; }
+      const qt = parseNum(XEdit.qt_movimento);
+      if (qt <= 0) { toast.error("Informe uma quantidade válida superior a 0."); return; }
+      if (!XEdit.deposito_id) { toast.error("Selecione o depósito."); return; }
+      if (!XEdit.tp_ajs_estoque) { toast.error("Selecione o tipo de ajuste."); return; }
 
-    const payload = {
-      ...XEdit,
-      empresa_id: XEmpresaId,
-      movimento_id: pedido.movimento_id,
-      tp_movimento: "AE",
-    };
+      const payload = {
+        ...XEdit,
+        empresa_id: XEmpresaId,
+        movimento_id: pedido.movimento_id,
+        tp_movimento: "AE",
+        deposito_id: Number(XEdit.deposito_id),
+        produto_id: Number(XEdit.produto_id),
+        qt_movimento: qt,
+        vl_und_produto: parseNum(XEdit.vl_und_produto),
+        vl_produto: parseNum(XEdit.vl_produto),
+        vl_desconto: parseNum(XEdit.vl_desconto),
+        vl_movimento: parseNum(XEdit.vl_movimento),
+        vl_despesa: parseNum(XEdit.vl_despesa),
+        vl_frete: parseNum(XEdit.vl_frete),
+        vl_seguro: parseNum(XEdit.vl_seguro),
+        vl_outro: parseNum(XEdit.vl_outro),
+      };
 
-    if (XEditingId) {
-      const { error } = await db.from("movimento_item").update(payload).eq("movimento_item_id", XEditingId);
-      if (error) { toast.error(error.message); return; }
-    } else {
-      const { error } = await db.from("movimento_item").insert(payload);
-      if (error) { toast.error(error.message); return; }
-    }
+      if (XEditingId) {
+        const { error } = await db.from("movimento_item").update(payload).eq("movimento_item_id", XEditingId);
+        if (error) { toast.error("Erro ao alterar item: " + error.message); return; }
+      } else {
+        const { error } = await db.from("movimento_item").insert(payload);
+        if (error) { toast.error("Erro ao incluir item: " + error.message); return; }
+      }
 
-    toast.success("Item do ajuste salvo.");
-    const wasInsert = !XEditingId;
-    setXEdit(null);
-    setXEditingId(null);
-    setXEditEstoque(null);
-    setXDepEstoque({});
-    setXCodigo("");
-    await loadItens();
-    
-    // Inserção contínua automática se estiver editando
-    if (wasInsert && podeEditar) {
-      setTimeout(() => novo(), 100);
+      toast.success("Item do ajuste salvo.");
+      await loadItens();
+
+      if (podeEditar) {
+        novo();
+        focusCodigoInput();
+      } else {
+        setXEdit(null);
+        setXEditingId(null);
+        setXEditEstoque(null);
+        setXDepEstoque({});
+        setXCodigo("");
+      }
+    } catch (err: any) {
+      toast.error("Erro inesperado ao salvar item: " + (err?.message || err));
+    } finally {
+      isSavingRef.current = false;
     }
   };
 
@@ -311,6 +348,29 @@ export default function AjusteEstoqueItensTab({ pedido, podeEditar, onItemsChang
       } 
     },
     { key: "infad_produto", label: "Informações Adicionais / Justificativa", width: "2.5fr" },
+    {
+      key: "acoes",
+      label: "Ações",
+      width: "70px",
+      align: "center",
+      render: r => (
+        <div className="flex items-center justify-center gap-1">
+          {podeEditar && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                excluirItem(r as IMovimentoItem);
+              }}
+              className="p-1 text-destructive hover:bg-destructive/10 rounded transition-colors"
+              title="Excluir item"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      ),
+    },
   ];
 
   const ro = !podeEditar;
@@ -335,7 +395,7 @@ export default function AjusteEstoqueItensTab({ pedido, podeEditar, onItemsChang
   return (
     <div className="space-y-4">
       {XEdit && (
-        <div className="border border-border/80 rounded-xl p-4 bg-card/60 backdrop-blur-sm space-y-4 shadow-sm animate-in fade-in duration-200">
+        <div className="border border-border/80 rounded-xl p-4 bg-card/60 backdrop-blur-sm space-y-4 shadow-sm animate-in fade-in duration-200" onKeyDown={handleKeyDown}>
           <div className="flex items-center gap-2 border-b border-border/50 pb-2">
             <Info className="w-4 h-4 text-cyan-600" />
             <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -356,16 +416,16 @@ export default function AjusteEstoqueItensTab({ pedido, podeEditar, onItemsChang
                   onBlur={onCodigoBlur}
                   onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); } }}
                   placeholder="Cód. ou EAN"
-                  className="w-full border border-border rounded-lg px-3 py-1.5 text-sm bg-background/50 focus:bg-background focus:ring-1 focus:ring-primary/30 outline-none"
+                  className="w-full border border-border rounded-lg px-3 py-1.5 text-sm bg-background/50 focus:bg-background focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all"
                 />
                 <button ref={lupaRef} type="button" disabled={ro} onClick={() => setXSearchOpen(true)}
-                  className="px-2.5 py-1.5 border border-border rounded-lg bg-background hover:bg-accent disabled:opacity-50 flex items-center justify-center transition-all"
+                  className="px-2.5 py-1.5 border border-border rounded-lg bg-background hover:bg-accent focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 disabled:opacity-50 flex items-center justify-center transition-all"
                   title="Pesquisar produto">
                   <Search className="w-4 h-4" />
                 </button>
                 {XEdit.produto_id && !ro && (
                   <button type="button" onClick={limparProduto}
-                    className="px-2 py-1.5 border border-border rounded-lg bg-background hover:bg-accent text-sm font-semibold transition-all"
+                    className="px-2 py-1.5 border border-border rounded-lg bg-background hover:bg-accent focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm font-semibold transition-all"
                     title="Limpar produto">×</button>
                 )}
               </div>
@@ -394,9 +454,9 @@ export default function AjusteEstoqueItensTab({ pedido, podeEditar, onItemsChang
                   Tipo de Ajuste
                   <HelpCircle className="w-3.5 h-3.5 text-muted-foreground" title="A = Adiciona ao físico, R = Retira do físico, M = Modifica/Força a quantidade atual no estoque" />
                 </label>
-                <select disabled={ro} value={XEdit.tp_ajs_estoque ?? ""}
+                <select ref={tpAjsRef} disabled={ro} value={XEdit.tp_ajs_estoque ?? ""}
                   onChange={e => setF("tp_ajs_estoque", e.target.value)}
-                  className="w-full border border-border rounded-lg px-3 py-1.5 text-sm mt-1 bg-background/50 focus:bg-background outline-none font-medium">
+                  className="w-full border border-border rounded-lg px-3 py-1.5 text-sm mt-1 bg-background/50 focus:bg-background focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all font-medium">
                   <option value="A">➕ Adiciona</option>
                   <option value="R">➖ Retira</option>
                   <option value="M">✏️ Modifica</option>
@@ -414,7 +474,7 @@ export default function AjusteEstoqueItensTab({ pedido, podeEditar, onItemsChang
                   onChange={e => setF("qt_movimento", formatNumericInput(e.target.value, 4))}
                   onBlur={e => handleBlur("qt_movimento", e.target.value, 4)}
                   onFocus={e => e.target.select()}
-                  className={`w-full border border-border rounded-lg px-3 py-1.5 text-sm text-right mt-1 bg-background/50 focus:bg-background outline-none font-semibold ${NO_SPIN}`}
+                  className={`w-full border border-border rounded-lg px-3 py-1.5 text-sm text-right mt-1 bg-background/50 focus:bg-background focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all font-semibold ${NO_SPIN}`}
                 />
               </div>
 
@@ -434,7 +494,7 @@ export default function AjusteEstoqueItensTab({ pedido, podeEditar, onItemsChang
               <label className="text-xs font-medium text-foreground/80">Depósito para Ajuste</label>
               <select disabled={ro} value={XEdit.deposito_id ?? ""}
                 onChange={e => setF("deposito_id", Number(e.target.value))}
-                className="w-full border border-border rounded-lg px-3 py-1.5 text-sm mt-1 bg-background/50 focus:bg-background outline-none font-medium">
+                className="w-full border border-border rounded-lg px-3 py-1.5 text-sm mt-1 bg-background/50 focus:bg-background focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all font-medium">
                 <option value="">-- Selecione o Depósito --</option>
                 {XDepositos.map(d => (
                   <option key={d.deposito_id} value={d.deposito_id}>
@@ -448,22 +508,40 @@ export default function AjusteEstoqueItensTab({ pedido, podeEditar, onItemsChang
             <div className="col-span-12 sm:col-span-6">
               <label className="text-xs font-semibold text-foreground/90">Informações Adicionais / Justificativa</label>
               <input
+                ref={infadRef}
                 disabled={ro}
                 value={XEdit.infad_produto || ""}
                 onChange={e => setF("infad_produto", e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    salvarBtnRef.current?.focus();
+                  }
+                }}
                 placeholder="Insira o motivo deste acerto físico (ex: avaria, quebra, acerto de balanço)..."
-                className="w-full border border-border rounded-lg px-3 py-1.5 text-sm mt-1 bg-background/50 focus:bg-background outline-none focus:ring-1 focus:ring-primary/20"
+                className="w-full border border-border rounded-lg px-3 py-1.5 text-sm mt-1 bg-background/50 focus:bg-background focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all"
               />
             </div>
 
             {/* Ações de Confirmar / Cancelar */}
             <div className="col-span-12 sm:col-span-2 flex gap-1.5">
-              <button onClick={salvarItem} disabled={ro}
-                className="w-full text-sm font-semibold py-1.5 px-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/95 transition-all shadow-sm disabled:opacity-50">
+              <button 
+                ref={salvarBtnRef}
+                type="button"
+                onClick={salvarItem} 
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    salvarItem();
+                  }
+                }}
+                disabled={ro} 
+                data-focusable="true"
+                className="w-full text-sm font-semibold py-1.5 px-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/95 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all shadow-sm disabled:opacity-50">
                 {XEditingId ? "Salvar" : "Lançar"}
               </button>
               <button onClick={() => { setXEdit(null); setXEditingId(null); setXEditEstoque(null); setXDepEstoque({}); setXCodigo(""); }}
-                className="w-full text-sm font-semibold py-1.5 px-3 rounded-lg border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-all">
+                className="w-full text-sm font-semibold py-1.5 px-3 rounded-lg border border-border bg-background hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all">
                 Cancelar
               </button>
             </div>

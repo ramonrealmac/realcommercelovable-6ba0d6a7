@@ -387,12 +387,124 @@ export const fiscalEmissaoService = {
     empresaId: number
   ): Promise<FiscalEmissaoResult> => {
     try {
-      const { data: cab, error: cabErr } = await db
+      let { data: cab, error: cabErr } = await db
         .from("fiscal_nfe_cabecalho")
         .select("*")
         .eq("nfe_cabecalho_id", nfeCabecalhoId)
         .single();
       if (cabErr || !cab) throw new Error("NF-e não localizada: " + cabErr?.message);
+
+      if (String(cab.st_nf) === "A") {
+        throw new Error("Esta NF-e já consta como Autorizada na SEFAZ e não pode ser retransmitida.");
+      }
+
+      // 1. RE-SINCRONIZAR E RECALCULAR DADOS DA FONTE (PRODUTOS / CLIENTE / REGRAS TRIBUTÁRIAS)
+      if (cab.movimento_id) {
+        const { data: nfeIdRet, error: eCalc } = await db.rpc("fu_calcular_impostos_movimento", {
+          p_movimento_id: cab.movimento_id,
+          p_modelo: String(cab.modelo || "55"),
+          p_serie: String(cab.serie || "001"),
+          p_nr_nota: String(cab.nr_nota || "0"),
+        });
+
+        if (eCalc) {
+          throw new Error("Erro ao recarregar cadastros/tributos da fonte: " + (eCalc.message || "Erro no recálculo fiscal."));
+        }
+
+        const newCabId = Number(nfeIdRet);
+        if (newCabId && newCabId !== nfeCabecalhoId) {
+          // a) Buscar itens recém calculados da nota gerada pela RPC
+          const { data: newItems } = await db
+            .from("fiscal_nfe_item")
+            .select("*")
+            .eq("nfe_cabecalho_id", newCabId);
+
+          if (newItems && newItems.length > 0) {
+            // b) Apagar itens desatualizados da nota original sendo retransmitida
+            await db.from("fiscal_nfe_item").delete().eq("nfe_cabecalho_id", nfeCabecalhoId);
+
+            // c) Inserir os novos itens calculados vinculando ao nfeCabecalhoId original
+            const itemsToInsert = newItems.map((it: any) => {
+              const { nfe_item_id, created_at, updated_at, ...rest } = it;
+              return {
+                ...rest,
+                nfe_cabecalho_id: nfeCabecalhoId,
+                empresa_id: empresaId,
+              };
+            });
+
+            await db.from("fiscal_nfe_item").insert(itemsToInsert);
+          }
+
+          // d) Copiar os totais tributários recalculados para o nfeCabecalhoId original
+          const { data: newCabData } = await db
+            .from("fiscal_nfe_cabecalho")
+            .select("*")
+            .eq("nfe_cabecalho_id", newCabId)
+            .maybeSingle();
+
+          if (newCabData) {
+            await db.from("fiscal_nfe_cabecalho").update({
+              vl_produto: newCabData.vl_produto,
+              vl_desconto: newCabData.vl_desconto,
+              vl_bc: newCabData.vl_bc,
+              vl_icms: newCabData.vl_icms,
+              vl_icms_st: newCabData.vl_icms_st,
+              vl_ipi: newCabData.vl_ipi,
+              vl_pis: newCabData.vl_pis,
+              vl_cofins: newCabData.vl_cofins,
+              vl_ibs: newCabData.vl_ibs,
+              vl_cbs: newCabData.vl_cbs,
+              vl_is: newCabData.vl_is,
+              vl_fcp: newCabData.vl_fcp,
+              vl_fcp_st: newCabData.vl_fcp_st,
+              vl_total_nf: newCabData.vl_total_nf,
+              obs_nf: newCabData.obs_nf,
+            }).eq("nfe_cabecalho_id", nfeCabecalhoId);
+          }
+
+          // e) Remover o rascunho temporário gerado pela RPC (deleta em cascata seus itens)
+          await db.from("fiscal_nfe_cabecalho").delete().eq("nfe_cabecalho_id", newCabId);
+        }
+      }
+
+      // 1.1 Garantia adicional de sincronização direta com a tabela 'produto' para NCM, CEST, Nome, GTIN e Origem
+      const { data: existingItens } = await db
+        .from("fiscal_nfe_item")
+        .select("nfe_item_id, produto_id")
+        .eq("nfe_cabecalho_id", nfeCabecalhoId);
+
+      if (existingItens && existingItens.length > 0) {
+        for (const item of existingItens) {
+          if (item.produto_id) {
+            const { data: prod } = await db
+              .from("produto")
+              .select("ncm, cest, nome, gtin, tb_a_origem")
+              .eq("produto_id", item.produto_id)
+              .maybeSingle();
+
+            if (prod) {
+              await db.from("fiscal_nfe_item").update({
+                ncm: prod.ncm || undefined,
+                cest: prod.cest || undefined,
+                nm_produto: prod.nome || undefined,
+                gtin: prod.gtin || "SEM GTIN",
+                origem: prod.tb_a_origem !== null && prod.tb_a_origem !== undefined ? Number(prod.tb_a_origem) : undefined,
+              }).eq("nfe_item_id", item.nfe_item_id);
+            }
+          }
+        }
+      }
+
+      // Relê o cabeçalho recém atualizado
+      const { data: cabAtualizado } = await db
+        .from("fiscal_nfe_cabecalho")
+        .select("*")
+        .eq("nfe_cabecalho_id", nfeCabecalhoId)
+        .single();
+      if (cabAtualizado) {
+        cab = cabAtualizado;
+      }
 
       const tipo: "NFE" | "NFCE" = Number(cab.modelo) === 65 ? "NFCE" : "NFE";
 
@@ -795,7 +907,8 @@ export const fiscalEmissaoService = {
       }
 
       const { data: fConfig } = await db.from("fiscal_config").select("*").eq("empresa_id", empresaId).single();
-      if (!fConfig) return { success: false, message: "Configuração fiscal não encontrada." };
+      const { data: empresaRaw } = await db.from("empresa").select("logomarca, url_logo").eq("empresa_id", empresaId).maybeSingle();
+      const logoEmpresa = empresaRaw?.logomarca || empresaRaw?.url_logo || fConfig?.danfe_path_logo || "";
 
       const { data: { user: authUser } } = await supabase.auth.getUser();
       const tipo: "NFE" | "NFCE" = Number(cab.modelo) === 65 ? "NFCE" : "NFE";
@@ -821,7 +934,26 @@ export const fiscalEmissaoService = {
             certificadoPath: fConfig.certificado,
             certificadoSenha: fConfig.senha_certificado || "",
             tipo_certificado: fConfig.tipo_certificado || "ARQUIVO",
-            pasta_arquivos: (fConfig as any).pasta_arquivos_fiscais || ""
+            pasta_arquivos: (fConfig as any).pasta_arquivos_fiscais || "",
+            danfe_tipo: fConfig.danfe_tipo,
+            danfe_pos_canhoto: fConfig.danfe_pos_canhoto,
+            danfe_exibe_resumo_canhoto: fConfig.danfe_exibe_resumo_canhoto,
+            danfe_path_logo: logoEmpresa,
+            danfe_logo_em_cima: fConfig.danfe_logo_em_cima,
+            danfe_expande_logo: fConfig.danfe_expande_logo,
+            danfe_fonte_nome: fConfig.danfe_fonte_nome,
+            danfe_fonte_tamanho: fConfig.danfe_fonte_tamanho,
+            danfe_casas_qcom: fConfig.danfe_casas_qcom,
+            danfe_casas_vuncom: fConfig.danfe_casas_vuncom,
+            danfe_exibe_info_adic: fConfig.danfe_exibe_info_adic,
+            nfce_modo_impressao: fConfig.nfce_modo_impressao,
+            nfce_largura_bobina: fConfig.nfce_largura_bobina,
+            nfce_imprime_duas_linhas: fConfig.nfce_imprime_duas_linhas,
+            nfce_qr_lateral: fConfig.nfce_qr_lateral,
+            nfce_via_consumidor: fConfig.nfce_via_consumidor,
+            nfce_imprime_itens: fConfig.nfce_imprime_itens,
+            posprinter_porta: fConfig.posprinter_porta,
+            posprinter_modelo: fConfig.posprinter_modelo
           }
         }
       }).select("id").single();

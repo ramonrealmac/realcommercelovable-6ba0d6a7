@@ -303,6 +303,10 @@ export const ItensGrid: React.FC<IItensGridProps> = ({ tabela, isEditing }) => {
       const { error } = await db.from("tabela_preco_item").update(payload).eq("tabela_item_id", XEditingId);
       if (error) { toast.error(error.message); return; }
       toast.success("Item atualizado.");
+      setXEdit(null);
+      setXEditingId(null);
+      setXSearchTerm("");
+      setXSearchResults([]);
     } else {
       const { data: dup } = await db.from("tabela_preco_item")
         .select("tabela_item_id").eq("tabela_id", tabela.tabela_id)
@@ -311,12 +315,15 @@ export const ItensGrid: React.FC<IItensGridProps> = ({ tabela, isEditing }) => {
       const { error } = await db.from("tabela_preco_item").insert(payload);
       if (error) { toast.error(error.message); return; }
       toast.success("Item incluído.");
+      setXEditingId(null);
+      setXEdit({ preco: 0 });
+      setXSearchTerm("");
+      setXSearchResults([]);
     }
-    setXEdit(null);
-    setXEditingId(null);
-    setXSearchTerm("");
-    setXSearchResults([]);
     await loadItens();
+    setTimeout(() => {
+      codigoInputRef.current?.focus();
+    }, 100);
   };
 
   const excluir = async (it: ITabelaPrecoItem) => {
@@ -689,6 +696,7 @@ export const ItensGrid: React.FC<IItensGridProps> = ({ tabela, isEditing }) => {
                   onKeyDown={e => {
                     if (e.key === "Enter") {
                       e.preventDefault();
+                      e.stopPropagation();
                       salvarBtnRef.current?.focus();
                     }
                   }}
@@ -699,6 +707,13 @@ export const ItensGrid: React.FC<IItensGridProps> = ({ tabela, isEditing }) => {
                 <button
                   ref={salvarBtnRef}
                   onClick={salvar}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      salvar();
+                    }
+                  }}
                   disabled={ro}
                   className="text-sm px-3 py-1 rounded bg-primary text-primary-foreground disabled:opacity-50 hover:opacity-90 transition-opacity"
                 >
