@@ -323,7 +323,15 @@ export function gerarIniNfe(params) {
   linhas.push('modFrete=9');
   linhas.push('');
 
-  if (pagamentos?.length) {
+  const isDevolucao = Number(cabecalho?.fin_nfe) === 4;
+
+  if (isDevolucao) {
+    linhas.push('[pag001]');
+    linhas.push('tPag=90');
+    linhas.push('vPag=0.00');
+    linhas.push('indPag=0');
+    linhas.push('');
+  } else if (pagamentos?.length) {
     for (let i = 0; i < pagamentos.length; i++) {
       const p = pagamentos[i];
       const nr = String(i + 1).padStart(3, '0');

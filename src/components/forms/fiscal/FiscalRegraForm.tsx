@@ -70,13 +70,16 @@ const COLS_IPI: IGridColumn[] = [
 ];
 
 const COLS_CBSIBS: IGridColumn[] = [
-  { key: "cst_csosn",    label: "CST/CSOSN", width: "100px", align: "center", render: r => s(r.cst_csosn) },
-  { key: "ibs_aliquota", label: "IBS %",     width: "90px",  align: "right", render: r => toNum(r.ibs_aliquota) },
-  { key: "cbs_aliquota", label: "CBS %",     width: "90px",  align: "right", render: r => toNum(r.cbs_aliquota) },
-  { key: "is_aliquota",  label: "IS %",      width: "90px",  align: "right", render: r => toNum(r.is_aliquota) },
-  { key: "uf_destino",   label: "UF Dest",   width: "80px",  align: "center", render: r => s(r.uf_destino) },
-  { key: "ncm_filtro",   label: "NCM",       width: "110px", align: "center", render: r => s(r.ncm_filtro) },
-  { key: "grupo_nome",   label: "Grupo Tributário", width: "160px", render: r => s(r.fiscal_grupo_produto?.nome) },
+  { key: "cst_csosn",         label: "CST/CSOSN",   width: "90px",  align: "center", render: r => s(r.cst_csosn) },
+  { key: "clas_trib_id",      label: "cClassTrib",   width: "100px", align: "center", render: r => s(r.clas_trib_id) },
+  { key: "ibs_aliquota",      label: "IBS %",       width: "80px",  align: "right",  render: r => toNum(r.ibs_aliquota) },
+  { key: "ibs_base_reducao",  label: "Red. IBS %",  width: "85px",  align: "right",  render: r => toNum(r.ibs_base_reducao) },
+  { key: "cbs_aliquota",      label: "CBS %",       width: "80px",  align: "right",  render: r => toNum(r.cbs_aliquota) },
+  { key: "cbs_base_reducao",  label: "Red. CBS %",  width: "85px",  align: "right",  render: r => toNum(r.cbs_base_reducao) },
+  { key: "is_aliquota",       label: "IS %",        width: "80px",  align: "right",  render: r => toNum(r.is_aliquota) },
+  { key: "uf_destino",        label: "UF Dest",     width: "75px",  align: "center", render: r => s(r.uf_destino) },
+  { key: "ncm_filtro",        label: "NCM",         width: "100px", align: "center", render: r => s(r.ncm_filtro) },
+  { key: "grupo_nome",        label: "Gr. Trib.",   width: "140px", render: r => s(r.fiscal_grupo_produto?.nome) },
 ];
 
 
@@ -175,7 +178,7 @@ const NatSel = ({ value, onChange, options, disabled = false }: {
     onChange={e => onChange(e.target.value)}
     className="border border-border rounded px-3 py-1.5 text-sm w-full bg-card focus:ring-2 focus:ring-ring outline-none h-[34px]"
   >
-    {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+    {options.map((o, idx) => <option key={o.value || idx} value={o.value}>{o.label || "\u00A0"}</option>)}
   </select>
 );
 
@@ -219,6 +222,7 @@ const EMPTY_ITEM = (regraId: number, tipo: string, empresaId: number) => ({
   fiscal_grupo_produto_id: null,
   origem_produto: null,
   cst_csosn: "",
+  clas_trib_id: null,
   aliquota: 0,
   base_reducao: 0,
   motivo_desoneracao: null,
@@ -226,13 +230,15 @@ const EMPTY_ITEM = (regraId: number, tipo: string, empresaId: number) => ({
   icms_st_aliquota: 0,
   icms_st_mva: 0,
   icms_st_base_reducao: 0,
-  mod_bc: 3,
-  mod_bc_st: 4,
+  mod_bc: null,
+  mod_bc_st: null,
   ipi_c_enq: "999",
   cst_pis_cofins: null,
   nat_receita_pis_cofins: null,
   ibs_aliquota: 0,
+  ibs_base_reducao: 0,
   cbs_aliquota: 0,
+  cbs_base_reducao: 0,
   is_aliquota: 0,
   empresa_id: empresaId,
 });
@@ -299,8 +305,8 @@ function FiltroRow({ item, isEditing, set, fiscalGrupoList }: {
   );
 }
 
-function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoList, regimeRegra }: {
-  regraId: number | null; tipo: string; isEditing: boolean; cfopList: any[]; empresaId: number; fiscalGrupoList: any[]; regimeRegra?: string | null;
+function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoList, regimeRegra, empresaRegime }: {
+  regraId: number | null; tipo: string; isEditing: boolean; cfopList: any[]; empresaId: number; fiscalGrupoList: any[]; regimeRegra?: string | null; empresaRegime?: string | null;
 }) {
   const isCfop = tipo === "CFOP";
   const table = isCfop ? "fiscal_regra_cfop" : "fiscal_regra_item";
@@ -312,6 +318,7 @@ function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoLis
   const [ipiEnqList, setIpiEnqList] = useState<any[]>([]);
   const [pisCofinsList, setPisCofinsList] = useState<any[]>([]);
   const [ibsCbsList, setIbsCbsList] = useState<any[]>([]);
+  const [clasTribList, setClasTribList] = useState<any[]>([]);
   const [selIdx, setSelIdx] = useState<number | null>(null);
   const [editing, setEditing] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
@@ -340,8 +347,10 @@ function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoLis
         .then(({ data }: any) => setPisCofinsList(data || []));
     }
     if (tipo === "CBSIBS") {
-      db.from("ibscbs").select("ibscbs_cst, ibscbs_descricao").order("ibscbs_cst")
+      db.from("ibscbs").select("ibscbs_id, ibscbs_cst, ibscbs_descricao").order("ibscbs_cst")
         .then(({ data }: any) => setIbsCbsList(data || []));
+      db.from("clas_trib").select("clas_trib_id, grupo_ibscbs_id, descricao").order("clas_trib_id")
+        .then(({ data }: any) => setClasTribList(data || []));
     }
     const sel = isCfop ? "*, cfop(cd_cfop, descricao), fiscal_grupo_produto(nome)" : "*, fiscal_grupo_produto(nome)";
     let q = db.from(table).select(sel).eq("fiscal_regra_id", regraId);
@@ -379,6 +388,14 @@ function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoLis
       else if (payload[k] === "" || payload[k] === undefined) payload[k] = null;
     }
 
+    if (!isCfop) {
+      if (payload.mod_bc === "" || payload.mod_bc === undefined || payload.mod_bc === null) payload.mod_bc = null;
+      else payload.mod_bc = Number(payload.mod_bc);
+
+      if (payload.mod_bc_st === "" || payload.mod_bc_st === undefined || payload.mod_bc_st === null) payload.mod_bc_st = null;
+      else payload.mod_bc_st = Number(payload.mod_bc_st);
+    }
+
     const q = isNew
       ? db.from(table).insert(payload)
       : db.from(table).update(payload).eq(pk, editing[pk]);
@@ -414,6 +431,12 @@ function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoLis
       ]}
       count={`${rows.length} registro(s)`}
     />
+  );
+
+  const selectedIbsCbs = (ibsCbsList || []).find((i: any) => i.ibscbs_cst === editing?.cst_csosn);
+  const selectedGroupId = selectedIbsCbs?.ibscbs_id;
+  const availableClasTrib = (clasTribList || []).filter((c: any) =>
+    selectedGroupId ? c.grupo_ibscbs_id === selectedGroupId : true
   );
 
   return (
@@ -454,9 +477,10 @@ function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoLis
                       { value: "", label: "Selecione..." },
                       ...(icmsList || [])
                         .filter((item: any) => {
-                          if (regimeRegra === "*") return true;
-                          if (regimeRegra === "S") return item.icms_tipo === "CSOSN";
-                          return item.icms_tipo === "CST";
+                          const regimeTarget = empresaRegime || (regimeRegra === "*" ? null : regimeRegra);
+                          if (!regimeTarget) return true;
+                          if (regimeTarget === "S") return (item.icms_tipo || "").toUpperCase() === "CSOSN";
+                          return (item.icms_tipo || "").toUpperCase() === "CST";
                         })
                         .map((item: any) => ({
                           value: item.icms_cst_csosn,
@@ -510,24 +534,49 @@ function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoLis
               ) : (
                 <Field label="CST/CSOSN"><TextInput value={editing.cst_csosn} onChange={v => set("cst_csosn", v)} /></Field>
               )}
-              <Field label="Alíquota %"><DecimalInput value={editing.aliquota} onChange={v => set("aliquota", v)} /></Field>
-              <Field label="Redução BC %"><DecimalInput value={editing.base_reducao} onChange={v => set("base_reducao", v)} /></Field>
+
+              {tipo === "CBSIBS" && (
+                <Field label="Classificação Tributária (cClassTrib)">
+                  <NatSel
+                    value={editing.clas_trib_id ?? ""}
+                    onChange={v => set("clas_trib_id", v || null)}
+                    options={[
+                      { value: "", label: "Selecione..." },
+                      ...availableClasTrib.map((item: any) => ({
+                        value: item.clas_trib_id,
+                        label: `${item.clas_trib_id} — ${item.descricao}`
+                      }))
+                    ]}
+                  />
+                </Field>
+              )}
+
+              {tipo !== "CBSIBS" && <>
+                <Field label="Alíquota %"><DecimalInput value={editing.aliquota} onChange={v => set("aliquota", v)} /></Field>
+                <Field label="Redução BC %"><DecimalInput value={editing.base_reducao} onChange={v => set("base_reducao", v)} /></Field>
+              </>}
 
               {tipo === "ICMS" && <>
                 <Field label="Mod. BC">
                   <NatSel
-                    value={String(editing.mod_bc ?? 3)}
-                    onChange={v => set("mod_bc", Number(v))}
-                    options={Object.entries(MOD_BC).map(([k, l]) => ({ value: k, label: l }))}
+                    value={editing.mod_bc === null || editing.mod_bc === undefined || editing.mod_bc === "" ? "" : String(editing.mod_bc)}
+                    onChange={v => set("mod_bc", v === "" ? null : Number(v))}
+                    options={[
+                      { value: "", label: "" },
+                      ...Object.entries(MOD_BC).map(([k, l]) => ({ value: k, label: l }))
+                    ]}
                   />
                 </Field>
                 <Field label="MVA %"><DecimalInput value={editing.icms_st_mva} onChange={v => set("icms_st_mva", v)} /></Field>
                 <Field label="Alíq. ST %"><DecimalInput value={editing.icms_st_aliquota} onChange={v => set("icms_st_aliquota", v)} /></Field>
                 <Field label="Mod. BC ST">
                   <NatSel
-                    value={String(editing.mod_bc_st ?? 4)}
-                    onChange={v => set("mod_bc_st", Number(v))}
-                    options={Object.entries(MOD_BC_ST).map(([k, l]) => ({ value: k, label: l }))}
+                    value={editing.mod_bc_st === null || editing.mod_bc_st === undefined || editing.mod_bc_st === "" ? "" : String(editing.mod_bc_st)}
+                    onChange={v => set("mod_bc_st", v === "" ? null : Number(v))}
+                    options={[
+                      { value: "", label: "" },
+                      ...Object.entries(MOD_BC_ST).map(([k, l]) => ({ value: k, label: l }))
+                    ]}
                   />
                 </Field>
                 <Field label="Red. BC ST %"><DecimalInput value={editing.icms_st_base_reducao} onChange={v => set("icms_st_base_reducao", v)} /></Field>
@@ -556,9 +605,11 @@ function SubGrid({ regraId, tipo, isEditing, cfopList, empresaId, fiscalGrupoLis
               )}
 
               {tipo === "CBSIBS" && <>
-                <Field label="IBS %"><DecimalInput value={editing.ibs_aliquota} onChange={v => set("ibs_aliquota", v)} /></Field>
-                <Field label="CBS %"><DecimalInput value={editing.cbs_aliquota} onChange={v => set("cbs_aliquota", v)} /></Field>
-                <Field label="IS %"><DecimalInput value={editing.is_aliquota} onChange={v => set("is_aliquota", v)} /></Field>
+                <Field label="Alíquota IBS %"><DecimalInput value={editing.ibs_aliquota} onChange={v => set("ibs_aliquota", v)} /></Field>
+                <Field label="Redução BC IBS %"><DecimalInput value={editing.ibs_base_reducao} onChange={v => set("ibs_base_reducao", v)} /></Field>
+                <Field label="Alíquota CBS %"><DecimalInput value={editing.cbs_aliquota} onChange={v => set("cbs_aliquota", v)} /></Field>
+                <Field label="Redução BC CBS %"><DecimalInput value={editing.cbs_base_reducao} onChange={v => set("cbs_base_reducao", v)} /></Field>
+                <Field label="Alíquota IS %"><DecimalInput value={editing.is_aliquota} onChange={v => set("is_aliquota", v)} /></Field>
               </>}
 
               <div className={`col-span-2 ${tipo === "CBSIBS" ? "lg:col-span-2" : "lg:col-span-1"} flex gap-2 pt-1`}>
@@ -761,6 +812,7 @@ const FiscalRegraForm: React.FC = () => {
                   cfopList={cfopList}
                   empresaId={XEmpresaMatrizId || 1}
                   regimeRegra={record.regime_trib}
+                  empresaRegime={currentEmpresa?.regime_trib}
                   fiscalGrupoList={fiscalGrupoList.filter(g => {
                     if (t.key === "CFOP") return true;
                     if (t.key === "ICMS") return g.tp_imposto === "ICMS";

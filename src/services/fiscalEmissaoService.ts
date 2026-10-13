@@ -399,7 +399,8 @@ export const fiscalEmissaoService = {
       }
 
       // 1. RE-SINCRONIZAR E RECALCULAR DADOS DA FONTE (PRODUTOS / CLIENTE / REGRAS TRIBUTÁRIAS)
-      if (cab.movimento_id) {
+      // APENAS para notas originadas de pedidos automáticos (não sobrescreve notas manuais de Outras Notas)
+      if (cab.movimento_id && cab.origem_inclusao !== "M") {
         const { data: nfeIdRet, error: eCalc } = await db.rpc("fu_calcular_impostos_movimento", {
           p_movimento_id: cab.movimento_id,
           p_modelo: String(cab.modelo || "55"),
@@ -534,8 +535,25 @@ export const fiscalEmissaoService = {
       const { data: nfeRefs } = await db.from("fiscal_nfe_referenciada")
         .select("chave_ref")
         .eq("nfe_cabecalho_id", nfeCabecalhoId)
-        .order("nfe_referenciada_id");
-      const chavesRef = nfeRefs?.map((d: any) => d.chave_ref).filter(Boolean) || [];
+      let chavesRef = nfeRefs?.map((d: any) => String(d.chave_ref || "").replace(/\D/g, "")).filter((ch: string) => ch.length === 44) || [];
+
+      // Coleta automaticamente as chaves de 44 dígitos informadas nos itens da nota (chave_ref_item / DFeReferenciado)
+      if (nfeItens && nfeItens.length > 0) {
+        for (const it of nfeItens) {
+          const rawItemKey = String(it.chave_ref_item || it.chave_ref || "").replace(/\D/g, "");
+          if (rawItemKey.length === 44 && !chavesRef.includes(rawItemKey)) {
+            chavesRef.push(rawItemKey);
+            try {
+              await db.from("fiscal_nfe_referenciada").insert({
+                nfe_cabecalho_id: nfeCabecalhoId,
+                chave_ref: rawItemKey,
+              });
+            } catch (eRefSync) {
+              console.warn("Aviso ao persistir chave do item em fiscal_nfe_referenciada:", eRefSync);
+            }
+          }
+        }
+      }
 
       const versaoMetodo = tipo === "NFE" ? fConfig?.nfe_versao_metodo : fConfig?.nfce_versao_metodo;
       const isV2 = versaoMetodo === '2.0';
@@ -543,6 +561,14 @@ export const fiscalEmissaoService = {
       // Validação de Devolução (Finalidade 4) em retransmitirDocumento
       if (Number(cab.fin_nfe) === 4) {
         if (chavesRef.length === 0) {
+          const itemComChaveIncompleta = nfeItens?.find((it: any) => {
+            const k = String(it.chave_ref_item || it.chave_ref || "").replace(/\D/g, "");
+            return k.length > 0 && k.length !== 44;
+          });
+          if (itemComChaveIncompleta) {
+            const k = String(itemComChaveIncompleta.chave_ref_item || itemComChaveIncompleta.chave_ref || "").replace(/\D/g, "");
+            throw new Error(`A Chave de Acesso da NF-e referenciada no item possui apenas ${k.length} dígitos (${k}). A SEFAZ exige exatamente 44 dígitos.`);
+          }
           throw new Error("NF-e de Devolução (Finalidade 4) exige ao menos uma Chave de Acesso referenciada (44 dígitos) cadastrada.");
         }
         const { data: origens } = await db

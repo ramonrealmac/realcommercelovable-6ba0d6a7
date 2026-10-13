@@ -22,6 +22,9 @@ export interface IProdutoRow {
   estoque_na_empresa: number;
   referencia?: string;
   gtin?: string;
+  ncm?: string;
+  cest?: string;
+  tb_a_origem?: number | string | null;
 }
 
 export interface IEstoqueDepositoRow {
@@ -115,7 +118,7 @@ export async function buscarProdutoPorCodigo(
     .maybeSingle();
 
   let q = db.from("produto")
-    .select("produto_id, cd_produto, nome, unidade_id, preco_venda, preco_venda_faturado, preco_promocional, preco_promocional_fat, st_promo, referencia, gtin")
+    .select("produto_id, cd_produto, nome, unidade_id, preco_venda, preco_venda_faturado, preco_promocional, preco_promocional_fat, st_promo, referencia, gtin, ncm, cest, tb_a_origem")
     .in("empresa_id", ids).eq("excluido", false).limit(5);
     
   if (codBarraData?.produto_id) {
@@ -170,6 +173,9 @@ export async function buscarProdutoPorCodigo(
     estoque_na_empresa: naEmpresa,
     referencia: p.referencia,
     gtin: p.gtin,
+    ncm: p.ncm,
+    cest: p.cest,
+    tb_a_origem: p.tb_a_origem,
   };
 }
 
@@ -453,7 +459,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({
 
     // 3. Monta query de produtos
     let q = db.from("produto")
-      .select("produto_id, cd_produto, nome, unidade_id, preco_venda, preco_venda_faturado, preco_promocional, preco_promocional_fat, st_promo, referencia, gtin")
+      .select("produto_id, cd_produto, nome, unidade_id, preco_venda, preco_venda_faturado, preco_promocional, preco_promocional_fat, st_promo, referencia, gtin, ncm, cest, tb_a_origem")
       .in("empresa_id", ids).eq("excluido", false);
 
     // Se temos filtro de IDs por estoque na busca vazia
@@ -495,7 +501,7 @@ const ProdutoSearchDialog: React.FC<IProps> = ({
     if (t && /^\d+$/.test(t)) {
       try {
         const { data: exactData } = await db.from("produto")
-          .select("produto_id, cd_produto, nome, unidade_id, preco_venda, preco_venda_faturado, preco_promocional, preco_promocional_fat, st_promo, referencia, gtin")
+          .select("produto_id, cd_produto, nome, unidade_id, preco_venda, preco_venda_faturado, preco_promocional, preco_promocional_fat, st_promo, referencia, gtin, ncm, cest, tb_a_origem")
           .in("empresa_id", ids)
           .eq("cd_produto", Number(t))
           .eq("excluido", false)

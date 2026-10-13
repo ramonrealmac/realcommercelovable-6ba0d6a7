@@ -48,7 +48,8 @@ interface IProps {
   onClose: () => void;
   onSelect: (cliente: IClienteRow) => void;
   empresaId: number;
-  tipo?: "cliente" | "fornecedor";
+  tipo?: "cliente" | "fornecedor" | "todos";
+  titulo?: string;
 }
 
 type CampoKey = "codigo" | "cnpj" | "razao_social" | "fantasia" | "telefone" | "email" | "endereco" | "bairro";
@@ -74,7 +75,7 @@ const parseCampos = (raw: unknown): CampoKey[] => {
   return CAMPOS_DEFAULT;
 };
 
-const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empresaId, tipo = "cliente" }) => {
+const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empresaId, tipo = "cliente", titulo }) => {
   const [XTermo, setXTermo] = useState("");
   const [XRows, setXRows] = useState<IClienteRow[]>([]);
   const [XLoading, setXLoading] = useState(false);
@@ -121,6 +122,8 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
 
     if (tipo === "fornecedor") {
       q = q.or("st_fornecedor.eq.S,st_transportador.eq.S");
+    } else if (tipo === "todos") {
+      q = q.or("st_cliente.eq.S,st_fornecedor.eq.S,st_transportador.eq.S");
     } else {
       q = q.eq("st_cliente", "S");
     }
@@ -211,7 +214,7 @@ const ClienteSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect, empres
       }}>
         <DialogHeader>
           <div className="flex items-center justify-between gap-4 flex-wrap">
-            <DialogTitle>{tipo === "fornecedor" ? "Pesquisar Fornecedor" : "Pesquisar Cliente"}</DialogTitle>
+            <DialogTitle>{titulo || (tipo === "fornecedor" ? "Pesquisar Fornecedor" : tipo === "todos" ? "Pesquisar Cliente / Fornecedor" : "Pesquisar Cliente")}</DialogTitle>
             <Popover open={XCfgOpen} onOpenChange={setXCfgOpen}>
               <PopoverTrigger asChild>
                 <button

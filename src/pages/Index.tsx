@@ -52,6 +52,11 @@ const OperadoraForm = safeLazy(() => import("@/components/forms/financeiro/Opera
 const BandeiraForm = safeLazy(() => import("@/components/forms/financeiro/BandeiraForm"));
 const TpOperacaoForm = safeLazy(() => import("@/components/forms/fiscal/TpOperacaoForm"));
 const CfopForm = safeLazy(() => import("@/components/forms/fiscal/CfopForm"));
+const IcmsForm = safeLazy(() => import("@/components/forms/fiscal/IcmsForm"));
+const PisCofinsForm = safeLazy(() => import("@/components/forms/fiscal/PisCofinsForm"));
+const IpiForm = safeLazy(() => import("@/components/forms/fiscal/IpiForm"));
+const IbsCbsForm = safeLazy(() => import("@/components/forms/fiscal/IbsCbsForm"));
+const ClasTribForm = safeLazy(() => import("@/components/forms/fiscal/ClasTribForm"));
 const FiscalGrupoProdutoForm = safeLazy(() => import("@/components/forms/fiscal/FiscalGrupoProdutoForm"));
 const FiscalRegraForm = safeLazy(() => import("@/components/forms/fiscal/FiscalRegraForm"));
 const PedidoForm = safeLazy(() => import("@/components/forms/pedido/PedidoForm"));
@@ -145,6 +150,11 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "plano-contas": return <PlanoContaForm />;
       case "tipo-operacoes": return <TpOperacaoForm />;
       case "cfop": return <CfopForm />;
+      case "icms": return <IcmsForm />;
+      case "pis-cofins": return <PisCofinsForm />;
+      case "ipi": return <IpiForm />;
+      case "ibs-cbs": return <IbsCbsForm />;
+      case "clas-trib": return <ClasTribForm />;
       case "fiscal-grupo-produtos": return <FiscalGrupoProdutoForm />;
       case "fiscal-regras": return <FiscalRegraForm />;
       case "pedidos": return <PedidoForm />;

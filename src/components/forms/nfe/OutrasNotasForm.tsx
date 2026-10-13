@@ -8,25 +8,29 @@ import NfeItensTab from "./NfeItensTab";
 import NfePagamentoTab from "./NfePagamentoTab";
 import type { INfeCabecalho, TNfeSt } from "./types";
 import { NFE_ST_LABELS } from "./types";
-import { Search, Send, Printer } from "lucide-react";
+import { Search, Send, Printer, AlertCircle } from "lucide-react";
 import { formatCPFCNPJ } from "@/lib/validators";
 import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
 import { useEnterTraversal } from "@/hooks/useEnterTraversal";
+import { formatNumericInput } from "@/utils/formNavigation";
 import ClienteSearchDialog, { IClienteRow } from "../pedido/ClienteSearchDialog";
+import FiscalProgressDialog from "@/components/fiscal/FiscalProgressDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 const db = supabase as any;
 
 interface IClienteInfo { id: number; cnpj: string; razao: string; cd_cadastro?: number | null; }
+interface IVendedorInfo { id: number; nome: string; cd_funcionario?: number | null; }
 
 const XGridCols: IGridColumn[] = [
   { key: "nfe_cabecalho_id", label: "ID",      width: "60px",  align: "right" },
-  { key: "pedido_id",        label: "Pedido",  width: "80px",  align: "right", render: r => r.pedido_id || r.movimento_id || "" },
+  { key: "pedido_id",        label: "Pedido",  width: "80px",  align: "right" },
   { key: "tp_nf",            label: "Tipo",    width: "70px",  render: r => r.tp_nf === 0 ? "Entrada" : "Saída" },
-  { key: "nr_nota",          label: "Nota",    width: "90px" },
+  { key: "nr_nota",          label: "Nota",    width: "90px",  render: (r: any) => r.nr_nota ? <span className="font-semibold">{r.nr_nota}</span> : <span className="text-muted-foreground text-[10px] italic">(Pendente)</span> },
   { key: "serie",            label: "Série",   width: "50px",  align: "center" },
   { key: "modelo",           label: "Mod.",    width: "50px",  align: "center" },
   { key: "dt_emissao",       label: "Emissão", width: "100px", render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
-  { key: "_dest",            label: "Destinatário", width: "2fr", getValue: (r: any) => r._dest_razao || "", render: (r: any) => r._dest_razao || (r.cadastro_id ? `#${r.cadastro_id}` : "") },
+  { key: "_dest",            label: "Cliente/Fornecedor", width: "2fr", getValue: (r: any) => r._dest_razao || "", render: (r: any) => r._dest_razao || (r.cadastro_id ? `#${r.cadastro_id}` : "") },
   { 
     key: "st_nf", 
     label: "Status", 
@@ -59,7 +63,9 @@ const XDefault: Partial<INfeCabecalho> = {
   fin_nfe: 1,
   tp_emis: 1,
   modelo: "55",
+  tp_operacao_id: null,
   nat_op: "Venda de Mercadoria",
+  funcionario_id: null,
   nr_nota: "",
   serie: "1",
   chave_nfe: "",
@@ -104,22 +110,68 @@ const OPERACOES_PREDEFINIDAS = [
 const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
   const { XEmpresaId } = useAppContext();
 
+  const [XAutoInsertItem, setXAutoInsertItem] = useState(false);
+
   const [XClienteCache, setXClienteCache] = useState<Record<number, IClienteInfo>>({});
+  const [XVendedorCache, setXVendedorCache] = useState<Record<number, IVendedorInfo>>({});
   const [XDepositos, setXDepositos] = useState<{ deposito_id: number; nome: string }[]>([]);
+  const [XTpOperacoes, setXTpOperacoes] = useState<{ id: number; label: string; tp_movimento: string; altera_estoque: string }[]>([]);
+  const [XProg, setXProg] = useState<{ open: boolean; titulo: string; total: number; restante: number }>({
+    open: false,
+    titulo: "",
+    total: 60,
+    restante: 60,
+  });
+  const [XSefazErroModal, setXSefazErroModal] = useState<{ open: boolean; cStat?: string | number | null; motivo?: string | null; detalhe?: string | null }>({
+    open: false,
+  });
+  
   const XClienteCacheRef = useRef<Record<number, IClienteInfo>>(XClienteCache);
   useEffect(() => { XClienteCacheRef.current = XClienteCache; }, [XClienteCache]);
 
+  const XVendedorCacheRef = useRef<Record<number, IVendedorInfo>>(XVendedorCache);
+  useEffect(() => { XVendedorCacheRef.current = XVendedorCache; }, [XVendedorCache]);
+
   const [XSearchOpen, setXSearchOpen] = useState(false);
-  const [XSearchTipo, setXSearchTipo] = useState<"cliente" | "fornecedor">("cliente");
+  const [XSearchTipo, setXSearchTipo] = useState<"cliente" | "fornecedor" | "todos">("todos");
   const [XSearchTarget, setXSearchTarget] = useState<((c: IClienteRow) => void) | null>(null);
 
+  const [XVendedorSearchOpen, setXVendedorSearchOpen] = useState(false);
+  const [XVendedorSearchTarget, setXVendedorSearchTarget] = useState<((v: IVendedorRow) => void) | null>(null);
+
+  const [XMovimentoCache, setXMovimentoCache] = useState<Record<number, number>>({});
+  const XMovimentoCacheRef = useRef<Record<number, number>>(XMovimentoCache);
+  useEffect(() => { XMovimentoCacheRef.current = XMovimentoCache; }, [XMovimentoCache]);
+
+  const ensureMovimentoInfo = useCallback(async (movIds: number[]) => {
+    const faltando = movIds.filter(id => id && !XMovimentoCacheRef.current[id]);
+    if (!faltando.length) return;
+    try {
+      const { data } = await db.from("movimento")
+        .select("movimento_id, nr_movimento")
+        .in("movimento_id", faltando);
+      if (data) {
+        setXMovimentoCache(prev => {
+          const next = { ...prev };
+          for (const m of data as any[]) {
+            if (m.movimento_id) next[m.movimento_id] = m.nr_movimento;
+          }
+          return next;
+        });
+      }
+    } catch (e) {
+      console.warn("Erro ao buscar dados do movimento:", e);
+    }
+  }, []);
+
   const destinatarioInputRef = useRef<HTMLInputElement>(null);
+  const vendedorInputRef = useRef<HTMLInputElement>(null);
+  const XVendorSelectedRef = useRef<number | null>(null);
 
   const { handleKeyDown } = useEnterTraversal();
 
   const handleSearchDestinatario = (rec: any, setF: (k: string, v: any) => void) => {
-    const isDevolucao = rec.fin_nfe === 4;
-    setXSearchTipo(isDevolucao ? "fornecedor" : "cliente");
+    setXSearchTipo("todos");
     setXSearchTarget(() => (c: IClienteRow) => {
       setXClienteCache(prev => ({
         ...prev,
@@ -132,16 +184,94 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
         }
       }));
       setF("cadastro_id", c.cadastro_id as any);
+      setXSearchOpen(false);
     });
     setXSearchOpen(true);
   };
 
+  const handleSaveAndGoToItens = async (
+    onSalvar?: () => Promise<any>,
+    setInnerTab?: (t: string) => void
+  ) => {
+    setXAutoInsertItem(true);
+    if (onSalvar) {
+      await onSalvar();
+    }
+    if (setInnerTab) {
+      setInnerTab("itens");
+    }
+  };
+
+  const handleSearchVendedor = (
+    rec: any,
+    setField: (k: string, v: any) => void,
+    setRecord?: any,
+    onSalvar?: () => Promise<any>,
+    setInnerTab?: (t: string) => void
+  ) => {
+    setXVendedorSearchTarget(() => async (v: IVendedorRow) => {
+      XVendorSelectedRef.current = v.cadastro_id;
+      setXVendedorCache(prev => ({
+        ...prev,
+        [v.cadastro_id]: {
+          id: v.cadastro_id,
+          cd_funcionario: v.cd_cadastro,
+          nome: v.razao_social || v.nome_fantasia || ""
+        }
+      }));
+      if (setRecord) {
+        setRecord((prev: any) => ({ ...prev, funcionario_id: v.cadastro_id }));
+      } else {
+        setField("funcionario_id", v.cadastro_id as any);
+      }
+      setXVendedorSearchOpen(false);
+      setTimeout(async () => {
+        await handleSaveAndGoToItens(onSalvar, setInnerTab);
+      }, 150);
+    });
+    setXVendedorSearchOpen(true);
+  };
+
   const XRefreshRef = useRef<(() => Promise<void>) | null>(null);
+
+  const carregarTpOperacoes = useCallback(async (empresaId: number) => {
+    if (!empresaId) return;
+    try {
+      const { data, error } = await db.from("tp_operacao")
+        .select("tp_operacao_id, descricao, tp_movimento, altera_estoque, gera_nf, excluido")
+        .eq("empresa_id", empresaId)
+        .order("descricao");
+
+      if (error) {
+        console.warn("Aviso ao carregar tp_operacao:", error);
+        return;
+      }
+
+      if (data) {
+        const validos = data.filter((t: any) =>
+          (String(t.gera_nf || "").toUpperCase() === "S" || t.gera_nf === true) &&
+          (t.excluido === false || t.excluido === null || t.excluido === undefined)
+        );
+        setXTpOperacoes(validos.map((t: any) => ({
+          id: t.tp_operacao_id,
+          label: t.descricao,
+          tp_movimento: String(t.tp_movimento || "").toUpperCase().trim(),
+          altera_estoque: t.altera_estoque,
+        })));
+      }
+    } catch (e) {
+      console.warn("Erro ao buscar tp_operacao:", e);
+    }
+  }, []);
 
   useEffect(() => {
     db.from("deposito").select("deposito_id,nome").eq("excluido", false).order("nome")
       .then(({ data }: any) => setXDepositos(data || []));
-  }, [XEmpresaId]);
+
+    if (XEmpresaId) {
+      carregarTpOperacoes(XEmpresaId);
+    }
+  }, [XEmpresaId, carregarTpOperacoes]);
 
   const ensureClienteInfo = useCallback(async (ids: number[]) => {
     const faltando = ids.filter(id => id && !XClienteCacheRef.current[id]);
@@ -160,16 +290,52 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
     }
   }, []);
 
-  const gridCols = useMemo(() => XGridCols.map(c =>
-    c.key === "_dest" ? { 
-      ...c, 
-      getValue: (r: any) => XClienteCache[r.cadastro_id]?.razao || "",
-      render: (r: any) => r._dest_razao || (r.cadastro_id ? (XClienteCache[r.cadastro_id]?.razao || `#${XClienteCache[r.cadastro_id]?.cd_cadastro ?? r.cadastro_id}`) : "")
-    } : c
-  ), [XClienteCache]);
+  const ensureVendedorInfo = useCallback(async (ids: number[]) => {
+    const faltando = ids.filter(id => id && !XVendedorCacheRef.current[id]);
+    if (!faltando.length) return;
+    const { data } = await db.from("funcionario")
+      .select("funcionario_id,cd_funcionario,nome")
+      .in("funcionario_id", faltando);
+    if (data) {
+      setXVendedorCache(prev => {
+        const next = { ...prev };
+        for (const v of data as any[]) {
+          next[v.funcionario_id] = { id: v.funcionario_id, cd_funcionario: v.cd_funcionario, nome: v.nome || "" };
+        }
+        return next;
+      });
+    }
+  }, []);
 
-  const fmt2 = (v: number) => Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
-  const fmtInput = (v: any) => (v === 0 || v === "0" || v === "" || v === undefined || v === null) ? "" : String(v).replace(".", ",");
+  const gridCols = useMemo(() => XGridCols.map(c => {
+    if (c.key === "_dest") {
+      return { 
+        ...c, 
+        getValue: (r: any) => XClienteCache[r.cadastro_id]?.razao || "",
+        render: (r: any) => r._dest_razao || (r.cadastro_id ? (XClienteCache[r.cadastro_id]?.razao || `#${XClienteCache[r.cadastro_id]?.cd_cadastro ?? r.cadastro_id}`) : "")
+      };
+    }
+    if (c.key === "pedido_id") {
+      return {
+        ...c,
+        getValue: (r: any) => (r.movimento_id ? XMovimentoCache[r.movimento_id] : null) || r.pedido_id || r.movimento_id || "",
+        render: (r: any) => {
+          const num = (r.movimento_id ? XMovimentoCache[r.movimento_id] : null) || r.pedido_id || r.movimento_id || "";
+          return num ? <span className="font-medium">{num}</span> : <span className="text-muted-foreground">-</span>;
+        }
+      };
+    }
+    return c;
+  }), [XClienteCache, XMovimentoCache]);
+
+  const fmt2 = (v: number) => Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtInput = (v: any) => {
+    if (v === undefined || v === null || v === "") return "0,00";
+    if (typeof v === "number") {
+      return v.toFixed(2).replace(".", ",");
+    }
+    return String(v).replace(".", ",");
+  };
   const parseNum = (v: any) => {
     if (v === undefined || v === null || v === "") return 0;
     if (typeof v === "number") return v;
@@ -182,6 +348,216 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
     setField(key, parseNum(current).toFixed(2).replace(".", ","));
   };
 
+  const handleEmitirDanfe = async (currentRecord: any) => {
+    if (!currentRecord?.nfe_cabecalho_id) return;
+    const tid = toast.loading("Gerando DANFE...");
+    try {
+      const res = await fiscalEmissaoService.imprimirDocumento(
+        currentRecord.nfe_cabecalho_id,
+        currentRecord.empresa_id || XEmpresaId
+      );
+      toast.dismiss(tid);
+      if (res.success && res.pdf_base64) {
+        const binaryString = atob(res.pdf_base64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+        const blob = new Blob([bytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        window.open(url, "_blank");
+        toast.success("DANFE gerado com sucesso.");
+      } else {
+        toast.error(res.message || "Falha ao gerar PDF do DANFE.");
+      }
+    } catch (e: any) {
+      toast.dismiss(tid);
+      toast.error("Erro ao emitir DANFE: " + e.message);
+    }
+  };
+
+  const handleEnviarSefaz = async (currentRecord: any, refresh?: () => Promise<void>) => {
+    if (!currentRecord?.nfe_cabecalho_id) {
+      toast.error("Salve a nota fiscal antes de transmitir à SEFAZ.");
+      return;
+    }
+    const targetEmpresaId = currentRecord.empresa_id || XEmpresaId;
+    const targetMod = String(currentRecord.modelo || "55");
+    const targetSer = String(currentRecord.serie || "1");
+
+    // 1. Gera o número oficial da nota fiscal SOMENTE NO ENVIO SEFAZ se ainda não tiver
+    let nrNotaTransmitir = currentRecord.nr_nota ? String(currentRecord.nr_nota).trim() : "";
+    if (!nrNotaTransmitir || nrNotaTransmitir === "0") {
+      try {
+        const { data: ci, error: errCi } = await db
+          .from("fiscal_config_item")
+          .select("fiscal_config_item_id, sequencia")
+          .eq("empresa_id", targetEmpresaId)
+          .eq("modelo", targetMod)
+          .eq("serie", targetSer)
+          .maybeSingle();
+
+        if (errCi || !ci) {
+          toast.error(`Configuração fiscal não encontrada para Empresa ${targetEmpresaId}, Modelo ${targetMod}, Série ${targetSer}.`);
+          return;
+        }
+
+        const proximoSequencial = Number(ci.sequencia || 1);
+        nrNotaTransmitir = String(proximoSequencial);
+
+        // Atribui o número da nota no banco
+        await db.from("fiscal_nfe_cabecalho")
+          .update({ nr_nota: nrNotaTransmitir })
+          .eq("nfe_cabecalho_id", currentRecord.nfe_cabecalho_id);
+
+        // Incrementa a sequência da série
+        await db.from("fiscal_config_item")
+          .update({ sequencia: proximoSequencial + 1 })
+          .eq("fiscal_config_item_id", ci.fiscal_config_item_id);
+
+        currentRecord.nr_nota = nrNotaTransmitir;
+        toast.info(`Número fiscal nº ${nrNotaTransmitir} gerado da sequência da Série ${targetSer}.`);
+      } catch (eSeq: any) {
+        toast.error("Erro ao gerar sequencial fiscal: " + eSeq.message);
+        return;
+      }
+    }
+
+    if (!confirm(`Enviar NF-e #${nrNotaTransmitir} para a SEFAZ via fiscal-worker?`)) return;
+
+    // 2. Sincroniza o movimento/pedido interno antes de transmitir
+    try {
+      await db.rpc("fu_sincronizar_movimento_outras_notas", {
+        p_nfe_cabecalho_id: currentRecord.nfe_cabecalho_id
+      });
+    } catch (eSync) {
+      console.warn("Aviso na sincronização prévia de movimento:", eSync);
+    }
+
+    // 3. Abre diálogo de progresso com contagem regressiva
+    const totalSeg = (await fiscalEmissaoService.obterTimeoutFiscalSeg(targetEmpresaId)) || 60;
+    setXProg({
+      open: true,
+      titulo: `Transmitindo NF-e #${nrNotaTransmitir} à SEFAZ...`,
+      total: totalSeg,
+      restante: totalSeg,
+    });
+
+    try {
+      // 3. Enfileira o comando para o fiscal-worker
+      const res = await fiscalEmissaoService.retransmitirDocumento(
+        currentRecord.nfe_cabecalho_id,
+        targetEmpresaId
+      );
+
+      if (!res.success || !res.fiscal_evento_id) {
+        setXProg(p => ({ ...p, open: false }));
+        toast.error("Falha ao enfileirar: " + (res.message || "Erro desconhecido"));
+        setXSefazErroModal({
+          open: true,
+          cStat: "VALIDAÇÃO",
+          motivo: res.message || "Erro prévio de validação antes da transmissão.",
+        });
+        return;
+      }
+
+      // 4. Aguarda processamento do fiscal-worker em tempo real
+      const ret = await fiscalEmissaoService.aguardarEvento(res.fiscal_evento_id, {
+        empresaId: targetEmpresaId,
+        timeoutMs: totalSeg * 1000,
+        onTick: (s) => setXProg(p => ({ ...p, restante: s })),
+      });
+
+      setXProg(p => ({ ...p, open: false }));
+
+      // 5. Busca dados atualizados da nota no banco
+      const { data: cabUpdated } = await db.from("fiscal_nfe_cabecalho")
+        .select("nfe_cabecalho_id, nr_nota, serie, st_nf, c_stat, x_motivo, chave_nfe, nr_protocolo, movimento_id, pedido_id")
+        .eq("nfe_cabecalho_id", currentRecord.nfe_cabecalho_id)
+        .maybeSingle();
+
+      if (refresh) await refresh();
+      else if (XRefreshRef.current) await XRefreshRef.current();
+
+      const stNf = cabUpdated?.st_nf || (ret.success ? "A" : "R");
+
+      // 6. Trata retorno oficial da SEFAZ
+      if (stNf === "A") {
+        toast.success("Nota Fiscal AUTORIZADA com sucesso pela SEFAZ!");
+
+        // Atualiza e avança o sequencial em fiscal_config_item
+        const nrEmitido = Number(cabUpdated?.nr_nota || currentRecord.nr_nota);
+        if (nrEmitido) {
+          const modEmitido = String(currentRecord.modelo || "55");
+          const serEmitida = String(currentRecord.serie || "1");
+          const { data: ci } = await db
+            .from("fiscal_config_item")
+            .select("fiscal_config_item_id, sequencia")
+            .eq("empresa_id", targetEmpresaId)
+            .eq("modelo", modEmitido)
+            .eq("serie", serEmitida)
+            .maybeSingle();
+          if (ci && Number(ci.sequencia) <= nrEmitido) {
+            await db
+              .from("fiscal_config_item")
+              .update({ sequencia: nrEmitido + 1 })
+              .eq("fiscal_config_item_id", ci.fiscal_config_item_id);
+            buscarProximoSequencial(targetEmpresaId, modEmitido, serEmitida).then(nr => {
+              if (nr) setXProximoNrNota(nr);
+            });
+          }
+        }
+
+        // Gera DANFE automaticamente
+        const tidDanfe = toast.loading("Gerando DANFE em PDF...");
+        try {
+          const impRes = await fiscalEmissaoService.imprimirDocumento(
+            currentRecord.nfe_cabecalho_id,
+            targetEmpresaId
+          );
+          toast.dismiss(tidDanfe);
+          if (impRes.success && impRes.pdf_base64) {
+            const binaryString = atob(impRes.pdf_base64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+            const blob = new Blob([bytes], { type: "application/pdf" });
+            const url = URL.createObjectURL(blob);
+            window.open(url, "_blank");
+            toast.success("DANFE emitido e aberto em nova aba.");
+          }
+        } catch (eImp: any) {
+          toast.dismiss(tidDanfe);
+          console.warn("Aviso na geração do DANFE:", eImp.message);
+        }
+      } else {
+        // Erro ou Rejeição da SEFAZ
+        const cStat = cabUpdated?.c_stat || ret.resposta?.c_stat || ret.resposta?.CStat || ret.status || "";
+        const motivo = cabUpdated?.x_motivo || ret.mensagem || ret.resposta?.x_motivo || ret.resposta?.Msg || "Rejeição não especificada pela SEFAZ";
+        
+        let dica = "";
+        if (String(cStat) === "539" || String(cStat) === "204") {
+          dica = `A numeração de nota fiscal (${cabUpdated?.nr_nota || currentRecord.nr_nota}) já foi utilizada anteriormente na SEFAZ. Clique em 'Editar' e use o botão '⚡ Próximo livre' ao lado de Nº Nota para avançar para o próximo sequencial da série.`;
+        }
+
+        toast.error(`Rejeição SEFAZ: ${motivo}`);
+        setXSefazErroModal({
+          open: true,
+          cStat,
+          motivo,
+          detalhe: dica,
+        });
+      }
+    } catch (e: any) {
+      setXProg(p => ({ ...p, open: false }));
+      toast.error("Erro: " + e.message);
+      setXSefazErroModal({
+        open: true,
+        cStat: "ERRO",
+        motivo: e.message,
+      });
+      if (refresh) await refresh();
+      else if (XRefreshRef.current) await XRefreshRef.current();
+    }
+  };
+
   return (
     <>
       <StandardCrudForm<INfeCabecalho>
@@ -189,24 +565,99 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
         XTableName: "fiscal_nfe_cabecalho",
         XPrimaryKey: "nfe_cabecalho_id",
         XTitle: "Outras Notas",
-        XDefaultRecord: { ...XDefault, empresa_id: XEmpresaId } as any,
+        XDefaultRecord: { 
+          ...XDefault, 
+          empresa_id: XEmpresaId,
+          nr_nota: "",
+        } as any,
         XEmpresaId,
         XSelectCols: "*",
         XOrderBy: "nfe_cabecalho_id",
         XSoftDelete: false,
+        XKeepEditAfterInsert: true,
         XApplyFilter: (q) => q, 
         XCanEdit: (rec: any) => !["A", "C", "D"].includes(String(rec.st_nf)),
         XOnAfterLoad: (rows: any[]) => {
           const ids = [...new Set(rows.map(r => r.cadastro_id).filter(Boolean))] as number[];
           if (ids.length) ensureClienteInfo(ids);
+          const vIds = [...new Set(rows.map(r => r.funcionario_id).filter(Boolean))] as number[];
+          if (vIds.length) ensureVendedorInfo(vIds);
+          const movIds = [...new Set(rows.map(r => r.movimento_id).filter(Boolean))] as number[];
+          if (movIds.length) ensureMovimentoInfo(movIds);
         },
         XOnBeforeSave: (rec: any) => {
           if (rec.tp_nf === undefined || rec.tp_nf === null) rec.tp_nf = 1;
           delete rec.chaves_ref;
           delete rec.chave_ref;
-          return { ...rec, empresa_id: rec.empresa_id || XEmpresaId };
+          delete rec.vl_bc_st;
+          delete rec._dest;
+          delete rec._dest_razao;
+          if (XVendorSelectedRef.current !== undefined && XVendorSelectedRef.current !== null) {
+            rec.funcionario_id = XVendorSelectedRef.current;
+          }
+
+          const targetEmpId = rec.empresa_id || XEmpresaId;
+          
+          // O número da nota fiscal é gerado SOMENTE no envio à SEFAZ. Se vazio ou 0, mantém vazio.
+          if (!rec.nr_nota || String(rec.nr_nota).trim() === "0") {
+            rec.nr_nota = "";
+          }
+
+          const numericTotalKeys = [
+            "vl_produto", "vl_desconto", "vl_frete", "vl_seguro", "vl_despesa", "vl_outro",
+            "vl_bc", "vl_icms", "vl_icms_deson", "vl_icms_st", "vl_fcp", "vl_fcp_st",
+            "vl_fcp_st_ret", "vl_ipi", "vl_ipi_devol", "vl_ii", "vl_pis", "vl_cofins",
+            "vl_ibs", "vl_cbs", "vl_is", "vl_total_nf"
+          ];
+          for (const k of numericTotalKeys) {
+            if (rec[k] !== undefined && rec[k] !== null && rec[k] !== "") {
+              rec[k] = parseNum(rec[k]);
+            } else if (rec[k] === "") {
+              rec[k] = 0;
+            }
+          }
+          return { ...rec, empresa_id: targetEmpId };
         },
-        XOnAfterSave: async (rec: any, mode: any) => {},
+        XOnAfterSave: async (rec: any, mode: any) => {
+          if (rec?.nfe_cabecalho_id && rec?.tp_operacao_id) {
+            try {
+              await db.rpc("fu_sincronizar_movimento_outras_notas", {
+                p_nfe_cabecalho_id: rec.nfe_cabecalho_id
+              });
+              if (XRefreshRef.current) {
+                await XRefreshRef.current();
+              }
+            } catch (e) {
+              console.error("Erro ao sincronizar pedido em Outras Notas:", e);
+            }
+          }
+          if (rec?.nfe_cabecalho_id && Number(rec.fin_nfe) === 4) {
+            try {
+              const { data: pagData } = await db.from("fiscal_nfe_pagamento")
+                .select("nfe_pagamento_id, t_pag, v_pag")
+                .eq("nfe_cabecalho_id", rec.nfe_cabecalho_id);
+
+              if (!pagData || pagData.length === 0) {
+                await db.from("fiscal_nfe_pagamento").insert({
+                  nfe_cabecalho_id: rec.nfe_cabecalho_id,
+                  t_pag: "90",
+                  v_pag: 0,
+                  tp_integra: 2,
+                });
+              } else if (pagData.length === 1 && (pagData[0].t_pag !== "90" || Number(pagData[0].v_pag) !== 0)) {
+                await db.from("fiscal_nfe_pagamento").update({
+                  t_pag: "90",
+                  v_pag: 0,
+                  tp_integra: 2,
+                  cnpj_credenciadora: null,
+                  c_aut: null,
+                }).eq("nfe_pagamento_id", pagData[0].nfe_pagamento_id);
+              }
+            } catch (eP) {
+              console.warn("Aviso ao garantir pagamento 90 em devolução:", eP);
+            }
+          }
+        },
       }}
       XGridCols={gridCols}
       XExportTitle="Outras Notas"
@@ -215,39 +666,16 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
       XInitialId={initialId}
       XToolbarExtras={({ currentRecord, isEditing, refresh }) => {
         if (!currentRecord || isEditing) return null;
-        const st = String(currentRecord.st_nf || "");
-        const podeEnviar = ["P", "E", "R"].includes(st) && Number(currentRecord.tp_nf) === 1;
+        const st = String(currentRecord.st_nf || "P").toUpperCase();
         const foiEmitida = st === "A";
+        const podeEnviar = !foiEmitida && st !== "C";
 
         if (foiEmitida) {
           return (
             <button
               type="button"
-              onClick={async () => {
-                const tid = toast.loading("Gerando DANFE...");
-                try {
-                  const res = await fiscalEmissaoService.imprimirDocumento(
-                    currentRecord.nfe_cabecalho_id,
-                    currentRecord.empresa_id || XEmpresaId
-                  );
-                  toast.dismiss(tid);
-                  if (res.success && res.pdf_base64) {
-                    const binaryString = atob(res.pdf_base64);
-                    const bytes = new Uint8Array(binaryString.length);
-                    for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-                    const blob = new Blob([bytes], { type: "application/pdf" });
-                    const url = URL.createObjectURL(blob);
-                    window.open(url, "_blank");
-                    toast.success("DANFE gerado com sucesso.");
-                  } else {
-                    toast.error(res.message || "Falha ao gerar PDF do DANFE.");
-                  }
-                } catch (e: any) {
-                  toast.dismiss(tid);
-                  toast.error("Erro ao emitir DANFE: " + e.message);
-                }
-              }}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md shadow-sm"
+              onClick={() => handleEmitirDanfe(currentRecord)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md shadow-sm"
               title="Visualizar e Imprimir DANFE em PDF"
             >
               <Printer className="w-3.5 h-3.5" /> EMITIR DANFE
@@ -259,27 +687,8 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
           return (
             <button
               type="button"
-              onClick={async () => {
-                if (!confirm(`Enviar NF-e #${currentRecord.nfe_cabecalho_id} para a SEFAZ via fiscal-worker?`)) return;
-                const tid = toast.loading("Enviando para fila do fiscal-worker...");
-                try {
-                  const res = await fiscalEmissaoService.retransmitirDocumento(
-                    currentRecord.nfe_cabecalho_id,
-                    XEmpresaId
-                  );
-                  toast.dismiss(tid);
-                  if (res.success) {
-                    toast.success(`Evento #${res.fiscal_evento_id} enfileirado. Aguarde o fiscal-worker processar.`);
-                    await refresh();
-                  } else {
-                    toast.error("Falha: " + (res.message || "Erro desconhecido"));
-                  }
-                } catch (e: any) {
-                  toast.dismiss(tid);
-                  toast.error("Erro: " + e.message);
-                }
-              }}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-primary text-primary-foreground rounded-md hover:opacity-90 shadow-sm"
+              onClick={() => handleEnviarSefaz(currentRecord, refresh)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#eab308] hover:bg-[#ca8a04] text-white rounded shadow-sm transition-colors"
               title="Cria evento PENDENTE no fiscal_evento para que o fiscal-worker transmita a NF-e à SEFAZ"
             >
               <Send className="w-3.5 h-3.5" /> ENVIAR SEFAZ
@@ -292,29 +701,55 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
       XExtraTabs={[
         {
           key: "itens", label: "Itens da NF-e",
-          render: ({ record, currentRecord }) => {
+          render: ({ record, currentRecord, isEditing, setRecord }) => {
             const id = (currentRecord || record)?.nfe_cabecalho_id || null;
             const st = (currentRecord || record)?.st_nf || "A";
             const finNfe = Number((currentRecord || record)?.fin_nfe || 1);
-            const podeEditar = !["A", "E", "C", "D"].includes(String(st));
+            const podeEditar = !!isEditing && !["A", "E", "C", "D"].includes(String(st));
             return (
               <NfeItensTab 
                 nfeCabecalhoId={id} 
                 empresaId={XEmpresaId} 
                 podeEditar={podeEditar} 
-                hideVinculo={finNfe !== 4} 
-                onRefreshCabecalho={() => XRefreshRef.current?.()}
+                hideVinculo={true}
+                finNfe={finNfe} 
+                onRefreshCabecalho={async (totais?: any) => {
+                  if (totais && setRecord) {
+                    setRecord((prev: any) => ({ ...prev, ...totais }));
+                  } else if (id && setRecord) {
+                    const { data: fresh } = await db.from("fiscal_nfe_cabecalho")
+                      .select("*")
+                      .eq("nfe_cabecalho_id", id)
+                      .maybeSingle();
+                    if (fresh) {
+                      setRecord((prev: any) => ({ ...prev, ...fresh }));
+                    }
+                  }
+                  if (id) {
+                    try {
+                      await db.rpc("fu_sincronizar_movimento_outras_notas", {
+                        p_nfe_cabecalho_id: id
+                      });
+                    } catch (e) {
+                      console.warn("Sincronização de movimento em background:", e);
+                    }
+                  }
+                  await XRefreshRef.current?.();
+                }}
+                autoInsert={XAutoInsertItem}
+                onAutoInsertHandled={() => setXAutoInsertItem(false)}
               />
             );
           },
         },
         {
           key: "pagamentos", label: "Pagamentos",
-          render: ({ record, currentRecord }) => {
+          render: ({ record, currentRecord, isEditing }) => {
             const id = (currentRecord || record)?.nfe_cabecalho_id || null;
             const st = (currentRecord || record)?.st_nf || "A";
-            const podeEditar = !["A", "E", "C", "D"].includes(String(st));
-            return <NfePagamentoTab nfeCabecalhoId={id} podeEditar={podeEditar} />;
+            const finNfe = Number((currentRecord || record)?.fin_nfe || 1);
+            const podeEditar = !!isEditing && !["A", "E", "C", "D"].includes(String(st));
+            return <NfePagamentoTab nfeCabecalhoId={id} podeEditar={podeEditar} finNfe={finNfe} />;
           },
         },
         {
@@ -377,20 +812,49 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
           },
         },
       ]}
-      renderCadastro={({ record, setField, mode, isEditing }) => {
+      renderCadastro={({ record, setField, setRecord, mode, isEditing, onSalvar, setInnerTab, handleEditar }) => {
         const ro = !isEditing;
         const stAtual = (record.st_nf || "A") as TNfeSt;
+
+        if (record?.funcionario_id) {
+          XVendorSelectedRef.current = record.funcionario_id;
+          if (!XVendedorCache[record.funcionario_id]) {
+            ensureVendedorInfo([record.funcionario_id]);
+          }
+        }
 
         return (
           <div className="space-y-4" onKeyDown={handleKeyDown}>
             <div className="grid grid-cols-12 gap-3 items-end">
               <div className="col-span-1">
-                <label className="text-xs text-muted-foreground">Pedido</label>
-                <input readOnly value={(record as any).pedido_id ?? (record as any).movimento_id ?? ""} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right" title="Nº do pedido" />
+                <label className="text-xs text-muted-foreground font-medium">Nº Pedido</label>
+                <input 
+                  readOnly 
+                  value={
+                    (record.movimento_id && XMovimentoCache[record.movimento_id]) 
+                      ? XMovimentoCache[record.movimento_id] 
+                      : ((record as any).pedido_id ?? (record as any).movimento_id ?? "")
+                  } 
+                  className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right font-bold text-foreground" 
+                  title={`Número oficial do pedido (${record.movimento_id ? `Movimento #${record.movimento_id}` : 'Sem movimento'})`} 
+                />
               </div>
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Tipo de Nota</label>
-                <select disabled={ro} value={record.tp_nf ?? 1} onChange={e => setField("tp_nf" as any, Number(e.target.value) as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
+                <select 
+                  disabled={ro} 
+                  value={record.tp_nf ?? 1} 
+                  onChange={e => {
+                    const novoTp = Number(e.target.value);
+                    setField("tp_nf" as any, novoTp as any);
+                    const prefixoNovo = novoTp === 0 ? "E" : "S";
+                    const opAtual = XTpOperacoes.find(o => o.id === record.tp_operacao_id);
+                    if (opAtual && !opAtual.tp_movimento.toUpperCase().startsWith(prefixoNovo)) {
+                      setField("tp_operacao_id" as any, null as any);
+                    }
+                  }} 
+                  className="w-full border border-border rounded px-2 py-1 text-sm font-medium"
+                >
                   <option value={1}>1 - Saída</option>
                   <option value={0}>0 - Entrada</option>
                 </select>
@@ -406,9 +870,22 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                   <option value={65}>65</option>
                 </select>
               </div>
-              <div className="col-span-1">
-                <label className="text-xs text-muted-foreground">Nº Nota <span className="text-destructive">*</span></label>
-                <input readOnly={ro} type="number" value={record.nr_nota || ""} onChange={e => setField("nr_nota" as any, Number(e.target.value) as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground flex items-center justify-between">
+                  <span>Nº Nota</span>
+                  {!record.nr_nota && (
+                    <span className="text-[10px] text-muted-foreground italic font-normal">(gerado no envio)</span>
+                  )}
+                </label>
+                <input 
+                  readOnly={ro} 
+                  type="text" 
+                  placeholder="(Gerado ao enviar SEFAZ)"
+                  value={record.nr_nota ?? ""} 
+                  onChange={e => setField("nr_nota" as any, e.target.value as any)} 
+                  className="w-full border border-border rounded px-2 py-1 text-sm font-semibold" 
+                  title="O número oficial é gerado e incrementado automaticamente a partir da série oficial no momento do envio à SEFAZ."
+                />
               </div>
               <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Série</label>
@@ -419,12 +896,17 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                 <input type="date" readOnly={ro} value={(record.dt_emissao || "").toString().substring(0, 10)} onChange={e => setField("dt_emissao" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
               </div>
               <div className="col-span-1">
-                <label className="text-xs text-muted-foreground">Dt. Saída</label>
-                <input type="date" readOnly={ro} value={(record.dt_saida || "").toString().substring(0, 10)} onChange={e => setField("dt_saida" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
-              </div>
-              <div className="col-span-1">
-                <label className="text-xs text-muted-foreground">Dt. Entrada</label>
-                <input type="date" readOnly={ro} value={((record as any).dt_entrada || "").toString().substring(0, 10)} onChange={e => setField("dt_entrada" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
+                <label className="text-xs text-muted-foreground">{Number(record.tp_nf) === 0 ? "Dt. Entrada" : "Dt. Saída"}</label>
+                <input 
+                  type="date" 
+                  readOnly={ro} 
+                  value={((Number(record.tp_nf) === 0 ? (record as any).dt_entrada : record.dt_saida) || "").toString().substring(0, 10)} 
+                  onChange={e => {
+                    if (Number(record.tp_nf) === 0) setField("dt_entrada" as any, e.target.value as any);
+                    else setField("dt_saida" as any, e.target.value as any);
+                  }} 
+                  className="w-full border border-border rounded px-2 py-1 text-sm" 
+                />
               </div>
               <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Status</label>
@@ -433,23 +915,115 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
             </div>
 
             <div className="grid grid-cols-12 gap-3">
-              <div className="col-span-6">
+              <div className="col-span-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-muted-foreground font-medium">
+                    Tipo de Operação {Number(record.tp_nf) === 0 ? "(Entradas: E*)" : "(Saídas: S*)"}
+                  </label>
+                  {isEditing && (
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => carregarTpOperacoes(record.empresa_id || XEmpresaId)}
+                      className="text-[10px] text-primary hover:underline font-normal"
+                      title="Atualizar lista de tipos de operação cadastrados"
+                    >
+                      ↻ Atualizar
+                    </button>
+                  )}
+                </div>
+                {(() => {
+                  const isEntrada = Number(record.tp_nf) === 0;
+                  const prefixoEsperado = isEntrada ? "E" : "S";
+                  const operacoesFiltradas = XTpOperacoes.filter(op =>
+                    op.tp_movimento.toUpperCase().startsWith(prefixoEsperado)
+                  );
+                  const operacoesExibir = operacoesFiltradas.some(o => o.id === record.tp_operacao_id)
+                    ? operacoesFiltradas
+                    : (record.tp_operacao_id && XTpOperacoes.find(o => o.id === record.tp_operacao_id))
+                      ? [...operacoesFiltradas, XTpOperacoes.find(o => o.id === record.tp_operacao_id)!]
+                      : operacoesFiltradas;
+
+                  return (
+                    <select 
+                      disabled={ro} 
+                      value={record.tp_operacao_id ?? ""} 
+                      onFocus={() => {
+                        if (isEditing) carregarTpOperacoes(record.empresa_id || XEmpresaId);
+                      }}
+                      onChange={e => {
+                        const val = e.target.value ? Number(e.target.value) : null;
+                        setField("tp_operacao_id" as any, val as any);
+                        const sel = XTpOperacoes.find(o => o.id === val);
+                        if (sel) {
+                          setField("nat_op" as any, sel.label as any);
+                        }
+                      }} 
+                      className="w-full border border-border rounded px-2 py-1 text-sm bg-background font-medium"
+                    >
+                      <option value="">— Selecione —</option>
+                      {operacoesExibir.map(op => (
+                        <option key={op.id} value={op.id}>
+                          [{op.tp_movimento}] {op.label}
+                        </option>
+                      ))}
+                    </select>
+                  );
+                })()}
+              </div>
+              <div className="col-span-3">
                 <label className="text-xs text-muted-foreground">Natureza da Operação <span className="text-destructive">*</span></label>
-                <select 
-                  disabled={ro} 
+                <input 
+                  readOnly={ro} 
                   value={record.nat_op ?? ""} 
                   onChange={e => setField("nat_op" as any, e.target.value as any)} 
+                  list="operacoes-predefinidas-list"
+                  placeholder="Informe a natureza"
                   className="w-full border border-border rounded px-2 py-1 text-sm"
-                >
-                  <option value="">— Selecione —</option>
+                />
+                <datalist id="operacoes-predefinidas-list">
                   {OPERACOES_PREDEFINIDAS.map(op => (
-                    <option key={op} value={op}>{op}</option>
+                    <option key={op} value={op} />
                   ))}
-                </select>
+                </datalist>
               </div>
               <div className="col-span-3">
                 <label className="text-xs text-muted-foreground">Finalidade NF-e</label>
-                <select disabled={ro} value={record.fin_nfe ?? 1} onChange={e => setField("fin_nfe" as any, Number(e.target.value) as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
+                <select 
+                  disabled={ro} 
+                  value={record.fin_nfe ?? 1} 
+                  onChange={async e => {
+                    const novoFin = Number(e.target.value);
+                    setField("fin_nfe" as any, novoFin as any);
+                    if (novoFin === 4 && record.nfe_cabecalho_id) {
+                      try {
+                        const { data: pagData } = await db.from("fiscal_nfe_pagamento")
+                          .select("nfe_pagamento_id, t_pag, v_pag")
+                          .eq("nfe_cabecalho_id", record.nfe_cabecalho_id);
+
+                        if (!pagData || pagData.length === 0) {
+                          await db.from("fiscal_nfe_pagamento").insert({
+                            nfe_cabecalho_id: record.nfe_cabecalho_id,
+                            t_pag: "90",
+                            v_pag: 0,
+                            tp_integra: 2,
+                          });
+                        } else if (pagData.length === 1 && (pagData[0].t_pag !== "90" || Number(pagData[0].v_pag) !== 0)) {
+                          await db.from("fiscal_nfe_pagamento").update({
+                            t_pag: "90",
+                            v_pag: 0,
+                            tp_integra: 2,
+                            cnpj_credenciadora: null,
+                            c_aut: null,
+                          }).eq("nfe_pagamento_id", pagData[0].nfe_pagamento_id);
+                        }
+                      } catch (eP) {
+                        console.warn("Erro ao configurar pagamento 90:", eP);
+                      }
+                    }
+                  }} 
+                  className="w-full border border-border rounded px-2 py-1 text-sm font-medium"
+                >
                   <option value={1}>1 - NF-e normal</option>
                   <option value={2}>2 - NF-e complementar</option>
                   <option value={3}>3 - NF-e de ajuste</option>
@@ -469,24 +1043,26 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
 
             <div className="grid grid-cols-12 gap-3">
               <div className="col-span-12">
-                <label className="text-xs text-muted-foreground">Destinatário <span className="text-destructive">*</span></label>
+                <label className="text-xs text-muted-foreground font-medium">Cliente/Fornecedor <span className="text-destructive">*</span></label>
                 <div className="flex gap-1">
                   <input
                     ref={destinatarioInputRef}
                     readOnly={!isEditing}
                     value={record.cadastro_id ? (XClienteCache[record.cadastro_id]?.razao || `#${XClienteCache[record.cadastro_id]?.cd_cadastro ?? record.cadastro_id}`) : ""}
-                    placeholder="Pressione Enter para pesquisar..."
+                    placeholder="Pressione Enter para pesquisar cliente ou fornecedor..."
                     className="flex-1 border border-border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none cursor-pointer"
                     data-lookup="true"
                     data-required="true"
                     data-lookup-key="destinatario"
-                    onKeyDown={(e) => {
+                    onKeyDown={async (e) => {
                       if (!isEditing) return;
                       if (e.key === "Enter") {
                         e.preventDefault();
                         e.stopPropagation();
                         if (!record.cadastro_id) {
                           handleSearchDestinatario(record, setField);
+                        } else {
+                          await handleSaveAndGoToItens(onSalvar, setInnerTab);
                         }
                       }
                     }}
@@ -497,7 +1073,7 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                       tabIndex={-1}
                       onClick={() => handleSearchDestinatario(record, setField)}
                       className="px-2 py-1 border border-border rounded bg-card hover:bg-accent"
-                      title="Pesquisar destinatário"
+                      title="Pesquisar cliente ou fornecedor"
                       data-lookup-trigger="true"
                       data-lookup-key="destinatario"
                     >
@@ -551,7 +1127,7 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                       value={ro ? fmt2(Number((record as any)[f.key] || 0)) : fmtInput((record as any)[f.key] || 0)}
                       onBlur={() => handleBlur(f.key, record, setField)}
                       onChange={e => {
-                        const val = e.target.value.replace(/\./g, "").replace(",", ".");
+                        const val = formatNumericInput(e.target.value, 2);
                         setField(f.key as any, val as any);
                       }}
                       className={`w-full border border-border rounded px-2 py-1.5 text-xs text-right font-mono ${ro ? "bg-secondary/50" : "bg-card"}`}
@@ -576,9 +1152,56 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
         open={XSearchOpen}
         onClose={() => setXSearchOpen(false)}
         empresaId={XEmpresaId}
-        tipo={XSearchTipo}
+        tipo="todos"
+        titulo="Pesquisar Cliente / Fornecedor"
         onSelect={(c) => XSearchTarget?.(c)}
       />
+
+      <FiscalProgressDialog
+        open={XProg.open}
+        titulo={XProg.titulo}
+        descricao="Aguardando assinatura digital, transmissão e autorização da SEFAZ via Fiscal Worker."
+        segundosTotais={XProg.total}
+        segundosRestantes={XProg.restante}
+      />
+
+      <Dialog open={XSefazErroModal.open} onOpenChange={open => setXSefazErroModal(p => ({ ...p, open }))}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="w-5 h-5 text-destructive" />
+              Retorno SEFAZ / Rejeição
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-sm">
+            {XSefazErroModal.cStat && (
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-xs uppercase px-2 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">
+                  Status SEFAZ: {XSefazErroModal.cStat}
+                </span>
+              </div>
+            )}
+            <div className="p-3 bg-destructive/5 border border-destructive/20 rounded-md text-destructive font-mono text-xs whitespace-pre-wrap leading-relaxed">
+              {XSefazErroModal.motivo}
+            </div>
+            {XSefazErroModal.detalhe && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-md text-amber-800 text-xs leading-relaxed">
+                <strong className="block mb-1">Como resolver:</strong>
+                {XSefazErroModal.detalhe}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setXSefazErroModal(p => ({ ...p, open: false }))}
+              className="px-4 py-2 text-xs font-bold bg-secondary rounded hover:bg-secondary/80"
+            >
+              FECHAR
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

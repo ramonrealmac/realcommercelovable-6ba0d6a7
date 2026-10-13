@@ -19,7 +19,11 @@ export interface INfeCabecalho {
   nfe_cabecalho_id: number;
   empresa_id: number;
   cadastro_id: number | null;
+  funcionario_id?: number | null;
   deposito_id: number | null;
+  tp_operacao_id?: number | null;
+  movimento_id?: number | null;
+  pedido_id?: number | null;
   origem_inclusao: TNfeOrigemInclusao;
   modelo: string;
   tp_nf: number;
@@ -80,7 +84,9 @@ export interface INfeItem {
   qt_tributavel: number;
   vl_unit: number;
   vl_unit_tributavel: number;
+  pc_desconto?: number;
   vl_desconto: number;
+  vl_unit_liquido?: number;
   vl_frete: number;
   vl_seguro: number;
   vl_outro: number;
@@ -102,8 +108,11 @@ export interface INfeItem {
   vl_cofins: number;
   vl_fcp_st: number;
   vl_ibs: number;
+  vl_ibs_est?: number;
+  vl_ibs_mun?: number;
   vl_cbs: number;
   vl_is: number;
+  vl_bc_ibscbs?: number;
   // Alíquotas
   pc_ipi: number;
   pc_icms: number;
@@ -112,12 +121,17 @@ export interface INfeItem {
   pc_cofins: number;
   pc_fcp_st: number;
   pc_ibs: number;
+  pc_ibs_est?: number;
+  pc_ibs_mun?: number;
+  pc_red_bc_ibs?: number;
   pc_cbs: number;
+  pc_red_bc_cbs?: number;
   pc_is: number;
   pc_fcp: number;
   pc_cred_sn: number;
   pc_red_bc: number;
   pc_red_bc_st: number;
+  clas_trib_id?: string | null;
   // CSTs
   cst_icms: string;
   cst_ipi: string;

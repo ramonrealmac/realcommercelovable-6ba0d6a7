@@ -53,6 +53,15 @@ const getTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
+const getInitialDtIni = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 30);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 const formatarDataEmissao = (dt: any) => {
   if (!dt) return "";
   const s = String(dt);
@@ -166,7 +175,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
 
   const [XData, setXData] = useState<any[]>([]);
   const [XLoading, setXLoading] = useState(false);
-  const [XDtIni, setXDtIni] = useState(getTodayString());
+  const [XDtIni, setXDtIni] = useState(getInitialDtIni());
   const [XDtFim, setXDtFim] = useState(getTodayString());
   const [XFilterAmbiente, setXFilterAmbiente] = useState("");
   const [XFilterModelo, setXFilterModelo] = useState("");
@@ -362,7 +371,7 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
 
   const handleLimparFiltros = () => {
     const today = getTodayString();
-    setXDtIni(today);
+    setXDtIni(getInitialDtIni());
     setXDtFim(today);
     setXFilterAmbiente("");
     setXFilterModelo("");
@@ -685,7 +694,10 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
                         <Terminal className="w-4 h-4 mr-2 text-indigo-500" /> Log
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => openTab({ title: `CCe NF-e ${r.nr_nota || r.nfe_cabecalho_id}`, component: "cce", params: { nfe_cabecalho_id: r.nfe_cabecalho_id } })}>
+                      <DropdownMenuItem 
+                        onClick={() => openTab({ title: `CCe NF-e ${r.nr_nota || r.nfe_cabecalho_id}`, component: "cce", params: { nfe_cabecalho_id: r.nfe_cabecalho_id } })}
+                        disabled={String(r.st_nf) === "C"}
+                      >
                         <FileText className="w-4 h-4 mr-2 text-amber-500" /> Carta de Correção
                       </DropdownMenuItem>
                       <DropdownMenuItem
@@ -698,16 +710,19 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
                       >
                         <ArrowUpFromLine className="w-4 h-4 mr-2 text-orange-500" /> Devolver Nota
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => openTab({ 
-                        title: `Inutilizar ${r.nr_nota || r.nfe_cabecalho_id}`, 
-                        component: "nfe-inutilizacao", 
-                        params: { 
-                          modelo: String(r.modelo || "55"), 
-                          serie: r.serie, 
-                          nr_ini: r.nr_nota, 
-                          nr_fin: r.nr_nota 
-                        } 
-                      })}>
+                      <DropdownMenuItem 
+                        onClick={() => openTab({ 
+                          title: `Inutilizar ${r.nr_nota || r.nfe_cabecalho_id}`, 
+                          component: "nfe-inutilizacao", 
+                          params: { 
+                            modelo: String(r.modelo || "55"), 
+                            serie: r.serie, 
+                            nr_ini: r.nr_nota, 
+                            nr_fin: r.nr_nota 
+                          } 
+                        })}
+                        disabled={String(r.st_nf) === "C"}
+                      >
                         <FileX className="w-4 h-4 mr-2 text-rose-500" /> Inutilizar Numeração
                       </DropdownMenuItem>
                       <DropdownMenuItem 

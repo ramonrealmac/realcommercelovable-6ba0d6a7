@@ -4473,6 +4473,7 @@ export type Database = {
           st_nf: string
           tp_emis: number
           tp_nf: number
+          tp_operacao_id: number | null
           updated_at: string
           vl_bc: number
           vl_cbs: number
@@ -4531,6 +4532,7 @@ export type Database = {
           st_nf?: string
           tp_emis?: number
           tp_nf?: number
+          tp_operacao_id?: number | null
           updated_at?: string
           vl_bc?: number
           vl_cbs?: number
@@ -4589,6 +4591,7 @@ export type Database = {
           st_nf?: string
           tp_emis?: number
           tp_nf?: number
+          tp_operacao_id?: number | null
           updated_at?: string
           vl_bc?: number
           vl_cbs?: number

@@ -149,6 +149,11 @@ export const MENU_CONFIG: MenuItem[] = [
         icon: BarChart3,
         children: [
           { id: "cfop", title: "CFOP", icon: Plus },
+          { id: "icms", title: "ICMS", icon: Percent },
+          { id: "pis-cofins", title: "PIS / COFINS", icon: Percent },
+          { id: "ipi", title: "IPI", icon: Percent },
+          { id: "ibs-cbs", title: "IBS / CBS", icon: Percent },
+          { id: "clas-trib", title: "Classificação", icon: Percent },
           { id: "fiscal-grupo-produtos", title: "Grupos de Tributação", icon: BoxSelect },
           { id: "fiscal-regras", title: "Regras Fiscais", icon: AlignLeft },
         ],

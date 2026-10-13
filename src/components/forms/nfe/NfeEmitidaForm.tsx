@@ -402,7 +402,7 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
       XExtraTabs={[
         {
           key: "itens", label: "Itens da NF-e",
-          render: ({ record, currentRecord }) => {
+          render: ({ record, currentRecord, setRecord }) => {
             const id = (currentRecord || record)?.nfe_cabecalho_id || null;
             const st = (currentRecord || record)?.st_nf || "A";
             const podeEditar = !["A", "E", "C", "D"].includes(String(st));
@@ -412,7 +412,20 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                 empresaId={XEmpresaId} 
                 podeEditar={podeEditar} 
                 hideVinculo={true} 
-                onRefreshCabecalho={() => XRefreshRef.current?.()}
+                onRefreshCabecalho={async (totais?: any) => {
+                  if (totais && setRecord) {
+                    setRecord((prev: any) => ({ ...prev, ...totais }));
+                  } else if (id && setRecord) {
+                    const { data: fresh } = await db.from("fiscal_nfe_cabecalho")
+                      .select("*")
+                      .eq("nfe_cabecalho_id", id)
+                      .maybeSingle();
+                    if (fresh) {
+                      setRecord((prev: any) => ({ ...prev, ...fresh }));
+                    }
+                  }
+                  await XRefreshRef.current?.();
+                }}
               />
             );
           },
@@ -422,8 +435,8 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
           render: ({ record, currentRecord }) => {
             const id = (currentRecord || record)?.nfe_cabecalho_id || null;
             const st = (currentRecord || record)?.st_nf || "A";
-            const podeEditar = !["A", "E", "C", "D"].includes(String(st));
-            return <NfePagamentoTab nfeCabecalhoId={id} podeEditar={podeEditar} />;
+            const finNfe = Number((currentRecord || record)?.fin_nfe || 1);
+            return <NfePagamentoTab nfeCabecalhoId={id} podeEditar={podeEditar} finNfe={finNfe} />;
           },
         },
         {

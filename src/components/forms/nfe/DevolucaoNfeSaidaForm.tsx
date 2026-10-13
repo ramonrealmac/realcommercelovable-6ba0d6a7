@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
@@ -61,10 +61,16 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
   const { XEmpresaId, openTab } = useAppContext();
   const [XStep, setXStep] = useState<1 | 2 | 3>(1);
 
+  // Refs para navegação com Enter
+  const buscaRef = useRef<HTMLInputElement>(null);
+  const dtIniRef = useRef<HTMLInputElement>(null);
+  const dtFimRef = useRef<HTMLInputElement>(null);
+  const buscarBtnRef = useRef<HTMLButtonElement>(null);
+
   // Step 1
   const [XBusca, setXBusca] = useState("");
-  const [XDtIni, setXDtIni] = useState(new Date(new Date().setDate(new Date().getDate() - 90)).toISOString().substring(0, 10));
-  const [XDtFim, setXDtFim] = useState(new Date().toISOString().substring(0, 10));
+  const [XDtIni, setXDtIni] = useState("");
+  const [XDtFim, setXDtFim] = useState("");
   const [XLoading, setXLoading] = useState(false);
   const [XResultados, setXResultados] = useState<any[]>([]);
 
@@ -94,6 +100,10 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
 
   // ------- Etapa 1
   const buscarNotas = async () => {
+    if (!XBusca.trim() && !XDtIni.trim() && !XDtFim.trim()) {
+      toast.warning("Informe pelo menos um filtro para realizar a busca.");
+      return;
+    }
     setXLoading(true);
     setXResultados([]);
     try {
@@ -101,7 +111,7 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
         .select("nfe_cabecalho_id,nr_nota,serie,dt_emissao,dt_saida,vl_total_nf,chave_nfe,cadastro_id,st_nf,modelo,tp_nf,fin_nfe,cadastro:cadastro_id(razao_social,cnpj)")
         .eq("empresa_id", XEmpresaId)
         .eq("tp_nf", 1)
-        .in("st_nf", ["E", "1"]) // Apenas notas fiscais autorizadas
+        .in("st_nf", ["A", "E", "1"]) // Apenas notas fiscais autorizadas/enviadas
         .neq("fin_nfe", 4) // não permitir devolver uma devolução
         .eq("excluido", false);
 
@@ -128,10 +138,13 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
     }
   };
 
-  useEffect(() => {
-    if (XStep === 1 && XEmpresaId && !initialNfeId) buscarNotas();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [XStep, XEmpresaId]);
+  const limparFiltros = () => {
+    setXBusca("");
+    setXDtIni("");
+    setXDtFim("");
+    setXResultados([]);
+    buscaRef.current?.focus();
+  };
 
   // Pré-carregamento via prop (vindo do Gerenciador Fiscal)
   useEffect(() => {
@@ -142,7 +155,7 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
         .eq("nfe_cabecalho_id", initialNfeId)
         .maybeSingle();
       if (error || !data) { toast.error("NF-e de origem não encontrada."); return; }
-      if (!["E", "1"].includes(String(data.st_nf))) {
+      if (!["A", "E", "1"].includes(String(data.st_nf))) {
         toast.error(`A nota ${data.nr_nota || initialNfeId} não está autorizada e não pode ser devolvida.`);
         return;
       }
@@ -396,24 +409,66 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
               <div className="relative flex-1 min-w-[260px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
+                  ref={buscaRef}
                   autoFocus
                   value={XBusca}
                   onChange={e => setXBusca(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && buscarNotas()}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      dtIniRef.current?.focus();
+                    }
+                  }}
                   placeholder="Nº da nota ou parte da chave de acesso..."
                   className="w-full pl-9 pr-3 py-2 border border-border rounded-md text-sm bg-background"
                 />
               </div>
               <div className="flex flex-col">
                 <label className="text-[10px] uppercase font-bold text-muted-foreground">Início</label>
-                <input type="date" value={XDtIni} onChange={e => setXDtIni(e.target.value)} className="px-2 py-1.5 text-sm border border-border rounded-md bg-background" />
+                <input 
+                  ref={dtIniRef}
+                  type="date" 
+                  value={XDtIni} 
+                  onChange={e => setXDtIni(e.target.value)} 
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      dtFimRef.current?.focus();
+                    }
+                  }}
+                  className="px-2 py-1.5 text-sm border border-border rounded-md bg-background" 
+                />
               </div>
               <div className="flex flex-col">
                 <label className="text-[10px] uppercase font-bold text-muted-foreground">Fim</label>
-                <input type="date" value={XDtFim} onChange={e => setXDtFim(e.target.value)} className="px-2 py-1.5 text-sm border border-border rounded-md bg-background" />
+                <input 
+                  ref={dtFimRef}
+                  type="date" 
+                  value={XDtFim} 
+                  onChange={e => setXDtFim(e.target.value)} 
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      buscarBtnRef.current?.focus();
+                    }
+                  }}
+                  className="px-2 py-1.5 text-sm border border-border rounded-md bg-background" 
+                />
               </div>
-              <button onClick={buscarNotas} disabled={XLoading} className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-xs font-bold hover:opacity-90 disabled:opacity-50">
+              <button 
+                ref={buscarBtnRef}
+                onClick={buscarNotas} 
+                disabled={XLoading} 
+                className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-xs font-bold hover:opacity-90 disabled:opacity-50"
+              >
                 {XLoading ? "BUSCANDO..." : "BUSCAR"}
+              </button>
+              <button 
+                onClick={limparFiltros} 
+                disabled={XLoading} 
+                className="bg-secondary text-secondary-foreground px-4 py-2 rounded-md text-xs font-bold hover:opacity-90 disabled:opacity-50"
+              >
+                LIMPAR
               </button>
             </div>
 
@@ -471,7 +526,17 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
               </div>
               <div className="col-span-3">
                 <label className="text-[10px] uppercase font-bold text-muted-foreground">Depósito (entrada) <span className="text-destructive">*</span></label>
-                <select value={XDepositoId ?? ""} onChange={e => setXDepositoId(e.target.value ? Number(e.target.value) : null)} className="w-full px-2 py-1.5 border border-border rounded-md text-sm bg-background">
+                <select 
+                  value={XDepositoId ?? ""} 
+                  onChange={e => {
+                    const val = e.target.value ? Number(e.target.value) : null;
+                    setXDepositoId(val);
+                    if (val) {
+                      setXItens(prev => prev.map(it => ({ ...it, deposito_id: val })));
+                    }
+                  }} 
+                  className="w-full px-2 py-1.5 border border-border rounded-md text-sm bg-background"
+                >
                   <option value="">— Selecione —</option>
                   {XDepositos.map(d => <option key={d.deposito_id} value={d.deposito_id}>{d.nome}</option>)}
                 </select>
