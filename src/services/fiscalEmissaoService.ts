@@ -168,10 +168,15 @@ export const fiscalEmissaoService = {
       if (eCalc) throw new Error(eCalc.message || "Erro no cálculo fiscal.");
       const cabId: number = nfeIdRet as number;
 
-      // 5.0 Vincula o pedido (movimento) ao cabeçalho fiscal
+      // 5.0 Vincula o pedido (movimento) ao cabeçalho fiscal com o número real do pedido (nr_movimento)
       try {
+        const { data: movData } = await db.from("movimento")
+          .select("nr_movimento")
+          .eq("movimento_id", movimentoId)
+          .maybeSingle();
+        const nrPedido = movData?.nr_movimento || movimentoId;
         await db.from("fiscal_nfe_cabecalho")
-          .update({ pedido_id: movimentoId })
+          .update({ pedido_id: nrPedido })
           .eq("nfe_cabecalho_id", cabId);
       } catch (eUpdPed) {
         console.warn("[FiscalService] Falha ao gravar pedido_id no cabeçalho:", eUpdPed);
@@ -530,7 +535,12 @@ export const fiscalEmissaoService = {
       const fConfigItem = fConfigItens?.[0];
       if (!fConfigItem) throw new Error(`Configuração fiscal (modelo ${cab.modelo}/série ${cab.serie}) não localizada.`);
 
-      const { data: nfeItens } = await db.from("fiscal_nfe_item").select("*").eq("nfe_cabecalho_id", nfeCabecalhoId);
+      const { data: nfeItens } = await db
+        .from("fiscal_nfe_item")
+        .select("*")
+        .eq("nfe_cabecalho_id", nfeCabecalhoId)
+        .eq("excluido", false)
+        .order("nr_item", { ascending: true });
       const { data: nfePagtos } = await db.from("fiscal_nfe_pagamento").select("*").eq("nfe_cabecalho_id", nfeCabecalhoId);
       const { data: nfeRefs } = await db.from("fiscal_nfe_referenciada")
         .select("chave_ref")
@@ -583,6 +593,31 @@ export const fiscalEmissaoService = {
                 `A NF-e referenciada nº ${o.nr_nota || ""} (Chave: ${o.chave_nfe}) está no status "${o.st_nf === "E" ? "Pendente/Não Autorizada" : o.st_nf}" e NÃO consta como Autorizada no sistema.\n\nA SEFAZ rejeita devoluções de notas fiscais que não estejam devidamente autorizadas no Fisco (Rejeição 321).`
               );
             }
+          }
+        }
+
+        // Validação de CFOP de devolução/retorno (Rejeição 327 da SEFAZ)
+        const isEntradaDev = String(cab.tp_nf) === "0";
+        for (let idx = 0; idx < (nfeItens || []).length; idx++) {
+          const item = nfeItens[idx];
+          const cfopLimpo = String(item.cfop || "").replace(/\D/g, "");
+          const nrItem = item.nr_item || idx + 1;
+          
+          if (!cfopLimpo) {
+            throw new Error(
+              `Item #${nrItem} (${item.nm_produto || "Produto"}) está sem CFOP preenchido.\nPara NF-e de Devolução (Finalidade 4), selecione um CFOP válido de devolução (ex: ${isEntradaDev ? "1202, 2202, 1411" : "5202, 6202, 5411"}).`
+            );
+          }
+
+          // Se for saída e tiver CFOP de venda (ex: 5101, 5102, 6101, 6102, etc.) ou se for entrada e tiver compra (1101, 1102, 2101, 2102)
+          const cfopInvalido = isEntradaDev
+            ? (cfopLimpo.startsWith("11") || cfopLimpo.startsWith("21") || cfopLimpo.startsWith("5") || cfopLimpo.startsWith("6"))
+            : (cfopLimpo.startsWith("51") || cfopLimpo.startsWith("61") || cfopLimpo.startsWith("1") || cfopLimpo.startsWith("2"));
+
+          if (cfopInvalido) {
+            throw new Error(
+              `CFOP "${cfopLimpo}" inválido para o Item #${nrItem} (${item.nm_produto || "Produto"}).\nPara NF-e de Devolução (Finalidade 4), a SEFAZ exige CFOP de devolução ou retorno (ex: ${isEntradaDev ? "1202, 2202, 1411" : "5202, 6202, 5411, 5949"}). Corrija o CFOP do item na aba 'Itens da NF-e' antes de transmitir.`
+            );
           }
         }
       }
@@ -716,7 +751,12 @@ export const fiscalEmissaoService = {
       const { data: fConfigItens } = await db.from("fiscal_config_item").select("*").eq("empresa_id", empresaId).eq("modelo", cab.modelo).eq("serie", cab.serie);
       const fConfigItem = fConfigItens?.[0];
 
-      const { data: nfeItens } = await db.from("fiscal_nfe_item").select("*").eq("nfe_cabecalho_id", nfeCabecalhoId);
+      const { data: nfeItens } = await db
+        .from("fiscal_nfe_item")
+        .select("*")
+        .eq("nfe_cabecalho_id", nfeCabecalhoId)
+        .eq("excluido", false)
+        .order("nr_item", { ascending: true });
       const { data: nfePagtos } = await db.from("fiscal_nfe_pagamento").select("*").eq("nfe_cabecalho_id", nfeCabecalhoId);
 
       const params = {
@@ -1112,6 +1152,20 @@ export const fiscalEmissaoService = {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       const tipo: "NFE" | "NFCE" = Number(cab.modelo) === 65 ? "NFCE" : "NFE";
 
+      // Garante que a chave possua 44 dígitos e dígito verificador matematicamente válido
+      let chaveCancelamento = String(cab.chave_nfe || "").trim().replace(/\D/g, "");
+      if (chaveCancelamento.length === 44) {
+        const key43 = chaveCancelamento.substring(0, 43);
+        const weights = [2, 3, 4, 5, 6, 7, 8, 9];
+        let sum = 0;
+        for (let i = key43.length - 1, w = 0; i >= 0; i--, w++) {
+          sum += parseInt(key43[i], 10) * weights[w % weights.length];
+        }
+        const rem = sum % 11;
+        const dv = (rem === 0 || rem === 1) ? 0 : 11 - rem;
+        chaveCancelamento = key43 + String(dv);
+      }
+
       const { data: evento, error: evErr } = await db.from("fiscal_evento").insert({
         empresa_id: empresaId,
         nfe_cabecalho_id: nfeCabecalhoId,
@@ -1121,7 +1175,7 @@ export const fiscalEmissaoService = {
         user_id: authUser?.id || null,
         payload: {
           nfe_cabecalho_id: nfeCabecalhoId,
-          chave: cab.chave_nfe,
+          chave: chaveCancelamento,
           justificativa: justificativa,
           cnpj: cnpjEmitente,
           config: {

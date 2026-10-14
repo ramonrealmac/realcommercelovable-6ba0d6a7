@@ -81,7 +81,7 @@ export async function emitirNfe(params: EmissaoParams): Promise<EmissaoResult> {
     if (eCab || !cabecalho) throw new Error('Cabeçalho fiscal não localizado após cálculo.');
 
     const { data: itens, error: eItens } = await db
-      .from('fiscal_nfe_item').select('*').eq('nfe_cabecalho_id', nfe_cabecalho_id).order('nr_item');
+      .from('fiscal_nfe_item').select('*').eq('nfe_cabecalho_id', nfe_cabecalho_id).eq('excluido', false).order('nr_item');
     if (eItens) throw new Error('Erro ao reler itens fiscais: ' + eItens.message);
 
     // 5. Cadastro destinatário + pagamentos do movimento

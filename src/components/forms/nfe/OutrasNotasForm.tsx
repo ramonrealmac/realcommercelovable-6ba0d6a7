@@ -8,7 +8,7 @@ import NfeItensTab from "./NfeItensTab";
 import NfePagamentoTab from "./NfePagamentoTab";
 import type { INfeCabecalho, TNfeSt } from "./types";
 import { NFE_ST_LABELS } from "./types";
-import { Search, Send, Printer, AlertCircle } from "lucide-react";
+import { Search, Send, Printer, AlertCircle, Copy, Download, Check, FileCode, CheckCircle2, XCircle } from "lucide-react";
 import { formatCPFCNPJ } from "@/lib/validators";
 import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
 import { useEnterTraversal } from "@/hooks/useEnterTraversal";
@@ -78,35 +78,6 @@ const XDefault: Partial<INfeCabecalho> = {
   dt_saida: new Date().toISOString().substring(0, 10),
 };
 
-const OPERACOES_PREDEFINIDAS = [
-  "Venda de mercadoria",
-  "Compra ou entrada de mercadoria",
-  "Devolução de venda — mercadoria devolvida pelo cliente.",
-  "Devolução de compra — mercadoria devolvida ao fornecedor.",
-  "Remessa de mercadoria",
-  "Retorno de mercadoria",
-  "Transferência entre estabelecimentos",
-  "Bonificação",
-  "Doação",
-  "Brinde",
-  "Amostra grátis",
-  "Consignação mercantil",
-  "Demonstração",
-  "Remessa para conserto",
-  "Retorno de conserto",
-  "Remessa para industrialização",
-  "Retorno de industrialização",
-  "Venda para entrega futura",
-  "Simples faturamento",
-  "Remessa por conta e ordem de terceiros",
-  "Importação",
-  "Exportação",
-  "Entrada de mercadoria não recebida",
-  "Estorno de operação",
-  "Complemento de preço ou imposto",
-  "Ajuste fiscal"
-];
-
 const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
   const { XEmpresaId } = useAppContext();
 
@@ -115,7 +86,14 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
   const [XClienteCache, setXClienteCache] = useState<Record<number, IClienteInfo>>({});
   const [XVendedorCache, setXVendedorCache] = useState<Record<number, IVendedorInfo>>({});
   const [XDepositos, setXDepositos] = useState<{ deposito_id: number; nome: string }[]>([]);
-  const [XTpOperacoes, setXTpOperacoes] = useState<{ id: number; label: string; tp_movimento: string; altera_estoque: string }[]>([]);
+  const [XTpOperacoes, setXTpOperacoes] = useState<{
+    id: number;
+    descricao: string;
+    tp_movimento: string;
+    gera_nf: string | boolean;
+    gera_pedido: string;
+    altera_estoque: string;
+  }[]>([]);
   const [XProg, setXProg] = useState<{ open: boolean; titulo: string; total: number; restante: number }>({
     open: false,
     titulo: "",
@@ -238,8 +216,9 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
     if (!empresaId) return;
     try {
       const { data, error } = await db.from("tp_operacao")
-        .select("tp_operacao_id, descricao, tp_movimento, altera_estoque, gera_nf, excluido")
+        .select("tp_operacao_id, descricao, tp_movimento, gera_nf, gera_pedido, altera_estoque, excluido")
         .eq("empresa_id", empresaId)
+        .eq("excluido", false)
         .order("descricao");
 
       if (error) {
@@ -248,14 +227,16 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
       }
 
       if (data) {
+        // Flag gera_nf: se sim carrega na combo, se não não carrega
         const validos = data.filter((t: any) =>
-          (String(t.gera_nf || "").toUpperCase() === "S" || t.gera_nf === true) &&
-          (t.excluido === false || t.excluido === null || t.excluido === undefined)
+          String(t.gera_nf || "").toUpperCase() === "S" || t.gera_nf === true
         );
         setXTpOperacoes(validos.map((t: any) => ({
           id: t.tp_operacao_id,
-          label: t.descricao,
+          descricao: t.descricao,
           tp_movimento: String(t.tp_movimento || "").toUpperCase().trim(),
+          gera_nf: t.gera_nf,
+          gera_pedido: t.gera_pedido,
           altera_estoque: t.altera_estoque,
         })));
       }
@@ -470,9 +451,13 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
 
       // 5. Busca dados atualizados da nota no banco
       const { data: cabUpdated } = await db.from("fiscal_nfe_cabecalho")
-        .select("nfe_cabecalho_id, nr_nota, serie, st_nf, c_stat, x_motivo, chave_nfe, nr_protocolo, movimento_id, pedido_id")
+        .select("nfe_cabecalho_id, nr_nota, serie, st_nf, c_stat, x_motivo, chave_nfe, nr_protocolo, recibo_sefaz, xml_nf, dt_cancelamento, protocolo_cancelamento, motivo_cancelamento, movimento_id, pedido_id")
         .eq("nfe_cabecalho_id", currentRecord.nfe_cabecalho_id)
         .maybeSingle();
+
+      if (cabUpdated) {
+        Object.assign(currentRecord, cabUpdated);
+      }
 
       if (refresh) await refresh();
       else if (XRefreshRef.current) await XRefreshRef.current();
@@ -754,58 +739,263 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
         },
         {
           key: "adicionais", label: "Dados Adicionais",
-          render: ({ record, setField, isEditing }) => {
+          render: ({ record, currentRecord, setField, isEditing }) => {
             const ro = !isEditing;
+            const r = currentRecord || record;
+            const st = String(r.st_nf || "P").toUpperCase();
+            const chave = String(r.chave_nfe || "").trim();
+            const xml = String(r.xml_nf || "").trim();
+
+            const handleCopiarChave = () => {
+              if (!chave) {
+                toast.error("Nenhuma chave de acesso disponível.");
+                return;
+              }
+              navigator.clipboard.writeText(chave);
+              toast.success("Chave da NF-e copiada para a área de transferência!");
+            };
+
+            const handleCopiarXml = () => {
+              if (!xml) {
+                toast.error("Nenhum XML disponível.");
+                return;
+              }
+              navigator.clipboard.writeText(xml);
+              toast.success("XML copiado para a área de transferência!");
+            };
+
+            const handleDownloadXml = () => {
+              if (!xml) {
+                toast.error("Nenhum XML disponível para download.");
+                return;
+              }
+              const blob = new Blob([xml], { type: "text/xml;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `NFe_${chave || r.nr_nota || r.nfe_cabecalho_id}.xml`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+              toast.success("Download do XML iniciado!");
+            };
+
             return (
-              <div className="space-y-3">
+              <div className="space-y-4">
+                {/* Cabeçalho de Status SEFAZ */}
+                <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg border border-border bg-secondary/30">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${st === "A" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : st === "R" ? "bg-destructive/10 text-destructive border border-destructive/20" : st === "C" ? "bg-red-500/10 text-red-600 border border-red-500/20" : "bg-muted text-muted-foreground"}`}>
+                      {st === "A" ? <CheckCircle2 className="w-5 h-5" /> : st === "R" || st === "C" ? <XCircle className="w-5 h-5" /> : <FileCode className="w-5 h-5" />}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wide">
+                          Status Fiscal:
+                        </span>
+                        <span className={`text-xs font-black uppercase px-2 py-0.5 rounded ${st === "A" ? "bg-emerald-600 text-white" : st === "R" ? "bg-destructive text-destructive-foreground" : st === "C" ? "bg-red-600 text-white" : "bg-secondary text-foreground"}`}>
+                          {st === "A" ? "Autorizada SEFAZ" : st === "R" ? "Rejeitada" : st === "C" ? "Cancelada" : "Pendente"}
+                        </span>
+                        {r.c_stat && (
+                          <span className="text-xs font-mono text-muted-foreground">
+                            (cStat {r.c_stat})
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {r.x_motivo || (st === "A" ? "Documento fiscal autorizado com sucesso." : "Aguardando envio ou consulta à SEFAZ.")}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Ações rápidas da Aba Dados Adicionais */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCopiarChave}
+                      disabled={!chave}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-border rounded-md bg-card hover:bg-accent text-foreground disabled:opacity-50 transition-colors shadow-sm"
+                      title="Copiar Chave de 44 dígitos"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-muted-foreground" /> Copiar Chave
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCopiarXml}
+                      disabled={!xml}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-border rounded-md bg-card hover:bg-accent text-foreground disabled:opacity-50 transition-colors shadow-sm"
+                      title="Copiar texto XML"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-muted-foreground" /> Copiar XML
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownloadXml}
+                      disabled={!xml}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 transition-opacity shadow-sm"
+                      title="Baixar arquivo XML da nota"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Baixar XML
+                    </button>
+                  </div>
+                </div>
+
+                {/* Chave, Protocolo e Recibo */}
                 <div className="grid grid-cols-12 gap-3">
-                  <div className="col-span-6">
-                    <label className="text-xs text-muted-foreground">Chave NF-e (44 dígitos)</label>
-                    <input readOnly={ro} value={record.chave_nfe ?? ""} onChange={e => setField("chave_nfe" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm font-mono" />
+                  <div className="col-span-12 md:col-span-6">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Chave de Acesso da NF-e (44 dígitos)</label>
+                      {chave && (
+                        <button
+                          type="button"
+                          onClick={handleCopiarChave}
+                          className="text-[11px] text-primary hover:underline flex items-center gap-1"
+                        >
+                          <Copy className="w-3 h-3" /> Copiar
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      readOnly={ro}
+                      value={record.chave_nfe ?? ""}
+                      onChange={e => setField("chave_nfe" as any, e.target.value as any)}
+                      placeholder="Chave gerada pela SEFAZ após autorização"
+                      className="w-full border border-border rounded px-2.5 py-1.5 text-xs font-mono bg-card"
+                    />
                   </div>
-                  <div className="col-span-3">
-                    <label className="text-xs text-muted-foreground">Nº Protocolo</label>
-                    <input readOnly={ro} value={record.nr_protocolo ?? ""} onChange={e => setField("nr_protocolo" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
+
+                  <div className="col-span-6 md:col-span-3">
+                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">Nº Protocolo</label>
+                    <input
+                      readOnly={ro}
+                      value={record.nr_protocolo ?? ""}
+                      onChange={e => setField("nr_protocolo" as any, e.target.value as any)}
+                      placeholder="Protocolo de autorização"
+                      className="w-full border border-border rounded px-2.5 py-1.5 text-xs font-mono bg-card"
+                    />
                   </div>
-                  <div className="col-span-3">
-                    <label className="text-xs text-muted-foreground">Recibo SEFAZ</label>
-                    <input readOnly value={record.recibo_sefaz ?? ""} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary" />
+
+                  <div className="col-span-6 md:col-span-3">
+                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">Recibo SEFAZ</label>
+                    <input
+                      readOnly
+                      value={record.recibo_sefaz ?? ""}
+                      placeholder="Recibo do lote SEFAZ"
+                      className="w-full border border-border rounded px-2.5 py-1.5 text-xs font-mono bg-secondary text-muted-foreground"
+                    />
                   </div>
                 </div>
+
+                {/* Retorno Detalhado SEFAZ */}
                 <div className="grid grid-cols-12 gap-3">
-                  <div className="col-span-3">
-                    <label className="text-xs text-muted-foreground">cStat</label>
-                    <input readOnly value={record.c_stat ?? ""} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary" />
+                  <div className="col-span-3 md:col-span-2">
+                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">Código cStat</label>
+                    <input
+                      readOnly
+                      value={record.c_stat ?? ""}
+                      className="w-full border border-border rounded px-2.5 py-1.5 text-xs font-mono font-bold text-center bg-secondary"
+                    />
                   </div>
-                  <div className="col-span-9">
-                    <label className="text-xs text-muted-foreground">Motivo SEFAZ</label>
-                    <input readOnly value={record.x_motivo ?? ""} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary" />
+
+                  <div className="col-span-9 md:col-span-10">
+                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">Mensagem SEFAZ (xMotivo)</label>
+                    <input
+                      readOnly
+                      value={record.x_motivo ?? ""}
+                      className="w-full border border-border rounded px-2.5 py-1.5 text-xs bg-secondary text-foreground"
+                    />
                   </div>
                 </div>
+
+                {/* Observações da NF-e */}
                 <div>
-                  <label className="text-xs text-muted-foreground">Observações da NF-e</label>
-                  <textarea readOnly={ro} value={record.obs_nf ?? ""} onChange={e => setField("obs_nf" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-2 text-sm min-h-[100px]" />
+                  <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">Informações Adicionais de Interesse do Fisco / Observações (infAdic)</label>
+                  <textarea
+                    readOnly={ro}
+                    value={record.obs_nf ?? ""}
+                    onChange={e => setField("obs_nf" as any, e.target.value as any)}
+                    rows={3}
+                    placeholder="Informações complementares que constarão no rodapé do DANFE e no XML..."
+                    className="w-full border border-border rounded px-3 py-2 text-xs bg-card resize-y"
+                  />
                 </div>
-                <div className="border border-border rounded p-3 bg-card">
-                  <p className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">Cancelamento</p>
-                  <div className="grid grid-cols-12 gap-3">
-                    <div className="col-span-3">
-                      <label className="text-xs text-muted-foreground">Dt. Cancelamento</label>
-                      <input readOnly value={(record as any).dt_cancelamento ? new Date((record as any).dt_cancelamento).toLocaleString("pt-BR") : ""} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary" />
-                    </div>
-                    <div className="col-span-3">
-                      <label className="text-xs text-muted-foreground">Protocolo Cancel.</label>
-                      <input readOnly value={(record as any).protocolo_cancelamento ?? ""} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary font-mono" />
-                    </div>
-                    <div className="col-span-6">
-                      <label className="text-xs text-muted-foreground">Motivo Cancelamento</label>
-                      <input readOnly={ro} value={(record as any).motivo_cancelamento ?? ""} onChange={e => setField("motivo_cancelamento" as any, e.target.value as any)} className="w-full border border-border rounded px-2 py-1 text-sm" />
+
+                {/* Cancelamento se houver */}
+                {((record as any).dt_cancelamento || (record as any).protocolo_cancelamento || (record as any).motivo_cancelamento) && (
+                  <div className="border border-destructive/30 rounded-lg p-3 bg-destructive/5 space-y-2">
+                    <p className="text-xs font-bold text-destructive uppercase tracking-wide flex items-center gap-1.5">
+                      <AlertCircle className="w-4 h-4" /> Dados do Cancelamento
+                    </p>
+                    <div className="grid grid-cols-12 gap-3">
+                      <div className="col-span-12 sm:col-span-3">
+                        <label className="text-[11px] text-muted-foreground block font-medium">Data / Hora Cancelamento</label>
+                        <input
+                          readOnly
+                          value={(record as any).dt_cancelamento ? new Date((record as any).dt_cancelamento).toLocaleString("pt-BR") : ""}
+                          className="w-full border border-border rounded px-2 py-1 text-xs bg-secondary"
+                        />
+                      </div>
+                      <div className="col-span-12 sm:col-span-3">
+                        <label className="text-[11px] text-muted-foreground block font-medium">Protocolo Cancelamento</label>
+                        <input
+                          readOnly
+                          value={(record as any).protocolo_cancelamento ?? ""}
+                          className="w-full border border-border rounded px-2 py-1 text-xs bg-secondary font-mono"
+                        />
+                      </div>
+                      <div className="col-span-12 sm:col-span-6">
+                        <label className="text-[11px] text-muted-foreground block font-medium">Motivo Cancelamento</label>
+                        <input
+                          readOnly={ro}
+                          value={(record as any).motivo_cancelamento ?? ""}
+                          onChange={e => setField("motivo_cancelamento" as any, e.target.value as any)}
+                          className="w-full border border-border rounded px-2 py-1 text-xs bg-secondary"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">XML da NF-e</label>
-                  <textarea readOnly value={record.xml_nf ?? ""} className="w-full border border-border rounded px-2 py-2 text-[10px] font-mono min-h-[120px] bg-secondary/50" />
+                )}
+
+                {/* Pré-visualização do XML com ações */}
+                <div className="border border-border rounded-lg p-3 bg-card space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FileCode className="w-4 h-4 text-primary" />
+                      <span className="text-xs font-bold uppercase tracking-wide">XML do Documento Fiscal</span>
+                      {xml && (
+                        <span className="text-[10px] text-muted-foreground font-mono">
+                          ({(xml.length / 1024).toFixed(1)} KB)
+                        </span>
+                      )}
+                    </div>
+                    {xml ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleCopiarXml}
+                          className="text-xs text-primary hover:underline flex items-center gap-1 font-semibold"
+                        >
+                          <Copy className="w-3.5 h-3.5" /> Copiar XML
+                        </button>
+                        <span className="text-muted-foreground">|</span>
+                        <button
+                          type="button"
+                          onClick={handleDownloadXml}
+                          className="text-xs text-primary hover:underline flex items-center gap-1 font-semibold"
+                        >
+                          <Download className="w-3.5 h-3.5" /> Baixar XML (.xml)
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground italic">Nenhum XML gerado ainda</span>
+                    )}
+                  </div>
+                  <textarea
+                    readOnly
+                    value={xml || "O XML da NF-e será exibido aqui assim que a nota for gerada ou autorizada pela SEFAZ."}
+                    className={`w-full border border-border rounded-md px-3 py-2 text-[11px] font-mono min-h-[140px] ${xml ? "bg-secondary/40 text-foreground" : "bg-secondary/20 text-muted-foreground italic"}`}
+                  />
                 </div>
               </div>
             );
@@ -851,6 +1041,7 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                     const opAtual = XTpOperacoes.find(o => o.id === record.tp_operacao_id);
                     if (opAtual && !opAtual.tp_movimento.toUpperCase().startsWith(prefixoNovo)) {
                       setField("tp_operacao_id" as any, null as any);
+                      setField("nat_op" as any, "" as any);
                     }
                   }} 
                   className="w-full border border-border rounded px-2 py-1 text-sm font-medium"
@@ -915,10 +1106,10 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
             </div>
 
             <div className="grid grid-cols-12 gap-3">
-              <div className="col-span-3">
+              <div className="col-span-6">
                 <div className="flex items-center justify-between">
                   <label className="text-xs text-muted-foreground font-medium">
-                    Tipo de Operação {Number(record.tp_nf) === 0 ? "(Entradas: E*)" : "(Saídas: S*)"}
+                    Natureza da Operação {Number(record.tp_nf) === 0 ? "(Entrada)" : "(Saída)"} <span className="text-destructive">*</span>
                   </label>
                   {isEditing && (
                     <button
@@ -926,7 +1117,7 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                       tabIndex={-1}
                       onClick={() => carregarTpOperacoes(record.empresa_id || XEmpresaId)}
                       className="text-[10px] text-primary hover:underline font-normal"
-                      title="Atualizar lista de tipos de operação cadastrados"
+                      title="Atualizar lista de naturezas da operação"
                     >
                       ↻ Atualizar
                     </button>
@@ -944,10 +1135,13 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                       ? [...operacoesFiltradas, XTpOperacoes.find(o => o.id === record.tp_operacao_id)!]
                       : operacoesFiltradas;
 
+                  const valorSelecionado = record.tp_operacao_id 
+                    ?? (XTpOperacoes.find(o => o.descricao === record.nat_op)?.id ?? "");
+
                   return (
-                    <select 
-                      disabled={ro} 
-                      value={record.tp_operacao_id ?? ""} 
+                    <select
+                      disabled={ro}
+                      value={valorSelecionado}
                       onFocus={() => {
                         if (isEditing) carregarTpOperacoes(record.empresa_id || XEmpresaId);
                       }}
@@ -956,15 +1150,17 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                         setField("tp_operacao_id" as any, val as any);
                         const sel = XTpOperacoes.find(o => o.id === val);
                         if (sel) {
-                          setField("nat_op" as any, sel.label as any);
+                          setField("nat_op" as any, sel.descricao as any);
+                        } else {
+                          setField("nat_op" as any, "" as any);
                         }
-                      }} 
+                      }}
                       className="w-full border border-border rounded px-2 py-1 text-sm bg-background font-medium"
                     >
-                      <option value="">— Selecione —</option>
+                      <option value="">— Selecione a Natureza da Operação —</option>
                       {operacoesExibir.map(op => (
                         <option key={op.id} value={op.id}>
-                          [{op.tp_movimento}] {op.label}
+                          {op.descricao}
                         </option>
                       ))}
                     </select>
@@ -972,23 +1168,7 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                 })()}
               </div>
               <div className="col-span-3">
-                <label className="text-xs text-muted-foreground">Natureza da Operação <span className="text-destructive">*</span></label>
-                <input 
-                  readOnly={ro} 
-                  value={record.nat_op ?? ""} 
-                  onChange={e => setField("nat_op" as any, e.target.value as any)} 
-                  list="operacoes-predefinidas-list"
-                  placeholder="Informe a natureza"
-                  className="w-full border border-border rounded px-2 py-1 text-sm"
-                />
-                <datalist id="operacoes-predefinidas-list">
-                  {OPERACOES_PREDEFINIDAS.map(op => (
-                    <option key={op} value={op} />
-                  ))}
-                </datalist>
-              </div>
-              <div className="col-span-3">
-                <label className="text-xs text-muted-foreground">Finalidade NF-e</label>
+                <label className="text-xs text-muted-foreground font-medium">Finalidade NF-e</label>
                 <select 
                   disabled={ro} 
                   value={record.fin_nfe ?? 1} 
@@ -1025,13 +1205,11 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                   className="w-full border border-border rounded px-2 py-1 text-sm font-medium"
                 >
                   <option value={1}>1 - NF-e normal</option>
-                  <option value={2}>2 - NF-e complementar</option>
-                  <option value={3}>3 - NF-e de ajuste</option>
                   <option value={4}>4 - NF-e de devolução ou retorno</option>
                 </select>
               </div>
               <div className="col-span-3">
-                <label className="text-xs text-muted-foreground">Tipo Emissão</label>
+                <label className="text-xs text-muted-foreground font-medium">Tipo Emissão</label>
                 <select disabled={ro} value={record.tp_emis ?? 1} onChange={e => setField("tp_emis" as any, Number(e.target.value) as any)} className="w-full border border-border rounded px-2 py-1 text-sm">
                   <option value={1}>1 - Normal</option>
                   <option value={2}>2 - Contingência FS-IA</option>

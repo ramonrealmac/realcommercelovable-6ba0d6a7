@@ -392,6 +392,47 @@ const OpcoesPagamentoDialog: React.FC<IProps> = ({ open, dados, empresaId, funci
         setXSalvando(false);
         setXStatus("");
       } else {
+        // Fallback defensivo: se a nota foi autorizada no banco (ex: duplicidade tratada pelo worker), continua com sucesso
+        let autorizada = false;
+        if (res.nfe_cabecalho_id) {
+          const { data: nfeChecada } = await supabase
+            .from("fiscal_nfe_cabecalho")
+            .select("st_nf, nr_protocolo")
+            .eq("nfe_cabecalho_id", res.nfe_cabecalho_id)
+            .maybeSingle();
+          if (nfeChecada && (nfeChecada.st_nf === "A" || nfeChecada.nr_protocolo)) {
+            autorizada = true;
+          }
+        }
+
+        if (autorizada) {
+          toast.success(`${tipo} autorizada!`);
+          setXEmitido(true);
+          setXNfeId(res.nfe_cabecalho_id);
+          setXStatus("Gerando DANFE para visualização...");
+          const impRes = await fiscalEmissaoService.imprimirDocumento(res.nfe_cabecalho_id, empresaId);
+          if (impRes.success && impRes.pdf_base64) {
+            setXLastPdf(impRes.pdf_base64);
+            try {
+              const byteCharacters = atob(impRes.pdf_base64);
+              const byteNumbers = new Array(byteCharacters.length);
+              for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+              }
+              const byteArray = new Uint8Array(byteNumbers);
+              const file = new Blob([byteArray], { type: 'application/pdf' });
+              const fileURL = URL.createObjectURL(file);
+              const win = window.open(fileURL, 'danfe_view', '_blank');
+              if (!win) {
+                toast.error("O bloqueador de popups impediu a abertura do DANFE.");
+              }
+            } catch {}
+          }
+          setXSalvando(false);
+          setXStatus("");
+          return;
+        }
+
         setXSalvando(false);
         setXStatus("");
         toast.error(`Falha na ${tipo}: ${ret.mensagem || "verifique o log fiscal"}`);

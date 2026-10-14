@@ -35,7 +35,7 @@ export async function buscarNfePorNumero(
   let query = db.from("fiscal_nfe_cabecalho")
     .select("nfe_cabecalho_id, nr_nota, serie, dt_emissao, vl_total_nf, cadastro_id, st_nf, chave_nfe, modelo")
     .eq("empresa_id", empresaId)
-    .eq("tp_nf", 1) // Somente notas emitidas pela própria empresa
+    .in("tp_nf", [0, 1]) // Notas emitidas pela própria empresa (Saídas e Entradas Próprias/Devoluções)
     .eq("st_nf", "A") // Somente autorizadas
     .neq("chave_nfe", "")
     .not("chave_nfe", "is", null)
@@ -76,7 +76,7 @@ const NfeSearchDialog: React.FC<IProps> = ({ open, onClose, onSelect }) => {
     let query = db.from("fiscal_nfe_cabecalho")
       .select("nfe_cabecalho_id, nr_nota, serie, dt_emissao, vl_total_nf, cadastro_id, st_nf, chave_nfe, modelo")
       .eq("empresa_id", XEmpresaId)
-      .eq("tp_nf", 1) // Somente notas emitidas pela própria empresa (Saída)
+      .in("tp_nf", [0, 1]) // Notas emitidas pela própria empresa (Saídas e Entradas Próprias/Devoluções)
       .eq("st_nf", "A") // Somente NF-e / NFC-e autorizadas pela SEFAZ
       .neq("chave_nfe", "")
       .not("chave_nfe", "is", null)

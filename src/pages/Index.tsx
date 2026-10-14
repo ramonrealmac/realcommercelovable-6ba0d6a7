@@ -13,15 +13,22 @@ const safeLazy = (importFn: () => Promise<any>) =>
     try {
       return await importFn();
     } catch (error) {
-      console.error("Dynamic import error, attempting refresh:", error);
-      const isRetried = window.sessionStorage.getItem("vite_import_retry");
-      if (!isRetried) {
-        window.sessionStorage.setItem("vite_import_retry", "true");
-        window.location.reload();
-        return new Promise(() => {});
-      }
-      window.sessionStorage.removeItem("vite_import_retry");
-      throw error;
+      console.error("Dynamic import error in component:", error);
+      // Retorna fallback gracioso em vez de forçar reload da página inteira
+      return {
+        default: () => (
+          <div className="flex flex-col items-center justify-center h-full p-8 text-center text-muted-foreground gap-3">
+            <p className="font-semibold text-destructive">Falha ao carregar o formulário.</p>
+            <p className="text-xs">{(error as any)?.message || "Erro no carregamento dinâmico do módulo."}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded hover:opacity-90 transition-opacity"
+            >
+              Recarregar Sistema
+            </button>
+          </div>
+        )
+      };
     }
   });
 

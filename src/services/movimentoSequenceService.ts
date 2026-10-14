@@ -26,19 +26,7 @@ export async function obterProximoNrMovimento(empresaId: number, tpOperacaoId?: 
   // 2. Fallback via tabela sys_sequencial
   try {
     const db = supabase as any;
-    let chaveSeq = opId ? String(opId) : "0";
-
-    if (opId) {
-      const { data: tpData } = await db
-        .from("tp_operacao")
-        .select("tp_movimento")
-        .eq("tp_operacao_id", opId)
-        .maybeSingle();
-
-      if (tpData?.tp_movimento) {
-        chaveSeq = String(tpData.tp_movimento);
-      }
-    }
+    const chaveSeq = opId ? String(opId) : "0";
 
     const { data: seqData } = await db
       .from("sys_sequencial")

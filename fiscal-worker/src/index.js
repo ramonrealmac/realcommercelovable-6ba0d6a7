@@ -537,6 +537,57 @@ const processarEvento = async (evento) => {
             }
         }
 
+        // Intercepta e auto-cura rejeição por duplicidade (204 / 539) para NF-e e NFC-e
+        const isEmissaoNfe = ['EMITIR_NFE', 'EMITIR_NFCE', 'EMITIR_XML_NFE', 'EMITIR_XML_NFCE'].includes(evento.comando);
+        if (isEmissaoNfe) {
+            const isDuplicidade = ['204', '539'].includes(String(resultado.c_stat)) || 
+                String(resultado.erro || '').includes('204') || 
+                String(resultado.erro || '').includes('539') || 
+                String(resultado.retorno_completo || '').includes('204') || 
+                String(resultado.retorno_completo || '').includes('539') || 
+                String(resultado.x_motivo || '').toLowerCase().includes('duplicidade');
+
+            if (isDuplicidade) {
+                logger.info(`[NF-e #${nfeCabecalhoId}] Rejeição por duplicidade detectada. Verificando protocolo da SEFAZ para autocura...`);
+
+                let prot = resultado.nr_protocolo;
+                if (!prot) {
+                    const mPr = String(resultado.retorno_completo || '').match(/nProt[:=\s]*"?(\d+)"?/i) 
+                             || String(resultado.erro || '').match(/nProt[:=\s]*"?(\d+)"?/i)
+                             || String(resultado.x_motivo || '').match(/nProt[:=\s]*"?(\d+)"?/i)
+                             || String(resultado.retorno_completo || '').match(/Protocolo[:=\s]*"?(\d+)"?/i);
+                    if (mPr) prot = mPr[1];
+                }
+
+                let chave = resultado.chave_nfe;
+                if (!chave || chave.length !== 44) {
+                    const mCh = String(resultado.retorno_completo || '').match(/chNFe[:=\s]*"?(\d{44})"?/i)
+                             || String(resultado.erro || '').match(/chNFe[:=\s]*"?(\d{44})"?/i)
+                             || String(resultado.x_motivo || '').match(/chNFe[:=\s]*"?(\d{44})"?/i)
+                             || String(resultado.retorno_completo || '').match(/NFe(\d{44})/i)
+                             || String(payload.dados || '').match(/Id="NFe(\d{44})"/);
+                    if (mCh) chave = mCh[1];
+                }
+
+                if (prot) {
+                    logger.info(`[NF-e #${nfeCabecalhoId}] Autocura aplicada com sucesso! Protocolo encontrado: ${prot}, Chave: ${chave}`);
+                    resultado.sucesso = true;
+                    resultado.c_stat = '100';
+                    resultado.x_motivo = 'Autorizado o uso da NF-e (Duplicidade tratada)';
+                    resultado.nr_protocolo = prot;
+                    if (chave) resultado.chave_nfe = chave;
+                    resultado.erro = null;
+
+                    // Se não tiver xml_nfe completo com protocolo, utiliza o payload XML assinado para impressão
+                    if (!resultado.xml_nfe && payload.dados) {
+                        resultado.xml_nfe = payload.dados;
+                    }
+                } else {
+                    logger.warn(`[NF-e #${nfeCabecalhoId}] Duplicidade detectada mas não foi possível extrair nProt do retorno.`);
+                }
+            }
+        }
+
         const isCancelamento = ['CANCELAR_NFE', 'CANCELAR_NFCE'].includes(evento.comando);
         const isInutilizacao = ['INUTILIZAR_NFE', 'INUTILIZAR_NFCE'].includes(evento.comando);
 
@@ -563,13 +614,13 @@ const processarEvento = async (evento) => {
                 const jaEstavaAutorizada = nfeAtual && (nfeAtual.st_nf === 'A' || nfeAtual.nr_protocolo);
 
                 // Se deu sucesso OU se foi duplicidade (mas a nota já estava autorizada ou tem protocolo), mantém Autorizada 'A'
-                const statusFinalNfe = (resultado.sucesso || (isDuplicidade && jaEstavaAutorizada)) 
+                const statusFinalNfe = (resultado.sucesso || (isDuplicidade && (jaEstavaAutorizada || resultado.nr_protocolo))) 
                     ? 'A' 
                     : (isDenegada ? 'D' : 'R');
 
                 const updateNfe = {
-                    c_stat: (isDuplicidade && jaEstavaAutorizada) ? 100 : (resultado.c_stat ? parseInt(String(resultado.c_stat)) : null),
-                    x_motivo: (isDuplicidade && jaEstavaAutorizada) ? 'Autorizado o uso da NF-e (Duplicidade tratada)' : (resultado.x_motivo || (resultado.sucesso ? 'Autorizado' : 'Rejeitado')),
+                    c_stat: (resultado.sucesso || (isDuplicidade && (jaEstavaAutorizada || resultado.nr_protocolo))) ? 100 : (resultado.c_stat ? parseInt(String(resultado.c_stat)) : null),
+                    x_motivo: (resultado.sucesso && isDuplicidade) ? 'Autorizado o uso da NF-e (Duplicidade tratada)' : (resultado.x_motivo || (resultado.sucesso ? 'Autorizado' : 'Rejeitado')),
                     st_nf: statusFinalNfe, // A=Autorizada, D=Denegado, R=Rejeitado
                     updated_at: new Date().toISOString()
                 };

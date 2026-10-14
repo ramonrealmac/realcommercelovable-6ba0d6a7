@@ -173,7 +173,21 @@ const FaturarPedidoDialog: React.FC<IProps> = ({ open, funcionarioId, empresaId,
       setXProg(p => ({ ...p, open: false }));
 
       if (!ret.success) {
-        throw new Error(ret.mensagem || "Rejeitado pela SEFAZ ou erro no worker.");
+        // Fallback defensivo: se a nota foi autorizada no banco (duplicidade tratada), continua com sucesso
+        let autorizadaNoBanco = false;
+        if (res.nfe_cabecalho_id) {
+          const { data: nfeChecada } = await db
+            .from("fiscal_nfe_cabecalho")
+            .select("st_nf, nr_protocolo")
+            .eq("nfe_cabecalho_id", res.nfe_cabecalho_id)
+            .maybeSingle();
+          if (nfeChecada && (nfeChecada.st_nf === "A" || nfeChecada.nr_protocolo)) {
+            autorizadaNoBanco = true;
+          }
+        }
+        if (!autorizadaNoBanco) {
+          throw new Error(ret.mensagem || "Rejeitado pela SEFAZ ou erro no worker.");
+        }
       }
 
       toast.success(`${modLbl} emitida com sucesso!`);

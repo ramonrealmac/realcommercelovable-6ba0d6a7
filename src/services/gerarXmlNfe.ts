@@ -65,12 +65,22 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
   // Helper para escapar XML
   const esc = (s: any) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 
+  // Calcula dígito verificador real (módulo 11) para o Id e cDV da NF-e / NFC-e
+  const chave43 = `${cUF}${dhEmi.substring(2, 4)}${dhEmi.substring(5, 7)}${empresa.cnpj.replace(/\D/g,'')}${modelo}${serie.padStart(3,'0')}${nNF.padStart(9,'0')}${tpNF}${cNF}`;
+  const weights = [2, 3, 4, 5, 6, 7, 8, 9];
+  let sumDV = 0;
+  for (let i = chave43.length - 1, w = 0; i >= 0; i--, w++) {
+    sumDV += parseInt(chave43[i], 10) * weights[w % weights.length];
+  }
+  const remDV = sumDV % 11;
+  const cDV = (remDV === 0 || remDV === 1) ? 0 : 11 - remDV;
+
   let xml = `<?xml version="1.0" encoding="UTF-8"?>`;
   xml += `<enviNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">`;
   xml += `<idLote>1</idLote>`;
   xml += `<indSinc>1</indSinc>`;
   xml += `<NFe>`;
-  xml += `<infNFe versao="4.00" Id="NFe${cUF}${dhEmi.substring(2, 4)}${dhEmi.substring(5, 7)}${empresa.cnpj.replace(/\D/g,'')}${modelo}${serie.padStart(3,'0')}${nNF.padStart(9,'0')}${tpNF}${cNF}1">`;
+  xml += `<infNFe versao="4.00" Id="NFe${chave43}${cDV}">`;
   
   // Determina IE e Indicador do IE do Destinatário
   const ieDest = limparNumeros(cadastro?.inscricao_estadual || '');
@@ -113,7 +123,7 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
   const tpImpVal = isNFCe ? '4' : (danfeTipo === '2' ? '2' : (danfeTipo === '3' ? '3' : '1'));
   xml += `<tpImp>${tpImpVal}</tpImp>`;
   xml += `<tpEmis>1</tpEmis>`;
-  xml += `<cDV>0</cDV>`; // O ACBr calcula o dígito real
+  xml += `<cDV>${cDV}</cDV>`;
   xml += `<tpAmb>${ambiente}</tpAmb>`;
   xml += `<finNFe>${finNFe}</finNFe>`;
   xml += `<indFinal>${isConsumidorFinal}</indFinal>`;
@@ -223,8 +233,15 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
     xml += `<cEAN>${normalizarGtinFiscal(it.gtin)}</cEAN>`;
     xml += `<xProd>${esc(it.nm_produto)}</xProd>`;
     xml += `<NCM>${esc(it.ncm)}</NCM>`;
-    if (it.cest) xml += `<CEST>${esc(it.cest)}</CEST>`;
-    xml += `<CFOP>${it.cfop_id || it.cfop || '5102'}</CFOP>`;
+    let cfopVal = it.cfop ? String(it.cfop).trim() : (it.cfop_id ? String(it.cfop_id).trim() : '');
+    if (!cfopVal) {
+      if (String(cabecalho.fin_nfe) === '4') {
+        cfopVal = String(cabecalho.tp_nf) === '0' ? '1202' : '5202';
+      } else {
+        cfopVal = String(cabecalho.tp_nf) === '0' ? '1102' : '5102';
+      }
+    }
+    xml += `<CFOP>${cfopVal}</CFOP>`;
     xml += `<uCom>${esc(it.unidade || 'UN')}</uCom>`;
     xml += `<qCom>${qt.toFixed(4)}</qCom>`;
     xml += `<vUnCom>${vUnit.toFixed(10)}</vUnCom>`;

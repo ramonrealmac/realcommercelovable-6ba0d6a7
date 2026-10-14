@@ -154,13 +154,51 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
     }
   }, []);
 
-  const gridCols = useMemo(() => XGridCols.map(c =>
-    c.key === "_dest" ? { 
-      ...c, 
-      getValue: (r: any) => XClienteCache[r.cadastro_id]?.razao || "",
-      render: (r: any) => r._dest_razao || (r.cadastro_id ? (XClienteCache[r.cadastro_id]?.razao || `#${XClienteCache[r.cadastro_id]?.cd_cadastro ?? r.cadastro_id}`) : "")
-    } : c
-  ), [XClienteCache]);
+  const [XMovimentoCache, setXMovimentoCache] = useState<Record<number, number>>({});
+  const XMovimentoCacheRef = useRef<Record<number, number>>(XMovimentoCache);
+  useEffect(() => { XMovimentoCacheRef.current = XMovimentoCache; }, [XMovimentoCache]);
+
+  const ensureMovimentoInfo = useCallback(async (movIds: number[]) => {
+    const faltando = movIds.filter(id => id && !XMovimentoCacheRef.current[id]);
+    if (!faltando.length) return;
+    try {
+      const { data } = await db.from("movimento")
+        .select("movimento_id, nr_movimento")
+        .in("movimento_id", faltando);
+      if (data) {
+        setXMovimentoCache(prev => {
+          const next = { ...prev };
+          for (const m of data as any[]) {
+            if (m.movimento_id) next[m.movimento_id] = m.nr_movimento;
+          }
+          return next;
+        });
+      }
+    } catch (e) {
+      console.warn("Erro ao buscar dados do movimento:", e);
+    }
+  }, []);
+
+  const gridCols = useMemo(() => XGridCols.map(c => {
+    if (c.key === "_dest") {
+      return { 
+        ...c, 
+        getValue: (r: any) => XClienteCache[r.cadastro_id]?.razao || "",
+        render: (r: any) => r._dest_razao || (r.cadastro_id ? (XClienteCache[r.cadastro_id]?.razao || `#${XClienteCache[r.cadastro_id]?.cd_cadastro ?? r.cadastro_id}`) : "")
+      };
+    }
+    if (c.key === "pedido_id") {
+      return {
+        ...c,
+        getValue: (r: any) => (r.movimento_id ? XMovimentoCache[r.movimento_id] : null) || r.pedido_id || r.movimento_id || "",
+        render: (r: any) => {
+          const num = (r.movimento_id ? XMovimentoCache[r.movimento_id] : null) || r.pedido_id || r.movimento_id || "";
+          return num ? <span className="font-medium">{num}</span> : <span className="text-muted-foreground">-</span>;
+        }
+      };
+    }
+    return c;
+  }), [XClienteCache, XMovimentoCache]);
 
   const fmt2 = (v: number) => Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
   const fmtInput = (v: any) => (v === 0 || v === "0" || v === "" || v === undefined || v === null) ? "" : String(v).replace(".", ",");
@@ -193,6 +231,8 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
         XOnAfterLoad: (rows: any[]) => {
           const ids = [...new Set(rows.map(r => r.cadastro_id).filter(Boolean))] as number[];
           if (ids.length) ensureClienteInfo(ids);
+          const movIds = [...new Set(rows.map(r => r.movimento_id).filter(Boolean))] as number[];
+          if (movIds.length) ensureMovimentoInfo(movIds);
         },
         XOnBeforeSave: (rec: any) => {
           if (rec.tp_nf === undefined || rec.tp_nf === null) rec.tp_nf = 1;
@@ -526,13 +566,26 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
         const ro = !isEditing;
         const stAtual = (record.st_nf || "A") as TNfeSt;
 
+        if (record?.movimento_id && !XMovimentoCache[record.movimento_id]) {
+          ensureMovimentoInfo([record.movimento_id]);
+        }
+
         return (
           <div className="space-y-4" onKeyDown={handleKeyDown}>
             {/* Linha 1 */}
             <div className="grid grid-cols-12 gap-3 items-end">
               <div className="col-span-1">
-                <label className="text-xs text-muted-foreground">Pedido</label>
-                <input readOnly value={(record as any).pedido_id ?? (record as any).movimento_id ?? ""} className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right" title="Nº do pedido (movimento) que originou esta nota" />
+                <label className="text-xs text-muted-foreground font-medium">Pedido</label>
+                <input 
+                  readOnly 
+                  value={
+                    (record.movimento_id && XMovimentoCache[record.movimento_id]) 
+                      ? XMovimentoCache[record.movimento_id] 
+                      : ((record as any).pedido_id ?? (record as any).movimento_id ?? "")
+                  } 
+                  className="w-full border border-border rounded px-2 py-1 text-sm bg-secondary text-right font-bold text-foreground" 
+                  title={`Número oficial do pedido (${record.movimento_id ? `Movimento #${record.movimento_id}` : 'Sem movimento'})`} 
+                />
               </div>
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Tipo de Nota</label>

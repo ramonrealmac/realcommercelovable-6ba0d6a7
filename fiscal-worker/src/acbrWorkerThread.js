@@ -1807,13 +1807,26 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
                 const { chave, justificativa, cnpj } = jsonPayload;
                 const nfeId = jsonPayload.nfe_cabecalho_id;
 
-                console.log(`[FiscalLib] Cancelando ${comando}: ${chave}...`);
+                let chaveAjustada = String(chave || "").trim().replace(/\D/g, "");
+                if (chaveAjustada.length === 44) {
+                    const key43 = chaveAjustada.substring(0, 43);
+                    const weights = [2, 3, 4, 5, 6, 7, 8, 9];
+                    let sum = 0;
+                    for (let i = key43.length - 1, w = 0; i >= 0; i--, w++) {
+                        sum += parseInt(key43[i], 10) * weights[w % weights.length];
+                    }
+                    const rem = sum % 11;
+                    const dv = (rem === 0 || rem === 1) ? 0 : 11 - rem;
+                    chaveAjustada = key43 + String(dv);
+                }
+
+                console.log(`[FiscalLib] Cancelando ${comando}: ${chaveAjustada}...`);
 
                 const bufferResposta = Buffer.alloc(TAMANHO_BUFFER);
                 const bufferTamanho = Buffer.alloc(4);
                 bufferTamanho.writeInt32LE(TAMANHO_BUFFER, 0);
 
-                const ret = libNFe.Cancelar(handle, chave, justificativa, cnpj, 1, bufferResposta, bufferTamanho);
+                const ret = libNFe.Cancelar(handle, chaveAjustada, justificativa, cnpj, 1, bufferResposta, bufferTamanho);
                 if (ret !== 0) throw new Error(lerRetornoACBr(libNFe, handle));
 
                 const resposta = bufferResposta.toString('utf8', 0, bufferTamanho.readInt32LE(0));
@@ -2158,16 +2171,43 @@ const executarComandoFiscal = async (comando, jsonPayload) => {
 
                 console.log(`[FiscalLib] EnviarEvento CCE ret=${ret} | UltimoRetorno: ${ultimoRetorno.substring(0, 300)}`);
 
-                const extrair = (chave) => {
-                    const m = (ultimoRetorno + xmlRetorno).match(new RegExp(`${chave}[=:]\\s*"?([^\\r\\n",}]+)"?`, 'i'));
-                    return m ? m[1].trim() : null;
-                };
+                let c_stat = null;
+                let x_motivo = null;
+                let nr_protocolo = null;
 
-                const c_stat = extrair('cStat') || extrair('CStat');
-                const x_motivo = extrair('xMotivo') || extrair('XMotivo');
-                const nr_protocolo = extrair('nProt') || extrair('NProt');
+                try {
+                    const parsed = JSON.parse(ultimoRetorno || xmlRetorno || '{}');
+                    const ev = parsed.Evento?.Evento001 || parsed.Evento;
+                    if (ev) {
+                        c_stat = ev.CStat ?? ev.cStat;
+                        x_motivo = ev.XMotivo ?? ev.xMotivo;
+                        nr_protocolo = ev.nProt ?? ev.NProt;
+                    }
+                } catch {
+                    // Fallback se não for JSON puro
+                }
 
-                const sucesso = ['135', '136'].includes(String(c_stat)) || String(ultimoRetorno).includes('135') || String(xmlRetorno).includes('135');
+                // Se c_stat for 128 (Lote processado), busca o status do Evento individual (Evento001)
+                if (!c_stat || String(c_stat) === '128') {
+                    const mEvStat = (ultimoRetorno + xmlRetorno).match(/Evento001[\s\S]*?(?:cStat|CStat)[=:\s"]+(\d+)/i);
+                    if (mEvStat) c_stat = mEvStat[1];
+                    const mEvMotivo = (ultimoRetorno + xmlRetorno).match(/Evento001[\s\S]*?(?:xMotivo|XMotivo)[=:\s"]+([^"\r\n}]+)/i);
+                    if (mEvMotivo) x_motivo = mEvMotivo[1];
+                    const mEvProt = (ultimoRetorno + xmlRetorno).match(/Evento001[\s\S]*?(?:nProt|NProt)[=:\s"]+([^"\r\n}]+)/i);
+                    if (mEvProt) nr_protocolo = mEvProt[1];
+                }
+
+                if (!c_stat) {
+                    const extrair = (chave) => {
+                        const m = (ultimoRetorno + xmlRetorno).match(new RegExp(`${chave}[=:]\\s*"?([^\\r\\n",}]+)"?`, 'i'));
+                        return m ? m[1].trim() : null;
+                    };
+                    c_stat = extrair('cStat') || extrair('CStat');
+                    x_motivo = x_motivo || extrair('xMotivo') || extrair('XMotivo');
+                    nr_protocolo = nr_protocolo || extrair('nProt') || extrair('NProt');
+                }
+
+                const sucesso = ['135', '136'].includes(String(c_stat));
 
                 return {
                     sucesso,

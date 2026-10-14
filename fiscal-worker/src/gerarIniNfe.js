@@ -156,8 +156,15 @@ export function gerarIniNfe(params) {
     linhas.push(`cEANTrib=${gtinFiscal}`);
     linhas.push(`xProd=${xProdFinal}`);
     linhas.push(`NCM=${it.ncm || ''}`);
-    if (it.cest) linhas.push(`CEST=${it.cest}`);
-    linhas.push(`CFOP=${it.cfop || '5102'}`);
+    let cfopFinal = it.cfop ? String(it.cfop).trim() : '';
+    if (!cfopFinal) {
+      if (finNFe === '4') {
+        cfopFinal = tpNF === '0' ? '1202' : '5202';
+      } else {
+        cfopFinal = tpNF === '0' ? '1102' : '5102';
+      }
+    }
+    linhas.push(`CFOP=${cfopFinal}`);
     linhas.push(`uCom=${it.unidade || 'UN'}`);
     linhas.push(`qCom=${qt.toFixed(4)}`);
     linhas.push(`vUnCom=${vUnit.toFixed(10)}`);

@@ -1223,18 +1223,36 @@ const NfeItensTab: React.FC<NfeItensTabProps> = ({
 
   const filteredCfops = useMemo(() => {
     const isEntrada = XCabecalho?.tp_nf === 0;
-    if (isEntrada) {
-      return XCfops.filter(c => {
-        const cd = String(c.cd_cfop || "");
-        return cd.startsWith("1") || cd.startsWith("2") || cd.startsWith("3");
-      });
-    } else {
-      return XCfops.filter(c => {
-        const cd = String(c.cd_cfop || "");
-        return cd.startsWith("5") || cd.startsWith("6") || cd.startsWith("7");
+    const base = XCfops.filter(c => {
+      const cd = String(c.cd_cfop || "");
+      return isEntrada ? (cd.startsWith("1") || cd.startsWith("2") || cd.startsWith("3")) : (cd.startsWith("5") || cd.startsWith("6") || cd.startsWith("7"));
+    });
+
+    if (isDevolucao) {
+      // Prioriza CFOPs de devolução (12xx, 22xx, 14xx, 24xx, 52xx, 62xx, 54xx, 64xx, 5949, 1949, etc.)
+      const isDevolucaoCode = (cd: string) => {
+        return (
+          cd.startsWith("12") || cd.startsWith("22") ||
+          cd.startsWith("52") || cd.startsWith("62") ||
+          cd.startsWith("1411") || cd.startsWith("2411") ||
+          cd.startsWith("5411") || cd.startsWith("6411") ||
+          cd.startsWith("5553") || cd.startsWith("5556") ||
+          cd.startsWith("5949") || cd.startsWith("6949") ||
+          cd.startsWith("1949") || cd.startsWith("2949")
+        );
+      };
+
+      return [...base].sort((a, b) => {
+        const aDev = isDevolucaoCode(String(a.cd_cfop || ""));
+        const bDev = isDevolucaoCode(String(b.cd_cfop || ""));
+        if (aDev && !bDev) return -1;
+        if (!aDev && bDev) return 1;
+        return String(a.cd_cfop).localeCompare(String(b.cd_cfop));
       });
     }
-  }, [XCfops, XCabecalho?.tp_nf]);
+
+    return base;
+  }, [XCfops, XCabecalho?.tp_nf, isDevolucao]);
 
   const handleEditar = () => {
     if (XCurrentIdx === null) return;
