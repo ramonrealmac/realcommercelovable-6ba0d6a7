@@ -30,6 +30,7 @@ const XGridCols: IGridColumn[] = [
   { key: "serie",            label: "Série",   width: "50px",  align: "center" },
   { key: "modelo",           label: "Mod.",    width: "50px",  align: "center" },
   { key: "dt_emissao",       label: "Emissão", width: "100px", render: r => r.dt_emissao ? new Date(r.dt_emissao).toLocaleDateString("pt-BR") : "" },
+  { key: "nat_op",           label: "Natureza da Operação", width: "180px", getValue: (r: any) => r.nat_op || "", render: (r: any) => <span className="truncate block" title={r.nat_op || ""}>{r.nat_op || ""}</span> },
   { key: "_dest",            label: "Cliente/Fornecedor", width: "2fr", getValue: (r: any) => r._dest_razao || "", render: (r: any) => r._dest_razao || (r.cadastro_id ? `#${r.cadastro_id}` : "") },
   { 
     key: "st_nf", 
@@ -64,7 +65,7 @@ const XDefault: Partial<INfeCabecalho> = {
   tp_emis: 1,
   modelo: "55",
   tp_operacao_id: null,
-  nat_op: "Venda de Mercadoria",
+  nat_op: "",
   funcionario_id: null,
   nr_nota: "",
   serie: "1",
@@ -94,6 +95,8 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
     gera_pedido: string;
     altera_estoque: string;
   }[]>([]);
+  const XTpOperacoesRef = useRef(XTpOperacoes);
+  useEffect(() => { XTpOperacoesRef.current = XTpOperacoes; }, [XTpOperacoes]);
   const [XProg, setXProg] = useState<{ open: boolean; titulo: string; total: number; restante: number }>({
     open: false,
     titulo: "",
@@ -227,11 +230,7 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
       }
 
       if (data) {
-        // Flag gera_nf: se sim carrega na combo, se não não carrega
-        const validos = data.filter((t: any) =>
-          String(t.gera_nf || "").toUpperCase() === "S" || t.gera_nf === true
-        );
-        setXTpOperacoes(validos.map((t: any) => ({
+        setXTpOperacoes(data.map((t: any) => ({
           id: t.tp_operacao_id,
           descricao: t.descricao,
           tp_movimento: String(t.tp_movimento || "").toUpperCase().trim(),
@@ -242,6 +241,32 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
       }
     } catch (e) {
       console.warn("Erro ao buscar tp_operacao:", e);
+    }
+  }, []);
+
+  const ensureTpOperacoesInfo = useCallback(async (opIds: number[]) => {
+    const faltando = opIds.filter(id => id && !XTpOperacoesRef.current.some(o => String(o.id) === String(id)));
+    if (!faltando.length) return;
+    try {
+      const { data } = await db.from("tp_operacao")
+        .select("tp_operacao_id, descricao, tp_movimento, gera_nf, gera_pedido, altera_estoque")
+        .in("tp_operacao_id", faltando);
+      if (data && data.length) {
+        setXTpOperacoes(prev => {
+          const existentes = new Set(prev.map(p => String(p.id)));
+          const novos = data.filter((t: any) => !existentes.has(String(t.tp_operacao_id))).map((t: any) => ({
+            id: t.tp_operacao_id,
+            descricao: t.descricao,
+            tp_movimento: String(t.tp_movimento || "").toUpperCase().trim(),
+            gera_nf: t.gera_nf,
+            gera_pedido: t.gera_pedido,
+            altera_estoque: t.altera_estoque,
+          }));
+          return [...prev, ...novos];
+        });
+      }
+    } catch (e) {
+      console.warn("Erro ao buscar dados de tp_operacao:", e);
     }
   }, []);
 
@@ -306,8 +331,18 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
         }
       };
     }
+    if (c.key === "nat_op") {
+      return {
+        ...c,
+        getValue: (r: any) => r.nat_op || (r.tp_operacao_id ? (XTpOperacoes.find(o => String(o.id) === String(r.tp_operacao_id))?.descricao || "") : ""),
+        render: (r: any) => {
+          const desc = r.nat_op || (r.tp_operacao_id ? (XTpOperacoes.find(o => String(o.id) === String(r.tp_operacao_id))?.descricao || "") : "");
+          return <span className="truncate block" title={desc}>{desc}</span>;
+        }
+      };
+    }
     return c;
-  }), [XClienteCache, XMovimentoCache]);
+  }), [XClienteCache, XMovimentoCache, XTpOperacoes]);
 
   const fmt2 = (v: number) => Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtInput = (v: any) => {
@@ -569,6 +604,8 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
           if (vIds.length) ensureVendedorInfo(vIds);
           const movIds = [...new Set(rows.map(r => r.movimento_id).filter(Boolean))] as number[];
           if (movIds.length) ensureMovimentoInfo(movIds);
+          const opIds = [...new Set(rows.map(r => r.tp_operacao_id).filter(Boolean))] as number[];
+          if (opIds.length) ensureTpOperacoesInfo(opIds);
         },
         XOnBeforeSave: (rec: any) => {
           if (rec.tp_nf === undefined || rec.tp_nf === null) rec.tp_nf = 1;
@@ -1038,8 +1075,11 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                     const novoTp = Number(e.target.value);
                     setField("tp_nf" as any, novoTp as any);
                     const prefixoNovo = novoTp === 0 ? "E" : "S";
-                    const opAtual = XTpOperacoes.find(o => o.id === record.tp_operacao_id);
-                    if (opAtual && !opAtual.tp_movimento.toUpperCase().startsWith(prefixoNovo)) {
+                    const opAtual = XTpOperacoes.find(o => String(o.id) === String(record.tp_operacao_id));
+                    const opCompativel = opAtual && 
+                      opAtual.tp_movimento.toUpperCase().startsWith(prefixoNovo) &&
+                      (String(opAtual.gera_nf || "").toUpperCase() === "S" || opAtual.gera_nf === true);
+                    if (!opCompativel) {
                       setField("tp_operacao_id" as any, null as any);
                       setField("nat_op" as any, "" as any);
                     }
@@ -1126,17 +1166,40 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                 {(() => {
                   const isEntrada = Number(record.tp_nf) === 0;
                   const prefixoEsperado = isEntrada ? "E" : "S";
+
+                  // Popula a combo automaticamente com os tipos de operação que começam com E (0 - Entrada) ou S (1 - Saída) e possuem emitir nota = sim (gera_nf = 'S')
                   const operacoesFiltradas = XTpOperacoes.filter(op =>
+                    (String(op.gera_nf || "").toUpperCase() === "S" || op.gera_nf === true) &&
                     op.tp_movimento.toUpperCase().startsWith(prefixoEsperado)
                   );
-                  const operacoesExibir = operacoesFiltradas.some(o => o.id === record.tp_operacao_id)
-                    ? operacoesFiltradas
-                    : (record.tp_operacao_id && XTpOperacoes.find(o => o.id === record.tp_operacao_id))
-                      ? [...operacoesFiltradas, XTpOperacoes.find(o => o.id === record.tp_operacao_id)!]
-                      : operacoesFiltradas;
 
-                  const valorSelecionado = record.tp_operacao_id 
-                    ?? (XTpOperacoes.find(o => o.descricao === record.nat_op)?.id ?? "");
+                  // Localiza operação vinculada por ID ou pela descrição (case-insensitive)
+                  const matchedOp = (record.tp_operacao_id && XTpOperacoes.find(o => String(o.id) === String(record.tp_operacao_id)))
+                    || (record.nat_op && XTpOperacoes.find(o => o.descricao.trim().toLowerCase() === String(record.nat_op).trim().toLowerCase()));
+
+                  const operacoesExibir = [...operacoesFiltradas];
+                  if (matchedOp && !operacoesExibir.some(o => String(o.id) === String(matchedOp.id))) {
+                    if (ro || matchedOp.tp_movimento.toUpperCase().startsWith(prefixoEsperado)) {
+                      operacoesExibir.push(matchedOp);
+                    }
+                  }
+
+                  // Se a nota carregada na aba localizar possui nat_op gravada e ela não consta em operacoesExibir, inclui para garantir exibição
+                  const natOpTexto = String(record.nat_op || "").trim();
+                  if (!matchedOp && natOpTexto && (ro || record.nfe_cabecalho_id)) {
+                    operacoesExibir.push({
+                      id: `nat_${natOpTexto}` as any,
+                      descricao: natOpTexto,
+                      tp_movimento: prefixoEsperado,
+                      gera_nf: "S",
+                      gera_pedido: "N",
+                      altera_estoque: "N",
+                    });
+                  }
+
+                  const valorSelecionado = matchedOp && (ro || matchedOp.tp_movimento.toUpperCase().startsWith(prefixoEsperado))
+                    ? String(matchedOp.id)
+                    : (natOpTexto && (ro || record.nfe_cabecalho_id) ? `nat_${natOpTexto}` : "");
 
                   return (
                     <select
@@ -1146,20 +1209,24 @@ const OutrasNotasForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
                         if (isEditing) carregarTpOperacoes(record.empresa_id || XEmpresaId);
                       }}
                       onChange={e => {
-                        const val = e.target.value ? Number(e.target.value) : null;
-                        setField("tp_operacao_id" as any, val as any);
-                        const sel = XTpOperacoes.find(o => o.id === val);
-                        if (sel) {
-                          setField("nat_op" as any, sel.descricao as any);
-                        } else {
+                        const val = e.target.value;
+                        if (!val) {
+                          setField("tp_operacao_id" as any, null as any);
                           setField("nat_op" as any, "" as any);
+                          return;
+                        }
+                        const sel = operacoesExibir.find(o => String(o.id) === String(val));
+                        if (sel) {
+                          const isCustom = String(sel.id).startsWith("nat_");
+                          setField("tp_operacao_id" as any, isCustom ? null : Number(sel.id) as any);
+                          setField("nat_op" as any, sel.descricao as any);
                         }
                       }}
                       className="w-full border border-border rounded px-2 py-1 text-sm bg-background font-medium"
                     >
                       <option value="">— Selecione a Natureza da Operação —</option>
                       {operacoesExibir.map(op => (
-                        <option key={op.id} value={op.id}>
+                        <option key={String(op.id)} value={String(op.id)}>
                           {op.descricao}
                         </option>
                       ))}
