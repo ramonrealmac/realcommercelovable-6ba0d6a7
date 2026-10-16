@@ -62,6 +62,7 @@ import {
   Calculator,
   FileX,
   Briefcase,
+  FilePlus,
 } from "lucide-react";
 
 export interface MenuItem {
@@ -267,6 +268,7 @@ export const MENU_CONFIG: MenuItem[] = [
           { id: "cce", title: "Carta de Correção", icon: FilePen },
           { id: "nfe-inutilizacao", title: "Inutilização de Numeração", icon: FileX },
           { id: "devolucao-nfe-saida-fiscal", title: "Devolução de NF-e de Saída", icon: ArrowDownToLine },
+          { id: "nota-complementar", title: "Nota Complementar", icon: FilePlus },
         ]
       },
       {

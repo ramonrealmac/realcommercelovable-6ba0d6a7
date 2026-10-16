@@ -333,5 +333,33 @@ export function validarDadosFiscais(params: {
     }
   }
 
+  // Validação de NF-e Complementar (Finalidade 2)
+  const isComplementar =
+    movimento.fin_nfe === 2 ||
+    String(movimento.fin_nfe) === "2" ||
+    String(movimento.finalidade) === "2";
+
+  if (isComplementar) {
+    const refs = chavesRef || [];
+    const chaveComp = String((movimento as any).chave_nfe_origem || "").replace(/\D/g, "");
+    if (refs.length === 0 && chaveComp.length !== 44) {
+      erros.push({
+        campo: "Documento Referenciado (Complementar / finNFe 2)",
+        mensagem: "NF-e Complementar exige a Chave de Acesso de 44 dígitos da NF-e original vinculada nos Documentos Referenciados."
+      });
+    } else {
+      const allRefs = refs.length > 0 ? refs : [chaveComp];
+      allRefs.forEach((c, idx) => {
+        const limpa = String(c || "").replace(/\D/g, "");
+        if (limpa.length !== 44) {
+          erros.push({
+            campo: `Chave Referenciada #${idx + 1}`,
+            mensagem: `A chave informada ("${c}") possui ${limpa.length} dígitos. A chave da NF-e original DEVE possuir exatamente 44 dígitos numéricos.`
+          });
+        }
+      });
+    }
+  }
+
   return { valido: erros.length === 0, erros };
 }

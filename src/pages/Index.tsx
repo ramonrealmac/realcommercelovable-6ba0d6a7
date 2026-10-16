@@ -75,6 +75,7 @@ const DevolucaoPedidoSemNfeForm = safeLazy(() => import("@/components/forms/pedi
 const ListaNfeEmitidaForm = safeLazy(() => import("@/components/forms/nfe/ListaNfeEmitidaForm"));
 const NfeEmitidaForm = safeLazy(() => import("@/components/forms/nfe/NfeEmitidaForm"));
 const OutrasNotasForm = safeLazy(() => import("@/components/forms/nfe/OutrasNotasForm"));
+const NotaComplementarForm = safeLazy(() => import("@/components/forms/nfe/NotaComplementarForm"));
 const ConsultaTitulosReceberForm = safeLazy(() => import("@/components/forms/financeiro/ConsultaTitulosReceberForm"));
 const BaixaPorClienteForm = safeLazy(() => import("@/components/forms/financeiro/BaixaPorClienteForm"));
 const BaixaCartaoForm = safeLazy(() => import("@/components/forms/financeiro/BaixaCartaoForm"));
@@ -164,7 +165,7 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "clas-trib": return <ClasTribForm />;
       case "fiscal-grupo-produtos": return <FiscalGrupoProdutoForm />;
       case "fiscal-regras": return <FiscalRegraForm />;
-      case "pedidos": return <PedidoForm />;
+      case "pedidos": return <PedidoForm initialMovimentoId={params?.movimento_id} />;
       case "nova-entrada": return <NotaFiscalEntradaForm />;
       case "minhas-entradas": return <NotaFiscalEntradaForm />;
       case "nfe-recebidas": return <NfeRecebidasForm />;
@@ -175,6 +176,7 @@ const TabContent = memo(({ component, params }: { component: string; params?: an
       case "nfe-emitidas": return <ListaNfeEmitidaForm initialFilterId={params?.nfe_cabecalho_id} />;
       case "nfe-form": return <NfeEmitidaForm initialId={params?.nfe_cabecalho_id} />;
       case "outras-notas": return <OutrasNotasForm initialId={params?.nfe_cabecalho_id} />;
+      case "nota-complementar": return <NotaComplementarForm initialNfeId={params?.nfe_cabecalho_id} />;
       case "consulta-titulos-receber": return <ConsultaTitulosReceberForm />;
       case "gerar-contas-receber": return <GerarContasReceberForm initialId={params?.financeiro_id} />;
       case "baixa-por-cliente": return <BaixaPorClienteForm />;

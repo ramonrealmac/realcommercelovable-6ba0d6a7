@@ -529,7 +529,7 @@ const processarEvento = async (evento) => {
 
                     resultado.sucesso = true;
                     resultado.c_stat = '100';
-                    resultado.x_motivo = 'Autorizado o uso do MDF-e (Recuperado por Duplicidade)';
+                    resultado.x_motivo = 'Autorizado o uso do MDF-e';
                     if (chave) resultado.chave_mdfe = chave;
                     if (prot) resultado.nr_protocolo = prot;
                     resultado.erro = null;
@@ -573,7 +573,7 @@ const processarEvento = async (evento) => {
                     logger.info(`[NF-e #${nfeCabecalhoId}] Autocura aplicada com sucesso! Protocolo encontrado: ${prot}, Chave: ${chave}`);
                     resultado.sucesso = true;
                     resultado.c_stat = '100';
-                    resultado.x_motivo = 'Autorizado o uso da NF-e (Duplicidade tratada)';
+                    resultado.x_motivo = 'Autorizado o uso da NF-e';
                     resultado.nr_protocolo = prot;
                     if (chave) resultado.chave_nfe = chave;
                     resultado.erro = null;
@@ -620,7 +620,7 @@ const processarEvento = async (evento) => {
 
                 const updateNfe = {
                     c_stat: (resultado.sucesso || (isDuplicidade && (jaEstavaAutorizada || resultado.nr_protocolo))) ? 100 : (resultado.c_stat ? parseInt(String(resultado.c_stat)) : null),
-                    x_motivo: (resultado.sucesso && isDuplicidade) ? 'Autorizado o uso da NF-e (Duplicidade tratada)' : (resultado.x_motivo || (resultado.sucesso ? 'Autorizado' : 'Rejeitado')),
+                    x_motivo: (resultado.sucesso && isDuplicidade) ? 'Autorizado o uso da NF-e' : (resultado.x_motivo || (resultado.sucesso ? 'Autorizado o uso da NF-e' : 'Rejeitado')),
                     st_nf: statusFinalNfe, // A=Autorizada, D=Denegado, R=Rejeitado
                     updated_at: new Date().toISOString()
                 };

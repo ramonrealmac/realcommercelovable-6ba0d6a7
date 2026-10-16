@@ -291,7 +291,10 @@ export const fiscalEmissaoService = {
         .select("chave_ref")
         .eq("nfe_cabecalho_id", cabId)
         .order("nfe_referenciada_id");
-      const chavesRef = nfeRefs?.map((d: any) => d.chave_ref).filter(Boolean) || [];
+      let chavesRef = nfeRefs?.map((d: any) => d.chave_ref).filter(Boolean) || [];
+      if (chavesRef.length === 0 && (nfeCabecalho as any).chave_nfe_origem) {
+        chavesRef = [(nfeCabecalho as any).chave_nfe_origem];
+      }
 
       const itensTratados = await Promise.all((nfeItens || []).map(async (it: any) => {
         let nrItemOrigem = Number(it.nr_item_origem || 0);
@@ -567,6 +570,38 @@ export const fiscalEmissaoService = {
 
       const versaoMetodo = tipo === "NFE" ? fConfig?.nfe_versao_metodo : fConfig?.nfce_versao_metodo;
       const isV2 = versaoMetodo === '2.0';
+
+      // Adiciona chave_nfe_origem se chavesRef estiver vazia
+      if (chavesRef.length === 0 && (cab as any).chave_nfe_origem) {
+        const rawCompKey = String((cab as any).chave_nfe_origem).replace(/\D/g, "");
+        if (rawCompKey.length === 44) chavesRef.push(rawCompKey);
+      }
+
+      // Validação de Nota Complementar (Finalidade 2)
+      if (Number(cab.fin_nfe) === 2) {
+        if (chavesRef.length === 0) {
+          throw new Error("NF-e Complementar (Finalidade 2) exige a Chave de Acesso referenciada (44 dígitos) da NF-e original autorizada.");
+        }
+        const { data: origens } = await db
+          .from("fiscal_nfe_cabecalho")
+          .select("chave_nfe, st_nf, nr_nota, fin_nfe")
+          .in("chave_nfe", chavesRef);
+
+        if (origens && origens.length > 0) {
+          for (const o of origens) {
+            if (!["A", "1"].includes(String(o.st_nf))) {
+              throw new Error(
+                `A NF-e original referenciada nº ${o.nr_nota || ""} (Chave: ${o.chave_nfe}) NÃO consta como Autorizada no sistema (Rejeição 321 da SEFAZ).`
+              );
+            }
+            if (Number(o.fin_nfe) === 2) {
+              throw new Error(
+                `A NF-e nº ${o.nr_nota || ""} referenciada já é uma Nota Complementar. A SEFAZ veda referenciar uma NF-e complementar como documento original.`
+              );
+            }
+          }
+        }
+      }
 
       // Validação de Devolução (Finalidade 4) em retransmitirDocumento
       if (Number(cab.fin_nfe) === 4) {

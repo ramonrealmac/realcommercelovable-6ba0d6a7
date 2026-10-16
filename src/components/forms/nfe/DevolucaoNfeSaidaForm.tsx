@@ -2,8 +2,10 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
-import { Search, ArrowLeft, ArrowRight, RotateCcw, Check, FileText, Package, Send } from "lucide-react";
+import { Search, ArrowLeft, ArrowRight, RotateCcw, Check, FileText, Package, Send, Printer } from "lucide-react";
 import { formatCPFCNPJ } from "@/lib/validators";
+import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
+import FiscalProgressDialog from "@/components/fiscal/FiscalProgressDialog";
 
 const db = supabase as any;
 
@@ -84,6 +86,15 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
   // Step 3
   const [XGerando, setXGerando] = useState(false);
   const [XNovoNfeId, setXNovoNfeId] = useState<number | null>(null);
+  const [XTransmitida, setXTransmitida] = useState(false);
+  const [XTpOperacaoEdId, setXTpOperacaoEdId] = useState<number | null>(null);
+  const [XGeradoMovimento, setXGeradoMovimento] = useState<{ movimento_id: number; nr_movimento: number } | null>(null);
+  const [XProg, setXProg] = useState<{ open: boolean; titulo: string; total: number; restante: number }>({
+    open: false,
+    titulo: "",
+    total: 60,
+    restante: 60,
+  });
 
   useEffect(() => {
     if (!XEmpresaId) return;
@@ -95,6 +106,19 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
       .then(({ data }: any) => {
         setXDepositos(data || []);
         if (data?.length === 1) setXDepositoId(data[0].deposito_id);
+      });
+
+    // Busca tipo de operacao ED (Entrada Devolução)
+    db.from("tp_operacao")
+      .select("tp_operacao_id,descricao")
+      .eq("empresa_id", XEmpresaId)
+      .eq("tp_movimento", "ED")
+      .eq("excluido", false)
+      .maybeSingle()
+      .then(({ data }: any) => {
+        if (data?.tp_operacao_id) {
+          setXTpOperacaoEdId(Number(data.tp_operacao_id));
+        }
       });
   }, [XEmpresaId]);
 
@@ -108,7 +132,7 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
     setXResultados([]);
     try {
       let q = db.from("fiscal_nfe_cabecalho")
-        .select("nfe_cabecalho_id,nr_nota,serie,dt_emissao,dt_saida,vl_total_nf,chave_nfe,cadastro_id,st_nf,modelo,tp_nf,fin_nfe,cadastro:cadastro_id(razao_social,cnpj)")
+        .select("nfe_cabecalho_id,nr_nota,serie,dt_emissao,dt_saida,vl_total_nf,chave_nfe,cadastro_id,st_nf,modelo,tp_nf,fin_nfe,movimento_id,pedido_id,cadastro:cadastro_id(razao_social,cnpj)")
         .eq("empresa_id", XEmpresaId)
         .eq("tp_nf", 1)
         .in("st_nf", ["A", "E", "1"]) // Apenas notas fiscais autorizadas/enviadas
@@ -151,7 +175,7 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
     if (!initialNfeId || !XEmpresaId) return;
     (async () => {
       const { data, error } = await db.from("fiscal_nfe_cabecalho")
-        .select("nfe_cabecalho_id,nr_nota,serie,dt_emissao,dt_saida,vl_total_nf,chave_nfe,cadastro_id,st_nf,modelo,tp_nf,fin_nfe,cadastro:cadastro_id(razao_social,cnpj)")
+        .select("nfe_cabecalho_id,nr_nota,serie,dt_emissao,dt_saida,vl_total_nf,chave_nfe,cadastro_id,st_nf,modelo,tp_nf,fin_nfe,movimento_id,pedido_id,cadastro:cadastro_id(razao_social,cnpj)")
         .eq("nfe_cabecalho_id", initialNfeId)
         .maybeSingle();
       if (error || !data) { toast.error("NF-e de origem não encontrada."); return; }
@@ -173,23 +197,63 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
         .eq("excluido", false)
         .order("nr_item");
       if (error) throw error;
-      const list: IItemDevolucao[] = (itens || []).map((it: any) => ({
-        nfe_item_id: it.nfe_item_id,
-        produto_id: it.produto_id,
-        cd_produto: it.cd_prod_fornec || (it.produto_id ? String(it.produto_id) : ""),
-        nm_produto: it.nm_produto || "",
-        unidade: it.unidade || "UN",
-        qt_origem: Number(it.qt_entrada || 0),
-        qt_devolver: 0,
-        vl_unit: Number(it.vl_unit || 0),
-        vl_total_origem: Number(it.vl_total || 0),
-        cfop_origem: it.cfop || "",
-        cfop_devolucao: cfopDevolucaoSugerido(it.cfop || ""),
-        ncm: it.ncm || "",
-        gtin: it.gtin || "",
-        deposito_id: it.deposito_id || XDepositoId || (XDepositos.length > 0 ? XDepositos[0].deposito_id : null),
-        origem_item: it,
-      }));
+
+      // Consulta se algum dos itens já foi devolvido em notas fiscais com status autorizado ('A')
+      const itemIds = (itens || []).map((it: any) => it.nfe_item_id).filter(Boolean);
+      let jaDevolvidoPorItem: Record<number, number> = {};
+
+      if (itemIds.length > 0) {
+        const { data: itensDevolvidos } = await db.from("fiscal_nfe_item")
+          .select("nfe_item_origem_id, qt_entrada, fiscal_nfe_cabecalho!inner(st_nf)")
+          .in("nfe_item_origem_id", itemIds)
+          .eq("excluido", false)
+          .eq("fiscal_nfe_cabecalho.st_nf", "A");
+
+        if (itensDevolvidos) {
+          for (const dev of itensDevolvidos) {
+            const origId = dev.nfe_item_origem_id;
+            if (origId) {
+              jaDevolvidoPorItem[origId] = (jaDevolvidoPorItem[origId] || 0) + Number(dev.qt_entrada || 0);
+            }
+          }
+        }
+      }
+
+      const list: IItemDevolucao[] = [];
+      for (const it of (itens || [])) {
+        const qtOrig = Number(it.qt_entrada || 0);
+        const qtDevolvida = jaDevolvidoPorItem[it.nfe_item_id] || 0;
+        const qtDisponivel = Math.max(0, qtOrig - qtDevolvida);
+
+        // Se o item já foi devolvido em nota autorizada, não deve mais aparecer disponível
+        if (qtDisponivel <= 0.0001) {
+          continue;
+        }
+
+        list.push({
+          nfe_item_id: it.nfe_item_id,
+          produto_id: it.produto_id,
+          cd_produto: it.cd_prod_fornec || (it.produto_id ? String(it.produto_id) : ""),
+          nm_produto: it.nm_produto || "",
+          unidade: it.unidade || "UN",
+          qt_origem: qtDisponivel,
+          qt_devolver: 0,
+          vl_unit: Number(it.vl_unit || 0),
+          vl_total_origem: Number(it.vl_unit || 0) * qtDisponivel,
+          cfop_origem: it.cfop || "",
+          cfop_devolucao: cfopDevolucaoSugerido(it.cfop || ""),
+          ncm: it.ncm || "",
+          gtin: it.gtin || "",
+          deposito_id: it.deposito_id || XDepositoId || (XDepositos.length > 0 ? XDepositos[0].deposito_id : null),
+          origem_item: it,
+        });
+      }
+
+      if (list.length === 0) {
+        toast.warning("Todos os itens desta NF-e já foram devolvidos em notas autorizadas.");
+        return;
+      }
+
       setXSelecionada(nfe);
       setXItens(list);
       setXStep(2);
@@ -217,16 +281,111 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
     [XItens]
   );
 
+  // Transmissão para a SEFAZ com cronômetro em tempo real
+  const transmitirSefaz = async (nfeId: number, nrNota?: string, segPreConfigurado?: number) => {
+    const targetEmpresaId = XSelecionada?.empresa_id || XEmpresaId;
+    const totalSeg = segPreConfigurado || (await fiscalEmissaoService.obterTimeoutFiscalSeg(targetEmpresaId)) || 60;
+    setXProg({
+      open: true,
+      titulo: `Transmitindo NF-e #${nrNota || nfeId} à SEFAZ...`,
+      total: totalSeg,
+      restante: totalSeg,
+    });
+
+    try {
+      const res = await fiscalEmissaoService.retransmitirDocumento(nfeId, targetEmpresaId);
+      if (!res.success || !res.fiscal_evento_id) {
+        setXProg(p => ({ ...p, open: false }));
+        setXStep(3);
+        toast.error("Falha ao enfileirar: " + (res.message || "Erro desconhecido"));
+        return;
+      }
+
+      const ret = await fiscalEmissaoService.aguardarEvento(res.fiscal_evento_id, {
+        empresaId: targetEmpresaId,
+        timeoutMs: totalSeg * 1000,
+        onTick: (s) => setXProg(p => ({ ...p, restante: s })),
+      });
+      setXProg(p => ({ ...p, open: false }));
+      setXStep(3);
+
+      const { data: updatedCab } = await db.from("fiscal_nfe_cabecalho")
+        .select("st_nf, nr_nota, serie, c_stat, x_motivo, movimento_id, movimento:movimento_id(nr_movimento)")
+        .eq("nfe_cabecalho_id", nfeId)
+        .maybeSingle();
+
+      const stNf = updatedCab?.st_nf || (ret.success ? "A" : "R");
+      if (stNf === "A") {
+        setXTransmitida(true);
+        if (updatedCab?.movimento_id) {
+          setXGeradoMovimento({
+            movimento_id: Number(updatedCab.movimento_id),
+            nr_movimento: Number((updatedCab.movimento as any)?.nr_movimento || updatedCab.movimento_id),
+          });
+        }
+        toast.success("Nota Fiscal de Devolução AUTORIZADA pela SEFAZ com sucesso!");
+        try {
+          const impRes = await fiscalEmissaoService.imprimirDocumento(nfeId, targetEmpresaId);
+          if (impRes.success && impRes.pdf_base64) {
+            const binaryString = atob(impRes.pdf_base64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+            const blob = new Blob([bytes], { type: "application/pdf" });
+            const url = URL.createObjectURL(blob);
+            window.open(url, "_blank");
+          }
+        } catch {}
+      } else {
+        setXTransmitida(false);
+        toast.error("Retorno SEFAZ: " + (ret.mensagem || ret.resposta?.x_motivo || "Não autorizada"));
+      }
+    } catch (e: any) {
+      setXProg(p => ({ ...p, open: false }));
+      setXStep(3);
+      toast.error("Erro na transmissão: " + e.message);
+    }
+  };
+
   // ------- Etapa 3 - gerar NF-e devolução (entrada)
   const gerarDevolucao = async () => {
-    const itensValidos = XItens.filter(it => it.qt_devolver > 0);
-    if (!itensValidos.length) { toast.error("Informe a quantidade a devolver em pelo menos 1 item."); return; }
-    if (itensValidos.some(it => !it.deposito_id)) { toast.error("Selecione o depósito de entrada para todos os itens a devolver."); return; }
-    if (!XSelecionada?.cadastro_id) { toast.error("NF-e de origem sem cliente."); return; }
-    if (!confirm(`Confirma a geração da NF-e de DEVOLUÇÃO DE VENDA para ${itensValidos.length} item(s) — Total R$ ${totalDevolucao.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}?`)) return;
+    let itensValidos = XItens.filter(it => it.qt_devolver > 0);
+    if (!itensValidos.length) {
+      // Se o usuário não informou quantidade manualmente, assume devolver todos os itens disponíveis
+      itensValidos = XItens.map(it => ({ ...it, qt_devolver: it.qt_origem }));
+      setXItens(itensValidos);
+    }
+    if (!itensValidos.length) {
+      toast.error("Nenhum item disponível para devolução.");
+      return;
+    }
+
+    const defaultDepId = itensValidos[0]?.deposito_id || XDepositoId || (XDepositos.length > 0 ? XDepositos[0].deposito_id : null);
+    itensValidos = itensValidos.map(it => ({
+      ...it,
+      deposito_id: it.deposito_id || defaultDepId,
+    }));
+
+    if (!XSelecionada?.cadastro_id) {
+      toast.error("NF-e de origem sem cliente vinculado.");
+      return;
+    }
 
     setXGerando(true);
+    const targetEmpresaId = XSelecionada?.empresa_id || XEmpresaId;
+    let totalSeg = 60;
+
+    // Abre o temporizador padrão imediatamente (idêntico ao Caixa)
+    setXProg({
+      open: true,
+      titulo: "Transmitindo NF-e de Devolução à SEFAZ...",
+      total: 60,
+      restante: 60,
+    });
+
     try {
+      totalSeg = (await fiscalEmissaoService.obterTimeoutFiscalSeg(targetEmpresaId)) || 60;
+      setXProg(p => ({ ...p, total: totalSeg, restante: totalSeg }));
+
       const obs = `Devolução referente à NF-e de venda nº ${XSelecionada.nr_nota}/${XSelecionada.serie} — Chave: ${XSelecionada.chave_nfe || "-"}`;
       const vlProduto = itensValidos.reduce((s, it) => s + it.qt_devolver * it.vl_unit, 0);
 
@@ -247,12 +406,11 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
           .eq("fiscal_config_item_id", cfgItem.fiscal_config_item_id);
       }
 
-      const defaultDepId = itensValidos[0]?.deposito_id || XDepositoId || XDepositos[0]?.deposito_id || null;
-
       const { data: novo, error: eCab } = await db.from("fiscal_nfe_cabecalho").insert({
         empresa_id: XEmpresaId,
         cadastro_id: XSelecionada.cadastro_id,
         deposito_id: defaultDepId,
+        tp_operacao_id: XTpOperacaoEdId || 6,
         origem_inclusao: "M",
         st_nf: "P",
         tp_nf: 0,           // entrada (mercadoria retornando)
@@ -286,7 +444,7 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
 
       const itensPayload = itensValidos.map((it, idx) => {
         const o = it.origem_item;
-        const fator = it.qt_devolver / Math.max(1e-9, it.qt_origem);
+        const fator = it.qt_devolver / Math.max(1e-9, Number(o?.qt_entrada || it.qt_origem));
         return {
           nfe_cabecalho_id: novoId,
           empresa_id: XEmpresaId,
@@ -348,13 +506,31 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
       const { error: eIt } = await db.from("fiscal_nfe_item").insert(itensPayload);
       if (eIt) throw eIt;
 
+      // Gera o pedido / movimento ED vinculado imediatamente
+      const origemMovId = XSelecionada?.movimento_id || XSelecionada?.pedido_id || null;
+      try {
+        const { data: rpcRes, error: eRpc } = await db.rpc("fu_gerar_movimento_devolucao_nfe", {
+          p_nfe_cabecalho_id: novoId,
+          p_movimento_origem_id: origemMovId ? Number(origemMovId) : null,
+        });
+        if (!eRpc && rpcRes?.movimento_id) {
+          setXGeradoMovimento({
+            movimento_id: Number(rpcRes.movimento_id),
+            nr_movimento: Number(rpcRes.nr_movimento || rpcRes.movimento_id),
+          });
+        }
+      } catch (err) {
+        console.warn("Aviso ao gerar movimento ED preliminar:", err);
+      }
+
       setXNovoNfeId(novoId);
-      setXStep(3);
-      toast.success(`NF-e de devolução de venda gerada (ID #${novoId}). Abrindo formulário...`);
-      setTimeout(() => {
-        openTab({ title: `Devolução Venda NF-e #${novoId}`, component: "nfe-form", params: { nfe_cabecalho_id: novoId } });
-      }, 300);
+      setXProg(p => ({
+        ...p,
+        titulo: `Transmitindo NF-e #${nrNotaDev || novoId} à SEFAZ...`,
+      }));
+      await transmitirSefaz(novoId, nrNotaDev, totalSeg);
     } catch (e: any) {
+      setXProg(p => ({ ...p, open: false }));
       toast.error("Falha ao gerar devolução: " + e.message);
     } finally {
       setXGerando(false);
@@ -367,7 +543,7 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
   };
 
   const reiniciar = () => {
-    setXStep(1); setXBusca(""); setXSelecionada(null); setXItens([]); setXNovoNfeId(null);
+    setXStep(1); setXBusca(""); setXSelecionada(null); setXItens([]); setXNovoNfeId(null); setXGeradoMovimento(null);
   };
 
   const StepBadge: React.FC<{ n: number; label: string; icon: React.ReactNode }> = ({ n, label, icon }) => (
@@ -599,12 +775,17 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
               </div>
             </div>
 
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <button onClick={() => setXStep(1)} className="flex items-center gap-1 px-3 py-2 text-xs font-bold bg-secondary rounded-md hover:bg-secondary/80">
                 <ArrowLeft className="w-3.5 h-3.5" /> VOLTAR
               </button>
-              <button onClick={gerarDevolucao} disabled={XGerando} className="flex items-center gap-1 px-4 py-2 text-xs font-bold bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 shadow-sm">
-                {XGerando ? "GERANDO..." : <>GERAR NF-e DE DEVOLUÇÃO <ArrowRight className="w-3.5 h-3.5" /></>}
+              <button 
+                onClick={gerarDevolucao} 
+                disabled={XGerando} 
+                className="flex items-center gap-1.5 px-5 py-2.5 text-xs font-bold bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 shadow-sm tracking-wide"
+                title="Gera e transmite à SEFAZ exibindo o cronômetro em tempo real"
+              >
+                {XGerando ? "PROCESSANDO..." : <>GERAR E ENVIAR À SEFAZ <Send className="w-3.5 h-3.5" /></>}
               </button>
             </div>
           </div>
@@ -612,24 +793,83 @@ const DevolucaoNfeSaidaForm: React.FC<DevolucaoNfeSaidaFormProps> = ({ initialNf
 
         {XStep === 3 && XNovoNfeId && (
           <div className="flex flex-col items-center justify-center gap-4 h-full text-center">
-            <div className="p-4 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400">
-              <Check className="w-12 h-12" />
+            <div className={`p-4 rounded-full ${XTransmitida ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400" : "bg-primary/10 text-primary"}`}>
+              {XTransmitida ? <Check className="w-12 h-12" /> : <Send className="w-12 h-12" />}
             </div>
-            <h3 className="text-xl font-bold">NF-e de devolução criada com sucesso</h3>
+            <h3 className="text-xl font-bold">
+              {XTransmitida ? "NF-e de Devolução Autorizada na SEFAZ!" : "NF-e de Devolução Criada com Sucesso"}
+            </h3>
             <p className="text-sm text-muted-foreground max-w-md">
-              A nota foi aberta em uma nova aba, pronta para conferência e <span className="font-bold">envio à SEFAZ</span> através do botão <span className="font-bold">"Enviar SEFAZ"</span> na barra de ferramentas.
+              {XTransmitida 
+                ? `A devolução foi transmitida, aprovada pela SEFAZ e o Pedido ED${XGeradoMovimento ? ` #${XGeradoMovimento.nr_movimento}` : ""} foi devidamente gerado e atualizado.`
+                : `A devolução e o Pedido ED${XGeradoMovimento ? ` #${XGeradoMovimento.nr_movimento}` : ""} foram gerados. Clique no botão abaixo para enviar à SEFAZ ou abra o formulário completo.`}
             </p>
-            <div className="flex gap-2 mt-2">
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
               <button onClick={reiniciar} className="px-4 py-2 text-xs font-bold bg-secondary rounded-md hover:bg-secondary/80">
                 NOVA DEVOLUÇÃO
               </button>
-              <button onClick={abrirNotaGerada} className="flex items-center gap-1 px-4 py-2 text-xs font-bold bg-primary text-primary-foreground rounded-md hover:opacity-90 shadow-sm">
+              {!XTransmitida && (
+                <button 
+                  onClick={() => transmitirSefaz(XNovoNfeId)} 
+                  className="flex items-center gap-1 px-4 py-2 text-xs font-bold bg-primary text-primary-foreground rounded-md hover:opacity-90 shadow-sm"
+                >
+                  <Send className="w-3.5 h-3.5" /> ENVIAR PARA A SEFAZ AGORA
+                </button>
+              )}
+              {XTransmitida && (
+                <button
+                  onClick={async () => {
+                    const tid = toast.loading("Gerando DANFE...");
+                    try {
+                      const res = await fiscalEmissaoService.imprimirDocumento(XNovoNfeId, XEmpresaId);
+                      toast.dismiss(tid);
+                      if (res.success && res.pdf_base64) {
+                        const binaryString = atob(res.pdf_base64);
+                        const bytes = new Uint8Array(binaryString.length);
+                        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+                        const blob = new Blob([bytes], { type: "application/pdf" });
+                        const url = URL.createObjectURL(blob);
+                        window.open(url, "_blank");
+                      }
+                    } catch (e: any) {
+                      toast.dismiss(tid);
+                      toast.error("Erro ao emitir DANFE: " + e.message);
+                    }
+                  }}
+                  className="flex items-center gap-1 px-4 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md shadow-sm"
+                >
+                  <Printer className="w-3.5 h-3.5" /> IMPRIMIR DANFE
+                </button>
+              )}
+              <button onClick={abrirNotaGerada} className="flex items-center gap-1 px-4 py-2 text-xs font-bold bg-muted hover:bg-muted/80 border border-border rounded-md shadow-sm">
                 ABRIR NF-e GERADA <ArrowRight className="w-3.5 h-3.5" />
               </button>
+              {XGeradoMovimento && (
+                <button 
+                  onClick={() => {
+                    openTab({
+                      title: `Pedido ED #${XGeradoMovimento.nr_movimento}`,
+                      component: "pedidos",
+                      params: { movimento_id: XGeradoMovimento.movimento_id },
+                    });
+                  }}
+                  className="flex items-center gap-1 px-4 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-md shadow-sm"
+                >
+                  <Package className="w-3.5 h-3.5" /> ABRIR PEDIDO ED (#{XGeradoMovimento.nr_movimento})
+                </button>
+              )}
             </div>
           </div>
         )}
       </div>
+
+      <FiscalProgressDialog
+        open={XProg.open}
+        titulo={XProg.titulo}
+        descricao="Aguardando resposta do Fiscal Worker / SEFAZ."
+        segundosTotais={XProg.total}
+        segundosRestantes={XProg.restante}
+      />
     </div>
   );
 };

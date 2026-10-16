@@ -578,7 +578,11 @@ const PedidoCadastroFormContent: React.FC<PedidoCadastroFormContentProps> = ({
   );
 };
 
-const PedidoForm: React.FC = () => {
+interface PedidoFormProps {
+  initialMovimentoId?: number;
+}
+
+const PedidoForm: React.FC<PedidoFormProps> = ({ initialMovimentoId }) => {
   const { XEmpresaId } = useAppContext();
   const { handleKeyDown } = useEnterTraversal();
   const [XVendedores, setXVendedores] = useState<ILookup[]>([]);
@@ -1352,6 +1356,7 @@ const PedidoForm: React.FC = () => {
           const st = record?.st_entrega;
           return (st === "S" || st === "P") ? [] : ["entrega"];
         }}
+        XInitialId={initialMovimentoId}
         config={{
           XTableName: "movimento",
           XPrimaryKey: "movimento_id",
@@ -1363,7 +1368,7 @@ const PedidoForm: React.FC = () => {
           XOrderAsc: false,
           XKeepEditAfterInsert: true,
           XSoftDelete: false,
-          XApplyFilter: (q) => q.in("tp_movimento", ["PD", "SV", "OR", "S"]),
+          XApplyFilter: (q) => q.in("tp_movimento", ["PD", "SV", "OR", "S", "ED"]),
           XCanEdit: (rec) => {
             if (!rec) return true;
             if (rec.excluido) return false;

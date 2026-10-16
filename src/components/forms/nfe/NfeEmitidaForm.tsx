@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { formatCPFCNPJ } from "@/lib/validators";
 import { fiscalEmissaoService } from "@/services/fiscalEmissaoService";
+import FiscalProgressDialog from "@/components/fiscal/FiscalProgressDialog";
 import { useEnterTraversal } from "@/hooks/useEnterTraversal";
 import ClienteSearchDialog, { IClienteRow } from "../pedido/ClienteSearchDialog";
 
@@ -102,6 +103,13 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
     chaveNfe?: string;
     sucesso?: boolean;
   }>({ open: false, loading: false });
+
+  const [XProg, setXProg] = useState<{ open: boolean; titulo: string; total: number; restante: number }>({
+    open: false,
+    titulo: "",
+    total: 60,
+    restante: 60,
+  });
 
   const destinatarioInputRef = useRef<HTMLInputElement>(null);
   const naturezaOperacaoInputRef = useRef<HTMLInputElement>(null);
@@ -297,53 +305,61 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
             <button
               type="button"
               onClick={async () => {
-                if (!confirm(`Enviar NF-e #${currentRecord.nfe_cabecalho_id} para a SEFAZ via fiscal-worker?`)) return;
-                const tid = toast.loading("Recarregando cadastros da fonte, recalculando tributos e enviando para a SEFAZ...");
+                if (!confirm(`Enviar NF-e #${currentRecord.nr_nota || currentRecord.nfe_cabecalho_id} para a SEFAZ via fiscal-worker?`)) return;
                 const targetEmpresaId = currentRecord.empresa_id || XEmpresaId;
+                const totalSeg = (await fiscalEmissaoService.obterTimeoutFiscalSeg(targetEmpresaId)) || 60;
+                setXProg({
+                  open: true,
+                  titulo: `Transmitindo NF-e #${currentRecord.nr_nota || currentRecord.nfe_cabecalho_id} à SEFAZ...`,
+                  total: totalSeg,
+                  restante: totalSeg,
+                });
                 try {
                   const res = await fiscalEmissaoService.retransmitirDocumento(
                     currentRecord.nfe_cabecalho_id,
                     targetEmpresaId
                   );
-                  toast.dismiss(tid);
-                  if (res.success && res.fiscal_evento_id) {
-                    toast.loading("Aguardando resposta da SEFAZ...", { id: tid });
-                    const ret = await fiscalEmissaoService.aguardarEvento(res.fiscal_evento_id, {
-                      empresaId: targetEmpresaId
-                    });
-                    toast.dismiss(tid);
+                  if (!res.success || !res.fiscal_evento_id) {
+                    setXProg(p => ({ ...p, open: false }));
+                    toast.error("Falha ao enfileirar: " + (res.message || "Erro desconhecido"));
+                    return;
+                  }
 
-                    await refresh();
+                  const ret = await fiscalEmissaoService.aguardarEvento(res.fiscal_evento_id, {
+                    empresaId: targetEmpresaId,
+                    timeoutMs: totalSeg * 1000,
+                    onTick: (s) => setXProg(p => ({ ...p, restante: s })),
+                  });
+                  setXProg(p => ({ ...p, open: false }));
 
-                    const { data: cabUpdated } = await db.from("fiscal_nfe_cabecalho")
-                      .select("nfe_cabecalho_id, st_nf, empresa_id")
-                      .eq("nfe_cabecalho_id", currentRecord.nfe_cabecalho_id)
-                      .maybeSingle();
+                  await refresh();
 
-                    const stNf = cabUpdated?.st_nf || (ret.success ? "A" : currentRecord.st_nf);
+                  const { data: cabUpdated } = await db.from("fiscal_nfe_cabecalho")
+                    .select("nfe_cabecalho_id, st_nf, empresa_id")
+                    .eq("nfe_cabecalho_id", currentRecord.nfe_cabecalho_id)
+                    .maybeSingle();
 
-                    if (stNf === "A") {
-                      toast.success("Nota Fiscal autorizada com sucesso! Gerando DANFE...");
-                      const impRes = await fiscalEmissaoService.imprimirDocumento(
-                        currentRecord.nfe_cabecalho_id,
-                        targetEmpresaId
-                      );
-                      if (impRes.success && impRes.pdf_base64) {
-                        const binaryString = atob(impRes.pdf_base64);
-                        const bytes = new Uint8Array(binaryString.length);
-                        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-                        const blob = new Blob([bytes], { type: "application/pdf" });
-                        const url = URL.createObjectURL(blob);
-                        window.open(url, "_blank");
-                      }
-                    } else {
-                      toast.error("Retorno SEFAZ: " + (ret.mensagem || ret.resposta?.x_motivo || "Não autorizada"));
+                  const stNf = cabUpdated?.st_nf || (ret.success ? "A" : currentRecord.st_nf);
+
+                  if (stNf === "A") {
+                    toast.success("Nota Fiscal autorizada com sucesso! Gerando DANFE...");
+                    const impRes = await fiscalEmissaoService.imprimirDocumento(
+                      currentRecord.nfe_cabecalho_id,
+                      targetEmpresaId
+                    );
+                    if (impRes.success && impRes.pdf_base64) {
+                      const binaryString = atob(impRes.pdf_base64);
+                      const bytes = new Uint8Array(binaryString.length);
+                      for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+                      const blob = new Blob([bytes], { type: "application/pdf" });
+                      const url = URL.createObjectURL(blob);
+                      window.open(url, "_blank");
                     }
                   } else {
-                    toast.error("Falha: " + (res.message || "Erro desconhecido"));
+                    toast.error("Retorno SEFAZ: " + (ret.mensagem || ret.resposta?.x_motivo || "Não autorizada"));
                   }
                 } catch (e: any) {
-                  toast.dismiss(tid);
+                  setXProg(p => ({ ...p, open: false }));
                   toast.error("Erro: " + e.message);
                   await refresh();
                 }
@@ -844,6 +860,14 @@ const NfeEmitidaForm: React.FC<{ initialId?: number }> = ({ initialId }) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <FiscalProgressDialog
+        open={XProg.open}
+        titulo={XProg.titulo}
+        descricao="Aguardando resposta do Fiscal Worker / SEFAZ."
+        segundosTotais={XProg.total}
+        segundosRestantes={XProg.restante}
+      />
     </>
   );
 };

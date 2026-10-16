@@ -21,7 +21,8 @@ import {
   CheckSquare,
   ArrowUpFromLine,
   Filter,
-  RotateCcw
+  RotateCcw,
+  FilePlus,
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -709,6 +710,16 @@ const ListaNfeEmitidaForm: React.FC<IProps> = ({ initialFilterId }) => {
                         disabled={String(r.tp_nf) !== "1" || String(r.st_nf) !== "A"}
                       >
                         <ArrowUpFromLine className="w-4 h-4 mr-2 text-orange-500" /> Devolver Nota
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => openTab({
+                          title: `Comp. NF-e ${r.nr_nota || r.nfe_cabecalho_id}`,
+                          component: "nota-complementar",
+                          params: { nfe_cabecalho_id: r.nfe_cabecalho_id },
+                        })}
+                        disabled={String(r.st_nf) !== "A" || String(r.fin_nfe) === "2"}
+                      >
+                        <FilePlus className="w-4 h-4 mr-2 text-blue-500" /> Emitir Nota Complementar
                       </DropdownMenuItem>
                       <DropdownMenuItem 
                         onClick={() => openTab({ 

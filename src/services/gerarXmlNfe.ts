@@ -106,9 +106,12 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
   if (chavesParaRef.length === 0 && (cabecalho as any).chave_ref) {
     chavesParaRef = [(cabecalho as any).chave_ref];
   }
+  if (chavesParaRef.length === 0 && (cabecalho as any).chave_nfe_origem) {
+    chavesParaRef = [(cabecalho as any).chave_nfe_origem];
+  }
 
-  // Fallback: Se for devolução (finNFe = 4) e nenhuma chave veio pelas props, tenta extrair a chave de 44 dígitos da obs_nf/infCpl
-  if (chavesParaRef.length === 0 && Number(finNFe) === 4) {
+  // Fallback: Se for devolução (finNFe = 4) ou complementar (finNFe = 2) e nenhuma chave veio pelas props, tenta extrair a chave de 44 dígitos da obs_nf/infCpl
+  if (chavesParaRef.length === 0 && (Number(finNFe) === 4 || Number(finNFe) === 2)) {
     const texto = String((cabecalho as any).obs_nf || "") + " " + String((cabecalho as any).infCpl || "");
     const m = texto.match(/(\d{44})/g);
     if (m) {
@@ -424,8 +427,9 @@ export function gerarXmlNfe(params: GerarXmlParams): string {
   // <pag>
   xml += `<pag>`;
   const isDevolucao = Number(cabecalho.fin_nfe) === 4;
+  const isComplementarSemFin = Number(cabecalho.fin_nfe) === 2 && !(cabecalho as any).gera_financeiro_comp;
 
-  if (isDevolucao) {
+  if (isDevolucao || isComplementarSemFin) {
     xml += `<detPag>`;
     xml += `<tPag>90</tPag>`;
     xml += `<vPag>0.00</vPag>`;

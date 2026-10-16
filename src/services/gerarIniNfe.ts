@@ -90,11 +90,15 @@ export function gerarIniNfe(params: GerarIniParams): string {
   linhas.push(`verProc=RealCommerce1.0`);
   linhas.push(``);
 
-  if (Number(cabecalho.fin_nfe) === 4) {
+  if (Number(cabecalho.fin_nfe) === 4 || Number(cabecalho.fin_nfe) === 2) {
     const chaves: string[] = (cabecalho as any).chaves_ref || [];
-    const finalChaves = chaves.length > 0 
+    let finalChaves = chaves.length > 0 
       ? chaves 
       : ((cabecalho as any).chave_ref ? [(cabecalho as any).chave_ref] : []);
+
+    if (finalChaves.length === 0 && (cabecalho as any).chave_nfe_origem) {
+      finalChaves = [(cabecalho as any).chave_nfe_origem];
+    }
 
     finalChaves.forEach((ch, idx) => {
       const nr = String(idx + 1).padStart(3, '0');
@@ -329,8 +333,9 @@ export function gerarIniNfe(params: GerarIniParams): string {
   // [pagNNN] — pagamentos
   // ──────────────────────────────────────────────
   const isDevolucao = Number(cabecalho.fin_nfe) === 4;
+  const isComplementarSemFin = Number(cabecalho.fin_nfe) === 2 && !(cabecalho as any).gera_financeiro_comp;
 
-  if (isDevolucao) {
+  if (isDevolucao || isComplementarSemFin) {
     linhas.push(`[pag001]`);
     linhas.push(`tPag=90`);
     linhas.push(`vPag=0.00`);
